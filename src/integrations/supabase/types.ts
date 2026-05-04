@@ -14,7 +14,198 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      checks: {
+        Row: {
+          amount: number
+          check_number: string
+          created_at: string
+          id: string
+          issue_date: string
+          memo: string | null
+          payee_name: string
+          payee_vendor_id: string | null
+          project_id: string | null
+          status: Database["public"]["Enums"]["check_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          check_number: string
+          created_at?: string
+          id?: string
+          issue_date?: string
+          memo?: string | null
+          payee_name: string
+          payee_vendor_id?: string | null
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["check_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          check_number?: string
+          created_at?: string
+          id?: string
+          issue_date?: string
+          memo?: string | null
+          payee_name?: string
+          payee_vendor_id?: string | null
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["check_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checks_payee_vendor_id_fkey"
+            columns: ["payee_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          budget: number
+          code: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget?: number
+          code?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget?: number
+          code?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string | null
+          source_name: string | null
+          transaction_date: string
+          type: Database["public"]["Enums"]["txn_type"]
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          source_name?: string | null
+          transaction_date?: string
+          type: Database["public"]["Enums"]["txn_type"]
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string | null
+          source_name?: string | null
+          transaction_date?: string
+          type?: Database["public"]["Enums"]["txn_type"]
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendors: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +214,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      check_status: "pending" | "cleared" | "voided"
+      project_status: "active" | "on_hold" | "completed" | "archived"
+      txn_type: "income" | "expense"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +343,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      check_status: ["pending", "cleared", "voided"],
+      project_status: ["active", "on_hold", "completed", "archived"],
+      txn_type: ["income", "expense"],
+    },
   },
 } as const
