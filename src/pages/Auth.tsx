@@ -71,6 +71,34 @@ export default function Auth() {
           <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-center">
             {mode === 'signin' ? 'No account? Request access →' : '← Back to sign in'}
           </button>
+
+          <div className="pt-4 border-t border-dashed border-border space-y-2">
+            <div className="micro-label text-accent">Development Bypass</div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                const devEmail = 'dev@houinc.local';
+                const devPassword = 'devbypass123';
+                try {
+                  const { error } = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword });
+                  if (error) {
+                    const { error: signUpErr } = await supabase.auth.signUp({ email: devEmail, password: devPassword, options: { emailRedirectTo: window.location.origin } });
+                    if (signUpErr) throw signUpErr;
+                    const retry = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword });
+                    if (retry.error) throw retry.error;
+                  }
+                  toast.success('Dev session active');
+                } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+              }}
+              className="w-full rounded-none h-10 border-accent/50 text-accent hover:bg-accent hover:text-accent-foreground"
+            >
+              Bypass Login (Dev)
+            </Button>
+            <p className="text-[10px] text-muted-foreground tracking-wide">Signs in as <span className="font-mono-tab">dev@houinc.local</span>. Remove before production.</p>
+          </div>
         </div>
       </div>
     </div>
