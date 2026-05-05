@@ -2,6 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
+const relatedQueryKeys: Record<'vendors' | 'projects' | 'checks' | 'transactions', string[][]> = {
+  vendors: [['vendors'], ['transactions'], ['checks']],
+  projects: [['projects'], ['transactions'], ['checks']],
+  checks: [['checks'], ['projects'], ['vendors']],
+  transactions: [['transactions'], ['projects'], ['vendors']],
+};
+
+const stripJoinedRelations = <T extends Record<string, unknown>>(row: T) => {
+  const { projects, vendors, ...payload } = row;
+  return payload;
+};
+
 export const useVendors = () => useQuery({
   queryKey: ['vendors'],
   queryFn: async () => {
@@ -41,7 +53,8 @@ export const useUpsert = <T extends { id?: string }>(table: 'vendors' | 'project
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (row: T) => {
-      const payload = { ...row, user_id: user!.id } as any;
+      if (!user) throw new Error('You must be signed in to save changes');
+      const payload = { ...stripJoinedRelations(row as Record<string, unknown>), user_id: user.id } as never;
       if (row.id) {
         const { error } = await supabase.from(table).update(payload).eq('id', row.id);
         if (error) throw error;
@@ -50,7 +63,10 @@ export const useUpsert = <T extends { id?: string }>(table: 'vendors' | 'project
         if (error) throw error;
       }
     },
-    onSuccess: () => { invalidate.forEach(k => qc.invalidateQueries({ queryKey: k })); },
+    onSuccess: async () => {
+      const keys = [...invalidate, ...relatedQueryKeys[table]];
+      await Promise.all(keys.map(k => qc.invalidateQueries({ queryKey: k })));
+    },
   });
 };
 
@@ -61,7 +77,10 @@ export const useDelete = (table: 'vendors' | 'projects' | 'checks' | 'transactio
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => { invalidate.forEach(k => qc.invalidateQueries({ queryKey: k })); },
+    onSuccess: async () => {
+      const keys = [...invalidate, ...relatedQueryKeys[table]];
+      await Promise.all(keys.map(k => qc.invalidateQueries({ queryKey: k })));
+    },
   });
 };
 
@@ -69,15 +88,18 @@ export const useQuickCreate = (table: 'vendors' | 'projects') => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (data: Record<string, any>) => {
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!user) throw new Error('You must be signed in to save changes');
       const { data: result, error } = await supabase
         .from(table)
-        .insert({ ...data, user_id: user!.id })
+        .insert({ ...data, user_id: user.id })
         .select()
         .single();
       if (error) throw error;
-      return result as { id: string; name: string; [key: string]: any };
+      return result as { id: string; name: string; [key: string]: unknown };
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [table] }); },
+    onSuccess: async () => {
+      await Promise.all(relatedQueryKeys[table].map(k => qc.invalidateQueries({ queryKey: k })));
+    },
   });
 };

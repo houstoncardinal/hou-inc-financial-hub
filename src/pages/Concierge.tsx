@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -141,6 +142,7 @@ export default function Concierge() {
   const navigate = useNavigate();
   const inputFileRef = useRef<HTMLInputElement>(null);
   const captureFileRef = useRef<HTMLInputElement>(null);
+  const guidedFormRef = useRef<HTMLFormElement>(null);
 
   const [phase, setPhase] = useState<'welcome' | 'guided' | 'summary' | 'done'>('welcome');
   const [serviceType, setServiceType] = useState<ServiceType | null>(null);
@@ -216,6 +218,34 @@ export default function Concierge() {
     if (step === 0) { setPhase('welcome'); return; }
     setStep(prev => prev - 1); setCustomCat(false); setCustomCatVal('');
   };
+
+  const commitCustomCategory = () => {
+    const category = customCatVal.trim();
+    if (!category) return false;
+    setVal('category', category);
+    setCustomCat(false);
+    setCustomCatVal('');
+    return true;
+  };
+
+  useEffect(() => {
+    if (phase !== 'guided') return;
+
+    const handleDocumentKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON') return;
+      if (target.closest('[role="combobox"], [role="listbox"], [role="dialog"]')) return;
+
+      e.preventDefault();
+      guidedFormRef.current?.requestSubmit();
+    };
+
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
+  }, [phase, step]);
 
   const handleReceipt = useCallback((f: File | null) => {
     if (!f) { setReceiptFile(null); setReceiptPreview(null); return; }
@@ -354,6 +384,28 @@ export default function Concierge() {
     const Icon = q.icon || Sparkles;
     const progress = ((step + 1) / questions.length) * 100;
 
+    const handleGuidedSubmit = (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (q.type === 'category' && customCat && !commitCustomCategory()) {
+        toast.error('Please enter a category');
+        return;
+      }
+      goNext();
+    };
+
+    const handleGuidedKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+      if (e.key !== 'Enter' || e.defaultPrevented || e.nativeEvent.isComposing) return;
+
+      const target = e.target as HTMLElement;
+      if (target.closest('[role="combobox"], [role="listbox"]')) return;
+      if (target.tagName === 'TEXTAREA' && e.shiftKey) return;
+
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        e.preventDefault();
+        e.currentTarget.requestSubmit();
+      }
+    };
+
     const renderInput = () => {
       // Receipt
       if (q.type === 'receipt') {
@@ -364,28 +416,28 @@ export default function Concierge() {
             {receiptPreview ? (
               <div className="relative border border-border p-3 bg-secondary/20">
                 <img src={receiptPreview} alt="Receipt" className="max-h-40 w-full object-contain" />
-                <button onClick={() => handleReceipt(null)} className="absolute top-3 right-3 w-7 h-7 bg-background/90 border border-border flex items-center justify-center hover:bg-accent hover:text-white transition-colors"><X className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => handleReceipt(null)} className="absolute top-3 right-3 w-7 h-7 bg-background/90 border border-border flex items-center justify-center hover:bg-accent hover:text-white transition-colors"><X className="w-3.5 h-3.5" /></button>
                 {receiptFile && <div className="text-[10px] text-muted-foreground mt-1.5 font-mono-tab truncate px-1">{(receiptFile.size / 1024 / 1024).toFixed(1)} MB · {receiptFile.name}</div>}
                 <div className="flex gap-2 mt-3">
                   <Button type="button" variant="outline" onClick={() => inputFileRef.current?.click()} className="rounded-none flex-1 h-9 text-xs">Change</Button>
-                  <Button type="button" className="rounded-none flex-1 h-9 text-xs bg-foreground text-background hover:opacity-90" onClick={goNext}>Looks good</Button>
+                  <Button type="submit" className="rounded-none flex-1 h-9 text-xs bg-foreground text-background hover:opacity-90">Looks good</Button>
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="flex gap-3">
-                  <button onClick={() => inputFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
+                  <button type="button" onClick={() => inputFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
                     <Upload className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.5} />
                     <span className="text-xs text-muted-foreground group-hover:text-foreground">Upload Document</span>
                     <span className="text-[9px] text-muted-foreground">PDF, JPG, PNG</span>
                   </button>
-                  <button onClick={() => captureFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
+                  <button type="button" onClick={() => captureFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
                     <Camera className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.5} />
                     <span className="text-xs text-muted-foreground group-hover:text-foreground">Take Photo</span>
                     <span className="text-[9px] text-muted-foreground">No size limit</span>
                   </button>
                 </div>
-                <Button type="button" variant="outline" onClick={goNext} className="rounded-none w-full h-10 text-xs">Skip — no receipt</Button>
+                <Button type="submit" variant="outline" className="rounded-none w-full h-10 text-xs">Skip — no receipt</Button>
               </div>
             )}
           </div>
@@ -433,7 +485,7 @@ export default function Concierge() {
             <div className="space-y-3">
               <Input value={customCatVal} onChange={e => setCustomCatVal(e.target.value)} placeholder="Type custom category..." className="rounded-none h-12 text-base" autoFocus />
               <div className="flex gap-2">
-                <Button type="button" onClick={() => { if (customCatVal.trim()) { setVal('category', customCatVal.trim()); setCustomCat(false); setCustomCatVal(''); } }} className="rounded-none flex-1 h-9 text-xs bg-foreground text-background">Set</Button>
+                <Button type="button" onClick={commitCustomCategory} className="rounded-none flex-1 h-9 text-xs bg-foreground text-background">Set</Button>
                 <Button type="button" variant="outline" onClick={() => setCustomCat(false)} className="rounded-none h-9 text-xs">Cancel</Button>
               </div>
             </div>
@@ -451,7 +503,7 @@ export default function Concierge() {
               <Plus className="w-3 h-3" /> Create custom category
             </Button>
             <div className="flex justify-center mt-4">
-              <Button onClick={goNext} className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
+              <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
                 {isLast ? 'Review & Save' : 'Continue'}
                 <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
               </Button>
@@ -489,40 +541,42 @@ export default function Concierge() {
 
           <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-8">
             <div className="w-full max-w-lg mx-auto">
-              <div className="flex items-center justify-center mb-8">
-                <div className="w-16 h-16 bg-foreground/5 flex items-center justify-center">
-                  <Icon className="w-7 h-7 text-foreground/60" strokeWidth={1.5} />
+              <form ref={guidedFormRef} onSubmit={handleGuidedSubmit} onKeyDown={handleGuidedKeyDown}>
+                <div className="flex items-center justify-center mb-8">
+                  <div className="w-16 h-16 bg-foreground/5 flex items-center justify-center">
+                    <Icon className="w-7 h-7 text-foreground/60" strokeWidth={1.5} />
+                  </div>
                 </div>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-light tracking-tight text-center mb-2 leading-snug">{q.label}</h2>
-              {q.helper && <p className="text-xs text-muted-foreground text-center mb-8">{q.helper}</p>}
-              {!q.helper && <div className="mb-8" />}
-              <div className="mb-6">{renderInput()}</div>
+                <h2 className="text-xl sm:text-2xl font-light tracking-tight text-center mb-2 leading-snug">{q.label}</h2>
+                {q.helper && <p className="text-xs text-muted-foreground text-center mb-8">{q.helper}</p>}
+                {!q.helper && <div className="mb-8" />}
+                <div className="mb-6">{renderInput()}</div>
 
-              {showContinue && (
-                <div className="flex justify-center">
-                  <Button onClick={goNext} className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
-                    {isLast ? 'Review & Save' : 'Continue'}
-                    <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
-                  </Button>
+                {showContinue && (
+                  <div className="flex justify-center">
+                    <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
+                      {isLast ? 'Review & Save' : 'Continue'}
+                      <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Continue for vendor/project */}
+                {(q.type === 'vendor' || q.type === 'project') && (
+                  <div className="flex justify-center mt-4">
+                    <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
+                      {isLast ? 'Review & Save' : 'Continue'}
+                      <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-center gap-1.5 mt-8">
+                  {questions.map((_, i) => (
+                    <div key={i} className={`w-1.5 h-1.5 transition-all duration-500 ${i <= step ? 'bg-foreground' : 'bg-border'}`} />
+                  ))}
                 </div>
-              )}
-
-              {/* Continue for vendor/project */}
-              {(q.type === 'vendor' || q.type === 'project') && (
-                <div className="flex justify-center mt-4">
-                  <Button onClick={goNext} className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
-                    {isLast ? 'Review & Save' : 'Continue'}
-                    <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
-                  </Button>
-                </div>
-              )}
-
-              <div className="flex items-center justify-center gap-1.5 mt-8">
-                {questions.map((_, i) => (
-                  <div key={i} className={`w-1.5 h-1.5 transition-all duration-500 ${i <= step ? 'bg-foreground' : 'bg-border'}`} />
-                ))}
-              </div>
+              </form>
             </div>
           </div>
         </div>
