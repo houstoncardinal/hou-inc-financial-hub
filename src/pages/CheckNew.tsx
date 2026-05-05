@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useChecks, useProjects, useUpsert, useVendors } from '@/hooks/useFinance';
+import { useChecks, useProjects, useUpsert, useVendors, useQuickCreate } from '@/hooks/useFinance';
+import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import DigitalCheck from '@/components/DigitalCheck';
 import { toast } from 'sonner';
 
@@ -17,6 +18,8 @@ export default function CheckNew() {
   const { data: projects = [] } = useProjects();
   const { data: checks = [] } = useChecks();
   const upsert = useUpsert('checks', [['checks']]);
+  const createVendor = useQuickCreate('vendors');
+  const createProject = useQuickCreate('projects');
 
   const nextNumber = useMemo(() => {
     const nums = checks.map((c: any) => parseInt(c.check_number, 10)).filter(n => !isNaN(n));
@@ -48,7 +51,7 @@ export default function CheckNew() {
     <AppShell>
       <PageHeader eyebrow="Issue Instrument" title="Create Check" description="Initiate a financial instrument against the operating account." />
 
-      <div className="px-8 py-8 grid grid-cols-1 lg:grid-cols-2 gap-10 max-w-7xl">
+      <div className="px-4 sm:px-8 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 max-w-7xl">
         <form onSubmit={submit} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label className="micro-label">Check Number</Label>
@@ -58,19 +61,27 @@ export default function CheckNew() {
           </div>
 
           <div className="space-y-1.5"><Label className="micro-label">Payee · Vendor</Label>
-            <Select value={form.payee_vendor_id} onValueChange={v => {
-              const ven = vendors.find((x: any) => x.id === v);
-              setForm({ ...form, payee_vendor_id: v, payee_name: ven?.name || form.payee_name });
-            }}>
-              <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select vendor (optional)" /></SelectTrigger>
-              <SelectContent>{vendors.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <QuickCreateSelect
+              value={form.payee_vendor_id}
+              onValueChange={v => {
+                const ven = vendors.find((x: any) => x.id === v);
+                setForm({ ...form, payee_vendor_id: v, payee_name: ven?.name || form.payee_name });
+              }}
+              options={vendors}
+              placeholder="Select vendor (optional)"
+              entityLabel="Vendor"
+              onCreateNew={async (name) => {
+                const result = await createVendor.mutateAsync({ name });
+                toast.success(`Vendor "${name}" created`);
+                return result;
+              }}
+            />
           </div>
 
           <div className="space-y-1.5"><Label className="micro-label">Payee Name</Label>
             <Input className="rounded-none h-10" value={form.payee_name} onChange={e => setForm({ ...form, payee_name: e.target.value })} required /></div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label className="micro-label">Amount (USD)</Label>
               <Input type="number" step="0.01" min="0" className="rounded-none h-10 font-mono-tab text-right" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required /></div>
             <div className="space-y-1.5"><Label className="micro-label">Status</Label>
@@ -82,18 +93,26 @@ export default function CheckNew() {
           </div>
 
           <div className="space-y-1.5"><Label className="micro-label">Project Assignment</Label>
-            <Select value={form.project_id} onValueChange={v => setForm({ ...form, project_id: v })}>
-              <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Assign to project" /></SelectTrigger>
-              <SelectContent>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <QuickCreateSelect
+              value={form.project_id}
+              onValueChange={v => setForm({ ...form, project_id: v })}
+              options={projects}
+              placeholder="Assign to project"
+              entityLabel="Project"
+              onCreateNew={async (name) => {
+                const result = await createProject.mutateAsync({ name });
+                toast.success(`Project "${name}" created`);
+                return result;
+              }}
+            />
           </div>
 
           <div className="space-y-1.5"><Label className="micro-label">Memo</Label>
             <Textarea className="rounded-none" rows={2} value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} /></div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" className="rounded-none h-10 px-6">Issue Check</Button>
-            <Button type="button" variant="ghost" className="rounded-none h-10" onClick={() => nav('/checks')}>Cancel</Button>
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button type="submit" className="rounded-none h-10 px-6 w-full sm:w-auto">Issue Check</Button>
+            <Button type="button" variant="ghost" className="rounded-none h-10 w-full sm:w-auto" onClick={() => nav('/checks')}>Cancel</Button>
           </div>
         </form>
 

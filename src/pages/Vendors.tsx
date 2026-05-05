@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useTransactions, useUpsert, useVendors } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Download, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { downloadCSV } from '@/lib/reports';
 
 const blank = { name: '', contact_email: '', contact_phone: '', address: '', notes: '' };
 
@@ -31,6 +32,17 @@ export default function Vendors() {
     return { ...v, totalPaid: checksTotal + expTotal, txnCount };
   }), [vendors, checks, expenses, q]);
 
+  /* ── CSV Export ── */
+  const exportCSV = () => {
+    downloadCSV(
+      enriched,
+      `hou-vendors-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Email', 'Phone', 'Address', 'Total Paid', 'Transactions', 'Notes'],
+      (v: any) => [v.name, v.contact_email || '', v.contact_phone || '', v.address || '', v.totalPaid, v.txnCount, v.notes || '']
+    );
+    toast.success('Vendors exported as CSV');
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) return;
@@ -43,30 +55,72 @@ export default function Vendors() {
     <AppShell>
       <PageHeader eyebrow="Counterparties" title="Vendors" description="Structured registry of payees with linked transaction history and total disbursement."
         actions={
-          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(blank); }}>
-            <DialogTrigger asChild><Button className="rounded-none">New Vendor</Button></DialogTrigger>
-            <DialogContent className="rounded-none max-w-lg">
-              <DialogHeader><DialogTitle>{form.id ? 'Edit Vendor' : 'New Vendor'}</DialogTitle></DialogHeader>
-              <form onSubmit={submit} className="space-y-4">
-                <div className="space-y-1.5"><Label className="micro-label">Legal Name</Label><Input className="rounded-none" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5"><Label className="micro-label">Email</Label><Input type="email" className="rounded-none" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} /></div>
-                  <div className="space-y-1.5"><Label className="micro-label">Phone</Label><Input className="rounded-none" value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} /></div>
-                </div>
-                <div className="space-y-1.5"><Label className="micro-label">Address</Label><Input className="rounded-none" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label className="micro-label">Notes</Label><Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-                <Button type="submit" className="rounded-none w-full">Save</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
+              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportCSV}><Download className="w-4 h-4" /></Button>
+            </div>
+            <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(blank); }}>
+              <DialogTrigger asChild><Button className="rounded-none">New Vendor</Button></DialogTrigger>
+              <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>{form.id ? 'Edit Vendor' : 'New Vendor'}</DialogTitle></DialogHeader>
+                <form onSubmit={submit} className="space-y-4">
+                  <div className="space-y-1.5"><Label className="micro-label">Legal Name</Label><Input className="rounded-none h-10" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5"><Label className="micro-label">Email</Label><Input type="email" className="rounded-none h-10" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label className="micro-label">Phone</Label><Input className="rounded-none h-10" value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} /></div>
+                  </div>
+                  <div className="space-y-1.5"><Label className="micro-label">Address</Label><Input className="rounded-none h-10" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="micro-label">Notes</Label><Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+                  <Button type="submit" className="rounded-none w-full h-10">Save</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         } />
 
-      <div className="px-8 py-5 border-b border-border">
-        <Input placeholder="Search vendors…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none max-w-sm h-9" />
+      {/* Mobile export bar */}
+      <div className="sm:hidden px-4 py-3 border-b border-border">
+        <Button variant="outline" size="sm" className="rounded-none text-xs w-full" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1.5" />Export CSV</Button>
       </div>
 
-      <div className="px-8 py-6">
-        <div className="border border-border">
+      <div className="px-4 sm:px-8 py-5 border-b border-border">
+        <Input placeholder="Search vendors…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none max-w-sm h-9 w-full sm:w-auto" />
+      </div>
+
+      <div className="px-4 sm:px-8 py-6">
+        {/* Mobile card view */}
+        <div className="sm:hidden space-y-3">
+          {enriched.length === 0 ? <div className="py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
+            enriched.map((v: any) => (
+              <div key={v.id} className="border border-border p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">{v.name}</span>
+                  <span className="text-sm font-semibold font-mono-tab">{fmtUSD(v.totalPaid)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{v.contact_email || '—'}</span>
+                  <span>{v.contact_phone || '—'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{v.txnCount} transactions</span>
+                  <span>{v.address || '—'}</span>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '' }); setOpen(true); }}>Edit</Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="rounded-none h-7 w-7 text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
+                      <AlertDialogHeader><AlertDialogTitle>Remove vendor?</AlertDialogTitle><AlertDialogDescription>Linked transactions will retain their amounts but lose vendor reference.</AlertDialogDescription></AlertDialogHeader>
+                      <AlertDialogFooter className="flex-col sm:flex-row gap-2"><AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-accent w-full sm:w-auto" onClick={() => del.mutate(v.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden sm:block border border-border">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
             <div className="col-span-3">Vendor</div><div className="col-span-3">Email</div><div className="col-span-2">Phone</div><div className="col-span-1 text-right">Txns</div><div className="col-span-2 text-right">Total Paid</div><div className="col-span-1 text-right">—</div>
           </div>

@@ -64,3 +64,20 @@ export const useDelete = (table: 'vendors' | 'projects' | 'checks' | 'transactio
     onSuccess: () => { invalidate.forEach(k => qc.invalidateQueries({ queryKey: k })); },
   });
 };
+
+export const useQuickCreate = (table: 'vendors' | 'projects') => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      const { data: result, error } = await supabase
+        .from(table)
+        .insert({ ...data, user_id: user!.id })
+        .select()
+        .single();
+      if (error) throw error;
+      return result as { id: string; name: string; [key: string]: any };
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [table] }); },
+  });
+};

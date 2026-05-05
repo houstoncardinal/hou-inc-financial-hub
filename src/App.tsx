@@ -12,7 +12,10 @@ import CheckNew from "./pages/CheckNew";
 import TxnPage from "./pages/TxnPage";
 import Ledger from "./pages/Ledger";
 import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
 import Vendors from "./pages/Vendors";
+import Concierge from "./pages/Concierge";
+import Charts from "./pages/Charts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,7 +36,10 @@ const App = () => (
             <Route path="/expenses" element={<Protected><TxnPage kind="expense" /></Protected>} />
             <Route path="/ledger" element={<Protected><Ledger /></Protected>} />
             <Route path="/projects" element={<Protected><Projects /></Protected>} />
+            <Route path="/projects/:id" element={<Protected><ProjectDetail /></Protected>} />
             <Route path="/vendors" element={<Protected><Vendors /></Protected>} />
+            <Route path="/concierge" element={<Protected><Concierge /></Protected>} />
+            <Route path="/charts" element={<Protected><Charts /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
