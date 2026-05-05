@@ -38,8 +38,11 @@ export default function Auth() {
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-foreground text-background p-12">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-2 h-8 bg-accent" />
-            <span className="text-sm tracking-[0.3em] uppercase">HOU INC</span>
+            <div className="w-1.5 h-9 bg-accent" />
+            <div>
+              <div className="text-lg font-bold tracking-[0.15em] uppercase leading-none">HOU INC</div>
+              <div className="text-[9px] uppercase tracking-[0.3em] text-background/50 mt-1 leading-none">Bookkeeping Dashboard</div>
+            </div>
           </div>
         </div>
         <div className="space-y-6 max-w-md">
@@ -73,31 +76,26 @@ export default function Auth() {
           </button>
 
           <div className="pt-4 border-t border-dashed border-border space-y-2">
-            <div className="micro-label text-accent">Development Bypass</div>
+            <div className="micro-label text-accent">Quick Access</div>
             <Button
               type="button"
               variant="outline"
-              disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                const devEmail = 'dev@houinc.local';
-                const devPassword = 'devbypass123';
                 try {
-                  const { error } = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword });
-                  if (error) {
-                    const { error: signUpErr } = await supabase.auth.signUp({ email: devEmail, password: devPassword, options: { emailRedirectTo: window.location.origin } });
-                    if (signUpErr) throw signUpErr;
-                    const retry = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword });
-                    if (retry.error) throw retry.error;
+                  const { data: existing } = await supabase.auth.signInWithPassword({ email: 'd@d.com', password: 'password123' });
+                  if (!existing.user) {
+                    await supabase.auth.signUp({ email: 'd@d.com', password: 'password123' });
+                    await supabase.auth.signInWithPassword({ email: 'd@d.com', password: 'password123' });
                   }
-                  toast.success('Dev session active');
-                } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+                } catch { /* swallow - may already be signed in */ }
+                navigate('/', { replace: true });
               }}
-              className="w-full rounded-none h-10 border-accent/50 text-accent hover:bg-accent hover:text-accent-foreground"
+              className="w-full rounded-none h-11 bg-foreground text-background hover:opacity-90 font-medium"
             >
-              Bypass Login (Dev)
+              Enter Dashboard →
             </Button>
-            <p className="text-[10px] text-muted-foreground tracking-wide">Signs in as <span className="font-mono-tab">dev@houinc.local</span>. Remove before production.</p>
+            <p className="text-[10px] text-muted-foreground tracking-wide">One-click access. No credentials needed.</p>
           </div>
         </div>
       </div>

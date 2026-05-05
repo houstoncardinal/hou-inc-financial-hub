@@ -1,5 +1,5 @@
-import { ReactNode, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { ReactNode, useState, useCallback, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import SmartWidget from './SmartWidget';
+import { sounds } from '@/hooks/useSound';
 
 const nav = [
   { to: '/', label: 'Overview', icon: LayoutGrid, end: true },
@@ -35,11 +36,13 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="h-16 px-5 flex items-center gap-3 border-b border-border shrink-0">
-        <div className="w-1.5 h-7 bg-accent" />
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">FinOS</div>
-          <div className="text-sm font-semibold tracking-tight">HOU INC</div>
+      <div className="h-16 px-5 flex flex-col justify-center border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1 h-6 bg-accent" />
+          <div>
+            <div className="text-sm font-bold tracking-[0.15em] uppercase leading-none">HOU INC</div>
+            <div className="text-[8px] uppercase tracking-[0.25em] text-muted-foreground mt-0.5 leading-none">Bookkeeping Dashboard</div>
+          </div>
         </div>
       </div>
 
@@ -49,11 +52,11 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
             key={n.to}
             to={n.to}
             end={n.end}
-            onClick={onNavigate}
+            onClick={() => { onNavigate?.(); sounds.tap(); }}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-l-2 ${
+              `nav-luxury flex items-center gap-3 px-3 py-2.5 text-sm transition-colors border-l-2 ${
                 isActive
-                  ? 'bg-secondary text-foreground border-accent pl-[10px]'
+                  ? 'bg-secondary text-foreground border-accent pl-[10px] font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50 border-transparent'
               }`
             }
@@ -70,7 +73,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="text-xs text-foreground truncate mt-0.5">{user?.email}</div>
         </div>
         <button
-          onClick={async () => { await signOut(); navigate('/auth'); onNavigate?.(); }}
+          onClick={async () => { sounds.click(); await signOut(); navigate('/auth'); onNavigate?.(); }}
           className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
         >
           <LogOut className="w-4 h-4 shrink-0" strokeWidth={1.5} />
@@ -83,6 +86,10 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const location = useLocation();
+
+  // Play subtle sound on navigation
+  useEffect(() => { sounds.tap(); }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,12 +103,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-5 bg-accent shrink-0" />
           <div>
-            <div className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground leading-none">FinOS</div>
-            <div className="text-[11px] font-semibold tracking-tight">HOU INC</div>
+            <div className="text-[10px] font-bold tracking-[0.15em] uppercase leading-none">HOU INC</div>
+            <div className="text-[7px] uppercase tracking-[0.25em] text-muted-foreground mt-[1px] leading-none">Bookkeeping Dashboard</div>
           </div>
         </div>
         <button
-          onClick={() => setSheetOpen(true)}
+          onClick={() => { setSheetOpen(true); sounds.open(); }}
           className="h-10 w-10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors -mr-2"
           aria-label="Open menu"
         >
@@ -110,7 +117,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       {/* ── Mobile drawer ── */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Sheet open={sheetOpen} onOpenChange={o => { setSheetOpen(o); if (!o) sounds.close(); }}>
         <SheetContent side="left" className="p-0 w-72 rounded-none border-r border-border">
           <NavContent onNavigate={() => setSheetOpen(false)} />
         </SheetContent>
@@ -122,7 +129,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* ── Main content ── */}
       <main className="md:ml-60 min-h-screen flex flex-col">
         <div className="md:hidden h-14 shrink-0" />
-        <div className="flex-1">{children}</div>
+        <div className="flex-1 page-enter">{children}</div>
         <div className="md:hidden h-20 shrink-0" />
       </main>
 
@@ -133,6 +140,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             key={n.to}
             to={n.to}
             end={n.end}
+            onClick={() => sounds.tap()}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
                 isActive ? 'text-foreground' : 'text-muted-foreground'
