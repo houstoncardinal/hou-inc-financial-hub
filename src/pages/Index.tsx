@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -319,12 +319,12 @@ export default function Index() {
         </div>
       </div>
 
-      {/* Time Filter + Export */}
-      <div className="px-4 sm:px-8 py-2 border-b border-border flex items-center justify-between">
+      {/* Mobile time filter + export */}
+      <div className="sm:hidden px-4 py-2 border-b border-border flex items-center justify-between">
         <TimeFilter value={timePeriod} onChange={setTimePeriod} />
         <div className="flex items-center gap-3">
-          <div className="text-[10px] text-muted-foreground font-mono-tab hidden sm:block">{getDateRange(timePeriod).label}</div>
-          <Button variant="outline" size="sm" className="rounded-none h-7 text-[10px] sm:hidden" onClick={exportPDF}>
+          <div className="text-[10px] text-muted-foreground font-mono-tab">{getDateRange(timePeriod).label}</div>
+          <Button variant="outline" size="sm" className="rounded-none h-7 text-[10px]" onClick={exportPDF}>
             <Download className="w-3 h-3 mr-1" />PDF
           </Button>
         </div>
