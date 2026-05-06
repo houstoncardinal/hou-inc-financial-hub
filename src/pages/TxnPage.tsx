@@ -120,23 +120,44 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const [open, setOpen] = useState(false);
   const blankForm = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', source_name: '', project_id: '', category: '', notes: '', payment_method: '' };
   const [form, setForm] = useState(blankForm);
+  const isIncome = kind === 'income';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.amount) { toast.error('Amount required'); return; }
-    await upsert.mutateAsync({
-      type: kind, amount: parseFloat(form.amount), transaction_date: form.transaction_date,
-      vendor_id: form.vendor_id || null, source_name: form.source_name || null,
-      project_id: form.project_id || null, category: form.category || null, notes: form.notes || null,
-      payment_method: !isIncome ? (form.payment_method || null) : undefined,
-    } as any);
-    toast.success(kind === 'income' ? 'Income logged' : 'Expense recorded');
-    setOpen(false);
-    setForm(blankForm);
+    if (!form.amount || !parseFloat(form.amount)) {
+      toast.error('Amount required');
+      return;
+    }
+    try {
+      const payload: Record<string, any> = {
+        type: kind,
+        amount: parseFloat(form.amount),
+        transaction_date: form.transaction_date,
+        category: form.category || null,
+        notes: form.notes || null,
+        project_id: form.project_id || null,
+      };
+      if (isIncome) {
+        payload.source_name = form.source_name || null;
+        payload.vendor_id = null;
+      } else {
+        payload.source_name = null;
+        payload.vendor_id = form.vendor_id || null;
+        if (form.payment_method) {
+          payload.payment_method = form.payment_method;
+        }
+      }
+      await upsert.mutateAsync(payload as any);
+      toast.success(isIncome ? 'Income saved' : 'Expense saved');
+      setOpen(false);
+      setForm(blankForm);
+    } catch (e: any) {
+      console.error('Save error:', e);
+      toast.error(e?.message || 'Save failed. Check your connection.');
+    }
   };
 
   const total = txns.reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const isIncome = kind === 'income';
 
   /* ── PDF Export ── */
   const exportPDF = () => {

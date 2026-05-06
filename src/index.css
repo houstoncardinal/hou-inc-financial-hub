@@ -47,28 +47,64 @@
 
     --positive: 150 60% 30%;
     --warning: 35 90% 40%;
+
+    --chart-1: 0 0% 7%;
+    --chart-2: 0 72% 38%;
+    --chart-3: 0 0% 38%;
+    --chart-4: 0 0% 55%;
+    --chart-5: 0 0% 70%;
+    --chart-grid: 0 0% 90%;
+    --chart-bg: 0 0% 100%;
   }
 
   .dark {
-    --background: 0 0% 7%;
-    --foreground: 0 0% 96%;
+    --background: 0 0% 6%;
+    --foreground: 0 0% 93%;
+
     --card: 0 0% 9%;
-    --card-foreground: 0 0% 96%;
+    --card-foreground: 0 0% 93%;
+
     --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 0 0% 96%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 72% 45%;
+    --popover-foreground: 0 0% 93%;
+
+    --primary: 0 0% 93%;
+    --primary-foreground: 0 0% 6%;
+
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 93%;
+
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 55%;
+
+    --accent: 0 72% 50%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 45%;
+
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 90%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 80%;
+
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 80%;
+    --sidebar-primary: 0 0% 93%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 13%;
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 0 0% 80%;
+
+    --positive: 150 60% 50%;
+    --warning: 35 95% 55%;
+
+    --chart-1: 0 0% 80%;
+    --chart-2: 0 72% 55%;
+    --chart-3: 0 0% 65%;
+    --chart-4: 0 0% 50%;
+    --chart-5: 0 0% 40%;
+    --chart-grid: 0 0% 20%;
+    --chart-bg: 0 0% 9%;
   }
 }
 
@@ -101,6 +137,70 @@
   .micro-label {
     @apply text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium;
   }
+}
+
+/* ── Recharts dark mode overrides ── */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: hsl(var(--chart-grid)) !important;
+  stroke-opacity: 0.5 !important;
+}
+
+.dark .recharts-text {
+  fill: hsl(var(--muted-foreground)) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: hsl(0 0% 12%) !important;
+  border: 1px solid hsl(0 0% 25%) !important;
+  border-radius: 4px !important;
+}
+
+.dark .recharts-tooltip-label {
+  color: hsl(0 0% 90%) !important;
+}
+
+.dark .recharts-default-tooltip .recharts-tooltip-item {
+  color: hsl(0 0% 85%) !important;
+}
+
+.dark .recharts-legend-item-text {
+  color: hsl(var(--foreground)) !important;
+  opacity: 0.9 !important;
+}
+
+.dark .recharts-responsive-container svg {
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+/* ── Stat card dark mode overrides ── */
+.dark .stat-card {
+  background: linear-gradient(135deg, hsl(220 25% 18%), hsl(220 20% 12%)) !important;
+  border-color: hsl(220 20% 32%) !important;
+}
+
+.dark .stat-card .stat-label {
+  color: hsl(220 10% 65%) !important;
+}
+
+.dark .stat-card[data-card="balance"] {
+  background: linear-gradient(135deg, hsl(220 40% 18%), hsl(220 35% 12%)) !important;
+  border-color: hsl(220 35% 34%) !important;
+}
+
+.dark .stat-card[data-card="inflow"] {
+  background: linear-gradient(135deg, hsl(150 40% 16%), hsl(150 35% 11%)) !important;
+  border-color: hsl(150 35% 28%) !important;
+}
+
+.dark .stat-card[data-card="outflow"] {
+  background: linear-gradient(135deg, hsl(0 40% 18%), hsl(0 35% 12%)) !important;
+  border-color: hsl(0 35% 30%) !important;
+}
+
+.dark .stat-card[data-card="pending"] {
+  background: linear-gradient(135deg, hsl(35 35% 18%), hsl(35 30% 12%)) !important;
+  border-color: hsl(35 30% 30%) !important;
 }
 
 /* ── Luxury micro-animations ── */

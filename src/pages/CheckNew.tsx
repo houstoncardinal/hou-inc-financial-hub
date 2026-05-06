@@ -37,14 +37,18 @@ export default function CheckNew() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.payee_name || !form.amount || !form.check_number) { toast.error('Payee, amount and check number required'); return; }
-    await upsert.mutateAsync({
-      ...form,
-      amount: parseFloat(form.amount),
-      payee_vendor_id: form.payee_vendor_id || null,
-      project_id: form.project_id || null,
-    } as any);
-    toast.success(`Check #${form.check_number} issued`);
-    nav('/checks');
+    try {
+      await upsert.mutateAsync({
+        ...form,
+        amount: parseFloat(form.amount),
+        payee_vendor_id: form.payee_vendor_id || null,
+        project_id: form.project_id || null,
+      } as any);
+      toast.success(`Check #${form.check_number} issued`);
+      nav('/checks');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to issue check. Check your connection and try again.');
+    }
   };
 
   return (

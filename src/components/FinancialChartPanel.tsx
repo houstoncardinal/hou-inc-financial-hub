@@ -28,13 +28,13 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-/* ── Burn Rate Line Chart ── */
-export function BurnRateChart({ data }: {
+/* ── Cash Flow Trend Line Chart ── */
+export function CashFlowChart({ data }: {
   data: { label: string; inflow: number; outflow: number; net: number }[];
 }) {
   return (
     <div className="border border-border p-4">
-      <div className="micro-label mb-3">Burn Rate · 6 Month Trend</div>
+      <div className="micro-label mb-3">Cash Flow Trend · 6 Month</div>
       <div className="h-48 sm:h-52">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -54,7 +54,7 @@ export function BurnRateChart({ data }: {
             <RechartsTooltip content={<ChartTooltip />} />
             <Line type="monotone" dataKey="inflow" name="Income" stroke="var(--positive)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             <Line type="monotone" dataKey="outflow" name="Expenses" stroke="var(--accent)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-            <Line type="monotone" dataKey="net" name="Net" stroke="var(--foreground)" strokeWidth={2} strokeDasharray="4 2" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            <Line type="monotone" dataKey="net" name="Net" stroke="var(--foreground)" strokeWidth={3} strokeDasharray="none" dot={{ r: 3, fill: 'var(--foreground)', strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0, fill: 'var(--foreground)' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -77,7 +77,16 @@ export function ExposureChart({ projects, totalExposure }: {
     return active.map((p: any) => ({ name: p.name, value: Number(p.budget) }));
   }, [projects]);
 
-  const chartColors = ['#121212', '#a4221e', '#555555', '#888888', '#2d2d2d', '#c44a46', '#666666', '#999999'];
+  const chartColors = [
+    'var(--chart-1)',
+    'var(--chart-2)',
+    'var(--chart-3)',
+    'var(--chart-4)',
+    'var(--chart-5)',
+    'var(--accent)',
+    'var(--positive)',
+    'var(--warning)',
+  ];
 
   if (pieData.length === 0) {
     return (

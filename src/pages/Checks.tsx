@@ -19,6 +19,15 @@ export default function Checks() {
   const { data: checks = [] } = useChecks();
   const upsert = useUpsert('checks', [['checks']]);
   const del = useDelete('checks', [['checks']]);
+
+  const updateStatus = async (check: any, newStatus: string) => {
+    try {
+      await upsert.mutateAsync({ ...check, status: newStatus });
+      toast.success(`Check #${check.check_number} → ${newStatus}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update status');
+    }
+  };
   const [q, setQ] = useState(''); const [statusFilter, setStatusFilter] = useState('all');
 
   const filtered = useMemo(() => checks.filter((c: any) => {
@@ -91,7 +100,7 @@ export default function Checks() {
                 <span>{fmtDate(c.issue_date)}</span>
               </div>
               <div className="flex items-center gap-2 pt-1">
-                <Select value={c.status} onValueChange={v => upsert.mutate({ ...c, status: v })}>
+                <Select value={c.status} onValueChange={v => updateStatus(c, v)}>
                   <SelectTrigger className="rounded-none h-7 text-[10px] uppercase tracking-wider px-2 flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
                 </Select>
@@ -128,7 +137,7 @@ export default function Checks() {
               <div className="col-span-2 text-muted-foreground">{fmtDate(c.issue_date)}</div>
               <div className="col-span-2 text-right font-semibold">{fmtUSD(c.amount)}</div>
               <div className="col-span-1">
-                <Select value={c.status} onValueChange={v => upsert.mutate({ ...c, status: v })}>
+                <Select value={c.status} onValueChange={v => updateStatus(c, v)}>
                   <SelectTrigger className="rounded-none h-7 text-[10px] uppercase tracking-wider px-2"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
                 </Select>
