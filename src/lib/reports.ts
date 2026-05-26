@@ -634,6 +634,88 @@ export function downloadInvoiceExcel(invoices: InvoiceSummary[]) {
 }
 
 /* ────────────────────────────────────────────
+   PDF: Glossary
+──────────────────────────────────────────── */
+export interface GlossaryTerm {
+  term: string;
+  category: string;
+  definition: string;
+  alias?: string;
+}
+
+const GLOSSARY_CATEGORY_ORDER = [
+  'Foundation', 'Capital Movement', 'Instruments', 'Projects',
+  'Transactions', 'Invoicing', 'Counterparties', 'Analytics', 'Workflows',
+];
+
+export function generateGlossaryPDF(terms: GlossaryTerm[]) {
+  const { doc, y } = makeDoc('Glossary', 'HOU INC · Financial OS Reference');
+
+  // Intro paragraph
+  let cy = y;
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+  const intro =
+    'Definitions for every term, concept, and workflow inside the HOU INC Financial Operating System. ' +
+    'Use this reference to understand the language of capital movement, instrument issuance, ' +
+    'project accounting, and operational workflows.';
+  const introLines = doc.splitTextToSize(intro, PW - 2 * M);
+  doc.text(introLines, M, cy);
+  cy += introLines.length * 4.2 + 5;
+
+  // Summary metrics
+  const categoryCount = [...new Set(terms.map(t => t.category))].length;
+  cy = drawMetrics(doc, cy, [
+    { label: 'Total Terms',  value: String(terms.length) },
+    { label: 'Categories',   value: String(categoryCount) },
+    { label: 'As of',        value: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) },
+  ]);
+  cy += 6;
+
+  // Group by category and render
+  for (const cat of GLOSSARY_CATEGORY_ORDER) {
+    const catTerms = terms
+      .filter(t => t.category === cat)
+      .sort((a, b) => a.term.localeCompare(b.term));
+    if (!catTerms.length) continue;
+
+    cy = sectionLabel(doc, cy, cat);
+
+    const rows = catTerms.map(t => [
+      t.alias ? `${t.term}\nalso: ${t.alias}` : t.term,
+      t.definition,
+    ]);
+
+    (doc as any).autoTable({
+      startY: cy,
+      margin: { left: M, right: M, top: 14, bottom: 20 },
+      head: [['Term', 'Definition']],
+      body: rows,
+      headStyles: {
+        fillColor: C.black, textColor: C.white, fontStyle: 'bold' as const, fontSize: 6.5,
+        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+      },
+      bodyStyles: {
+        fontSize: 7, textColor: C.black,
+        cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+        minCellHeight: 8,
+      },
+      alternateRowStyles: { fillColor: C.altRow },
+      columnStyles: {
+        0: { cellWidth: 50, fontStyle: 'bold' as const, valign: 'top' },
+        1: { cellWidth: 129.9, valign: 'top' },
+      },
+      tableLineColor: C.border,
+      tableLineWidth: 0.2,
+    });
+
+    cy = (doc as any).lastAutoTable.finalY + 9;
+  }
+
+  addDecorations(doc, 'Glossary');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
    Legacy / utility helpers
 ──────────────────────────────────────────── */
 export function downloadCSV(

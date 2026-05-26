@@ -21,6 +21,7 @@ import Charts from "./pages/Charts";
 import Settings from "./pages/Settings";
 import Invoices from "./pages/Invoices";
 import InvoiceNew from "./pages/InvoiceNew";
+import Glossary from "./pages/Glossary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
                 <Route path="/invoices/new" element={<Protected><InvoiceNew /></Protected>} />
                 <Route path="/invoices/:id" element={<Protected><InvoiceNew /></Protected>} />
                 <Route path="/settings" element={<Protected><Settings /></Protected>} />
+                <Route path="/glossary" element={<Protected><Glossary /></Protected>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>

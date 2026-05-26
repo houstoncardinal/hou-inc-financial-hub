@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
-  Settings, Sun, Moon, Receipt
+  Settings, Sun, Moon, Receipt, BookMarked
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ElevenLabsAgent from './ElevenLabsAgent';
@@ -40,6 +40,7 @@ const navGroups = [
     items: [
       { to: '/charts', label: 'Charts', icon: BarChart3 },
       { to: '/concierge', label: 'Concierge', icon: ConciergeBell },
+      { to: '/glossary', label: 'Glossary', icon: BookMarked },
     ],
   },
 ];
