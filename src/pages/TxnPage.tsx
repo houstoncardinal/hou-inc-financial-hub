@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -11,11 +10,10 @@ import { useDelete, useProjects, useTransactions, useUpsert, useVendors, useQuic
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
-import { Trash2, Download, FileText, Plus, Upload, Camera, X } from 'lucide-react';
+import { Trash2, FileText, Table2, Plus, Upload, Camera, X } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
-import { generateTransactionReport, savePDF, downloadCSV } from '@/lib/reports';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { generateTransactionReport, savePDF, downloadTransactionExcel } from '@/lib/reports';
 
 const EXPENSE_CATEGORIES = [
   'Materials & Supplies', 'Labor & Subcontractors', 'Permits & Fees',
@@ -30,6 +28,26 @@ const INCOME_CATEGORIES = [
   'Reimbursement', 'Interest Income', 'Grant', 'Investment',
   'Refund', 'Other Income',
 ];
+
+function CurrencyInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={e => {
+          const raw = e.target.value.replace(/[^0-9.]/g, '');
+          const parts = raw.split('.');
+          const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+          onChange(cleaned);
+        }}
+        className="pl-7 font-mono-tab text-right rounded-none h-10"
+      />
+    </div>
+  );
+}
 
 function CategorySelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   const [custom, setCustom] = useState(false);
@@ -109,7 +127,6 @@ function ReceiptUpload() {
 }
 
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
-  const nav = useNavigate();
   const { data: txns = [] } = useTransactions(kind);
   const { data: projects = [] } = useProjects();
   const { data: vendors = [] } = useVendors();
@@ -143,9 +160,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       } else {
         payload.source_name = null;
         payload.vendor_id = form.vendor_id || null;
-        if (form.payment_method) {
-          payload.payment_method = form.payment_method;
-        }
+        if (form.payment_method) payload.payment_method = form.payment_method;
       }
       await upsert.mutateAsync(payload as any);
       toast.success(isIncome ? 'Income saved' : 'Expense saved');
@@ -159,28 +174,15 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
   const total = txns.reduce((s: number, t: any) => s + Number(t.amount), 0);
 
-  /* ── PDF Export ── */
   const exportPDF = () => {
     const doc = generateTransactionReport(txns, kind);
     savePDF(doc, `hou-${kind}-${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success(`${isIncome ? 'Income' : 'Expense'} report exported as PDF`);
   };
 
-  /* ── CSV Export ── */
-  const exportCSV = () => {
-    downloadCSV(
-      txns,
-      `hou-${kind}-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Date', isIncome ? 'Source' : 'Vendor', 'Project', isIncome ? 'Notes' : 'Category', 'Amount'],
-      (t: any) => [
-        t.transaction_date?.slice(0, 10),
-        isIncome ? (t.source_name || t.vendors?.name || '') : (t.vendors?.name || ''),
-        t.projects?.name || '',
-        isIncome ? (t.notes || '') : (t.category || ''),
-        t.amount,
-      ]
-    );
-    toast.success(`${isIncome ? 'Income' : 'Expense'} data exported as CSV`);
+  const exportExcel = () => {
+    downloadTransactionExcel(txns, kind);
+    toast.success(`${isIncome ? 'Income' : 'Expense'} exported as Excel`);
   };
 
   return (
@@ -188,13 +190,12 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       <PageHeader eyebrow={isIncome ? 'Capital Inflow' : 'Capital Outflow'} title={isIncome ? 'Income' : 'Expenses'} description={isIncome ? 'Recorded receipts from clients and project funding sources.' : 'Non-check expenditures by vendor and category.'}
         actions={
           <div className="flex items-center gap-2">
-            {/* Export buttons - visible on tablet+ */}
             <div className="hidden sm:flex items-center gap-2">
               <Button variant="outline" size="sm" className="rounded-none h-9 text-xs" onClick={exportPDF}>
                 <FileText className="w-3.5 h-3.5 mr-1.5" />PDF
               </Button>
-              <Button variant="outline" size="sm" className="rounded-none h-9 text-xs" onClick={exportCSV}>
-                <Download className="w-3.5 h-3.5 mr-1.5" />CSV
+              <Button variant="outline" size="sm" className="rounded-none h-9 text-xs" onClick={exportExcel}>
+                <Table2 className="w-3.5 h-3.5 mr-1.5" />Excel
               </Button>
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
@@ -203,20 +204,22 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                 <DialogHeader><DialogTitle className="text-lg">{isIncome ? 'Log Income' : 'Record Expense'}</DialogTitle></DialogHeader>
                 <form onSubmit={submit} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5"><Label className="micro-label">Amount</Label>
-                      <Input type="number" step="0.01" required className="rounded-none font-mono-tab text-right h-10" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Amount</Label>
+                      <CurrencyInput value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} />
+                    </div>
                     <div className="space-y-1.5"><Label className="micro-label">Date</Label>
-                      <Input type="date" className="rounded-none h-10" value={form.transaction_date} onChange={e => setForm({ ...form, transaction_date: e.target.value })} /></div>
+                      <Input type="date" className="rounded-none h-10" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} /></div>
                   </div>
                   {isIncome ? (
                     <div className="space-y-1.5"><Label className="micro-label">Source</Label>
-                      <Input placeholder="Client / source name" className="rounded-none h-10" value={form.source_name} onChange={e => setForm({ ...form, source_name: e.target.value })} /></div>
+                      <Input placeholder="Client / source name" className="rounded-none h-10" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} /></div>
                   ) : (
                     <>
                       <div className="space-y-1.5"><Label className="micro-label">Vendor</Label>
                         <QuickCreateSelect
                           value={form.vendor_id}
-                          onValueChange={v => setForm({ ...form, vendor_id: v })}
+                          onValueChange={v => setForm(f => ({ ...f, vendor_id: v }))}
                           options={vendors}
                           placeholder="Select vendor"
                           entityLabel="Vendor"
@@ -228,7 +231,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                         />
                       </div>
                       <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
-                        <Select value={form.payment_method} onValueChange={v => setForm({ ...form, payment_method: v })}>
+                        <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
                           <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select payment method" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="check">Check</SelectItem>
@@ -243,17 +246,17 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                       </div>
                     </>
                   )}
-                  <div className="space-y-1.5"><Label className="micro-label">{isIncome ? 'Category' : 'Category'}</Label>
+                  <div className="space-y-1.5"><Label className="micro-label">Category</Label>
                     <CategorySelect
                       value={form.category}
-                      onChange={v => setForm({ ...form, category: v })}
+                      onChange={v => setForm(f => ({ ...f, category: v }))}
                       options={isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES}
                     />
                   </div>
                   <div className="space-y-1.5"><Label className="micro-label">Project</Label>
                     <QuickCreateSelect
                       value={form.project_id}
-                      onValueChange={v => setForm({ ...form, project_id: v })}
+                      onValueChange={v => setForm(f => ({ ...f, project_id: v }))}
                       options={projects}
                       placeholder="Assign to project"
                       entityLabel="Project"
@@ -266,7 +269,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                   </div>
                   {!isIncome && <ReceiptUpload />}
                   <div className="space-y-1.5"><Label className="micro-label">Notes</Label>
-                    <Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+                    <Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
                   <Button type="submit" className="rounded-none w-full h-10">Save</Button>
                 </form>
               </DialogContent>
@@ -274,13 +277,12 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           </div>
         } />
 
-      {/* Mobile export bar */}
       <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}>
           <FileText className="w-3.5 h-3.5 mr-1.5" />Export PDF
         </Button>
-        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportCSV}>
-          <Download className="w-3.5 h-3.5 mr-1.5" />Export CSV
+        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}>
+          <Table2 className="w-3.5 h-3.5 mr-1.5" />Excel
         </Button>
       </div>
 
@@ -290,7 +292,6 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       </div>
 
       <div className="px-4 sm:px-8 py-6">
-        {/* Mobile card view */}
         <div className="sm:hidden space-y-3">
           {txns.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No records.</div>
@@ -318,7 +319,6 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           ))}
         </div>
 
-        {/* Desktop table */}
         <div className="hidden sm:block border border-border">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
             <div className="col-span-2">Date</div>

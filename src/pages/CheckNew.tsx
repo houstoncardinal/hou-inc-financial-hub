@@ -86,8 +86,24 @@ export default function CheckNew() {
             <Input className="rounded-none h-10" value={form.payee_name} onChange={e => setForm({ ...form, payee_name: e.target.value })} required /></div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label className="micro-label">Amount (USD)</Label>
-              <Input type="number" step="0.01" min="0" className="rounded-none h-10 font-mono-tab text-right" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required /></div>
+            <div className="space-y-1.5"><Label className="micro-label">Amount</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.amount}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9.]/g, '');
+                    const parts = raw.split('.');
+                    const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                    setForm({ ...form, amount: cleaned });
+                  }}
+                  className="pl-7 rounded-none h-10 font-mono-tab text-right"
+                  required
+                />
+              </div>
+            </div>
             <div className="space-y-1.5"><Label className="micro-label">Status</Label>
               <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
                 <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>

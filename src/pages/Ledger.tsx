@@ -7,12 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
 import { fmtDate, fmtUSD } from '@/lib/format';
-import { generateLedgerReport, savePDF, downloadCSV } from '@/lib/reports';
-import { FileText, Download, Plus, Trash2, ArrowDownToLine, ArrowUpFromLine, FileText as FileTextIcon, X, Upload, Camera } from 'lucide-react';
+import { generateLedgerReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
+import { FileText, Table2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 
@@ -28,6 +28,27 @@ const INCOME_CATEGORIES = [
   'Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee',
   'Reimbursement', 'Interest Income', 'Grant', 'Investment', 'Refund', 'Other Income',
 ];
+
+function CurrencyInput({ value, onChange, className = '', ...rest }: { value: string; onChange: (v: string) => void; className?: string; [k: string]: any }) {
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={e => {
+          const raw = e.target.value.replace(/[^0-9.]/g, '');
+          const parts = raw.split('.');
+          const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+          onChange(cleaned);
+        }}
+        className={`pl-7 font-mono-tab text-right rounded-none h-10 ${className}`}
+        {...rest}
+      />
+    </div>
+  );
+}
 
 export default function Ledger() {
   const navigate = useNavigate();
@@ -85,9 +106,9 @@ export default function Ledger() {
     toast.success('Ledger exported as PDF');
   };
 
-  const exportCSV = () => {
-    downloadCSV(rows, `hou-ledger-${new Date().toISOString().slice(0, 10)}.csv`, ['Date', 'Type', 'Reference', 'Counterparty', 'Project', 'Amount'], (r: any) => [r.date?.slice(0, 10), r.type, r.ref, r.party, r.project || '', r.amount]);
-    toast.success('Ledger exported as CSV');
+  const exportExcel = () => {
+    downloadLedgerExcel(income, expenses, checks);
+    toast.success('Ledger exported as Excel (4 sheets)');
   };
 
   const handleDelete = async () => {
@@ -121,58 +142,8 @@ export default function Ledger() {
     toast.success('Check created'); setAddOpen(null); setFormCheck(blankCheck);
   };
 
-  const AddDialog = () => {
-    if (!addOpen) return null;
-    const is = addOpen === 'income';
-    const isE = addOpen === 'expense';
-    return (
-      <Dialog open={!!addOpen} onOpenChange={o => { if (!o) setAddOpen(null); }}>
-        <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-lg">{is ? 'Log Income' : isE ? 'Record Expense' : 'Create Check'}</DialogTitle></DialogHeader>
-          <form onSubmit={is ? submitIncome : isE ? submitExpense : submitCheck} className="space-y-4">
-            {addOpen === 'check' && <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="micro-label">Amount</Label><Input type="number" step="0.01" required className="rounded-none font-mono-tab text-right h-10" value={formCheck.amount} onChange={e => setFormCheck({ ...formCheck, amount: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label className="micro-label">Date</Label><Input type="date" className="rounded-none h-10" value={formCheck.issue_date} onChange={e => setFormCheck({ ...formCheck, issue_date: e.target.value })} /></div>
-              </div>
-              <div className="space-y-1.5"><Label className="micro-label">Payee</Label><Input required className="rounded-none h-10" value={formCheck.payee_name} onChange={e => setFormCheck({ ...formCheck, payee_name: e.target.value })} placeholder="Payee name" /></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="micro-label">Check #</Label><Input className="rounded-none h-10" value={formCheck.check_number} onChange={e => setFormCheck({ ...formCheck, check_number: e.target.value })} placeholder="e.g. 1024" /></div>
-                <div className="space-y-1.5"><Label className="micro-label">Project</Label><QuickCreateSelect value={formCheck.project_id} onValueChange={v => setFormCheck({ ...formCheck, project_id: v })} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} /></div>
-              </div>
-              <div className="space-y-1.5"><Label className="micro-label">Memo</Label><Input className="rounded-none h-10" value={formCheck.memo} onChange={e => setFormCheck({ ...formCheck, memo: e.target.value })} placeholder="Optional memo" /></div>
-              <Button type="submit" className="rounded-none w-full h-10 bg-foreground text-background">Create Check</Button>
-            </>}
-            {(is || isE) && <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="micro-label">Amount</Label><Input type="number" step="0.01" required className="rounded-none font-mono-tab text-right h-10" value={is ? formIncome.amount : formExpense.amount} onChange={e => is ? setFormIncome({ ...formIncome, amount: e.target.value }) : setFormExpense({ ...formExpense, amount: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label className="micro-label">Date</Label><Input type="date" className="rounded-none h-10" value={is ? formIncome.transaction_date : formExpense.transaction_date} onChange={e => is ? setFormIncome({ ...formIncome, transaction_date: e.target.value }) : setFormExpense({ ...formExpense, transaction_date: e.target.value })} /></div>
-              </div>
-              {is && <div className="space-y-1.5"><Label className="micro-label">Source</Label><Input className="rounded-none h-10" value={formIncome.source_name} onChange={e => setFormIncome({ ...formIncome, source_name: e.target.value })} placeholder="Client or source name" /></div>}
-              {isE && <div className="space-y-1.5"><Label className="micro-label">Vendor</Label><QuickCreateSelect value={formExpense.vendor_id} onValueChange={v => setFormExpense({ ...formExpense, vendor_id: v })} options={vendors} placeholder="Select vendor" entityLabel="Vendor" onCreateNew={async (name) => { const r = await createVendor.mutateAsync({ name }); toast.success(`Vendor "${name}" created`); return r; }} /></div>}
-              <div className="space-y-1.5"><Label className="micro-label">Category</Label>
-                <Select value={is ? formIncome.category : formExpense.category} onValueChange={v => is ? setFormIncome({ ...formIncome, category: v }) : setFormExpense({ ...formExpense, category: v })}>
-                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
-                  <SelectContent>{(is ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              {isE && <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
-                <Select value={formExpense.payment_method} onValueChange={v => setFormExpense({ ...formExpense, payment_method: v })}>
-                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
-                  <SelectContent><SelectItem value="credit_card">Credit Card</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="net30">NET30</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="wire">Wire</SelectItem><SelectItem value="check">Check</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
-                </Select>
-              </div>}
-              <div className="space-y-1.5"><Label className="micro-label">Project</Label>
-                <QuickCreateSelect value={is ? formIncome.project_id : formExpense.project_id} onValueChange={v => is ? setFormIncome({ ...formIncome, project_id: v }) : setFormExpense({ ...formExpense, project_id: v })} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} />
-              </div>
-              <div className="space-y-1.5"><Label className="micro-label">Notes</Label><Textarea className="rounded-none" rows={2} value={is ? formIncome.notes : formExpense.notes} onChange={e => is ? setFormIncome({ ...formIncome, notes: e.target.value }) : setFormExpense({ ...formExpense, notes: e.target.value })} /></div>
-              <Button type="submit" className="rounded-none w-full h-10 bg-foreground text-background">{is ? 'Save Income' : 'Save Expense'}</Button>
-            </>}
-          </form>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  const is = addOpen === 'income';
+  const isE = addOpen === 'expense';
 
   return (
     <AppShell>
@@ -185,7 +156,7 @@ export default function Ledger() {
               <button onClick={() => { setAddOpen('check'); setFormCheck(blankCheck); }} className="flex items-center gap-1 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] bg-foreground/10 text-foreground hover:bg-foreground/20 transition-colors font-medium"><Plus className="w-3 h-3" /> Check</button>
             </div>
             <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportPDF}><FileText className="w-3.5 h-3.5" /></Button>
-            <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportCSV}><Download className="w-3.5 h-3.5" /></Button>
+            <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportExcel}><Table2 className="w-3.5 h-3.5" /></Button>
           </div>
         } />
 
@@ -196,7 +167,7 @@ export default function Ledger() {
         <button onClick={() => { setAddOpen('check'); setFormCheck(blankCheck); }} className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-[0.1em] bg-foreground/10 text-foreground font-medium"><Plus className="w-3 h-3" /> Check</button>
         <div className="flex-1" />
         <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportPDF}><FileText className="w-3 h-3 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportCSV}><Download className="w-3 h-3 mr-1" />CSV</Button>
+        <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportExcel}><Table2 className="w-3 h-3 mr-1" />Excel</Button>
       </div>
 
       <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px bg-border">
@@ -282,7 +253,62 @@ export default function Ledger() {
         </div>
       </div>
 
-      <AddDialog />
+      {/* Inline dialog — NOT a nested component so state doesn't reset on re-render */}
+      <Dialog open={!!addOpen} onOpenChange={o => { if (!o) setAddOpen(null); }}>
+        <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-lg">{is ? 'Log Income' : isE ? 'Record Expense' : 'Create Check'}</DialogTitle></DialogHeader>
+          <form onSubmit={is ? submitIncome : isE ? submitExpense : submitCheck} className="space-y-4">
+            {addOpen === 'check' && <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Amount</Label>
+                  <CurrencyInput value={formCheck.amount} onChange={v => setFormCheck(f => ({ ...f, amount: v }))} placeholder="0.00" />
+                </div>
+                <div className="space-y-1.5"><Label className="micro-label">Date</Label><Input type="date" className="rounded-none h-10" value={formCheck.issue_date} onChange={e => setFormCheck(f => ({ ...f, issue_date: e.target.value }))} /></div>
+              </div>
+              <div className="space-y-1.5"><Label className="micro-label">Payee</Label><Input required className="rounded-none h-10" value={formCheck.payee_name} onChange={e => setFormCheck(f => ({ ...f, payee_name: e.target.value }))} placeholder="Payee name" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5"><Label className="micro-label">Check #</Label><Input className="rounded-none h-10" value={formCheck.check_number} onChange={e => setFormCheck(f => ({ ...f, check_number: e.target.value }))} placeholder="e.g. 1024" /></div>
+                <div className="space-y-1.5"><Label className="micro-label">Project</Label><QuickCreateSelect value={formCheck.project_id} onValueChange={v => setFormCheck(f => ({ ...f, project_id: v }))} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} /></div>
+              </div>
+              <div className="space-y-1.5"><Label className="micro-label">Memo</Label><Input className="rounded-none h-10" value={formCheck.memo} onChange={e => setFormCheck(f => ({ ...f, memo: e.target.value }))} placeholder="Optional memo" /></div>
+              <Button type="submit" className="rounded-none w-full h-10 bg-foreground text-background">Create Check</Button>
+            </>}
+            {(is || isE) && <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Amount</Label>
+                  <CurrencyInput
+                    value={is ? formIncome.amount : formExpense.amount}
+                    onChange={v => is ? setFormIncome(f => ({ ...f, amount: v })) : setFormExpense(f => ({ ...f, amount: v }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-1.5"><Label className="micro-label">Date</Label><Input type="date" className="rounded-none h-10" value={is ? formIncome.transaction_date : formExpense.transaction_date} onChange={e => is ? setFormIncome(f => ({ ...f, transaction_date: e.target.value })) : setFormExpense(f => ({ ...f, transaction_date: e.target.value }))} /></div>
+              </div>
+              {is && <div className="space-y-1.5"><Label className="micro-label">Source</Label><Input className="rounded-none h-10" value={formIncome.source_name} onChange={e => setFormIncome(f => ({ ...f, source_name: e.target.value }))} placeholder="Client or source name" /></div>}
+              {isE && <div className="space-y-1.5"><Label className="micro-label">Vendor</Label><QuickCreateSelect value={formExpense.vendor_id} onValueChange={v => setFormExpense(f => ({ ...f, vendor_id: v }))} options={vendors} placeholder="Select vendor" entityLabel="Vendor" onCreateNew={async (name) => { const r = await createVendor.mutateAsync({ name }); toast.success(`Vendor "${name}" created`); return r; }} /></div>}
+              <div className="space-y-1.5"><Label className="micro-label">Category</Label>
+                <Select value={is ? formIncome.category : formExpense.category} onValueChange={v => is ? setFormIncome(f => ({ ...f, category: v })) : setFormExpense(f => ({ ...f, category: v }))}>
+                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>{(is ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              {isE && <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
+                <Select value={formExpense.payment_method} onValueChange={v => setFormExpense(f => ({ ...f, payment_method: v }))}>
+                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                  <SelectContent><SelectItem value="credit_card">Credit Card</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="net30">NET30</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="wire">Wire</SelectItem><SelectItem value="check">Check</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
+                </Select>
+              </div>}
+              <div className="space-y-1.5"><Label className="micro-label">Project</Label>
+                <QuickCreateSelect value={is ? formIncome.project_id : formExpense.project_id} onValueChange={v => is ? setFormIncome(f => ({ ...f, project_id: v })) : setFormExpense(f => ({ ...f, project_id: v }))} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} />
+              </div>
+              <div className="space-y-1.5"><Label className="micro-label">Notes</Label><Textarea className="rounded-none" rows={2} value={is ? formIncome.notes : formExpense.notes} onChange={e => is ? setFormIncome(f => ({ ...f, notes: e.target.value })) : setFormExpense(f => ({ ...f, notes: e.target.value }))} /></div>
+              <Button type="submit" className="rounded-none w-full h-10 bg-foreground text-background">{is ? 'Save Income' : 'Save Expense'}</Button>
+            </>}
+          </form>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

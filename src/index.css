@@ -139,6 +139,206 @@
   }
 }
 
+/* ── CHAMPAGNE theme — warm ivory & gold ── */
+.theme-champagne {
+  --background: 42 38% 97%;
+  --foreground: 33 55% 12%;
+  --card: 42 38% 97%;
+  --card-foreground: 33 55% 12%;
+  --popover: 42 38% 97%;
+  --popover-foreground: 33 55% 12%;
+  --primary: 33 55% 12%;
+  --primary-foreground: 42 38% 97%;
+  --secondary: 42 28% 91%;
+  --secondary-foreground: 33 55% 12%;
+  --muted: 42 28% 91%;
+  --muted-foreground: 33 25% 48%;
+  --accent: 43 72% 36%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 38%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 42 28% 83%;
+  --input: 42 28% 83%;
+  --ring: 43 72% 36%;
+  --sidebar-background: 42 33% 93%;
+  --sidebar-foreground: 33 45% 20%;
+  --sidebar-primary: 33 55% 12%;
+  --sidebar-primary-foreground: 42 38% 97%;
+  --sidebar-accent: 42 28% 88%;
+  --sidebar-accent-foreground: 33 55% 12%;
+  --sidebar-border: 42 28% 80%;
+  --sidebar-ring: 43 72% 36%;
+  --positive: 150 55% 32%;
+  --warning: 35 90% 44%;
+  --chart-1: 33 55% 12%;
+  --chart-2: 43 72% 36%;
+  --chart-3: 33 25% 48%;
+  --chart-4: 42 28% 65%;
+  --chart-5: 42 28% 78%;
+  --chart-grid: 42 28% 83%;
+  --chart-bg: 42 38% 97%;
+}
+
+/* ── OBSIDIAN theme — deep slate & electric blue ── */
+.theme-obsidian {
+  --background: 235 20% 8%;
+  --foreground: 220 15% 90%;
+  --card: 235 18% 11%;
+  --card-foreground: 220 15% 90%;
+  --popover: 235 18% 11%;
+  --popover-foreground: 220 15% 90%;
+  --primary: 220 15% 90%;
+  --primary-foreground: 235 20% 8%;
+  --secondary: 235 15% 15%;
+  --secondary-foreground: 220 15% 90%;
+  --muted: 235 15% 15%;
+  --muted-foreground: 220 10% 55%;
+  --accent: 217 88% 62%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 235 15% 22%;
+  --input: 235 15% 22%;
+  --ring: 217 88% 62%;
+  --sidebar-background: 235 22% 6%;
+  --sidebar-foreground: 220 15% 75%;
+  --sidebar-primary: 220 15% 90%;
+  --sidebar-primary-foreground: 235 20% 8%;
+  --sidebar-accent: 235 15% 13%;
+  --sidebar-accent-foreground: 220 15% 90%;
+  --sidebar-border: 235 15% 20%;
+  --sidebar-ring: 217 88% 62%;
+  --positive: 150 70% 48%;
+  --warning: 35 95% 60%;
+  --chart-1: 220 15% 80%;
+  --chart-2: 217 88% 62%;
+  --chart-3: 220 10% 60%;
+  --chart-4: 220 10% 45%;
+  --chart-5: 220 10% 30%;
+  --chart-grid: 235 15% 22%;
+  --chart-bg: 235 18% 11%;
+}
+
+/* ── EMERALD VAULT theme — forest green & gold ── */
+.theme-emerald {
+  --background: 148 42% 5%;
+  --foreground: 140 22% 88%;
+  --card: 148 38% 8%;
+  --card-foreground: 140 22% 88%;
+  --popover: 148 38% 8%;
+  --popover-foreground: 140 22% 88%;
+  --primary: 140 22% 88%;
+  --primary-foreground: 148 42% 5%;
+  --secondary: 148 32% 12%;
+  --secondary-foreground: 140 22% 88%;
+  --muted: 148 32% 12%;
+  --muted-foreground: 140 15% 55%;
+  --accent: 142 62% 42%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 148 32% 17%;
+  --input: 148 32% 17%;
+  --ring: 142 62% 42%;
+  --sidebar-background: 148 45% 4%;
+  --sidebar-foreground: 140 22% 72%;
+  --sidebar-primary: 140 22% 88%;
+  --sidebar-primary-foreground: 148 42% 5%;
+  --sidebar-accent: 148 32% 10%;
+  --sidebar-accent-foreground: 140 22% 88%;
+  --sidebar-border: 148 32% 15%;
+  --sidebar-ring: 142 62% 42%;
+  --positive: 142 62% 50%;
+  --warning: 38 90% 60%;
+  --chart-1: 140 22% 78%;
+  --chart-2: 142 62% 42%;
+  --chart-3: 140 15% 55%;
+  --chart-4: 140 15% 40%;
+  --chart-5: 140 15% 28%;
+  --chart-grid: 148 32% 17%;
+  --chart-bg: 148 38% 8%;
+}
+
+/* ── ROYAL NAVY theme — deep navy & champagne gold ── */
+.theme-navy {
+  --background: 220 58% 7%;
+  --foreground: 38 38% 88%;
+  --card: 220 52% 10%;
+  --card-foreground: 38 38% 88%;
+  --popover: 220 52% 10%;
+  --popover-foreground: 38 38% 88%;
+  --primary: 38 38% 88%;
+  --primary-foreground: 220 58% 7%;
+  --secondary: 220 45% 14%;
+  --secondary-foreground: 38 38% 88%;
+  --muted: 220 45% 14%;
+  --muted-foreground: 38 18% 55%;
+  --accent: 43 68% 50%;
+  --accent-foreground: 220 58% 7%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 42% 22%;
+  --input: 220 42% 22%;
+  --ring: 43 68% 50%;
+  --sidebar-background: 220 60% 6%;
+  --sidebar-foreground: 38 38% 74%;
+  --sidebar-primary: 38 38% 88%;
+  --sidebar-primary-foreground: 220 58% 7%;
+  --sidebar-accent: 220 45% 13%;
+  --sidebar-accent-foreground: 38 38% 88%;
+  --sidebar-border: 220 42% 20%;
+  --sidebar-ring: 43 68% 50%;
+  --positive: 150 65% 48%;
+  --warning: 38 90% 60%;
+  --chart-1: 38 38% 78%;
+  --chart-2: 43 68% 50%;
+  --chart-3: 38 18% 55%;
+  --chart-4: 38 18% 42%;
+  --chart-5: 38 18% 30%;
+  --chart-grid: 220 42% 22%;
+  --chart-bg: 220 52% 10%;
+}
+
+/* ── ROSE QUARTZ theme — blush & deep rose ── */
+.theme-rose {
+  --background: 348 60% 98%;
+  --foreground: 340 52% 12%;
+  --card: 348 60% 98%;
+  --card-foreground: 340 52% 12%;
+  --popover: 348 60% 98%;
+  --popover-foreground: 340 52% 12%;
+  --primary: 340 52% 12%;
+  --primary-foreground: 348 60% 98%;
+  --secondary: 348 45% 93%;
+  --secondary-foreground: 340 52% 12%;
+  --muted: 348 45% 93%;
+  --muted-foreground: 340 22% 50%;
+  --accent: 340 72% 46%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 348 38% 85%;
+  --input: 348 38% 85%;
+  --ring: 340 72% 46%;
+  --sidebar-background: 348 50% 95%;
+  --sidebar-foreground: 340 42% 20%;
+  --sidebar-primary: 340 52% 12%;
+  --sidebar-primary-foreground: 348 60% 98%;
+  --sidebar-accent: 348 45% 90%;
+  --sidebar-accent-foreground: 340 52% 12%;
+  --sidebar-border: 348 38% 82%;
+  --sidebar-ring: 340 72% 46%;
+  --positive: 150 52% 34%;
+  --warning: 30 88% 48%;
+  --chart-1: 340 52% 12%;
+  --chart-2: 340 72% 46%;
+  --chart-3: 340 22% 50%;
+  --chart-4: 348 38% 65%;
+  --chart-5: 348 38% 78%;
+  --chart-grid: 348 38% 85%;
+  --chart-bg: 348 60% 98%;
+}
+
 /* ── Recharts dark mode overrides ── */
 .dark .recharts-cartesian-grid-horizontal line,
 .dark .recharts-cartesian-grid-vertical line {

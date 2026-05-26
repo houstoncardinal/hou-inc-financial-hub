@@ -11,8 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import DigitalCheck from '@/components/DigitalCheck';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
-import { Trash2, Eye, Download, FileText } from 'lucide-react';
-import { generateCheckRegisterReport, savePDF, downloadCSV } from '@/lib/reports';
+import { Trash2, Eye, Table2, FileText } from 'lucide-react';
+import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
 
 export default function Checks() {
@@ -44,15 +44,10 @@ export default function Checks() {
     toast.success('Check register exported as PDF');
   };
 
-  /* ── CSV Export ── */
-  const exportCSV = () => {
-    downloadCSV(
-      filtered,
-      `hou-checks-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Check #', 'Payee', 'Amount', 'Issue Date', 'Status', 'Project', 'Memo'],
-      (c: any) => [c.check_number, c.payee_name, c.amount, c.issue_date, c.status, c.projects?.name || '', c.memo || '']
-    );
-    toast.success('Check register exported as CSV');
+  /* ── Excel Export ── */
+  const exportExcel = () => {
+    downloadCheckExcel(checks);
+    toast.success('Check register exported as Excel');
   };
 
   return (
@@ -62,7 +57,7 @@ export default function Checks() {
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
-              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportCSV}><Download className="w-4 h-4" /></Button>
+              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportExcel}><Table2 className="w-4 h-4" /></Button>
             </div>
             <Link to="/checks/new"><Button className="rounded-none">Create Check</Button></Link>
           </div>
@@ -71,7 +66,7 @@ export default function Checks() {
       {/* Mobile export bar */}
       <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
-        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1.5" />CSV</Button>
+        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}><Table2 className="w-3.5 h-3.5 mr-1.5" />Excel</Button>
       </div>
 
       <div className="px-4 sm:px-8 py-5 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center">

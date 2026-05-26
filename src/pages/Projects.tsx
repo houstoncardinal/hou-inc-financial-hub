@@ -11,9 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useProjects, useTransactions, useUpsert } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
-import { Trash2, Download, FileText, ArrowUpRight } from 'lucide-react';
+import { Trash2, Table2, FileText, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { generateProjectReport, savePDF, downloadCSV } from '@/lib/reports';
+import { generateProjectReport, savePDF, downloadProjectExcel } from '@/lib/reports';
 
 const blank = { name: '', code: '', budget: '', status: 'active' as const, notes: '' };
 
@@ -45,15 +45,10 @@ export default function Projects() {
     toast.success('Project portfolio exported as PDF');
   };
 
-  /* ── CSV Export ── */
-  const exportCSV = () => {
-    downloadCSV(
-      enriched,
-      `hou-projects-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Name', 'Code', 'Status', 'Budget', 'Spent', 'Incoming', 'Outstanding', 'Net', 'Utilization'],
-      (p: any) => [p.name, p.code || '', p.status, p.budget, p.spent, p.incoming, p.outstanding, p.net, `${p.used.toFixed(1)}%`]
-    );
-    toast.success('Projects exported as CSV');
+  /* ── Excel Export ── */
+  const exportExcel = () => {
+    downloadProjectExcel(enriched);
+    toast.success('Projects exported as Excel');
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -71,7 +66,7 @@ export default function Projects() {
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
-              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportCSV}><Download className="w-4 h-4" /></Button>
+              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportExcel}><Table2 className="w-4 h-4" /></Button>
             </div>
             <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(blank); }}>
               <DialogTrigger asChild><Button className="rounded-none">New Project</Button></DialogTrigger>
@@ -102,7 +97,7 @@ export default function Projects() {
       {/* Mobile export bar */}
       <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
-        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1.5" />CSV</Button>
+        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}><Table2 className="w-3.5 h-3.5 mr-1.5" />Excel</Button>
       </div>
 
       <div className="p-4 sm:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-border border border-border">

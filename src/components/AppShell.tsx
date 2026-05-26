@@ -5,10 +5,10 @@ import { useTheme } from '@/hooks/useTheme';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
-  Settings, Sun, Moon
+  Settings, Sun, Moon, Receipt
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import SmartWidget from './SmartWidget';
+import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
 
 const navGroups = [
@@ -30,6 +30,12 @@ const navGroups = [
     ],
   },
   {
+    label: 'Billing',
+    items: [
+      { to: '/invoices', label: 'Invoices', icon: Receipt },
+    ],
+  },
+  {
     label: 'Analysis',
     items: [
       { to: '/charts', label: 'Charts', icon: BarChart3 },
@@ -48,7 +54,7 @@ const mobileNav = [
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
-  const { theme, toggle } = useTheme();
+  const { toggle, isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const displayName = user?.user_metadata?.full_name || '';
@@ -76,7 +82,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded-sm transition-all"
           aria-label="Toggle theme"
         >
-          {theme === 'light' ? <Moon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Sun className="w-3.5 h-3.5" strokeWidth={1.5} />}
+          {isDark ? <Sun className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Moon className="w-3.5 h-3.5" strokeWidth={1.5} />}
         </button>
       </div>
 
@@ -142,7 +148,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
-  const { theme, toggle } = useTheme();
+  const { toggle, isDark } = useTheme();
 
   return (
     <div className="min-h-screen bg-background">
@@ -163,7 +169,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             className="h-9 w-9 flex items-center justify-center text-muted-foreground hover:text-foreground"
             aria-label="Toggle theme"
           >
-            {theme === 'light' ? <Moon className="w-4 h-4" strokeWidth={1.5} /> : <Sun className="w-4 h-4" strokeWidth={1.5} />}
+            {isDark ? <Sun className="w-4 h-4" strokeWidth={1.5} /> : <Moon className="w-4 h-4" strokeWidth={1.5} />}
           </button>
           <button
             onClick={() => { setSheetOpen(true); sounds.open(); }}
@@ -182,7 +188,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <SmartWidget />
+      <ElevenLabsAgent />
 
       {/* Main */}
       <main className="md:ml-52 min-h-screen flex flex-col">
