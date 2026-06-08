@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import AnimatedCounter from '@/components/motion/AnimatedCounter';
+import TiltCard from '@/components/motion/TiltCard';
+import MagneticButton from '@/components/motion/MagneticButton';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';
@@ -113,17 +118,26 @@ export default function Portfolio() {
       {/* Hero */}
       <section className="pt-40 pb-20" style={{ backgroundColor: CREAM, ...DOT }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-8">
+          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Signature Work</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-2 gap-12 items-end">
-            <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-              Portfolio
-            </h1>
-            <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-              Over 500 completed projects across Houston and the greater Texas market. Residential estates, commercial towers, retail destinations, and industrial campuses — each built to the same uncompromising standard.
-            </p>
+            <Reveal>
+              <motion.h1
+                style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}
+                initial={{ letterSpacing: '0.04em', opacity: 0 }}
+                animate={{ letterSpacing: '-0.01em', opacity: 1 }}
+                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                Portfolio
+              </motion.h1>
+            </Reveal>
+            <Reveal delay={0.15}>
+              <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
+                Over <AnimatedCounter value={500} suffix="+" className="font-semibold" style={{ color: GOLD }} /> completed projects across Houston and the greater Texas market. Residential estates, commercial towers, retail destinations, and industrial campuses — each built to the same uncompromising standard.
+              </p>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -135,35 +149,56 @@ export default function Portfolio() {
       >
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <div className="flex items-center gap-0 overflow-x-auto">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActive(cat)}
-                className="px-5 py-4 text-[9px] uppercase tracking-[0.24em] font-bold whitespace-nowrap transition-colors shrink-0"
-                style={{
-                  color: active === cat ? GOLD : 'rgba(28,24,20,0.35)',
-                  borderBottom: active === cat ? `2px solid ${GOLD}` : '2px solid transparent',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-            <div className="ml-auto shrink-0 px-5 py-4">
-              <div className="text-[9px] uppercase tracking-[0.22em]" style={{ color: 'rgba(28,24,20,0.25)' }}>
-                {filtered.length} Projects
+        <div className="max-w-7xl mx-auto px-6 lg:px-10">
+          <LayoutGroup>
+            <div className="flex items-center gap-0 overflow-x-auto">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setActive(cat)}
+                  className="relative px-5 py-4 text-[9px] uppercase tracking-[0.24em] font-bold whitespace-nowrap transition-colors shrink-0"
+                  style={{ color: active === cat ? GOLD : 'rgba(28,24,20,0.35)' }}
+                >
+                  {cat}
+                  {active === cat && (
+                    <motion.div
+                      layoutId="portfolio-pill"
+                      className="absolute left-0 right-0 bottom-0 h-[2px]"
+                      style={{ backgroundColor: GOLD }}
+                      transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                    />
+                  )}
+                </button>
+              ))}
+              <div className="ml-auto shrink-0 px-5 py-4">
+                <motion.div
+                  key={filtered.length}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-[9px] uppercase tracking-[0.22em]"
+                  style={{ color: 'rgba(28,24,20,0.25)' }}
+                >
+                  {filtered.length} Projects
+                </motion.div>
               </div>
             </div>
-          </div>
+          </LayoutGroup>
         </div>
       </div>
 
       {/* Grid */}
       <section className="py-2" style={{ backgroundColor: '#FFFFFF' }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="grid md:grid-cols-3 gap-0 mt-6" style={{ border: `1px solid ${BORDER}` }}>
+          <motion.div layout className="grid md:grid-cols-3 gap-0 mt-6" style={{ border: `1px solid ${BORDER}` }}>
+            <AnimatePresence mode="popLayout">
             {filtered.map((p, i) => (
-              <div
+              <motion.div
                 key={p.name}
+                layout
+                initial={{ opacity: 0, y: 32, filter: 'blur(8px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, scale: 0.94, filter: 'blur(6px)' }}
+                transition={{ duration: 0.55, delay: (i % 9) * 0.05, ease: [0.22, 1, 0.36, 1] }}
                 className="relative overflow-hidden group cursor-default transition-shadow duration-300"
                 style={{
                   minHeight: '300px',
