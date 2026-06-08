@@ -17,7 +17,7 @@ const SERVICES = [
     n: '01',
     title: 'Luxury Residences',
     sub: 'Custom Estates & High-End Homes',
-    body: 'We design and build singular private homes for Houston's most discerning families. Every detail — from foundation to finish — is executed to an uncompromising standard.',
+    body: "We design and build singular private homes for Houston's most discerning families. Every detail — from foundation to finish — is executed to an uncompromising standard.",
     specs: ['Custom Floor Plans', 'Smart Home Integration', 'Concierge Project Management', 'Premium Material Sourcing'],
   },
   {

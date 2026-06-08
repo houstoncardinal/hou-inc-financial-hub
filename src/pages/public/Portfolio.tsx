@@ -85,7 +85,7 @@ const PROJECTS = [
     year: '2024',
     sqft: '9,800 sq ft',
     value: '$6.1M',
-    detail: 'A contemporary-transitional custom home featuring a double-height entry foyer, chef's kitchen, home spa, and seamless indoor-outdoor living spaces.',
+    detail: "A contemporary-transitional custom home featuring a double-height entry foyer, chef's kitchen, home spa, and seamless indoor-outdoor living spaces.",
     bg: 'linear-gradient(150deg, #0E0E14 0%, #161420 60%, #0A0A10 100%)',
   },
   {

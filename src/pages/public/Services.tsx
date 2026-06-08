@@ -62,7 +62,7 @@ const SERVICES = [
     n: '05',
     title: 'Industrial & Warehouse',
     sub: 'Logistics · Light Industrial · Flex',
-    description: 'Efficient, durable industrial facilities built to accommodate Houston's logistics, manufacturing, and distribution ecosystem. We deliver flex, light industrial, and large-format warehouse products with speed and precision.',
+    description: "Efficient, durable industrial facilities built to accommodate Houston's logistics, manufacturing, and distribution ecosystem. We deliver flex, light industrial, and large-format warehouse products with speed and precision.",
     features: [
       'Tilt-wall & pre-engineered steel', 'Distribution & fulfillment centers',
       'Cold storage & specialty builds', 'Light industrial flex space',
