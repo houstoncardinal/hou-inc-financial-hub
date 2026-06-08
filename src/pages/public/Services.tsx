@@ -210,10 +210,19 @@ export default function Services() {
             className="grid grid-cols-2 md:grid-cols-4 gap-0"
             style={{ borderTop: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}` }}
           >
-            {CAPABILITIES.map(c => (
-              <div key={c} className="px-6 py-4" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+            {CAPABILITIES.map((c, i) => (
+              <motion.div
+                key={c}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: i * 0.04 }}
+                whileHover={{ backgroundColor: 'rgba(157,126,63,0.05)' }}
+                className="px-6 py-4 cursor-default"
+                style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}
+              >
                 <div className="text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: 'rgba(28,24,20,0.45)' }}>{c}</div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
