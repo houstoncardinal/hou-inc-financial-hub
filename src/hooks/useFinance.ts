@@ -1,11 +1,29 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-const relatedQueryKeys: Record<'vendors' | 'projects' | 'checks' | 'transactions', string[][]> = {
-  vendors: [['vendors'], ['transactions'], ['checks']],
-  projects: [['projects'], ['transactions'], ['checks']],
-  checks: [['checks'], ['projects'], ['vendors']],
+// ── Storage keys ──────────────────────────────────────────────────────────────
+const STORE = {
+  vendors:      'hou-vendors',
+  projects:     'hou-projects',
+  checks:       'hou-checks',
+  transactions: 'hou-transactions',
+} as const;
+
+type TableName = keyof typeof STORE;
+
+function load<T>(key: string): T[] {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch { return []; }
+}
+function save<T>(key: string, data: T[]) {
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ── Query invalidation map ─────────────────────────────────────────────────────
+const relatedQueryKeys: Record<TableName, string[][]> = {
+  vendors:      [['vendors'],  ['transactions'], ['checks']],
+  projects:     [['projects'], ['transactions'], ['checks']],
+  checks:       [['checks'],   ['projects'],     ['vendors']],
   transactions: [['transactions'], ['projects'], ['vendors']],
 };
 
@@ -14,54 +32,87 @@ const stripJoinedRelations = <T extends Record<string, unknown>>(row: T) => {
   return payload;
 };
 
+// ── Query hooks ───────────────────────────────────────────────────────────────
+
 export const useVendors = () => useQuery({
   queryKey: ['vendors'],
-  queryFn: async () => {
-    const { data, error } = await supabase.from('vendors').select('*').order('name');
-    if (error) throw error; return data;
-  },
+  queryFn: () =>
+    load<any>(STORE.vendors).sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')),
 });
 
 export const useProjects = () => useQuery({
   queryKey: ['projects'],
-  queryFn: async () => {
-    const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-    if (error) throw error; return data;
-  },
+  queryFn: () =>
+    load<any>(STORE.projects).sort((a: any, b: any) =>
+      (b.created_at || '').localeCompare(a.created_at || '')),
 });
 
 export const useChecks = () => useQuery({
   queryKey: ['checks'],
-  queryFn: async () => {
-    const { data, error } = await supabase.from('checks').select('*, projects(name), vendors(name)').order('issue_date', { ascending: false });
-    if (error) throw error; return data;
+  queryFn: () => {
+    const checks   = load<any>(STORE.checks);
+    const projects = load<any>(STORE.projects);
+    const vendors  = load<any>(STORE.vendors);
+    return checks
+      .map((c: any) => ({
+        ...c,
+        projects: projects.find((p: any) => p.id === c.project_id)
+          ? { name: projects.find((p: any) => p.id === c.project_id).name }
+          : null,
+        vendors: vendors.find((v: any) => v.id === c.payee_vendor_id)
+          ? { name: vendors.find((v: any) => v.id === c.payee_vendor_id).name }
+          : null,
+      }))
+      .sort((a: any, b: any) => (b.issue_date || '').localeCompare(a.issue_date || ''));
   },
 });
 
 export const useTransactions = (type?: 'income' | 'expense') => useQuery({
   queryKey: ['transactions', type],
-  queryFn: async () => {
-    let q = supabase.from('transactions').select('*, projects(name), vendors(name)').order('transaction_date', { ascending: false });
-    if (type) q = q.eq('type', type);
-    const { data, error } = await q;
-    if (error) throw error; return data;
+  queryFn: () => {
+    const txns     = load<any>(STORE.transactions);
+    const projects = load<any>(STORE.projects);
+    const vendors  = load<any>(STORE.vendors);
+    return txns
+      .filter((t: any) => !type || t.type === type)
+      .map((t: any) => ({
+        ...t,
+        projects: projects.find((p: any) => p.id === t.project_id)
+          ? { name: projects.find((p: any) => p.id === t.project_id).name }
+          : null,
+        vendors: vendors.find((v: any) => v.id === t.vendor_id)
+          ? { name: vendors.find((v: any) => v.id === t.vendor_id).name }
+          : null,
+      }))
+      .sort((a: any, b: any) =>
+        (b.transaction_date || '').localeCompare(a.transaction_date || ''));
   },
 });
 
-export const useUpsert = <T extends { id?: string }>(table: 'vendors' | 'projects' | 'checks' | 'transactions', invalidate: string[][]) => {
+// ── Mutation hooks ────────────────────────────────────────────────────────────
+
+export const useUpsert = <T extends { id?: string }>(
+  table: TableName,
+  invalidate: string[][],
+) => {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (row: T) => {
-      if (!user) throw new Error('You must be signed in to save changes');
-      const payload = { ...stripJoinedRelations(row as Record<string, unknown>), user_id: user.id } as never;
+      const payload = {
+        ...stripJoinedRelations(row as Record<string, unknown>),
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      } as any;
+      const items = load<any>(STORE[table]);
       if (row.id) {
-        const { error } = await supabase.from(table).update(payload).eq('id', row.id);
-        if (error) throw error;
+        const idx = items.findIndex((i: any) => i.id === row.id);
+        if (idx >= 0) items[idx] = { ...items[idx], ...payload };
+        else items.unshift({ ...payload, created_at: new Date().toISOString() });
       } else {
-        const { error } = await supabase.from(table).insert(payload);
-        if (error) throw error;
+        items.unshift({ ...payload, id: crypto.randomUUID(), created_at: new Date().toISOString() });
       }
+      save(STORE[table], items);
     },
     onSuccess: async () => {
       const keys = [...invalidate, ...relatedQueryKeys[table]];
@@ -70,12 +121,12 @@ export const useUpsert = <T extends { id?: string }>(table: 'vendors' | 'project
   });
 };
 
-export const useDelete = (table: 'vendors' | 'projects' | 'checks' | 'transactions', invalidate: string[][]) => {
+export const useDelete = (table: TableName, invalidate: string[][]) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table).delete().eq('id', id);
-      if (error) throw error;
+      const items = load<any>(STORE[table]).filter((i: any) => i.id !== id);
+      save(STORE[table], items);
     },
     onSuccess: async () => {
       const keys = [...invalidate, ...relatedQueryKeys[table]];
@@ -89,14 +140,18 @@ export const useQuickCreate = (table: 'vendors' | 'projects') => {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
-      if (!user) throw new Error('You must be signed in to save changes');
-      const { data: result, error } = await supabase
-        .from(table)
-        .insert({ ...data, user_id: user.id })
-        .select()
-        .single();
-      if (error) throw error;
-      return result as { id: string; name: string; [key: string]: unknown };
+      const now = new Date().toISOString();
+      const record = {
+        ...data,
+        user_id: user.id,
+        id: crypto.randomUUID(),
+        created_at: now,
+        updated_at: now,
+      } as { id: string; name: string; [key: string]: unknown };
+      const items = load<any>(STORE[table]);
+      items.unshift(record);
+      save(STORE[table], items);
+      return record;
     },
     onSuccess: async () => {
       await Promise.all(relatedQueryKeys[table].map(k => qc.invalidateQueries({ queryKey: k })));

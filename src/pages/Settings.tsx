@@ -23,16 +23,9 @@ export default function Settings() {
 
   const saveProfile = async () => {
     setSaving(true);
-    try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { error } = await supabase.auth.updateUser({ data: { full_name: displayName } });
-      if (error) throw error;
-      toast.success('Profile updated');
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSaving(false);
-    }
+    localStorage.setItem('hou-display-name', displayName);
+    toast.success('Profile updated');
+    setSaving(false);
   };
 
   const saveStripe = () => {

@@ -1,26 +1,44 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { Session, User } from '@supabase/supabase-js';
+import { createContext, useContext, ReactNode } from 'react';
 
-type Ctx = { user: User | null; session: Session | null; loading: boolean; signOut: () => Promise<void> };
-const AuthCtx = createContext<Ctx>({ user: null, session: null, loading: true, signOut: async () => {} });
+export interface AppUser {
+  id: string;
+  email: string;
+  user_metadata: { full_name?: string };
+}
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+function getMockUser(): AppUser {
+  return {
+    id: 'local-user-001',
+    email: 'admin@hou-inc.local',
+    user_metadata: { full_name: localStorage.getItem('hou-display-name') || 'HOU INC' },
+  };
+}
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s); setUser(s?.user ?? null);
-    });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session); setUser(session?.user ?? null); setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  return <AuthCtx.Provider value={{ user, session, loading, signOut: async () => { await supabase.auth.signOut(); } }}>{children}</AuthCtx.Provider>;
+type Ctx = {
+  user: AppUser;
+  session: { user: AppUser };
+  loading: false;
+  signOut: () => Promise<void>;
 };
+
+const AuthCtx = createContext<Ctx>({
+  user: getMockUser(),
+  session: { user: getMockUser() },
+  loading: false,
+  signOut: async () => {},
+});
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => (
+  <AuthCtx.Provider
+    value={{
+      user: getMockUser(),
+      session: { user: getMockUser() },
+      loading: false,
+      signOut: async () => { window.location.href = '/'; },
+    }}
+  >
+    {children}
+  </AuthCtx.Provider>
+);
 
 export const useAuth = () => useContext(AuthCtx);
