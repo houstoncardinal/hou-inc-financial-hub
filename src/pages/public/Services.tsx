@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import MagneticButton from '@/components/motion/MagneticButton';
+import TiltCard from '@/components/motion/TiltCard';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';

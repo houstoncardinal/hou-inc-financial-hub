@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import AnimatedCounter from '@/components/motion/AnimatedCounter';
+import TiltCard from '@/components/motion/TiltCard';
+import MagneticButton from '@/components/motion/MagneticButton';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';

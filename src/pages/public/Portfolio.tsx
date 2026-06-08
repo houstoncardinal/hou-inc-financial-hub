@@ -278,13 +278,20 @@ export default function Portfolio() {
           <p className="text-sm mb-8 font-light" style={{ color: 'rgba(250,247,242,0.38)' }}>
             Let's discuss your vision. We respond within one business day.
           </p>
-          <a
-            href="/contact"
-            className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-            style={{ backgroundColor: GOLD, color: DARK }}
-          >
-            Start a Conversation <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-          </a>
+          <Reveal delay={0.2}>
+            <MagneticButton as="a" href="/contact">
+              <a
+                href="/contact"
+                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
+                style={{ backgroundColor: GOLD, color: DARK }}
+              >
+                Start a Conversation
+                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </span>
+              </a>
+            </MagneticButton>
+          </Reveal>
         </div>
       </section>
 

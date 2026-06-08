@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { ArrowUpRight, MapPin, Phone, Mail, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import MagneticButton from '@/components/motion/MagneticButton';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';
