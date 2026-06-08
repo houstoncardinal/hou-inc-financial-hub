@@ -147,7 +147,7 @@ export const useQuickCreate = (table: 'vendors' | 'projects') => {
         id: crypto.randomUUID(),
         created_at: now,
         updated_at: now,
-      } as { id: string; name: string; [key: string]: unknown };
+      } as unknown as { id: string; name: string; [key: string]: unknown };
       const items = load<any>(STORE[table]);
       items.unshift(record);
       save(STORE[table], items);
