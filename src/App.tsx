@@ -15,6 +15,12 @@ import Portfolio from "./pages/public/Portfolio";
 import About     from "./pages/public/About";
 import Contact   from "./pages/public/Contact";
 
+// Client portal
+import PortalAuth      from "./pages/portal/PortalAuth";
+import PortalDashboard from "./pages/portal/PortalDashboard";
+import PortalProject   from "./pages/portal/PortalProject";
+import PortalMessages  from "./pages/portal/PortalMessages";
+
 // Finance dashboard
 import Index         from "./pages/Index";
 import Auth          from "./pages/Auth";
@@ -51,6 +57,12 @@ const App = () => (
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/about"     element={<About />} />
                 <Route path="/contact"   element={<Contact />} />
+
+                {/* ── Client portal ── */}
+                <Route path="/portal"             element={<PortalAuth />} />
+                <Route path="/portal/dashboard"   element={<PortalDashboard />} />
+                <Route path="/portal/project"     element={<PortalProject />} />
+                <Route path="/portal/messages"    element={<PortalMessages />} />
 
                 {/* ── Finance sector ── */}
                 <Route path="/auth"             element={<Auth />} />
