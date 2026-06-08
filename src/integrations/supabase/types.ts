@@ -14,11 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          created_at: string
+          event_type: Database["public"]["Enums"]["audit_event"]
+          geo_city: string | null
+          geo_country: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          resource_id: string | null
+          resource_type: string | null
+          success: boolean
+          user_agent: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: Database["public"]["Enums"]["audit_event"]
+          geo_city?: string | null
+          geo_country?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: Database["public"]["Enums"]["audit_event"]
+          geo_city?: string | null
+          geo_country?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          success?: boolean
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       checks: {
         Row: {
           amount: number
           check_number: string
           created_at: string
+          deleted_at: string | null
           id: string
           issue_date: string
           memo: string | null
@@ -33,6 +82,7 @@ export type Database = {
           amount: number
           check_number: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           issue_date?: string
           memo?: string | null
@@ -47,6 +97,7 @@ export type Database = {
           amount?: number
           check_number?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           issue_date?: string
           memo?: string | null
@@ -66,19 +117,61 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "checks_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "checks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "checks_vendor_fk"
+            columns: ["payee_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       projects: {
         Row: {
           budget: number
           code: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           notes: string | null
@@ -90,6 +183,7 @@ export type Database = {
           budget?: number
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -101,6 +195,7 @@ export type Database = {
           budget?: number
           code?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -115,6 +210,7 @@ export type Database = {
           amount: number
           category: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           notes: string | null
           project_id: string | null
@@ -129,6 +225,7 @@ export type Database = {
           amount: number
           category?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           project_id?: string | null
@@ -143,6 +240,7 @@ export type Database = {
           amount?: number
           category?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           notes?: string | null
           project_id?: string | null
@@ -168,6 +266,20 @@ export type Database = {
             referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "txn_project_fk"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "txn_vendor_fk"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
         ]
       }
       vendors: {
@@ -176,6 +288,7 @@ export type Database = {
           contact_email: string | null
           contact_phone: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           notes: string | null
@@ -187,6 +300,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -198,6 +312,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -214,6 +329,26 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      audit_event:
+        | "login_success"
+        | "login_failure"
+        | "logout"
+        | "signup"
+        | "check_issued"
+        | "check_voided"
+        | "check_updated"
+        | "transaction_created"
+        | "transaction_updated"
+        | "transaction_deleted"
+        | "project_created"
+        | "project_updated"
+        | "project_deleted"
+        | "vendor_created"
+        | "vendor_updated"
+        | "vendor_deleted"
+        | "export_drive"
+        | "export_csv"
+        | "export_pdf"
       check_status: "pending" | "cleared" | "voided"
       project_status: "active" | "on_hold" | "completed" | "archived"
       txn_type: "income" | "expense"
@@ -344,6 +479,27 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      audit_event: [
+        "login_success",
+        "login_failure",
+        "logout",
+        "signup",
+        "check_issued",
+        "check_voided",
+        "check_updated",
+        "transaction_created",
+        "transaction_updated",
+        "transaction_deleted",
+        "project_created",
+        "project_updated",
+        "project_deleted",
+        "vendor_created",
+        "vendor_updated",
+        "vendor_deleted",
+        "export_drive",
+        "export_csv",
+        "export_pdf",
+      ],
       check_status: ["pending", "cleared", "voided"],
       project_status: ["active", "on_hold", "completed", "archived"],
       txn_type: ["income", "expense"],
