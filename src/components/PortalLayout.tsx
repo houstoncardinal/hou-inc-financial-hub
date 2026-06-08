@@ -73,7 +73,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
                 borderLeft: isActive ? `2px solid ${GOLD}` : '2px solid transparent',
               })}
             >
-              <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={isActive => isActive ? 2 : 1.5} />
+              <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
               {label}
             </NavLink>
           ))}
