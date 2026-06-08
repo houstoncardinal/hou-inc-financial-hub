@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
-  Settings, Sun, Moon, Receipt, BookMarked
+  Settings, Sun, Moon, Receipt, BookMarked, Globe
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ElevenLabsAgent from './ElevenLabsAgent';
@@ -15,7 +15,7 @@ const navGroups = [
   {
     label: 'Daily',
     items: [
-      { to: '/', label: 'Overview', icon: LayoutGrid, end: true },
+      { to: '/finance', label: 'Overview', icon: LayoutGrid, end: true },
       { to: '/ledger', label: 'Ledger', icon: BookOpen },
       { to: '/checks', label: 'Checks', icon: FileText },
       { to: '/income', label: 'Income', icon: ArrowDownToLine },
@@ -46,7 +46,7 @@ const navGroups = [
 ];
 
 const mobileNav = [
-  { to: '/', label: 'Home', icon: LayoutGrid, end: true },
+  { to: '/finance', label: 'Home', icon: LayoutGrid, end: true },
   { to: '/checks', label: 'Checks', icon: FileText },
   { to: '/income', label: 'Income', icon: ArrowDownToLine },
   { to: '/expenses', label: 'Expenses', icon: ArrowUpFromLine },
@@ -75,7 +75,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="w-0.5 h-5 bg-accent" />
           <div>
             <div className="text-xs font-bold tracking-[0.12em] uppercase">HOU INC</div>
-            <div className="text-[7px] uppercase tracking-[0.2em] text-muted-foreground">Dashboard</div>
+            <div className="text-[7px] uppercase tracking-[0.2em] text-muted-foreground">Finance Sector</div>
           </div>
         </div>
         <button
@@ -135,6 +135,15 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
           <Settings className="w-3 h-3 text-muted-foreground shrink-0" strokeWidth={1.5} />
         </button>
+        <NavLink
+          to="/"
+          end
+          onClick={() => { onNavigate?.(); sounds.tap(); }}
+          className="w-full flex items-center gap-3 px-5 py-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"
+        >
+          <Globe className="w-3 h-3 shrink-0" strokeWidth={1.5} />
+          <span>HOU INC Website</span>
+        </NavLink>
         <button
           onClick={async () => { sounds.click(); await signOut(); navigate('/auth'); onNavigate?.(); }}
           className="w-full flex items-center gap-3 px-5 py-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"

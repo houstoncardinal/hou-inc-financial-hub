@@ -656,7 +656,7 @@ export default function Concierge() {
             <Button onClick={() => setPhase('welcome')} className="rounded-none h-12 px-8 bg-foreground text-background hover:opacity-90">
               <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} /> Do Another
             </Button>
-            <Button variant="outline" onClick={() => navigate('/')} className="rounded-none h-12 px-8">
+            <Button variant="outline" onClick={() => navigate('/finance')} className="rounded-none h-12 px-8">
               Back to Overview
             </Button>
           </div>

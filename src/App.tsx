@@ -7,22 +7,31 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Checks from "./pages/Checks";
-import CheckNew from "./pages/CheckNew";
-import TxnPage from "./pages/TxnPage";
-import Ledger from "./pages/Ledger";
-import Projects from "./pages/Projects";
+
+// Public website
+import Home      from "./pages/public/Home";
+import Services  from "./pages/public/Services";
+import Portfolio from "./pages/public/Portfolio";
+import About     from "./pages/public/About";
+import Contact   from "./pages/public/Contact";
+
+// Finance dashboard
+import Index         from "./pages/Index";
+import Auth          from "./pages/Auth";
+import Checks        from "./pages/Checks";
+import CheckNew      from "./pages/CheckNew";
+import TxnPage       from "./pages/TxnPage";
+import Ledger        from "./pages/Ledger";
+import Projects      from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
-import Vendors from "./pages/Vendors";
-import Concierge from "./pages/Concierge";
-import Charts from "./pages/Charts";
-import Settings from "./pages/Settings";
-import Invoices from "./pages/Invoices";
-import InvoiceNew from "./pages/InvoiceNew";
-import Glossary from "./pages/Glossary";
-import NotFound from "./pages/NotFound";
+import Vendors       from "./pages/Vendors";
+import Concierge     from "./pages/Concierge";
+import Charts        from "./pages/Charts";
+import Settings      from "./pages/Settings";
+import Invoices      from "./pages/Invoices";
+import InvoiceNew    from "./pages/InvoiceNew";
+import Glossary      from "./pages/Glossary";
+import NotFound      from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -36,23 +45,32 @@ const App = () => (
           <ThemeProvider>
             <AuthProvider>
               <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/" element={<Protected><Index /></Protected>} />
-                <Route path="/checks" element={<Protected><Checks /></Protected>} />
-                <Route path="/checks/new" element={<Protected><CheckNew /></Protected>} />
-                <Route path="/income" element={<Protected><TxnPage kind="income" /></Protected>} />
-                <Route path="/expenses" element={<Protected><TxnPage kind="expense" /></Protected>} />
-                <Route path="/ledger" element={<Protected><Ledger /></Protected>} />
-                <Route path="/projects" element={<Protected><Projects /></Protected>} />
-                <Route path="/projects/:id" element={<Protected><ProjectDetail /></Protected>} />
-                <Route path="/vendors" element={<Protected><Vendors /></Protected>} />
-                <Route path="/concierge" element={<Protected><Concierge /></Protected>} />
-                <Route path="/charts" element={<Protected><Charts /></Protected>} />
-                <Route path="/invoices" element={<Protected><Invoices /></Protected>} />
-                <Route path="/invoices/new" element={<Protected><InvoiceNew /></Protected>} />
-                <Route path="/invoices/:id" element={<Protected><InvoiceNew /></Protected>} />
-                <Route path="/settings" element={<Protected><Settings /></Protected>} />
-                <Route path="/glossary" element={<Protected><Glossary /></Protected>} />
+                {/* ── Public website ── */}
+                <Route path="/"          element={<Home />} />
+                <Route path="/services"  element={<Services />} />
+                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/about"     element={<About />} />
+                <Route path="/contact"   element={<Contact />} />
+
+                {/* ── Finance sector ── */}
+                <Route path="/auth"             element={<Auth />} />
+                <Route path="/finance"          element={<Protected><Index /></Protected>} />
+                <Route path="/checks"           element={<Protected><Checks /></Protected>} />
+                <Route path="/checks/new"       element={<Protected><CheckNew /></Protected>} />
+                <Route path="/income"           element={<Protected><TxnPage kind="income" /></Protected>} />
+                <Route path="/expenses"         element={<Protected><TxnPage kind="expense" /></Protected>} />
+                <Route path="/ledger"           element={<Protected><Ledger /></Protected>} />
+                <Route path="/projects"         element={<Protected><Projects /></Protected>} />
+                <Route path="/projects/:id"     element={<Protected><ProjectDetail /></Protected>} />
+                <Route path="/vendors"          element={<Protected><Vendors /></Protected>} />
+                <Route path="/concierge"        element={<Protected><Concierge /></Protected>} />
+                <Route path="/charts"           element={<Protected><Charts /></Protected>} />
+                <Route path="/invoices"         element={<Protected><Invoices /></Protected>} />
+                <Route path="/invoices/new"     element={<Protected><InvoiceNew /></Protected>} />
+                <Route path="/invoices/:id"     element={<Protected><InvoiceNew /></Protected>} />
+                <Route path="/settings"         element={<Protected><Settings /></Protected>} />
+                <Route path="/glossary"         element={<Protected><Glossary /></Protected>} />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
