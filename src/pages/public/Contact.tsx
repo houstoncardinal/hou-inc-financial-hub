@@ -67,17 +67,21 @@ export default function Contact() {
       {/* Hero */}
       <section className="pt-40 pb-20" style={{ backgroundColor: CREAM, ...DOT }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-8">
+          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Let's Talk</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-2 gap-12 items-end">
-            <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-              Start Your<br />Project
-            </h1>
-            <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-              Tell us what you're building. Our team reviews every inquiry personally and responds within one business day. No automated responses, no outsourced intake — just a direct conversation with the people who will build your project.
-            </p>
+            <Reveal>
+              <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
+                Start Your<br />Project
+              </h1>
+            </Reveal>
+            <Reveal delay={0.15}>
+              <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
+                Tell us what you're building. Our team reviews every inquiry personally and responds within one business day. No automated responses, no outsourced intake — just a direct conversation with the people who will build your project.
+              </p>
+            </Reveal>
           </div>
         </div>
       </section>
