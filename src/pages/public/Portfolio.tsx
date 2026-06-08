@@ -148,8 +148,6 @@ export default function Portfolio() {
         style={{ backgroundColor: 'rgba(250,247,242,0.97)', borderBottom: `1px solid ${BORDER}`, backdropFilter: 'blur(14px)' }}
       >
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-0 overflow-x-auto">
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <LayoutGroup>
             <div className="flex items-center gap-0 overflow-x-auto">
               {CATEGORIES.map(cat => (
