@@ -108,17 +108,23 @@ export default function About() {
           </div>
           <div className="grid md:grid-cols-4 gap-0" style={{ border: `1px solid ${BORDER}` }}>
             {VALUES.map((v, i) => (
-              <div key={v.n} className="p-8 bg-white" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}>
-                <div
-                  className="leading-none mb-5"
-                  style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.8rem', color: 'rgba(157,126,63,0.22)' }}
+              <Reveal key={v.n} delay={i * 0.1}>
+                <TiltCard
+                  max={4}
+                  className="p-8 bg-white h-full"
+                  style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}
                 >
-                  {v.n}
-                </div>
-                <div className="w-6 h-px mb-5" style={{ backgroundColor: GOLD }} />
-                <div className="text-base font-bold tracking-tight mb-3" style={{ color: DARK }}>{v.title}</div>
-                <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{v.body}</p>
-              </div>
+                  <div
+                    className="leading-none mb-5"
+                    style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.8rem', color: 'rgba(157,126,63,0.22)' }}
+                  >
+                    {v.n}
+                  </div>
+                  <div className="w-6 h-px mb-5" style={{ backgroundColor: GOLD }} />
+                  <div className="text-base font-bold tracking-tight mb-3" style={{ color: DARK }}>{v.title}</div>
+                  <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{v.body}</p>
+                </TiltCard>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -131,10 +137,28 @@ export default function About() {
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>25 Years of Progress</div>
           </div>
-          <div className="max-w-2xl space-y-0" style={{ borderLeft: `1px solid ${GOLD}` }}>
+          <div className="max-w-2xl space-y-0 relative">
+            {/* Animated draw line */}
+            <motion.div
+              className="absolute left-0 top-0 bottom-0 w-px origin-top"
+              style={{ backgroundColor: GOLD }}
+              initial={{ scaleY: 0 }}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ duration: 2.4, ease: [0.22, 1, 0.36, 1] }}
+            />
             {MILESTONES.map((m, i) => (
-              <div key={m.year} className="flex items-start gap-8 pl-8 pb-8 relative">
-                <div className="absolute -left-[4.5px] top-1 w-2 h-2 rounded-full" style={{ backgroundColor: GOLD }} />
+              <Reveal key={m.year} delay={i * 0.08} y={20} direction="left" x={20}
+                className="flex items-start gap-8 pl-8 pb-8 relative"
+              >
+                <motion.div
+                  className="absolute -left-[4.5px] top-1 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: GOLD }}
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.4 + i * 0.08, type: 'spring', stiffness: 380, damping: 16 }}
+                />
                 <div
                   className="shrink-0 w-12"
                   style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 600, fontSize: '0.9rem', color: GOLD }}
@@ -147,7 +171,7 @@ export default function About() {
                 >
                   {m.event}
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -156,10 +180,10 @@ export default function About() {
       {/* Leadership */}
       <section className="py-24" style={{ backgroundColor: ALT, borderTop: `1px solid ${BORDER}` }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-14">
+          <Reveal className="flex items-center gap-3 mb-14">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Leadership</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-3 gap-6">
             {TEAM.map(t => (
               <div
