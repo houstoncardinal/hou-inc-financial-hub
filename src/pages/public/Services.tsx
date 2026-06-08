@@ -135,24 +135,31 @@ export default function Services() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <div className="space-y-0" style={{ border: `1px solid ${BORDER}` }}>
             {SERVICES.map((s, i) => (
-              <div
+              <Reveal
                 key={s.n}
-                className="grid md:grid-cols-2 group"
+                y={50}
+                className="grid md:grid-cols-2 group overflow-hidden"
                 style={{ borderBottom: i < SERVICES.length - 1 ? `1px solid ${BORDER}` : 'none' }}
               >
                 {/* Visual side */}
                 <div
-                  className="relative min-h-[200px] md:min-h-[260px] flex items-end p-8 md:p-10"
+                  className="relative min-h-[200px] md:min-h-[260px] flex items-end p-8 md:p-10 overflow-hidden"
                   style={{ backgroundColor: i % 2 === 0 ? CREAM : ALT, order: i % 2 === 0 ? 0 : 1, ...DOT }}
                 >
                   {/* Hover glow */}
                   <div
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                    style={{ background: `radial-gradient(ellipse at 30% 70%, rgba(157,126,63,0.08) 0%, transparent 60%)` }}
+                    style={{ background: `radial-gradient(ellipse at 30% 70%, rgba(157,126,63,0.12) 0%, transparent 60%)` }}
                   />
                   <div className="relative z-10">
                     <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: GOLD }}>{s.tag}</div>
-                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: 'rgba(157,126,63,0.14)', lineHeight: 1 }}>{s.n}</div>
+                    <motion.div
+                      style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: 'rgba(157,126,63,0.14)', lineHeight: 1 }}
+                      whileHover={{ scale: 1.08, color: 'rgba(157,126,63,0.32)' }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      {s.n}
+                    </motion.div>
                   </div>
                 </div>
 
@@ -170,15 +177,23 @@ export default function Services() {
                   <div className="text-[9px] uppercase tracking-[0.22em] mb-5 font-semibold" style={{ color: GOLD }}>{s.sub}</div>
                   <p className="text-[11px] leading-relaxed mb-6 font-light" style={{ color: MUTED }}>{s.description}</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                    {s.features.map(f => (
-                      <div key={f} className="flex items-start gap-2 text-[10px]" style={{ color: 'rgba(28,24,20,0.4)' }}>
+                    {s.features.map((f, fi) => (
+                      <motion.div
+                        key={f}
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: fi * 0.04, duration: 0.4 }}
+                        className="flex items-start gap-2 text-[10px]"
+                        style={{ color: 'rgba(28,24,20,0.4)' }}
+                      >
                         <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" style={{ color: GOLD, opacity: 0.65 }} strokeWidth={1.5} />
                         {f}
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -214,13 +229,20 @@ export default function Services() {
           <p className="text-sm mb-10 font-light" style={{ color: 'rgba(250,247,242,0.4)' }}>
             Tell us what you're building. Our team will respond within one business day.
           </p>
-          <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-            style={{ backgroundColor: GOLD, color: DARK }}
-          >
-            Request a Consultation <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-          </Link>
+          <Reveal delay={0.15}>
+            <MagneticButton as="a" href="/contact">
+              <Link
+                to="/contact"
+                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
+                style={{ backgroundColor: GOLD, color: DARK }}
+              >
+                Request a Consultation
+                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </span>
+              </Link>
+            </MagneticButton>
+          </Reveal>
         </div>
       </section>
 
