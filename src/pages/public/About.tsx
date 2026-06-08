@@ -54,22 +54,24 @@ export default function About() {
       {/* Hero */}
       <section className="pt-40 pb-24" style={{ backgroundColor: CREAM, ...DOT }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-8">
+          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Our Story</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-2 gap-16 items-end">
-            <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-              About<br />HOU INC
-            </h1>
-            <div>
+            <Reveal>
+              <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
+                About<br />HOU INC
+              </h1>
+            </Reveal>
+            <Reveal delay={0.15}>
               <p className="text-sm leading-relaxed font-light mb-4" style={{ color: MUTED }}>
-                Founded in Houston in 1998, HOU INC has spent 25 years building some of the most recognized residential and commercial properties in Texas.
+                Founded in Houston in 1998, HOU INC has spent <AnimatedCounter value={25} className="font-semibold" style={{ color: GOLD }} /> years building some of the most recognized residential and commercial properties in Texas.
               </p>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
                 We are builders, first and foremost. We are also a company that believes the built environment shapes lives, communities, and economies — and that a construction firm has an obligation to its city.
               </p>
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
