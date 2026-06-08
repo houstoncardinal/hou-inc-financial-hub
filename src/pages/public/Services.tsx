@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import MagneticButton from '@/components/motion/MagneticButton';
+import TiltCard from '@/components/motion/TiltCard';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';
@@ -104,17 +108,21 @@ export default function Services() {
       {/* Hero */}
       <section className="pt-40 pb-20" style={{ backgroundColor: CREAM, ...DOT }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-8">
+          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>What We Build</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-2 gap-12 items-end">
-            <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-              Services
-            </h1>
-            <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-              From a 14,000 sq ft private estate to a 400,000 sq ft retail development — HOU INC has the capability, capacity, and conviction to deliver any project at the luxury level Houston demands.
-            </p>
+            <Reveal>
+              <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
+                Services
+              </h1>
+            </Reveal>
+            <Reveal delay={0.15}>
+              <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
+                From a 14,000 sq ft private estate to a 400,000 sq ft retail development — HOU INC has the capability, capacity, and conviction to deliver any project at the luxury level Houston demands.
+              </p>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -127,24 +135,31 @@ export default function Services() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <div className="space-y-0" style={{ border: `1px solid ${BORDER}` }}>
             {SERVICES.map((s, i) => (
-              <div
+              <Reveal
                 key={s.n}
-                className="grid md:grid-cols-2 group"
+                y={50}
+                className="grid md:grid-cols-2 group overflow-hidden"
                 style={{ borderBottom: i < SERVICES.length - 1 ? `1px solid ${BORDER}` : 'none' }}
               >
                 {/* Visual side */}
                 <div
-                  className="relative min-h-[200px] md:min-h-[260px] flex items-end p-8 md:p-10"
+                  className="relative min-h-[200px] md:min-h-[260px] flex items-end p-8 md:p-10 overflow-hidden"
                   style={{ backgroundColor: i % 2 === 0 ? CREAM : ALT, order: i % 2 === 0 ? 0 : 1, ...DOT }}
                 >
                   {/* Hover glow */}
                   <div
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                    style={{ background: `radial-gradient(ellipse at 30% 70%, rgba(157,126,63,0.08) 0%, transparent 60%)` }}
+                    style={{ background: `radial-gradient(ellipse at 30% 70%, rgba(157,126,63,0.12) 0%, transparent 60%)` }}
                   />
                   <div className="relative z-10">
                     <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: GOLD }}>{s.tag}</div>
-                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: 'rgba(157,126,63,0.14)', lineHeight: 1 }}>{s.n}</div>
+                    <motion.div
+                      style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: 'rgba(157,126,63,0.14)', lineHeight: 1 }}
+                      whileHover={{ scale: 1.08, color: 'rgba(157,126,63,0.32)' }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      {s.n}
+                    </motion.div>
                   </div>
                 </div>
 
@@ -162,15 +177,23 @@ export default function Services() {
                   <div className="text-[9px] uppercase tracking-[0.22em] mb-5 font-semibold" style={{ color: GOLD }}>{s.sub}</div>
                   <p className="text-[11px] leading-relaxed mb-6 font-light" style={{ color: MUTED }}>{s.description}</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                    {s.features.map(f => (
-                      <div key={f} className="flex items-start gap-2 text-[10px]" style={{ color: 'rgba(28,24,20,0.4)' }}>
+                    {s.features.map((f, fi) => (
+                      <motion.div
+                        key={f}
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: fi * 0.04, duration: 0.4 }}
+                        className="flex items-start gap-2 text-[10px]"
+                        style={{ color: 'rgba(28,24,20,0.4)' }}
+                      >
                         <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" style={{ color: GOLD, opacity: 0.65 }} strokeWidth={1.5} />
                         {f}
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -187,10 +210,19 @@ export default function Services() {
             className="grid grid-cols-2 md:grid-cols-4 gap-0"
             style={{ borderTop: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}` }}
           >
-            {CAPABILITIES.map(c => (
-              <div key={c} className="px-6 py-4" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}>
+            {CAPABILITIES.map((c, i) => (
+              <motion.div
+                key={c}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: i * 0.04 }}
+                whileHover={{ backgroundColor: 'rgba(157,126,63,0.05)' }}
+                className="px-6 py-4 cursor-default"
+                style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}
+              >
                 <div className="text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: 'rgba(28,24,20,0.45)' }}>{c}</div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -206,13 +238,20 @@ export default function Services() {
           <p className="text-sm mb-10 font-light" style={{ color: 'rgba(250,247,242,0.4)' }}>
             Tell us what you're building. Our team will respond within one business day.
           </p>
-          <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-            style={{ backgroundColor: GOLD, color: DARK }}
-          >
-            Request a Consultation <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-          </Link>
+          <Reveal delay={0.15}>
+            <MagneticButton as="a" href="/contact">
+              <Link
+                to="/contact"
+                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
+                style={{ backgroundColor: GOLD, color: DARK }}
+              >
+                Request a Consultation
+                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </span>
+              </Link>
+            </MagneticButton>
+          </Reveal>
         </div>
       </section>
 

@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
+import Reveal from '@/components/motion/Reveal';
+import AnimatedCounter from '@/components/motion/AnimatedCounter';
+import TiltCard from '@/components/motion/TiltCard';
+import MagneticButton from '@/components/motion/MagneticButton';
 
 const CREAM  = '#FAF7F2';
 const ALT    = '#F3EDE3';
@@ -49,22 +54,24 @@ export default function About() {
       {/* Hero */}
       <section className="pt-40 pb-24" style={{ backgroundColor: CREAM, ...DOT }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-8">
+          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Our Story</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-2 gap-16 items-end">
-            <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-              About<br />HOU INC
-            </h1>
-            <div>
+            <Reveal>
+              <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
+                About<br />HOU INC
+              </h1>
+            </Reveal>
+            <Reveal delay={0.15}>
               <p className="text-sm leading-relaxed font-light mb-4" style={{ color: MUTED }}>
-                Founded in Houston in 1998, HOU INC has spent 25 years building some of the most recognized residential and commercial properties in Texas.
+                Founded in Houston in 1998, HOU INC has spent <AnimatedCounter value={25} className="font-semibold" style={{ color: GOLD }} /> years building some of the most recognized residential and commercial properties in Texas.
               </p>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
                 We are builders, first and foremost. We are also a company that believes the built environment shapes lives, communities, and economies — and that a construction firm has an obligation to its city.
               </p>
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -101,17 +108,23 @@ export default function About() {
           </div>
           <div className="grid md:grid-cols-4 gap-0" style={{ border: `1px solid ${BORDER}` }}>
             {VALUES.map((v, i) => (
-              <div key={v.n} className="p-8 bg-white" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}>
-                <div
-                  className="leading-none mb-5"
-                  style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.8rem', color: 'rgba(157,126,63,0.22)' }}
+              <Reveal key={v.n} delay={i * 0.1}>
+                <TiltCard
+                  max={4}
+                  className="p-8 bg-white h-full"
+                  style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}
                 >
-                  {v.n}
-                </div>
-                <div className="w-6 h-px mb-5" style={{ backgroundColor: GOLD }} />
-                <div className="text-base font-bold tracking-tight mb-3" style={{ color: DARK }}>{v.title}</div>
-                <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{v.body}</p>
-              </div>
+                  <div
+                    className="leading-none mb-5"
+                    style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.8rem', color: 'rgba(157,126,63,0.22)' }}
+                  >
+                    {v.n}
+                  </div>
+                  <div className="w-6 h-px mb-5" style={{ backgroundColor: GOLD }} />
+                  <div className="text-base font-bold tracking-tight mb-3" style={{ color: DARK }}>{v.title}</div>
+                  <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{v.body}</p>
+                </TiltCard>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -124,10 +137,28 @@ export default function About() {
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>25 Years of Progress</div>
           </div>
-          <div className="max-w-2xl space-y-0" style={{ borderLeft: `1px solid ${GOLD}` }}>
+          <div className="max-w-2xl space-y-0 relative">
+            {/* Animated draw line */}
+            <motion.div
+              className="absolute left-0 top-0 bottom-0 w-px origin-top"
+              style={{ backgroundColor: GOLD }}
+              initial={{ scaleY: 0 }}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ duration: 2.4, ease: [0.22, 1, 0.36, 1] }}
+            />
             {MILESTONES.map((m, i) => (
-              <div key={m.year} className="flex items-start gap-8 pl-8 pb-8 relative">
-                <div className="absolute -left-[4.5px] top-1 w-2 h-2 rounded-full" style={{ backgroundColor: GOLD }} />
+              <Reveal key={m.year} delay={i * 0.08} y={20} direction="left" x={20}
+                className="flex items-start gap-8 pl-8 pb-8 relative"
+              >
+                <motion.div
+                  className="absolute -left-[4.5px] top-1 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: GOLD }}
+                  initial={{ scale: 0 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.4 + i * 0.08, type: 'spring', stiffness: 380, damping: 16 }}
+                />
                 <div
                   className="shrink-0 w-12"
                   style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 600, fontSize: '0.9rem', color: GOLD }}
@@ -140,7 +171,7 @@ export default function About() {
                 >
                   {m.event}
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -149,43 +180,44 @@ export default function About() {
       {/* Leadership */}
       <section className="py-24" style={{ backgroundColor: ALT, borderTop: `1px solid ${BORDER}` }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-14">
+          <Reveal className="flex items-center gap-3 mb-14">
             <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
             <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Leadership</div>
-          </div>
+          </Reveal>
           <div className="grid md:grid-cols-3 gap-6">
-            {TEAM.map(t => (
-              <div
-                key={t.name}
-                className="overflow-hidden transition-shadow duration-300"
-                style={{
-                  border: `1px solid ${BORDER}`,
-                  boxShadow: '0 2px 18px rgba(28,24,20,0.04)',
-                  backgroundColor: '#FFFFFF',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 40px rgba(28,24,20,0.1)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 18px rgba(28,24,20,0.04)'; }}
-              >
-                {/* Avatar area */}
-                <div className="relative h-40 flex items-end p-6" style={{ backgroundColor: CREAM, ...DOT }}>
-                  <div
-                    className="absolute top-4 right-4 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-1"
-                    style={{ color: GOLD, backgroundColor: 'rgba(157,126,63,0.1)', border: `1px solid rgba(157,126,63,0.2)` }}
-                  >
-                    {t.yrs}
+            {TEAM.map((t, i) => (
+              <Reveal key={t.name} delay={i * 0.08} y={40}>
+                <TiltCard
+                  max={6}
+                  className="overflow-hidden h-full"
+                  style={{
+                    border: `1px solid ${BORDER}`,
+                    boxShadow: '0 2px 18px rgba(28,24,20,0.04)',
+                    backgroundColor: '#FFFFFF',
+                  }}
+                >
+                  <div className="relative h-40 flex items-end p-6" style={{ backgroundColor: CREAM, ...DOT }}>
+                    <div
+                      className="absolute top-4 right-4 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-1"
+                      style={{ color: GOLD, backgroundColor: 'rgba(157,126,63,0.1)', border: `1px solid rgba(157,126,63,0.2)` }}
+                    >
+                      {t.yrs}
+                    </div>
+                    <motion.div
+                      whileHover={{ scale: 1.08, rotate: -3 }}
+                      transition={{ type: 'spring', stiffness: 280, damping: 14 }}
+                      className="w-12 h-12 flex items-center justify-center text-base font-black"
+                      style={{ backgroundColor: 'rgba(157,126,63,0.12)', color: GOLD, border: `1px solid rgba(157,126,63,0.25)`, fontFamily: SERIF }}
+                    >
+                      {t.initials}
+                    </motion.div>
                   </div>
-                  <div
-                    className="w-12 h-12 flex items-center justify-center text-base font-black"
-                    style={{ backgroundColor: 'rgba(157,126,63,0.12)', color: GOLD, border: `1px solid rgba(157,126,63,0.25)`, fontFamily: SERIF }}
-                  >
-                    {t.initials}
+                  <div className="p-6" style={{ borderTop: `1px solid ${BORDER}` }}>
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 500, fontSize: '1.05rem', color: DARK, marginBottom: '0.2rem' }}>{t.name}</div>
+                    <div className="text-[10px] uppercase tracking-[0.16em]" style={{ color: GOLD }}>{t.title}</div>
                   </div>
-                </div>
-                <div className="p-6" style={{ borderTop: `1px solid ${BORDER}` }}>
-                  <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 500, fontSize: '1.05rem', color: DARK, marginBottom: '0.2rem' }}>{t.name}</div>
-                  <div className="text-[10px] uppercase tracking-[0.16em]" style={{ color: GOLD }}>{t.title}</div>
-                </div>
-              </div>
+                </TiltCard>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -200,22 +232,29 @@ export default function About() {
           <p className="text-sm mb-8 font-light" style={{ color: 'rgba(250,247,242,0.38)' }}>
             Our team is ready to hear about your project.
           </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Link
-              to="/contact"
-              className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-              style={{ backgroundColor: GOLD, color: DARK }}
-            >
-              Get In Touch <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-            </Link>
-            <Link
-              to="/portfolio"
-              className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-all hover:bg-white/5"
-              style={{ border: `1px solid rgba(157,126,63,0.38)`, color: GOLD }}
-            >
-              View Our Work
-            </Link>
-          </div>
+          <Reveal delay={0.2} className="flex flex-wrap gap-4 justify-center">
+            <MagneticButton as="a" href="/contact">
+              <Link
+                to="/contact"
+                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
+                style={{ backgroundColor: GOLD, color: DARK }}
+              >
+                Get In Touch
+                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </span>
+              </Link>
+            </MagneticButton>
+            <MagneticButton as="a" href="/portfolio" strength={0.3}>
+              <Link
+                to="/portfolio"
+                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-all hover:bg-white/5"
+                style={{ border: `1px solid rgba(157,126,63,0.38)`, color: GOLD }}
+              >
+                View Our Work
+              </Link>
+            </MagneticButton>
+          </Reveal>
         </div>
       </section>
 
