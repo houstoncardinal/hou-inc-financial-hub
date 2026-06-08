@@ -124,106 +124,96 @@ export default function Contact() {
 
             {/* Form */}
             <div className="md:col-span-2 p-8 md:p-10">
+              <AnimatePresence mode="wait">
               {sent ? (
-                <div className="h-full flex flex-col items-center justify-center text-center py-16">
-                  <div
+                <motion.div
+                  key="sent"
+                  initial={{ opacity: 0, scale: 0.96, filter: 'blur(8px)' }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className="h-full flex flex-col items-center justify-center text-center py-16"
+                >
+                  <motion.div
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ delay: 0.2, type: 'spring', stiffness: 220, damping: 14 }}
                     className="w-14 h-14 flex items-center justify-center mb-6"
                     style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.3)` }}
                   >
                     <ArrowUpRight className="w-6 h-6" style={{ color: GOLD }} strokeWidth={1.5} />
-                  </div>
+                  </motion.div>
                   <h3 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.75rem', color: DARK, marginBottom: '0.75rem' }}>
                     Message Received
                   </h3>
                   <p className="text-sm max-w-sm font-light" style={{ color: MUTED }}>
                     Thank you. A member of the HOU INC team will review your inquiry and be in touch within one business day.
                   </p>
-                </div>
+                </motion.div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <motion.form
+                  key="form"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6 }}
+                  onSubmit={handleSubmit}
+                  className="space-y-6"
+                >
                   <div className="text-[9px] uppercase tracking-[0.34em] font-bold mb-8" style={{ color: GOLD }}>Project Inquiry</div>
 
-                  {/* Name + Company */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label style={labelStyle}>Full Name *</label>
-                      <input
-                        required
-                        value={form.name}
-                        onChange={set('name')}
-                        style={inputBase}
-                        onFocus={e => (e.target.style.borderColor = GOLD)}
-                        onBlur={e  => (e.target.style.borderColor = BORDER)}
-                      />
+                  {[
+                    [
+                      { key: 'name', label: 'Full Name *', required: true, type: 'text' },
+                      { key: 'company', label: 'Company', required: false, type: 'text' },
+                    ],
+                    [
+                      { key: 'email', label: 'Email *', required: true, type: 'email' },
+                      { key: 'phone', label: 'Phone', required: false, type: 'tel' },
+                    ],
+                  ].map((row, ri) => (
+                    <div key={ri} className="grid grid-cols-2 gap-4">
+                      {row.map((f, fi) => (
+                        <motion.div
+                          key={f.key}
+                          initial={{ opacity: 0, y: 12 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: ri * 0.1 + fi * 0.06, duration: 0.5 }}
+                        >
+                          <label style={labelStyle}>{f.label}</label>
+                          <input
+                            required={f.required}
+                            type={f.type}
+                            value={(form as any)[f.key]}
+                            onChange={set(f.key)}
+                            style={inputBase}
+                            onFocus={e => (e.target.style.borderColor = GOLD)}
+                            onBlur={e  => (e.target.style.borderColor = BORDER)}
+                          />
+                        </motion.div>
+                      ))}
                     </div>
-                    <div>
-                      <label style={labelStyle}>Company</label>
-                      <input
-                        value={form.company}
-                        onChange={set('company')}
-                        style={inputBase}
-                        onFocus={e => (e.target.style.borderColor = GOLD)}
-                        onBlur={e  => (e.target.style.borderColor = BORDER)}
-                      />
-                    </div>
-                  </div>
+                  ))}
 
-                  {/* Email + Phone */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label style={labelStyle}>Email *</label>
-                      <input
-                        required
-                        type="email"
-                        value={form.email}
-                        onChange={set('email')}
-                        style={inputBase}
-                        onFocus={e => (e.target.style.borderColor = GOLD)}
-                        onBlur={e  => (e.target.style.borderColor = BORDER)}
-                      />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Phone</label>
-                      <input
-                        type="tel"
-                        value={form.phone}
-                        onChange={set('phone')}
-                        style={inputBase}
-                        onFocus={e => (e.target.style.borderColor = GOLD)}
-                        onBlur={e  => (e.target.style.borderColor = BORDER)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Project Type + Budget */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
+                    <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.28 }}>
                       <label style={labelStyle}>Project Type *</label>
-                      <select
-                        required
-                        value={form.projectType}
-                        onChange={set('projectType')}
-                        style={{ ...inputBase, cursor: 'pointer' }}
-                      >
+                      <select required value={form.projectType} onChange={set('projectType')} style={{ ...inputBase, cursor: 'pointer' }}>
                         <option value="" disabled>Select type…</option>
                         {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                    </div>
-                    <div>
+                    </motion.div>
+                    <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.34 }}>
                       <label style={labelStyle}>Budget Range</label>
-                      <select
-                        value={form.budget}
-                        onChange={set('budget')}
-                        style={{ ...inputBase, cursor: 'pointer' }}
-                      >
+                      <select value={form.budget} onChange={set('budget')} style={{ ...inputBase, cursor: 'pointer' }}>
                         <option value="" disabled>Select range…</option>
                         {BUDGETS.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
-                    </div>
+                    </motion.div>
                   </div>
 
-                  {/* Message */}
-                  <div>
+                  <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.4 }}>
                     <label style={labelStyle}>Tell Us About Your Project *</label>
                     <textarea
                       required
@@ -231,30 +221,33 @@ export default function Contact() {
                       value={form.message}
                       onChange={set('message')}
                       placeholder="Location, timeline, scope, any specific requirements…"
-                      style={{
-                        ...inputBase,
-                        height: 'auto',
-                        padding: '0.75rem 1rem',
-                        resize: 'none',
-                      }}
+                      style={{ ...inputBase, height: 'auto', padding: '0.75rem 1rem', resize: 'none' }}
                       onFocus={e => (e.target.style.borderColor = GOLD)}
                       onBlur={e  => (e.target.style.borderColor = BORDER)}
                     />
-                  </div>
+                  </motion.div>
 
-                  <button
-                    type="submit"
-                    className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: GOLD, color: DARK }}
-                  >
-                    Send Inquiry <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </button>
+                  <MagneticButton as="button" strength={0.3}>
+                    <motion.button
+                      type="submit"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
+                      style={{ backgroundColor: GOLD, color: DARK }}
+                    >
+                      Send Inquiry
+                      <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+                        <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                      </span>
+                    </motion.button>
+                  </MagneticButton>
 
                   <p className="text-[9px] uppercase tracking-[0.16em] font-light" style={{ color: 'rgba(28,24,20,0.28)' }}>
                     All inquiries are reviewed by a senior team member. We respond within one business day.
                   </p>
-                </form>
+                </motion.form>
               )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
