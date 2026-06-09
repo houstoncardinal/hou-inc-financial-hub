@@ -146,10 +146,10 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                 </div>
               </div>
               <p className="text-[11px] leading-relaxed mb-6 font-light" style={{ color: 'rgba(250,247,242,0.32)' }}>
-                Houston's premier luxury construction firm. Building landmark residential and commercial properties since 1998.
+                Unparalleled construction excellence for residential and commercial projects across greater Houston.
               </p>
               <div className="h-px w-8 mb-4" style={{ backgroundColor: GOLD, opacity: 0.4 }} />
-              <div className="text-[9px] uppercase tracking-[0.22em]" style={{ color: 'rgba(250,247,242,0.18)' }}>Houston, Texas · Est. 1998</div>
+              <div className="text-[9px] uppercase tracking-[0.22em]" style={{ color: 'rgba(250,247,242,0.18)' }}>Houston, Texas</div>
             </div>
 
             {/* Services */}
@@ -189,15 +189,15 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               <div className="space-y-4">
                 <div>
                   <div className="text-[8px] uppercase tracking-[0.2em] mb-1" style={{ color: 'rgba(250,247,242,0.18)' }}>Address</div>
-                  <div className="text-[11px] leading-relaxed font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>1200 Post Oak Blvd<br />Suite 300<br />Houston, TX 77056</div>
+                  <div className="text-[11px] leading-relaxed font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>2100 W Loop South<br />Suite #1115<br />Houston, TX 77027</div>
                 </div>
                 <div>
                   <div className="text-[8px] uppercase tracking-[0.2em] mb-1" style={{ color: 'rgba(250,247,242,0.18)' }}>Phone</div>
-                  <div className="text-[11px] font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>(713) 555-0190</div>
+                  <div className="text-[11px] font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>(281) 915-9595</div>
                 </div>
                 <div>
                   <div className="text-[8px] uppercase tracking-[0.2em] mb-1" style={{ color: 'rgba(250,247,242,0.18)' }}>Email</div>
-                  <div className="text-[11px] font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>info@houinc.com</div>
+                  <div className="text-[11px] font-light" style={{ color: 'rgba(250,247,242,0.28)' }}>Info@Houinc.com</div>
                 </div>
               </div>
             </div>

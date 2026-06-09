@@ -160,7 +160,7 @@ export default function Home() {
               transition={{ duration: 1, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             />
             <div className="text-[9px] uppercase tracking-[0.42em] font-semibold" style={{ color: GOLD }}>
-              Houston · Texas · Est. 1998
+              Houston · Texas · Residential &amp; Commercial
             </div>
           </motion.div>
 
@@ -190,7 +190,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-10 items-end">
             <Reveal delay={1}>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                Luxury residential and commercial construction for those who refuse to compromise. From custom estates in River Oaks to landmark commercial developments across the greater Houston area.
+                Unparalleled construction excellence for residential and commercial projects. With a solid reputation built on excellence, integrity, and innovation, we deliver exceptional solutions that exceed expectations.
               </p>
             </Reveal>
             <Reveal delay={1.05} className="flex flex-wrap gap-4 md:justify-end">
@@ -294,10 +294,10 @@ export default function Home() {
               </h2>
               <div className="w-10 h-px mb-7" style={{ backgroundColor: BORDER }} />
               <p className="text-sm leading-relaxed font-light mb-5" style={{ color: MUTED }}>
-                HOU INC was founded in Houston in 1998 with a singular conviction: that the built environment shapes the quality of life for everyone who inhabits it. Over 25 years, we have grown from a boutique residential builder into one of Houston's most trusted luxury construction firms.
+                HOU INC is a leading name in the construction industry, built on a foundation of excellence, integrity, and innovation. Our meticulous attention to detail and commitment to quality craftsmanship have made us a trusted partner for Houston's most discerning residential and commercial clients.
               </p>
               <p className="text-sm leading-relaxed font-light mb-10" style={{ color: MUTED }}>
-                Today we serve private clients, institutional developers, and commercial enterprises across the greater Houston metro — delivering properties that set the standard for craftsmanship, design, and performance.
+                From luxury custom homes to major commercial developments, we deliver tailored solutions that exceed expectations — turning our clients' dreams into lasting structures that define Houston's skyline.
               </p>
               <MagneticButton as="a" href="/about" strength={0.25}>
                 <Link

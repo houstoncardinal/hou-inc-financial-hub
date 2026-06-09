@@ -21,10 +21,10 @@ const DOT: React.CSSProperties = {
 };
 
 const VALUES = [
-  { n: '01', title: 'Uncompromising Quality',   body: 'We hold every trade, material, and decision to an impossibly high standard. Not because we have to — because anything less would be an insult to our clients and our craft.' },
-  { n: '02', title: 'Absolute Transparency',    body: 'Every budget, every schedule, every challenge is communicated clearly and promptly. Our clients are never surprised by a HOU INC project.' },
-  { n: '03', title: 'Long-Term Relationships',  body: "The best measure of our work isn't the ribbon cutting — it's the call we get when that client is ready to build again. Over 70% of our revenue comes from repeat clients." },
-  { n: '04', title: 'Houston First',            body: "We are Houston. We hire Houston subcontractors, buy from Houston suppliers, and reinvest in the city we're proud to build. This isn't a marketing line — it's how we operate." },
+  { n: '01', title: 'Excellence',        body: 'We bring an uncompromising standard to every detail of every project. From foundation to finish, our commitment to excellence defines the HOU INC difference.' },
+  { n: '02', title: 'Integrity',         body: 'We operate with complete honesty and transparency. Every commitment we make is one we keep — building trust with clients, partners, and our community one project at a time.' },
+  { n: '03', title: 'Innovation',        body: 'We continuously seek better methods, materials, and solutions. Embracing innovation allows us to deliver superior results and remain at the forefront of Houston construction.' },
+  { n: '04', title: 'Customer Service',  body: 'Our clients are our highest priority. We provide personalized attention and tailored solutions at every stage — from initial consultation through project delivery and beyond.' },
 ];
 
 const TEAM = [
@@ -66,10 +66,10 @@ export default function About() {
             </Reveal>
             <Reveal delay={0.15}>
               <p className="text-sm leading-relaxed font-light mb-4" style={{ color: MUTED }}>
-                Founded in Houston in 1998, HOU INC has spent <AnimatedCounter value={25} className="font-semibold" style={{ color: GOLD }} /> years building some of the most recognized residential and commercial properties in Texas.
+                HOU INC is a leading name in the Houston construction industry, built on a foundation of excellence, integrity, and innovation. We serve residential and commercial clients who expect nothing short of exceptional.
               </p>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                We are builders, first and foremost. We are also a company that believes the built environment shapes lives, communities, and economies — and that a construction firm has an obligation to its city.
+                Our meticulous attention to detail and commitment to quality craftsmanship have made us one of Houston's most trusted construction firms — delivering tailored solutions that exceed expectations on every project.
               </p>
             </Reveal>
           </div>
@@ -92,9 +92,9 @@ export default function About() {
                 marginBottom: '1.5rem',
               }}
             >
-              "To build structures that outlast us — and relationships that do the same. We measure our success not in square footage but in trust earned, one project at a time."
+              "To deliver exceptional construction solutions through meticulous attention to detail, quality craftsmanship, and an unwavering commitment to our clients — turning every dream into a lasting reality."
             </blockquote>
-            <div className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ color: GOLD }}>— William Hou, Founder</div>
+            <div className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ color: GOLD }}>— HOU INC Mission Statement</div>
           </div>
         </div>
       </section>

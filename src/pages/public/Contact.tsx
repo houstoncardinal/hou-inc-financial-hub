@@ -27,9 +27,9 @@ const PROJECT_TYPES = [
 const BUDGETS = ['Under $1M', '$1M – $5M', '$5M – $25M', '$25M – $100M', '$100M+', 'Not yet determined'];
 
 const CONTACT_INFO = [
-  { Icon: MapPin, label: 'Office',         lines: ['1200 Post Oak Blvd, Suite 300', 'Houston, TX 77056'] },
-  { Icon: Phone,  label: 'Phone',          lines: ['(713) 555-0190', 'Mon–Fri · 8am–6pm CST'] },
-  { Icon: Mail,   label: 'Email',          lines: ['info@houinc.com', 'projects@houinc.com'] },
+  { Icon: MapPin, label: 'Office',         lines: ['2100 W Loop South, Suite #1115', 'Houston, TX 77027'] },
+  { Icon: Phone,  label: 'Phone',          lines: ['(281) 915-9595', 'Mon–Fri · 8am–6pm CST'] },
+  { Icon: Mail,   label: 'Email',          lines: ['Info@Houinc.com', 'Free consultations available'] },
   { Icon: Clock,  label: 'Response Time',  lines: ['Within 1 business day', 'For urgent inquiries, call directly'] },
 ];
 
@@ -74,12 +74,12 @@ export default function Contact() {
           <div className="grid md:grid-cols-2 gap-12 items-end">
             <Reveal>
               <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-                Start Your<br />Project
+                Don't Hesitate<br />to Reach Out
               </h1>
             </Reveal>
             <Reveal delay={0.15}>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                Tell us what you're building. Our team reviews every inquiry personally and responds within one business day. No automated responses, no outsourced intake — just a direct conversation with the people who will build your project.
+                Ready to embark on your next construction project? We would be delighted to discuss your vision and provide you with a tailored solution. Contact Houston Enterprise today and let us turn your dreams into reality.
               </p>
             </Reveal>
           </div>
@@ -116,7 +116,7 @@ export default function Contact() {
                 >
                   <div className="text-center">
                     <MapPin className="w-5 h-5 mx-auto mb-2" style={{ color: GOLD, opacity: 0.55 }} strokeWidth={1.5} />
-                    <div className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'rgba(28,24,20,0.35)' }}>Post Oak · Houston, TX</div>
+                    <div className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'rgba(28,24,20,0.35)' }}>W Loop South · Houston, TX 77027</div>
                   </div>
                 </div>
               </div>

@@ -24,7 +24,7 @@ const SERVICES = [
     n: '01',
     title: 'Luxury Custom Homes',
     sub: 'Residential · Private Estates',
-    description: "We build private residences for Houston's most exacting clients. Whether a 10,000 sq ft River Oaks estate or a contemporary lakefront retreat, every home we construct is an exercise in disciplined craft and uncompromising detail.",
+    description: "We build luxury custom homes for Houston's most discerning clients. From a grand River Oaks estate to a contemporary lakefront retreat, every residence is delivered with meticulous attention to detail, quality craftsmanship, and a tailored approach that brings each client's vision to life.",
     features: [
       'Custom architectural floor plans', 'Premium material selection & sourcing',
       'Smart home & automation integration', 'Landscape and hardscape design',
@@ -36,7 +36,7 @@ const SERVICES = [
     n: '02',
     title: 'Commercial Developments',
     sub: 'Office · Corporate · Institutional',
-    description: 'From Fortune 500 campuses to boutique professional towers, we deliver commercial environments that project prestige and perform at the highest level. Our project management systems ensure on-time, on-budget delivery at scale.',
+    description: 'We deliver commercial construction solutions built on excellence, integrity, and innovation. Whether a corporate campus, professional tower, or institutional facility, our team provides exceptional results through rigorous project management and an unwavering commitment to quality.',
     features: [
       'Class A & B office construction', 'Corporate campus master planning',
       'Tenant improvement & fit-out', 'Sustainable & LEED-certified builds',
@@ -48,7 +48,7 @@ const SERVICES = [
     n: '03',
     title: 'Shopping Centers & Retail',
     sub: 'Retail · Lifestyle · Mixed-Use',
-    description: 'We develop the retail destinations that define communities — from neighborhood centers to regional lifestyle destinations. Our team understands the intersection of traffic engineering, tenant mix, and architectural identity.',
+    description: "We develop the shopping centers and mixed-use destinations that define Houston communities. From neighborhood retail to regional lifestyle centers, our team delivers tailored solutions that exceed expectations — combining exceptional design with on-time, on-budget execution.",
     features: [
       'Anchor retail center development', 'Lifestyle & open-air retail',
       'Mixed-use podium development', 'Parking structure & site design',
@@ -120,7 +120,7 @@ export default function Services() {
             </Reveal>
             <Reveal delay={0.15}>
               <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                From a 14,000 sq ft private estate to a 400,000 sq ft retail development — HOU INC has the capability, capacity, and conviction to deliver any project at the luxury level Houston demands.
+                From luxury custom homes to major commercial developments and shopping centers — HOU INC delivers exceptional construction solutions built on excellence, integrity, and innovation. We work closely with each client to provide a tailored approach that exceeds expectations.
               </p>
             </Reveal>
           </div>
