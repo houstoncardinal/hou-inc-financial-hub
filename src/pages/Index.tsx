@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
+import { useInvoices, invoiceTotal } from '@/hooks/useInvoices';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
-import { FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap, ConciergeBell, BarChart3, FolderKanban, Users } from 'lucide-react';
+import { FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap, ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle, X } from 'lucide-react';
 import { generateLedgerReport, savePDF } from '@/lib/reports';
 import { toast } from 'sonner';
 import TimeFilter, { getDateRange } from '@/components/TimeFilter';
@@ -33,7 +34,9 @@ export default function Index() {
   const { data: expenses = [] } = useTransactions('expense');
   const { data: projects = [] } = useProjects();
   const { data: vendors = [] } = useVendors();
+  const { invoices } = useInvoices();
   const [timePeriod, setTimePeriod] = useState('all');
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   const filtered = useMemo(() => {
     const { start, end } = getDateRange(timePeriod);
@@ -175,6 +178,17 @@ export default function Index() {
     });
   }, [filtered.checks]);
 
+  /* ── Invoice alert data ── */
+  const invoiceAlerts = useMemo(() => {
+    const overdue = invoices.filter(i => i.status === 'overdue');
+    const overdueTotal = overdue.reduce((s, i) => s + invoiceTotal(i), 0);
+    const outstanding = invoices.filter(i => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + invoiceTotal(i), 0);
+    return { overdueCount: overdue.length, overdueTotal, outstanding };
+  }, [invoices]);
+
+  const stalePendingCount = pendingAgingData[3]?.count ?? 0; // 30d+ bucket
+  const stalePendingValue = pendingAgingData[3]?.value ?? 0;
+
   /* ── 4 stat cards with soft color accents and glass bokeh ── */
   const statCards = [
     {
@@ -259,6 +273,44 @@ export default function Index() {
             </div>
           </div>
         } />
+
+      {/* ── Alert banners ── */}
+      {(invoiceAlerts.overdueCount > 0 && !dismissedAlerts.includes('overdue')) && (
+        <div className="px-4 sm:px-8 py-2.5 flex items-center justify-between gap-3 border-b border-accent/20 bg-accent/5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertTriangle className="w-3.5 h-3.5 text-accent shrink-0" strokeWidth={2} />
+            <span className="text-xs text-accent font-medium">
+              {invoiceAlerts.overdueCount} overdue invoice{invoiceAlerts.overdueCount > 1 ? 's' : ''} totalling <span className="font-mono-tab font-semibold">{fmtUSD(invoiceAlerts.overdueTotal)}</span> — immediate follow-up required.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => navigate('/invoices')} className="text-[10px] uppercase tracking-[0.18em] font-bold text-accent hover:opacity-70 transition-opacity">
+              View →
+            </button>
+            <button onClick={() => setDismissedAlerts(a => [...a, 'overdue'])} className="text-accent/60 hover:text-accent transition-colors">
+              <X className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      )}
+      {(stalePendingCount > 0 && !dismissedAlerts.includes('stale')) && (
+        <div className="px-4 sm:px-8 py-2.5 flex items-center justify-between gap-3 border-b border-warning/20 bg-warning/5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" strokeWidth={2} />
+            <span className="text-xs text-warning font-medium">
+              {stalePendingCount} check{stalePendingCount > 1 ? 's' : ''} pending for 30+ days · <span className="font-mono-tab font-semibold">{fmtUSD(stalePendingValue)}</span> at risk. Consider voiding or following up.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => navigate('/checks')} className="text-[10px] uppercase tracking-[0.18em] font-bold text-warning hover:opacity-70 transition-opacity">
+              View →
+            </button>
+            <button onClick={() => setDismissedAlerts(a => [...a, 'stale'])} className="text-warning/60 hover:text-warning transition-colors">
+              <X className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 4 Stats + Quick Actions ── */}
       <div className="border-b border-border">
@@ -351,6 +403,20 @@ export default function Index() {
             <div className="text-left">
               <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Vendors</div>
               <div className="text-xs font-semibold font-mono-tab">{vendors.length} on file</div>
+            </div>
+          </button>
+          <button onClick={() => navigate('/invoices')}
+            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border hover:border-foreground/20 hover:bg-secondary/20 transition-all shrink-0">
+            <div className={`w-7 h-7 flex items-center justify-center ${invoiceAlerts.overdueCount > 0 ? 'bg-accent/10 text-accent' : 'bg-violet-600/10 text-violet-600'}`}>
+              <Receipt className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </div>
+            <div className="text-left">
+              <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Invoices</div>
+              <div className={`text-xs font-semibold font-mono-tab ${invoiceAlerts.overdueCount > 0 ? 'text-accent' : ''}`}>
+                {invoiceAlerts.overdueCount > 0
+                  ? `${invoiceAlerts.overdueCount} overdue`
+                  : `${fmtUSD(invoiceAlerts.outstanding)} out`}
+              </div>
             </div>
           </button>
           <div className="flex-1 min-w-4" />

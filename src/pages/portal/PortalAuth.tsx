@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
 
 const CREAM  = '#FAF7F2';
@@ -66,23 +67,28 @@ export default function PortalAuth() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { ok, error: err } = register(rName.trim(), rEmail.trim(), rPhone.trim());
-    setLoading(false);
-    if (!ok) { setError(err ?? 'Registration failed.'); return; }
-    navigate('/portal/dashboard');
+    setTimeout(() => {
+      const { ok, error: err } = register(rName.trim(), rEmail.trim(), rPhone.trim());
+      setLoading(false);
+      if (!ok) { setError(err ?? 'Registration failed.'); return; }
+      navigate('/portal/dashboard');
+    }, 420);
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { ok, error: err } = login(lEmail.trim());
-    setLoading(false);
-    if (!ok) { setError(err ?? 'Sign in failed.'); return; }
-    navigate('/portal/dashboard');
+    setTimeout(() => {
+      const { ok, error: err } = login(lEmail.trim());
+      setLoading(false);
+      if (!ok) { setError(err ?? 'Sign in failed.'); return; }
+      navigate('/portal/dashboard');
+    }, 380);
   };
 
   const switchMode = () => { setMode(m => m === 'register' ? 'login' : 'register'); setError(''); };
+  const isRegister = mode === 'register';
 
   /* ────────────────────────────────────────────────
      Shared: form content (used in both layouts)
@@ -94,93 +100,103 @@ export default function PortalAuth() {
       <div className="flex items-center gap-4 mb-7">
         <div className="flex-1 h-px" style={{ backgroundColor: BORDER }} />
         <span style={{ fontSize: '8px', color: GOLD, letterSpacing: '0.45em', fontWeight: 700, textTransform: 'uppercase' }}>
-          {mode === 'register' ? 'New Member' : 'Welcome Back'}
+          {isRegister ? 'New Member' : 'Welcome Back'}
         </span>
         <div className="flex-1 h-px" style={{ backgroundColor: BORDER }} />
       </div>
 
       {/* Heading */}
-      <h1 style={{
-        fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-        fontSize: 'clamp(2.2rem, 5vw, 3.2rem)',
-        color: DARK2, lineHeight: 1.06, letterSpacing: '-0.01em',
-        marginBottom: '0.6rem',
-      }}>
-        {mode === 'register' ? <>Begin your<br />project journey.</> : <>Return to<br />your project.</>}
-      </h1>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={mode}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h1 style={{
+            fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
+            fontSize: 'clamp(2.2rem, 5vw, 3.2rem)',
+            color: DARK2, lineHeight: 1.06, letterSpacing: '-0.01em',
+            marginBottom: '0.6rem',
+          }}>
+            {isRegister ? <>Begin your<br />project journey.</> : <>Return to<br />your project.</>}
+          </h1>
 
-      <p style={{ fontSize: '13px', color: '#6B5D52', lineHeight: 1.65, marginBottom: '2.25rem', fontWeight: 300 }}>
-        {mode === 'register'
-          ? 'Create your account and connect directly with a dedicated HOU INC project consultant.'
-          : 'Enter your email to access your portal and builder communications.'}
-      </p>
-
-      {/* Register */}
-      {mode === 'register' && (
-        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-          <div>
-            <label style={lbl}>Full Name *</label>
-            <input required value={rName} onChange={e => setRName(e.target.value)}
-              placeholder="Jane Smith" style={field}
-              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-              onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
-          </div>
-          <div>
-            <label style={lbl}>Email Address *</label>
-            <input required type="email" value={rEmail} onChange={e => setREmail(e.target.value)}
-              placeholder="jane@example.com" style={field}
-              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-              onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
-          </div>
-          <div>
-            <label style={lbl}>Phone &nbsp;<span style={{ opacity: 0.55 }}>Optional</span></label>
-            <input type="tel" value={rPhone} onChange={e => setRPhone(e.target.value)}
-              placeholder="(713) 555-0100" style={field}
-              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-              onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
-          </div>
-
-          {error && <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '14px', color: '#b94a38' }}>{error}</p>}
-
-          <button type="submit" disabled={loading}
-            className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
-            style={{ backgroundColor: DARK2, color: CREAM, height: '54px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700 }}>
-            {loading ? 'Creating account…' : <><span>Create Account</span><ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} /></>}
-          </button>
-
-          <p style={{ fontSize: '10px', color: '#9A8E85', letterSpacing: '0.08em', textAlign: 'center', lineHeight: 1.65 }}>
-            By creating an account you consent to being contacted by a HOU INC project consultant.
+          <p style={{ fontSize: '13px', color: '#6B5D52', lineHeight: 1.65, marginBottom: '2.25rem', fontWeight: 300 }}>
+            {isRegister
+              ? 'Create your account and connect directly with a dedicated HOU INC project consultant.'
+              : 'Enter your email to access your portal and builder communications.'}
           </p>
-        </form>
-      )}
 
-      {/* Login */}
-      {mode === 'login' && (
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-          <div>
-            <label style={lbl}>Email Address *</label>
-            <input required type="email" value={lEmail} onChange={e => setLEmail(e.target.value)}
-              placeholder="jane@example.com" style={field}
-              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-              onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
-          </div>
+          {/* Register */}
+          {isRegister && (
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              <div>
+                <label style={lbl}>Full Name *</label>
+                <input required value={rName} onChange={e => setRName(e.target.value)}
+                  placeholder="Jane Smith" style={field}
+                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                  onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
+              </div>
+              <div>
+                <label style={lbl}>Email Address *</label>
+                <input required type="email" value={rEmail} onChange={e => setREmail(e.target.value)}
+                  placeholder="jane@example.com" style={field}
+                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                  onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
+              </div>
+              <div>
+                <label style={lbl}>Phone &nbsp;<span style={{ opacity: 0.55 }}>Optional</span></label>
+                <input type="tel" value={rPhone} onChange={e => setRPhone(e.target.value)}
+                  placeholder="(713) 555-0100" style={field}
+                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                  onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
+              </div>
 
-          {error && <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '14px', color: '#b94a38' }}>{error}</p>}
+              {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '14px', color: '#b94a38' }}>{error}</motion.p>}
 
-          <button type="submit" disabled={loading}
-            className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
-            style={{ backgroundColor: GOLD, color: WHITE, height: '54px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700 }}>
-            {loading ? 'Signing in…' : <><span>Enter Portal</span><ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} /></>}
-          </button>
-        </form>
-      )}
+              <button type="submit" disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                style={{ backgroundColor: DARK2, color: CREAM, height: '54px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700 }}>
+                {loading ? 'Creating account…' : <><span>Create Account</span><ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} /></>}
+              </button>
+
+              <p style={{ fontSize: '10px', color: '#9A8E85', letterSpacing: '0.08em', textAlign: 'center', lineHeight: 1.65 }}>
+                By creating an account you consent to being contacted by a HOU INC project consultant.
+              </p>
+            </form>
+          )}
+
+          {/* Login */}
+          {!isRegister && (
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              <div>
+                <label style={lbl}>Email Address *</label>
+                <input required type="email" value={lEmail} onChange={e => setLEmail(e.target.value)}
+                  placeholder="jane@example.com" style={field}
+                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                  onBlur={e  => (e.target.style.borderBottomColor = BORDER)} />
+              </div>
+
+              {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '14px', color: '#b94a38' }}>{error}</motion.p>}
+
+              <button type="submit" disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                style={{ backgroundColor: GOLD, color: WHITE, height: '54px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700 }}>
+                {loading ? 'Signing in…' : <><span>Enter Portal</span><ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} /></>}
+              </button>
+            </form>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Footer */}
       <div className="mt-8 pt-6 flex items-center justify-between" style={{ borderTop: `1px solid ${BORDER}` }}>
         <button onClick={switchMode}
           style={{ fontSize: '12px', color: '#6B5D52', fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300 }}
           className="transition-opacity hover:opacity-70">
-          {mode === 'register' ? 'Already a member? Sign in →' : 'New to HOU INC? Create an account →'}
+          {isRegister ? 'Already a member? Sign in →' : 'New to HOU INC? Create an account →'}
         </button>
         <Link to="/"
           style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.26em', color: '#9A8E85', fontWeight: 600 }}
@@ -346,9 +362,14 @@ export default function PortalAuth() {
           style={{ backgroundImage: 'radial-gradient(circle, rgba(157,126,63,0.05) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
 
         {/* Form wrapper — centred, responsive padding */}
-        <div className="relative z-10 w-full flex flex-col items-center px-6 sm:px-10 md:px-14 lg:px-12 xl:px-16 py-10 md:py-14">
+        <motion.div
+          className="relative z-10 w-full flex flex-col items-center px-6 sm:px-10 md:px-14 lg:px-12 xl:px-16 py-10 md:py-14"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
           {FormContent}
-        </div>
+        </motion.div>
       </div>
 
     </div>

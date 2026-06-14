@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
+import { useInvoices } from '@/hooks/useInvoices';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
@@ -56,10 +57,12 @@ const mobileNav = [
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
   const { toggle, isDark } = useTheme();
+  const { invoices } = useInvoices();
   const navigate = useNavigate();
   const location = useLocation();
   const displayName = user?.user_metadata?.full_name || '';
   const initials = (displayName || user?.email || 'U').charAt(0).toUpperCase();
+  const overdueCount = invoices.filter(i => i.status === 'overdue').length;
 
   const handleSettings = () => {
     navigate('/settings');
@@ -111,7 +114,12 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                 }
               >
                 <n.icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-                <span>{n.label}</span>
+                <span className="flex-1">{n.label}</span>
+                {n.to === '/invoices' && overdueCount > 0 && (
+                  <span className="text-[8px] font-bold px-1 py-0.5 min-w-[16px] text-center bg-accent text-background leading-none">
+                    {overdueCount > 9 ? '9+' : overdueCount}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>

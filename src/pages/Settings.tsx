@@ -8,18 +8,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { Check, Eye, EyeOff, Zap } from 'lucide-react';
+import { Check, Eye, EyeOff, Zap, ShieldCheck } from 'lucide-react';
+import { DEFAULT_EMAIL, DEFAULT_PASS } from '@/hooks/useAuth';
 
 export default function Settings() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const { cfg, save: saveIntegrations } = useIntegrations();
 
-  const [displayName, setDisplayName] = useState(user?.user_metadata?.full_name || '');
-  const [saving, setSaving] = useState(false);
-  const [stripeKey, setStripeKey] = useState(cfg.stripe_secret_key);
-  const [showKey, setShowKey] = useState(false);
-  const [testingStripe, setTestingStripe] = useState(false);
+  const [displayName,    setDisplayName]    = useState(user?.user_metadata?.full_name || '');
+  const [saving,         setSaving]         = useState(false);
+  const [stripeKey,      setStripeKey]      = useState(cfg.stripe_secret_key);
+  const [showKey,        setShowKey]        = useState(false);
+  const [testingStripe,  setTestingStripe]  = useState(false);
+
+  const getStoredCreds = () => {
+    try { return JSON.parse(localStorage.getItem('hou-admin-creds') || '{}'); } catch { return {}; }
+  };
+  const [newEmail,    setNewEmail]    = useState(() => getStoredCreds().email    || DEFAULT_EMAIL);
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPw,   setShowNewPw]   = useState(false);
+  const [savingCreds, setSavingCreds] = useState(false);
 
   const saveProfile = async () => {
     setSaving(true);
@@ -99,6 +108,64 @@ export default function Settings() {
                 Sign Out
               </Button>
             </div>
+          </div>
+        </section>
+
+        {/* Security */}
+        <section className="border border-border p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="micro-label">Security</div>
+            <ShieldCheck className="w-3 h-3 text-muted-foreground" strokeWidth={1.5} />
+          </div>
+          <div className="text-xs text-muted-foreground mb-5">Update the credentials used to sign into the Finance Dashboard.</div>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="micro-label">Login Email</Label>
+              <Input
+                type="email"
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                className="rounded-none h-10 font-mono-tab text-sm"
+                placeholder={DEFAULT_EMAIL}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="micro-label">New Password <span className="normal-case tracking-normal font-normal text-muted-foreground">(leave blank to keep current)</span></Label>
+              <div className="relative">
+                <Input
+                  type={showNewPw ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="rounded-none h-10 pr-10"
+                  placeholder="Enter new password…"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showNewPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+            <Button
+              disabled={savingCreds}
+              onClick={() => {
+                setSavingCreds(true);
+                const current = getStoredCreds();
+                const updated = {
+                  email:    newEmail.trim() || DEFAULT_EMAIL,
+                  password: newPassword || current.password || DEFAULT_PASS,
+                };
+                localStorage.setItem('hou-admin-creds', JSON.stringify(updated));
+                setSavingCreds(false);
+                setNewPassword('');
+                toast.success('Credentials updated. Use them at next sign-in.');
+              }}
+              className="rounded-none h-9 text-xs bg-foreground text-background hover:opacity-90"
+            >
+              {savingCreds ? 'Saving…' : 'Update Credentials'}
+            </Button>
           </div>
         </section>
 

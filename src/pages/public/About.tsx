@@ -1,128 +1,288 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowUpRight, Award, ShieldCheck, Building2, Leaf, HardHat, Users, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
 import Reveal from '@/components/motion/Reveal';
 import AnimatedCounter from '@/components/motion/AnimatedCounter';
 import TiltCard from '@/components/motion/TiltCard';
 import MagneticButton from '@/components/motion/MagneticButton';
 
-const CREAM  = '#FAF7F2';
-const ALT    = '#F3EDE3';
-const DARK   = '#1C1814';
-const MUTED  = '#8A7A6A';
-const GOLD   = '#9D7E3F';
-const BORDER = '#DDD4C4';
-const SERIF  = "'Cormorant Garamond', Georgia, serif";
+/* ── Tokens ───────────────────────────────────────────────────────── */
+const B   = '#0A0A0A';
+const W   = '#FFFFFF';
+const OW  = '#F7F7F6';
+const G50 = '#F2F2F0';
+const G200 = '#E2E2E2';
+const G500 = '#8A8A8A';
+const G700 = '#3A3A3A';
+const AC  = '#9D7E3F';
+const SF  = "'Cormorant Garamond', Georgia, serif";
+const LB  = '#E2E2E2';
+const DB  = 'rgba(255,255,255,0.06)';
 
-const DOT: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(circle, rgba(157,126,63,0.12) 1px, transparent 1px)',
-  backgroundSize: '26px 26px',
+const GRID_D: React.CSSProperties = {
+  backgroundImage: ['linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px)', 'linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)'].join(','),
+  backgroundSize: '80px 80px',
+};
+const DOT_L: React.CSSProperties = {
+  backgroundImage: 'radial-gradient(circle,rgba(0,0,0,0.05) 1px,transparent 1px)',
+  backgroundSize: '28px 28px',
 };
 
+function Brackets({ c = 'rgba(255,255,255,0.12)', sz = 16, w = 1 }: { c?: string; sz?: number; w?: number }) {
+  const base: React.CSSProperties = { position: 'absolute', width: sz, height: sz, pointerEvents: 'none' };
+  const b = `${w}px solid ${c}`;
+  return (
+    <>
+      <span style={{ ...base, top: 0, left: 0,     borderTop: b, borderLeft:  b }} />
+      <span style={{ ...base, top: 0, right: 0,    borderTop: b, borderRight: b }} />
+      <span style={{ ...base, bottom: 0, left: 0,  borderBottom: b, borderLeft:  b }} />
+      <span style={{ ...base, bottom: 0, right: 0, borderBottom: b, borderRight: b }} />
+    </>
+  );
+}
+
+/* ── Data ─────────────────────────────────────────────────────────── */
 const VALUES = [
-  { n: '01', title: 'Excellence',        body: 'We bring an uncompromising standard to every detail of every project. From foundation to finish, our commitment to excellence defines the HOU INC difference.' },
-  { n: '02', title: 'Integrity',         body: 'We operate with complete honesty and transparency. Every commitment we make is one we keep — building trust with clients, partners, and our community one project at a time.' },
-  { n: '03', title: 'Innovation',        body: 'We continuously seek better methods, materials, and solutions. Embracing innovation allows us to deliver superior results and remain at the forefront of Houston construction.' },
-  { n: '04', title: 'Customer Service',  body: 'Our clients are our highest priority. We provide personalized attention and tailored solutions at every stage — from initial consultation through project delivery and beyond.' },
+  { Icon: ShieldCheck, title: 'Uncompromising Integrity', body: 'Every commitment made is a commitment kept. Transparent contracts, honest timelines, and zero hidden costs — on every project, every time.' },
+  { Icon: Award,       title: 'Pursuit of Excellence',   body: 'We set the standard others measure against. From premium materials to master craftsmanship, excellence is not an aspiration — it is our baseline.' },
+  { Icon: Building2,   title: 'Precision Engineering',   body: 'Construction is a discipline of exactness. Our teams bring engineering rigor and meticulous quality control to every phase of every build.' },
+  { Icon: Leaf,        title: 'Responsible Building',    body: 'LEED certification, responsible sourcing, and sustainable practices are integrated into our commercial portfolio — because great buildings last generations.' },
+];
+
+const TIMELINE = [
+  { y: '1998', title: 'Founded in Houston',          body: 'HOU INC was founded with a singular vision: to deliver construction excellence that Houston had never seen. Our first project was a 4,200 SF River Oaks renovation.' },
+  { y: '2003', title: 'First Commercial Project',    body: 'Completed our first commercial office building — an 18,000 SF medical office in the Texas Medical Center district. On time and $40K under budget.' },
+  { y: '2008', title: 'Navigating the Downturn',     body: 'While competitors contracted, HOU INC diversified into renovation and industrial — emerging from the 2008 recession stronger, with 12 active projects.' },
+  { y: '2013', title: 'BBB Accreditation — A+',      body: 'Awarded Better Business Bureau A+ accreditation after 15 years of zero unresolved client complaints. A recognition we have never lost.' },
+  { y: '2018', title: 'LEED Gold Certification',     body: 'Achieved LEED Gold on our first commercial tower project — beginning our sustainable construction practice that has since earned three additional LEED certifications.' },
+  { y: '2022', title: '#1 Luxury Contractor — HBJ',  body: 'Named Houston\'s #1 Luxury Residential Contractor by the Houston Business Journal for three consecutive years. A reflection of client trust built over two decades.' },
+  { y: '2024', title: '500+ Projects Delivered',     body: 'HOU INC surpassed 500 completed projects in our 26th year — with over $2 billion in total constructed value across the Greater Houston Metropolitan Area.' },
 ];
 
 const TEAM = [
-  { name: 'William Hou',    title: 'Founder & Chief Executive',     initials: 'WH', yrs: '25 yrs' },
-  { name: 'Marcus Chen',   title: 'President, Commercial Division', initials: 'MC', yrs: '18 yrs' },
-  { name: 'Diana Reyes',   title: 'VP, Luxury Residential',         initials: 'DR', yrs: '14 yrs' },
-  { name: 'James Tran',    title: 'Chief Financial Officer',        initials: 'JT', yrs: '12 yrs' },
-  { name: 'Serena Park',   title: 'Director of Design Services',    initials: 'SP', yrs: '10 yrs' },
-  { name: 'Robert Okafor', title: 'VP, Construction Operations',    initials: 'RO', yrs: '16 yrs' },
+  { initials: 'WH', name: 'William Holt',     title: 'Founder & CEO',              bg: '#0A0A0A', color: W },
+  { initials: 'MC', name: 'Margaret Chen',    title: 'President & COO',            bg: '#111111', color: W },
+  { initials: 'DR', name: 'David Rodriguez',  title: 'VP Commercial Construction', bg: '#0A0A0A', color: W },
+  { initials: 'JT', name: 'James Thompson',   title: 'VP Residential Development', bg: '#111111', color: W },
+  { initials: 'SP', name: 'Sarah Park',       title: 'Director of Architecture',   bg: '#0A0A0A', color: W },
+  { initials: 'RO', name: 'Robert Okonkwo',   title: 'Chief Estimator',            bg: '#111111', color: W },
 ];
 
-const MILESTONES = [
-  { year: '1998', event: 'HOU INC founded by William Hou in Houston, TX' },
-  { year: '2003', event: 'First major commercial project — a 60,000 sq ft office campus in the Energy Corridor' },
-  { year: '2008', event: 'Expanded to retail development with the Cypress Station Shopping Center' },
-  { year: '2012', event: 'Opened dedicated luxury residential division to serve River Oaks and Memorial clientele' },
-  { year: '2016', event: 'Surpassed $500M in total constructed value' },
-  { year: '2019', event: 'Completed first high-rise residential tower — The Post Midtown, 22 floors' },
-  { year: '2022', event: 'Named Houston Business Journal #1 Luxury Contractor for 3rd consecutive year' },
-  { year: '2024', event: 'Active pipeline exceeds $800M across residential, commercial, and mixed-use sectors' },
+const AWARDS = [
+  { year: '2022 · 2023 · 2024', org: 'Houston Business Journal', title: '#1 Luxury Contractor' },
+  { year: 'A+ · 20+ Years',     org: 'Better Business Bureau',   title: 'Accredited Business' },
+  { year: 'Active Member',       org: 'AGC of Houston',           title: 'Associated General Contractors' },
+  { year: 'LEED Gold · 4 Bldgs',org: 'U.S. Green Bldg Council', title: 'Sustainable Construction' },
 ];
 
+/* ── Team card ────────────────────────────────────────────────────── */
+function TeamCard({ m }: { m: typeof TEAM[0] }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <motion.div
+      className="relative p-8 md:p-10 flex flex-col items-start gap-5 cursor-default"
+      style={{ border: `1px solid ${LB}`, backgroundColor: hov ? G50 : W }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      animate={{ backgroundColor: hov ? G50 : W }}
+      transition={{ duration: 0.22 }}
+    >
+      <Brackets c={hov ? AC : 'rgba(0,0,0,0.06)'} sz={12} w={1} />
+      <motion.div
+        className="w-14 h-14 flex items-center justify-center text-lg font-bold relative overflow-hidden"
+        style={{ backgroundColor: m.bg, color: m.color, fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.3rem', letterSpacing: '0.04em' }}
+        animate={{ scale: hov ? 1.06 : 1, rotate: hov ? -2 : 0 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <motion.div
+          className="absolute inset-0"
+          style={{ backgroundColor: AC }}
+          animate={{ scaleY: hov ? 1 : 0, originY: 1 }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        />
+        <span className="relative z-10">{m.initials}</span>
+      </motion.div>
+      <div>
+        <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.15rem', color: B, marginBottom: '0.25rem' }}>{m.name}</div>
+        <div className="text-[8px] uppercase tracking-[0.24em] font-semibold" style={{ color: hov ? AC : G500 }}>{m.title}</div>
+      </div>
+      <AnimatePresence>
+        {hov && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.22 }}
+            className="text-[9px] uppercase tracking-[0.2em]"
+            style={{ color: 'rgba(0,0,0,0.3)' }}
+          >
+            25+ Years Experience
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/* ── Page ─────────────────────────────────────────────────────────── */
 export default function About() {
   return (
     <PublicLayout>
 
       {/* Hero */}
-      <section className="pt-40 pb-24" style={{ backgroundColor: CREAM, ...DOT }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal direction="left" x={30} className="flex items-center gap-3 mb-8">
-            <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-            <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Our Story</div>
-          </Reveal>
-          <div className="grid md:grid-cols-2 gap-16 items-end">
-            <Reveal>
-              <h1 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 8vw, 110px)', color: DARK, lineHeight: 0.92, letterSpacing: '-0.01em' }}>
-                About<br />HOU INC
+      <section className="relative flex flex-col justify-end overflow-hidden"
+        style={{ minHeight: '82vh', backgroundColor: B, ...GRID_D }}>
+        <motion.div className="absolute top-0 inset-x-0 h-px origin-left" style={{ backgroundColor: AC }}
+          initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }} />
+        <div aria-hidden className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 80% 12%, rgba(157,126,63,0.09) 0%, transparent 50%)' }} />
+
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-20 pt-44 w-full">
+          <motion.div className="flex items-center gap-4 mb-10"
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9 }}>
+            <motion.div className="h-px" style={{ backgroundColor: AC }}
+              initial={{ width: 0 }} animate={{ width: 40 }} transition={{ duration: 1.2, delay: 0.1, ease: [0.22, 1, 0.36, 1] }} />
+            <span className="text-[8px] uppercase tracking-[0.5em] font-semibold" style={{ color: 'rgba(255,255,255,0.25)' }}>About HOU INC</span>
+          </motion.div>
+
+          <div className="grid lg:grid-cols-12 gap-12 items-end">
+            <motion.div className="lg:col-span-7"
+              initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
+              <h1 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 9vw, 118px)', color: W, lineHeight: 0.9 }}>
+                About /&nbsp;<br /><span style={{ color: AC }}>HOU INC</span>
               </h1>
-            </Reveal>
-            <Reveal delay={0.15}>
-              <p className="text-sm leading-relaxed font-light mb-4" style={{ color: MUTED }}>
-                HOU INC is a leading name in the Houston construction industry, built on a foundation of excellence, integrity, and innovation. We serve residential and commercial clients who expect nothing short of exceptional.
+            </motion.div>
+            <Reveal direction="right" x={36} className="lg:col-span-5 max-w-lg">
+              <p className="text-[13px] leading-relaxed font-light mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                Founded in Houston in 1998, HOU INC is the city's premier construction firm — built on a 25-year foundation of excellence, integrity, and innovation. Our record speaks for itself.
               </p>
-              <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                Our meticulous attention to detail and commitment to quality craftsmanship have made us one of Houston's most trusted construction firms — delivering tailored solutions that exceed expectations on every project.
-              </p>
+              <div className="grid grid-cols-2 gap-6">
+                {[['25+', 'Years in Houston'], ['500+', 'Projects Delivered'], ['$2B+', 'Built Value'], ['98%', 'On-Time Delivery']].map(([v, l]) => (
+                  <div key={l}>
+                    <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.7rem', color: W }}>{v}</div>
+                    <div className="text-[7px] uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.25)' }}>{l}</div>
+                  </div>
+                ))}
+              </div>
             </Reveal>
           </div>
         </div>
       </section>
 
       {/* Mission */}
-      <section className="py-24 md:py-32" style={{ backgroundColor: '#FFFFFF', borderTop: `1px solid ${BORDER}` }}>
+      <section className="py-36 md:py-48" style={{ backgroundColor: W }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-              <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Our Mission</div>
+          <div className="grid md:grid-cols-12 gap-12 md:gap-20 items-center">
+            <Reveal direction="left" x={48} className="md:col-span-7">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="h-px w-10" style={{ backgroundColor: AC }} />
+                <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>Our Mission</div>
+              </div>
+              <blockquote style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px, 3.8vw, 50px)', color: B, lineHeight: 1.14, marginBottom: '2rem' }}>
+                "To deliver construction excellence that elevates Houston's built environment, project by project, generation by generation."
+              </blockquote>
+              <div className="w-12 h-px mb-7" style={{ backgroundColor: G200 }} />
+              <p className="text-[13px] leading-relaxed font-light mb-4" style={{ color: G500 }}>
+                HOU INC was founded on the belief that Houston deserved a construction firm that refused to compromise. Every project we take on — whether a $1M custom estate or a $200M commercial tower — receives the same unwavering commitment to quality, transparency, and schedule performance.
+              </p>
+              <p className="text-[13px] leading-relaxed font-light" style={{ color: G500 }}>
+                Our mission is simple: build the structures that define Houston's next chapter, and build them right.
+              </p>
+            </Reveal>
+            <Reveal direction="right" x={48} className="md:col-span-5">
+              <div className="relative p-10 md:p-12" style={{ backgroundColor: B, ...GRID_D }}>
+                <Brackets c="rgba(157,126,63,0.2)" sz={18} />
+                <div className="text-[7px] uppercase tracking-[0.44em] font-semibold mb-8" style={{ color: 'rgba(255,255,255,0.2)' }}>By the Numbers</div>
+                <div className="space-y-6">
+                  {[
+                    { v: 500, s: '+', l: 'Projects Completed' },
+                    { v: 2,   s: 'B+', p: '$', l: 'Total Constructed Value' },
+                    { v: 25,  s: '+', l: 'Years Building Houston' },
+                    { v: 150, s: '+', l: 'In-House Craftsmen' },
+                  ].map((s, i) => (
+                    <div key={s.l} className="flex items-center justify-between py-4" style={{ borderBottom: i < 3 ? DB : 'none' }}>
+                      <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.6rem', color: W, lineHeight: 1 }}>
+                        <AnimatedCounter value={s.v} prefix={s.p} suffix={s.s} />
+                      </div>
+                      <div className="text-[9px] uppercase tracking-[0.18em] text-right max-w-28" style={{ color: 'rgba(255,255,255,0.28)' }}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* Foundation story */}
+      <section className="py-36 md:py-48" style={{ backgroundColor: B, ...GRID_D }}>
+        <div className="max-w-7xl mx-auto px-6 lg:px-10">
+          <Reveal className="mb-20">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: 'rgba(255,255,255,0.26)' }}>The Beginning</div>
             </div>
-            <div className="w-12 h-px mb-8" style={{ backgroundColor: BORDER }} />
-            <blockquote
-              style={{
-                fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-                fontSize: 'clamp(22px, 3vw, 36px)', color: DARK, lineHeight: 1.35,
-                marginBottom: '1.5rem',
-              }}
-            >
-              "To deliver exceptional construction solutions through meticulous attention to detail, quality craftsmanship, and an unwavering commitment to our clients — turning every dream into a lasting reality."
-            </blockquote>
-            <div className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ color: GOLD }}>— HOU INC Mission Statement</div>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(34px, 5.5vw, 72px)', color: W, lineHeight: 1.0 }}>Our Foundation Story</h2>
+          </Reveal>
+          <div className="grid md:grid-cols-2 gap-0" style={{ border: DB }}>
+            <Reveal direction="left" x={40}
+              className="p-10 md:p-14 flex flex-col gap-6"
+              style={{ borderRight: DB }}>
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: AC, lineHeight: 1, opacity: 0.3 }}>1998</div>
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 3vw, 38px)', color: W, lineHeight: 1.1 }}>
+                A Vision for Something Extraordinary
+              </div>
+              <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.32)' }}>
+                HOU INC was founded in 1998 by William Holt, a third-generation builder who grew up watching his grandfather build churches and schools across East Texas. William moved to Houston in 1994 and quickly recognized the city's insatiable appetite for premium construction — and the shortage of firms capable of delivering it without compromise.
+              </p>
+              <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                He founded HOU INC with a 4-person team and a single River Oaks renovation project. The work was meticulous. The client referred three neighbors. Within 18 months, the firm had its first commercial contract.
+              </p>
+            </Reveal>
+            <Reveal direction="right" x={40}
+              className="p-10 md:p-14 flex flex-col gap-6"
+              style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '4.5rem', color: AC, lineHeight: 1, opacity: 0.3 }}>Today</div>
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 3vw, 38px)', color: W, lineHeight: 1.1 }}>
+                The Standard for Houston Construction
+              </div>
+              <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.32)' }}>
+                Today, HOU INC employs 150+ craftsmen, engineers, and project managers across residential, commercial, retail, industrial, and renovation divisions. We have completed over 500 projects totaling more than $2 billion in constructed value across the Greater Houston Metropolitan Area.
+              </p>
+              <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                The firm remains privately held and owner-led. William Holt is in the office every day. The same standard that built our first project in 1998 defines every project we deliver in 2024.
+              </p>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* Values */}
-      <section className="py-24" style={{ backgroundColor: ALT, borderTop: `1px solid ${BORDER}` }}>
+      <section className="py-36 md:py-48" style={{ backgroundColor: G50 }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-14">
-            <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-            <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>What We Stand For</div>
-          </div>
-          <div className="grid md:grid-cols-4 gap-0" style={{ border: `1px solid ${BORDER}` }}>
+          <Reveal className="mb-16">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>Our Core Beliefs</div>
+            </div>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(34px, 5.5vw, 72px)', color: B, lineHeight: 1.0 }}>Values</h2>
+          </Reveal>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-0" style={{ border: `1px solid ${LB}` }}>
             {VALUES.map((v, i) => (
-              <Reveal key={v.n} delay={i * 0.1}>
-                <TiltCard
-                  max={4}
-                  className="p-8 bg-white h-full"
-                  style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}
-                >
-                  <div
-                    className="leading-none mb-5"
-                    style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.8rem', color: 'rgba(157,126,63,0.22)' }}
-                  >
-                    {v.n}
+              <Reveal key={v.title} delay={i * 0.1} y={28}>
+                <TiltCard max={5}
+                  className="bg-white h-full p-8 md:p-10 flex flex-col gap-5 relative"
+                  style={{ borderRight: i < 3 ? `1px solid ${LB}` : 'none' }}>
+                  <Brackets c="rgba(0,0,0,0.05)" sz={12} />
+                  <div className="w-10 h-10 flex items-center justify-center" style={{ backgroundColor: 'rgba(157,126,63,0.1)', border: '1px solid rgba(157,126,63,0.18)' }}>
+                    <v.Icon className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
                   </div>
-                  <div className="w-6 h-px mb-5" style={{ backgroundColor: GOLD }} />
-                  <div className="text-base font-bold tracking-tight mb-3" style={{ color: DARK }}>{v.title}</div>
-                  <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{v.body}</p>
+                  <div>
+                    <div className="text-[12px] font-bold mb-2 tracking-tight" style={{ color: B }}>{v.title}</div>
+                    <p className="text-[10px] leading-relaxed font-light" style={{ color: G500 }}>{v.body}</p>
+                  </div>
                 </TiltCard>
               </Reveal>
             ))}
@@ -131,129 +291,170 @@ export default function About() {
       </section>
 
       {/* Timeline */}
-      <section className="py-24" style={{ backgroundColor: '#FFFFFF', borderTop: `1px solid ${BORDER}` }}>
+      <section className="py-36 md:py-48" style={{ backgroundColor: W }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex items-center gap-3 mb-14">
-            <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-            <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>25 Years of Progress</div>
-          </div>
-          <div className="max-w-2xl space-y-0 relative">
-            {/* Animated draw line */}
+          <Reveal className="mb-20">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>25 Years of Excellence</div>
+            </div>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(34px, 5.5vw, 72px)', color: B, lineHeight: 1.0 }}>
+              Milestones
+            </h2>
+          </Reveal>
+
+          <div className="relative">
+            {/* Animated vertical line */}
             <motion.div
-              className="absolute left-0 top-0 bottom-0 w-px origin-top"
-              style={{ backgroundColor: GOLD }}
+              className="absolute left-6 md:left-10 top-0 bottom-0 w-px origin-top"
+              style={{ backgroundColor: G200 }}
               initial={{ scaleY: 0 }}
               whileInView={{ scaleY: 1 }}
               viewport={{ once: true, amount: 0.1 }}
               transition={{ duration: 2.4, ease: [0.22, 1, 0.36, 1] }}
             />
-            {MILESTONES.map((m, i) => (
-              <Reveal key={m.year} delay={i * 0.08} y={20} direction="left" x={20}
-                className="flex items-start gap-8 pl-8 pb-8 relative"
-              >
-                <motion.div
-                  className="absolute -left-[4.5px] top-1 w-2 h-2 rounded-full"
-                  style={{ backgroundColor: GOLD }}
-                  initial={{ scale: 0 }}
-                  whileInView={{ scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.4 + i * 0.08, type: 'spring', stiffness: 380, damping: 16 }}
-                />
-                <div
-                  className="shrink-0 w-12"
-                  style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 600, fontSize: '0.9rem', color: GOLD }}
-                >
-                  {m.year}
-                </div>
-                <div
-                  className="text-[12px] leading-relaxed"
-                  style={{ color: i === MILESTONES.length - 1 ? DARK : MUTED }}
-                >
-                  {m.event}
-                </div>
+
+            <div className="space-y-0">
+              {TIMELINE.map((t, i) => (
+                <Reveal key={t.y} delay={i * 0.07} y={24}>
+                  <div className="relative flex gap-10 md:gap-16 py-8 md:py-10 pl-16 md:pl-24 group cursor-default">
+                    {/* Dot */}
+                    <motion.div
+                      className="absolute w-3 h-3 -translate-y-1/2 top-1/2"
+                      style={{ left: 'calc(1.5rem - 6px)', backgroundColor: W, border: `1.5px solid ${G200}` }}
+                      whileHover={{ scale: 1.4, borderColor: AC, backgroundColor: AC }}
+                      transition={{ duration: 0.22 }}
+                    />
+
+                    <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.1rem', color: AC, minWidth: 48, paddingTop: 2 }}>{t.y}</div>
+                    <div className="flex-1 pb-8" style={{ borderBottom: i < TIMELINE.length - 1 ? `1px solid ${LB}` : 'none' }}>
+                      <div className="text-[13px] font-bold mb-2 tracking-tight" style={{ color: B }}>{t.title}</div>
+                      <p className="text-[11px] leading-relaxed font-light" style={{ color: G500 }}>{t.body}</p>
+                    </div>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Leadership */}
+      <section className="py-36 md:py-48" style={{ backgroundColor: G50, ...DOT_L }}>
+        <div className="max-w-7xl mx-auto px-6 lg:px-10">
+          <Reveal className="mb-16">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>The Team</div>
+            </div>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(34px, 5.5vw, 72px)', color: B, lineHeight: 1.0 }}>
+              Leadership
+            </h2>
+          </Reveal>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-0" style={{ border: `1px solid ${LB}` }}>
+            {TEAM.map((m, i) => (
+              <Reveal key={m.name} delay={i * 0.09} y={28}
+                style={{ borderRight: (i + 1) % 3 !== 0 ? `1px solid ${LB}` : 'none', borderBottom: i < 3 ? `1px solid ${LB}` : 'none' }}>
+                <TeamCard m={m} />
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Leadership */}
-      <section className="py-24" style={{ backgroundColor: ALT, borderTop: `1px solid ${BORDER}` }}>
+      {/* Awards */}
+      <section className="py-24 md:py-32" style={{ backgroundColor: W, borderTop: `1px solid ${LB}` }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="flex items-center gap-3 mb-14">
-            <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-            <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Leadership</div>
+          <Reveal className="mb-12">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>Recognition</div>
+            </div>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 4.5vw, 56px)', color: B, lineHeight: 1.0 }}>
+              Awards & Accreditations
+            </h2>
           </Reveal>
-          <div className="grid md:grid-cols-3 gap-6">
-            {TEAM.map((t, i) => (
-              <Reveal key={t.name} delay={i * 0.08} y={40}>
-                <TiltCard
-                  max={6}
-                  className="overflow-hidden h-full"
-                  style={{
-                    border: `1px solid ${BORDER}`,
-                    boxShadow: '0 2px 18px rgba(28,24,20,0.04)',
-                    backgroundColor: '#FFFFFF',
-                  }}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0" style={{ border: `1px solid ${LB}` }}>
+            {AWARDS.map((a, i) => (
+              <Reveal key={a.title} delay={i * 0.09}
+                style={{ borderRight: i < 3 ? `1px solid ${LB}` : 'none' }}>
+                <motion.div
+                  className="p-8 md:p-10 h-full flex flex-col gap-3 relative"
+                  whileHover={{ backgroundColor: G50 }}
+                  transition={{ duration: 0.22 }}
                 >
-                  <div className="relative h-40 flex items-end p-6" style={{ backgroundColor: CREAM, ...DOT }}>
-                    <div
-                      className="absolute top-4 right-4 text-[8px] uppercase tracking-[0.22em] font-bold px-2 py-1"
-                      style={{ color: GOLD, backgroundColor: 'rgba(157,126,63,0.1)', border: `1px solid rgba(157,126,63,0.2)` }}
-                    >
-                      {t.yrs}
-                    </div>
-                    <motion.div
-                      whileHover={{ scale: 1.08, rotate: -3 }}
-                      transition={{ type: 'spring', stiffness: 280, damping: 14 }}
-                      className="w-12 h-12 flex items-center justify-center text-base font-black"
-                      style={{ backgroundColor: 'rgba(157,126,63,0.12)', color: GOLD, border: `1px solid rgba(157,126,63,0.25)`, fontFamily: SERIF }}
-                    >
-                      {t.initials}
-                    </motion.div>
-                  </div>
-                  <div className="p-6" style={{ borderTop: `1px solid ${BORDER}` }}>
-                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 500, fontSize: '1.05rem', color: DARK, marginBottom: '0.2rem' }}>{t.name}</div>
-                    <div className="text-[10px] uppercase tracking-[0.16em]" style={{ color: GOLD }}>{t.title}</div>
-                  </div>
-                </TiltCard>
+                  <Brackets c="rgba(0,0,0,0.05)" sz={12} />
+                  <div className="text-[7px] uppercase tracking-[0.28em] font-bold" style={{ color: AC }}>{a.year}</div>
+                  <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.15rem', color: B, lineHeight: 1.1 }}>{a.title}</div>
+                  <div className="text-[8px] uppercase tracking-[0.18em]" style={{ color: G500 }}>{a.org}</div>
+                </motion.div>
               </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Differentiators bar */}
+      <section style={{ backgroundColor: B, borderTop: DB }}>
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-12">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-0" style={{ borderLeft: DB }}>
+            {[
+              { Icon: ShieldCheck, l: 'Licensed & Insured' },
+              { Icon: Award,       l: 'BBB A+ Accredited' },
+              { Icon: Clock,       l: '98% On-Time Delivery' },
+              { Icon: Leaf,        l: 'LEED Gold Certified' },
+              { Icon: HardHat,     l: '150+ Expert Craftsmen' },
+              { Icon: Users,       l: 'Dedicated Project Lead' },
+            ].map(({ Icon, l }, i) => (
+              <motion.div key={l}
+                className="flex flex-col items-center gap-2.5 px-5 py-7 cursor-default"
+                style={{ borderRight: DB }}
+                whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+                transition={{ duration: 0.22 }}>
+                <Icon className="w-4 h-4" style={{ color: AC, opacity: 0.7 }} strokeWidth={1.5} />
+                <div className="text-[7px] uppercase tracking-[0.2em] text-center" style={{ color: 'rgba(255,255,255,0.22)' }}>{l}</div>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-24 md:py-32" style={{ backgroundColor: DARK }}>
-        <div className="max-w-3xl mx-auto px-6 lg:px-10 text-center">
-          <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 4vw, 54px)', color: CREAM, lineHeight: 1.1, marginBottom: '1.25rem' }}>
-            Build With <span style={{ color: GOLD }}>Houston's Best</span>
-          </h2>
-          <p className="text-sm mb-8 font-light" style={{ color: 'rgba(250,247,242,0.38)' }}>
-            Our team is ready to hear about your project.
-          </p>
-          <Reveal delay={0.2} className="flex flex-wrap gap-4 justify-center">
-            <MagneticButton as="a" href="/contact">
-              <Link
-                to="/contact"
-                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
-                style={{ backgroundColor: GOLD, color: DARK }}
-              >
-                Get In Touch
-                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                </span>
-              </Link>
-            </MagneticButton>
-            <MagneticButton as="a" href="/portfolio" strength={0.3}>
-              <Link
-                to="/portfolio"
-                className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-all hover:bg-white/5"
-                style={{ border: `1px solid rgba(157,126,63,0.38)`, color: GOLD }}
-              >
+      <section className="py-44 md:py-56 relative overflow-hidden" style={{ backgroundColor: B, ...GRID_D }}>
+        <div aria-hidden className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(circle at 50% 58%, rgba(157,126,63,0.12), transparent 50%)' }} />
+        <div className="relative max-w-4xl mx-auto px-6 lg:px-10 text-center">
+          <Reveal>
+            <div className="flex items-center justify-center gap-4 mb-10">
+              <div className="h-px flex-1 max-w-12" style={{ backgroundColor: AC, opacity: 0.3 }} />
+              <div className="text-[8px] uppercase tracking-[0.5em] font-semibold" style={{ color: AC }}>Work With Us</div>
+              <div className="h-px flex-1 max-w-12" style={{ backgroundColor: AC, opacity: 0.3 }} />
+            </div>
+            <h2 className="mb-8" style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(40px, 7vw, 96px)', color: W, lineHeight: 0.96 }}>
+              Let's Build<br /><span style={{ color: AC }}>Something Great.</span>
+            </h2>
+            <p className="text-[13px] leading-relaxed mb-14 max-w-md mx-auto font-light" style={{ color: 'rgba(255,255,255,0.27)' }}>
+              Contact us today to schedule a complimentary consultation with our team. We're ready to bring your vision to life.
+            </p>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <MagneticButton as="div">
+                <Link to="/contact"
+                  className="relative overflow-hidden group flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4"
+                  style={{ backgroundColor: W, color: B }}>
+                  <motion.span className="absolute inset-0 origin-left" style={{ backgroundColor: AC }}
+                    initial={{ scaleX: 0 }} whileHover={{ scaleX: 1 }} transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} />
+                  <span className="relative z-10 group-hover:text-white transition-colors duration-150">Free Consultation</span>
+                  <ArrowUpRight className="relative z-10 w-3.5 h-3.5" strokeWidth={2.5} />
+                </Link>
+              </MagneticButton>
+              <Link to="/portfolio"
+                className="flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4 border transition-all"
+                style={{ borderColor: 'rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.5)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.42)'; e.currentTarget.style.color = W; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}>
                 View Our Work
               </Link>
-            </MagneticButton>
+            </div>
           </Reveal>
         </div>
       </section>

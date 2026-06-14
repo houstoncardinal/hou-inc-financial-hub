@@ -64,7 +64,20 @@ export function nextInvoiceNumber(invoices: Invoice[]): string {
 }
 
 export function useInvoices() {
-  const [invoices, setInvoicesState] = useState<Invoice[]>(() => load());
+  const [invoices, setInvoicesState] = useState<Invoice[]>(() => {
+    const raw = load();
+    const today = new Date().toISOString().slice(0, 10);
+    let changed = false;
+    const autoUpdated = raw.map(inv => {
+      if (inv.status === 'sent' && inv.due_date && inv.due_date < today) {
+        changed = true;
+        return { ...inv, status: 'overdue' as const, updated_at: new Date().toISOString() };
+      }
+      return inv;
+    });
+    if (changed) persist(autoUpdated);
+    return autoUpdated;
+  });
 
   const setInvoices = useCallback((inv: Invoice[]) => {
     setInvoicesState(inv);

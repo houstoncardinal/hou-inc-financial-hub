@@ -113,7 +113,19 @@ export default function Projects() {
                     <div className="micro-label">{p.code || '—'} · {p.status}</div>
                     <div className="text-base font-semibold tracking-tight mt-1 truncate">{p.name}</div>
                   </div>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 group-hover:text-foreground transition-colors mt-1" />
+                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                    {p.used >= 100 && (
+                      <span className="text-[8px] uppercase tracking-[0.14em] px-1.5 py-0.5 border font-medium bg-accent/10 text-accent border-accent/30">
+                        Over Budget
+                      </span>
+                    )}
+                    {p.used >= 80 && p.used < 100 && (
+                      <span className="text-[8px] uppercase tracking-[0.14em] px-1.5 py-0.5 border font-medium bg-warning/10 text-warning border-warning/30">
+                        Near Limit
+                      </span>
+                    )}
+                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+                  </div>
                 </div>
               </button>
               <div className="flex gap-1 absolute top-3 right-3 z-10">

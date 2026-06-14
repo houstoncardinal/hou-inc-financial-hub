@@ -130,14 +130,28 @@ export default function ProjectDetail() {
         <div className="lg:col-span-2 space-y-6">
           {/* Budget utilization */}
           <div className="border border-border p-5">
-            <div className="micro-label mb-3">Budget Utilization</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="micro-label">Budget Utilization</div>
+              {enriched.used >= 100 && (
+                <span className="text-[8px] uppercase tracking-[0.14em] px-2 py-1 border font-medium bg-accent/10 text-accent border-accent/30">
+                  Over Budget · {fmtUSD(enriched.spent - enriched.budget)} excess
+                </span>
+              )}
+              {enriched.used >= 80 && enriched.used < 100 && (
+                <span className="text-[8px] uppercase tracking-[0.14em] px-2 py-1 border font-medium bg-warning/10 text-warning border-warning/30">
+                  Near Limit · {(100 - enriched.used).toFixed(1)}% remaining
+                </span>
+              )}
+            </div>
             <div className="flex justify-between text-xs text-muted-foreground mb-2">
               <span>{fmtUSD(enriched.spent)} spent of {fmtUSD(enriched.budget)}</span>
-              <span className="font-mono-tab">{enriched.used.toFixed(1)}%</span>
+              <span className={`font-mono-tab font-semibold ${enriched.used >= 100 ? 'text-accent' : enriched.used >= 80 ? 'text-warning' : ''}`}>
+                {enriched.used.toFixed(1)}%
+              </span>
             </div>
             <div className="h-2 bg-secondary">
               <div
-                className={`h-full transition-all ${enriched.used >= 100 ? 'bg-accent' : 'bg-foreground'}`}
+                className={`h-full transition-all ${enriched.used >= 100 ? 'bg-accent' : enriched.used >= 80 ? 'bg-warning' : 'bg-foreground'}`}
                 style={{ width: `${Math.min(enriched.used, 100)}%` }}
               />
             </div>

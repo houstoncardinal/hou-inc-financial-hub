@@ -1,641 +1,1039 @@
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, ArrowDown } from 'lucide-react';
-import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
-import { useRef } from 'react';
-import PublicLayout from '@/components/PublicLayout';
-import Reveal from '@/components/motion/Reveal';
-import AnimatedCounter from '@/components/motion/AnimatedCounter';
-import Marquee from '@/components/motion/Marquee';
-import MagneticButton from '@/components/motion/MagneticButton';
-import TiltCard from '@/components/motion/TiltCard';
+import {
+  ArrowUpRight, ArrowDown, BadgeCheck, Gauge, TreePine, HardHat,
+  Building2, Star, Compass, Ruler, Hammer, ClipboardCheck, Trophy,
+  Users, Quote, CheckCircle2, Award, ChevronRight,
+} from 'lucide-react';
+import {
+  motion, useScroll, useTransform, useReducedMotion,
+  useInView, AnimatePresence,
+} from 'framer-motion';
 
-const CREAM  = '#FAF7F2';
-const ALT    = '#F3EDE3';
-const DARK   = '#1C1814';
-const MUTED  = '#8A7A6A';
-const GOLD   = '#9D7E3F';
-const BORDER = '#DDD4C4';
-const SERIF  = "'Cormorant Garamond', Georgia, serif";
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+const B    = '#0A0A0A';
+const W    = '#FFFFFF';
+const G50  = '#F4F4F2';
+const G200 = '#E2E2DE';
+const G500 = '#8A8A8A';
+const G700 = '#3A3A3A';
+const AC   = '#9D7E3F';
+const SF   = "'Cormorant Garamond', Georgia, serif";
 
-const DOT: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(circle, rgba(157,126,63,0.13) 1px, transparent 1px)',
-  backgroundSize: '26px 26px',
+/* ── Photography ────────────────────────────────────────────────────── */
+const PH = {
+  hero:        'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
+  residential: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=85',
+  commercial:  'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=85',
+  svcHomes:    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80',
+  svcComm:     'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80',
+  svcReno:     'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=900&q=80',
+  proj1:       'https://images.unsplash.com/photo-1600607687939-ce8a6d350b8b?auto=format&fit=crop&w=1200&q=80',
+  proj2:       'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1200&q=80',
+  proj3:       'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
 };
 
-const TICKER = [
-  'Luxury Custom Homes', 'Shopping Centers', 'Mixed-Use Developments',
-  'Commercial Campuses', 'River Oaks Estates', 'High-Rise Residential',
-  'Industrial Parks', 'Retail Centers', 'Luxury Condominiums',
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+function Brackets({ c = B, sz = 16, w = 1.5 }: { c?: string; sz?: number; w?: number }) {
+  const s = { position: 'absolute' as const, width: sz, height: sz };
+  const l = { position: 'absolute' as const, backgroundColor: c };
+  return (
+    <>
+      <span style={{ ...s, top: 0, left: 0 }}>
+        <span style={{ ...l, top: 0, left: 0, width: w, height: sz }} />
+        <span style={{ ...l, top: 0, left: 0, height: w, width: sz }} />
+      </span>
+      <span style={{ ...s, top: 0, right: 0 }}>
+        <span style={{ ...l, top: 0, right: 0, width: w, height: sz }} />
+        <span style={{ ...l, top: 0, right: 0, height: w, width: sz }} />
+      </span>
+      <span style={{ ...s, bottom: 0, left: 0 }}>
+        <span style={{ ...l, bottom: 0, left: 0, width: w, height: sz }} />
+        <span style={{ ...l, bottom: 0, left: 0, height: w, width: sz }} />
+      </span>
+      <span style={{ ...s, bottom: 0, right: 0 }}>
+        <span style={{ ...l, bottom: 0, right: 0, width: w, height: sz }} />
+        <span style={{ ...l, bottom: 0, right: 0, height: w, width: sz }} />
+      </span>
+    </>
+  );
+}
+
+function Reveal({
+  children, delay = 0, className = '',
+}: { children: React.ReactNode; delay?: number; className?: string }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-8% 0px' });
+  return (
+    <motion.div ref={ref} className={className}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.9, delay, ease: [0.22, 1, 0.36, 1] }}>
+      {children}
+    </motion.div>
+  );
+}
+
+function AnimatedCounter({
+  target, suffix = '',
+}: { target: number; suffix?: string }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-10% 0px' });
+  const [count, setCount] = useState(0);
+  const started = useRef(false);
+
+  if (inView && !started.current) {
+    started.current = true;
+    const duration = 1800;
+    const start = performance.now();
+    const step = (now: number) => {
+      const pct  = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - pct, 4);
+      setCount(Math.floor(ease * target));
+      if (pct < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
+}
+
+/* Interactive headline word — hovers to gold */
+function IW({ ch, delay = 0, light = false }: { ch: string; delay?: number; light?: boolean }) {
+  const reduced = useReducedMotion();
+  const [hov, setHov] = useState(false);
+  return (
+    <motion.span
+      className="inline-block cursor-default"
+      style={{ color: hov ? AC : (light ? B : W), transition: 'color 0.22s' }}
+      initial={reduced ? false : { opacity: 0, y: 32 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.95, delay, ease: [0.22, 1, 0.36, 1] }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      {ch}
+    </motion.span>
+  );
+}
+
+/* ── CTA Buttons ─────────────────────────────────────────────────────── */
+function HeroPrimaryBtn({ to, children }: { to: string; children: React.ReactNode }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <Link to={to}
+      className="relative overflow-hidden inline-flex items-center gap-2"
+      style={{
+        color: hov ? B : W,
+        padding: '14px 28px',
+        fontSize: '9px',
+        fontWeight: 700,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase' as const,
+        transition: 'color 0.3s',
+        border: `1px solid ${W}`,
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <motion.span className="absolute inset-0"
+        style={{ backgroundColor: W, transformOrigin: 'left' }}
+        animate={{ scaleX: hov ? 1 : 0 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} />
+      <span className="relative z-10 flex items-center gap-2">{children}</span>
+    </Link>
+  );
+}
+
+function HeroSecondaryBtn({ to, children }: { to: string; children: React.ReactNode }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <Link to={to}
+      className="relative overflow-hidden inline-flex items-center gap-2"
+      style={{
+        color: hov ? W : 'rgba(255,255,255,0.48)',
+        padding: '14px 28px',
+        fontSize: '9px',
+        fontWeight: 700,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase' as const,
+        transition: 'color 0.2s',
+        border: '1px solid rgba(255,255,255,0.18)',
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <motion.span className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(255,255,255,0.08)', transformOrigin: 'left' }}
+        animate={{ scaleX: hov ? 1 : 0 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} />
+      <span className="relative z-10 flex items-center gap-2">{children}</span>
+    </Link>
+  );
+}
+
+function SectionBtn({ to, children, dark = false }: { to: string; children: React.ReactNode; dark?: boolean }) {
+  const [hov, setHov] = useState(false);
+  const bg = dark ? W : B;
+  const fg = dark ? B : W;
+  return (
+    <Link to={to}
+      className="relative overflow-hidden inline-flex items-center gap-2"
+      style={{
+        backgroundColor: bg,
+        color: hov ? W : fg,
+        padding: '13px 26px',
+        fontSize: '9px',
+        fontWeight: 700,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase' as const,
+        transition: 'color 0.3s',
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <motion.span className="absolute inset-0"
+        style={{ backgroundColor: AC, transformOrigin: 'left' }}
+        animate={{ scaleX: hov ? 1 : 0 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} />
+      <span className="relative z-10 flex items-center gap-2">{children}</span>
+    </Link>
+  );
+}
+
+/* ── Data ────────────────────────────────────────────────────────────── */
+const TICKER_ITEMS = [
+  'Luxury Custom Homes', 'Grade-A Commercial', 'Retail Centers', 'High-Rise Residential',
+  'Industrial Warehouses', 'Mixed-Use Development', 'LEED Certified', 'HBJ #1 Contractor',
+  '25 Years · Houston', 'BBB A+ Rated',
+];
+
+const TRUST_BADGES = [
+  { icon: BadgeCheck, label: 'BBB A+ Accredited' },
+  { icon: Trophy,     label: 'HBJ #1 Luxury Builder' },
+  { icon: Gauge,      label: '98% On-Time Delivery' },
+  { icon: TreePine,   label: 'LEED Certified' },
+  { icon: Users,      label: '500+ Projects Completed' },
+];
+
+const STATS = [
+  { v: 25,  s: '+',  l: 'Years in Houston',   d: 'Founded 1998' },
+  { v: 500, s: '+',  l: 'Projects Delivered',  d: 'Res · Comm · Retail' },
+  { v: 2,   s: 'B+', l: 'Value Constructed',  d: 'Greater Houston' },
+  { v: 98,  s: '%',  l: 'On-Time Delivery',    d: 'Schedule adherence' },
 ];
 
 const SERVICES = [
   {
-    n: '01',
-    title: 'Luxury Residences',
-    sub: 'Custom Estates & High-End Homes',
-    body: "We design and build singular private homes for Houston's most discerning families. Every detail — from foundation to finish — is executed to an uncompromising standard.",
-    specs: ['Custom Floor Plans', 'Smart Home Integration', 'Concierge Project Management', 'Premium Material Sourcing'],
+    img: PH.svcHomes,
+    tag: '01 · Residential',
+    title: 'Luxury Custom Homes',
+    sub: 'Bespoke estates and luxury residences crafted to the highest specification — River Oaks, Memorial, Tanglewood, and beyond.',
+    spec: ['Custom Estate Homes', 'High-Rise Residential', 'Renovation & Addition', 'Interior Fit-Out'],
   },
   {
-    n: '02',
-    title: 'Commercial Developments',
-    sub: 'Office Campuses & Corporate Facilities',
-    body: 'Landmark commercial spaces that project prestige, drive productivity, and hold their value for decades. We build for the Fortune 500 and the bold independent alike.',
-    specs: ['Class A Office Towers', 'Corporate Campus Design', 'Sustainable LEED Builds', 'Tenant Improvement'],
+    img: PH.svcComm,
+    tag: '02 · Commercial',
+    title: 'Commercial Development',
+    sub: 'Class-A office campuses, medical facilities, and corporate headquarters delivered on time and on budget.',
+    spec: ['Class-A Office', 'Medical Facilities', 'Corporate HQ', 'Hospitality'],
   },
   {
-    n: '03',
+    img: PH.svcReno,
+    tag: '03 · Retail & Mixed-Use',
     title: 'Retail & Mixed-Use',
-    sub: 'Shopping Centers & Live-Work Communities',
-    body: 'End-to-end development of high-traffic retail environments and integrated communities where commerce, culture, and residential life converge seamlessly.',
-    specs: ['Anchor Retail Centers', 'Lifestyle Developments', 'Mixed-Use Towers', 'Ground-Up Development'],
+    sub: 'Shopping centers, mixed-use developments, and retail flagship builds that drive commerce and community.',
+    spec: ['Anchored Shopping Centers', 'Mixed-Use Towers', 'Flagship Retail', 'Warehouse & Industrial'],
   },
 ];
 
 const PROJECTS = [
-  { name: 'The River Oaks Estate',    type: 'Luxury Residential',  loc: 'River Oaks, Houston',       year: '2024', sqft: '14,200 sq ft' },
-  { name: 'Galleria Commerce Center', type: 'Class A Commercial',   loc: 'Galleria District, Houston', year: '2023', sqft: '280,000 sq ft' },
-  { name: 'The Heights Collection',   type: 'Luxury Condominiums',  loc: 'The Heights, Houston',       year: '2024', sqft: '96,000 sq ft' },
-  { name: 'Katy Premium Outlets',     type: 'Retail Development',   loc: 'Katy, TX',                   year: '2022', sqft: '420,000 sq ft' },
+  { img: PH.proj1, tag: 'River Oaks · Residential',   title: 'Chambord Estate',             sqft: '14,500 SF', year: '2024', wide: true  },
+  { img: PH.proj2, tag: 'Energy Corridor · Industrial',title: 'Westway Commerce Campus',     sqft: '212,000 SF', year: '2024', wide: false },
+  { img: PH.proj3, tag: 'Galleria · Commercial',       title: 'Meridian Tower — Retail',     sqft: '98,000 SF', year: '2023', wide: false },
 ];
 
-const STEPS = [
-  { n: '01', title: 'Discovery & Vision',   body: 'We begin with an in-depth consultation to understand your goals, timeline, and standard of quality before a single line is drawn.' },
-  { n: '02', title: 'Design & Engineering', body: 'Our in-house design team works with the top architectural firms in Houston to produce precise, buildable plans that translate vision into structure.' },
-  { n: '03', title: 'Procurement & Build',  body: 'We leverage decades of supplier relationships to source premium materials at scale, then execute construction with relentless quality control.' },
-  { n: '04', title: 'Delivery & Beyond',    body: 'On-time, on-spec delivery is our baseline. Post-completion, our team remains available for warranty, maintenance, and future builds.' },
+const WHY = [
+  { icon: Trophy,        title: 'HBJ #1 Luxury Contractor', sub: 'Recognized three consecutive years as Houston Business Journal\'s top-ranked luxury contractor.' },
+  { icon: HardHat,       title: 'Vertically Integrated',    sub: 'In-house architecture, engineering, and construction management — one team, zero handoff gaps.' },
+  { icon: Gauge,         title: '98% On-Time Delivery',     sub: 'Industry-leading schedule adherence across every project type and scale since 2009.' },
+  { icon: TreePine,      title: 'LEED Gold Certified',      sub: 'Sustainable building expertise woven into every project, for structures built to last generations.' },
+  { icon: CheckCircle2,  title: 'Fixed-Price Guarantee',    sub: 'Our guaranteed maximum price contract protects your investment from cost overruns and surprises.' },
+  { icon: Users,         title: 'Dedicated Project Lead',   sub: 'A senior project executive remains your single point of contact from ground-break to handover.' },
 ];
 
-const STAT_NUMBERS: Array<{ value: number; prefix?: string; suffix?: string; label: string }> = [
-  { value: 25,  suffix: '+',  label: 'Years in Houston' },
-  { value: 500, suffix: '+',  label: 'Projects Delivered' },
-  { value: 2,   prefix: '$',  suffix: 'B+', label: 'Total Constructed' },
-  { value: 12,  suffix: '',   label: 'Property Types' },
+const PROCESS = [
+  { icon: Compass,        n: '01', title: 'Discovery & Vision',    sub: 'We begin by deeply understanding your goals, timeline, and budget — then align every decision to that north star.' },
+  { icon: Ruler,          n: '02', title: 'Design & Engineering',  sub: 'Our in-house team produces detailed architectural drawings and structural plans, refined with you at every stage.' },
+  { icon: Hammer,         n: '03', title: 'Precision Construction', sub: 'Master craftsmen and trusted trade partners execute with exacting standards under rigorous daily quality review.' },
+  { icon: ClipboardCheck, n: '04', title: 'Delivery & Stewardship', sub: 'We hand over a complete, punch-list-free project — then remain your partner through the full warranty period.' },
 ];
 
-/* ── Animated headline word ── */
-function HeadlineWord({ children, delay = 0, color }: { children: React.ReactNode; delay?: number; color?: string }) {
+const TESTIMONIALS = [
+  {
+    dark: true,
+    q: '"HOU INC delivered our River Oaks estate three weeks early and $200K under budget. The craftsmanship is extraordinary — not a single punch-list item at handover."',
+    name: 'James Whitfield',
+    title: 'Founding Partner, Whitfield Capital · River Oaks Estate',
+    stars: 5,
+  },
+  {
+    dark: false,
+    q: '"As a developer, I\'ve worked with the top contractors in Houston. HOU INC\'s commercial team operates at a completely different level. The Galleria project came in on time, exactly to spec."',
+    name: 'Diane Okonkwo',
+    title: 'CEO, Meridian Properties Group · Galleria Commerce Center',
+    stars: 5,
+  },
+  {
+    dark: true,
+    q: '"When you invest $8M in a custom home, you need a builder who treats it like it\'s their own. HOU INC\'s team was at our site every day and communication was impeccable from day one."',
+    name: 'Robert & Sarah Castellan',
+    title: 'Homeowners · Memorial Luxury Estate',
+    stars: 5,
+  },
+];
+
+/* ── Sub-components ──────────────────────────────────────────────────── */
+function ServiceCard({ s }: { s: typeof SERVICES[0] }) {
+  const [hov, setHov] = useState(false);
   return (
-    <span style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top' }}>
-      <motion.span
-        initial={{ y: '110%', opacity: 0 }}
-        animate={{ y: '0%', opacity: 1 }}
-        transition={{ duration: 1.05, delay, ease: [0.22, 1, 0.36, 1] }}
-        style={{ display: 'inline-block', color }}
-      >
-        {children}
-      </motion.span>
-    </span>
+    <motion.div
+      className="relative overflow-hidden cursor-pointer"
+      style={{ height: '480px', backgroundColor: G700 }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <motion.div className="absolute inset-0"
+        style={{ backgroundImage: `url(${s.img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.06 : 1 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <motion.div className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(8,8,8,0.96) 35%, rgba(8,8,8,0.25) 100%)' }}
+        animate={{ opacity: hov ? 1 : 0.85 }}
+        transition={{ duration: 0.4 }}
+      />
+      <div className="absolute inset-0 flex flex-col justify-end p-8">
+        <div className="text-[8px] uppercase tracking-[0.38em] font-semibold mb-4" style={{ color: AC }}>{s.tag}</div>
+        <h3 className="mb-3" style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '26px', color: W, lineHeight: 1.1 }}>
+          {s.title}
+        </h3>
+        <motion.p className="text-[12px] leading-relaxed mb-5 font-light" style={{ color: 'rgba(255,255,255,0.58)' }}
+          animate={{ opacity: hov ? 1 : 0, y: hov ? 0 : 12 }}
+          transition={{ duration: 0.35 }}>
+          {s.sub}
+        </motion.p>
+        <motion.div className="space-y-1.5"
+          animate={{ opacity: hov ? 1 : 0, y: hov ? 0 : 8 }}
+          transition={{ duration: 0.35, delay: 0.04 }}>
+          {s.spec.map(sp => (
+            <div key={sp} className="flex items-center gap-2">
+              <ChevronRight className="w-3 h-3 shrink-0" style={{ color: AC }} strokeWidth={2} />
+              <span className="text-[10px] uppercase tracking-[0.2em] font-medium" style={{ color: 'rgba(255,255,255,0.65)' }}>{sp}</span>
+            </div>
+          ))}
+        </motion.div>
+        <motion.div className="mt-5"
+          animate={{ opacity: hov ? 1 : 0, y: hov ? 0 : 6 }}
+          transition={{ duration: 0.3, delay: 0.08 }}>
+          <Link to="/services" className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.26em] font-bold"
+            style={{ color: AC }}>
+            Explore Service <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </Link>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
+function ProjectCard({ p, wide }: { p: typeof PROJECTS[0]; wide: boolean }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <motion.div
+      className="relative overflow-hidden cursor-pointer"
+      style={{ height: wide ? 640 : 308 }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <motion.div className="absolute inset-0"
+        style={{ backgroundImage: `url(${p.img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.05 : 1 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.85) 30%, rgba(0,0,0,0.15) 100%)' }} />
+      <motion.div className="absolute inset-x-0 bottom-0 p-7 pb-8"
+        animate={{ y: hov ? 0 : 16, opacity: hov ? 1 : 0.6 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+        <div className="text-[8px] uppercase tracking-[0.34em] font-semibold mb-2" style={{ color: AC }}>{p.tag}</div>
+        <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: wide ? '28px' : '20px', color: W, lineHeight: 1.1 }}>
+          {p.title}
+        </div>
+        <motion.div className="flex items-center gap-5 mt-3"
+          animate={{ opacity: hov ? 1 : 0 }}
+          transition={{ duration: 0.25, delay: 0.08 }}>
+          <span className="text-[9px] uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.48)' }}>{p.sqft}</span>
+          <span style={{ color: 'rgba(255,255,255,0.18)' }}>·</span>
+          <span className="text-[9px] uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.48)' }}>{p.year}</span>
+        </motion.div>
+      </motion.div>
+      <motion.div className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center"
+        style={{ border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.35)' }}
+        animate={{ opacity: hov ? 1 : 0, scale: hov ? 1 : 0.8 }}
+        transition={{ duration: 0.25 }}>
+        <ArrowUpRight className="w-4 h-4" style={{ color: W }} strokeWidth={1.5} />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function WhyCard({ w: card }: { w: typeof WHY[0] }) {
+  const [hov, setHov] = useState(false);
+  const Icon = card.icon;
+  return (
+    <motion.div className="relative p-7 cursor-default overflow-hidden"
+      style={{ border: '1px solid rgba(255,255,255,0.06)', backgroundColor: hov ? 'rgba(255,255,255,0.04)' : 'transparent', transition: 'background-color 0.3s' }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <motion.div className="absolute top-0 left-0 h-px"
+        style={{ backgroundColor: AC }}
+        animate={{ width: hov ? '100%' : '0%' }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }} />
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 flex items-center justify-center shrink-0"
+          style={{ border: `1px solid ${hov ? AC : 'rgba(255,255,255,0.12)'}`, transition: 'border-color 0.3s' }}>
+          <Icon className="w-4 h-4" style={{ color: hov ? AC : 'rgba(255,255,255,0.38)', transition: 'color 0.3s' }} strokeWidth={1.5} />
+        </div>
+      </div>
+      <div className="text-[12px] font-bold mb-2 uppercase tracking-[0.14em]"
+        style={{ color: hov ? W : 'rgba(255,255,255,0.72)', transition: 'color 0.25s' }}>{card.title}</div>
+      <div className="text-[12px] leading-relaxed font-light"
+        style={{ color: 'rgba(255,255,255,0.38)' }}>{card.sub}</div>
+    </motion.div>
+  );
+}
+
+function StepCard({ s, i }: { s: typeof PROCESS[0]; i: number }) {
+  const [hov, setHov] = useState(false);
+  const Icon = s.icon;
+  return (
+    <Reveal delay={i * 0.08}>
+      <div className="relative cursor-default"
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}>
+        <div className="relative h-px mb-7" style={{ backgroundColor: G200 }}>
+          <motion.div className="absolute inset-y-0 left-0" style={{ backgroundColor: AC }}
+            animate={{ width: hov ? '100%' : '0%' }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} />
+        </div>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 flex items-center justify-center shrink-0"
+            style={{ backgroundColor: hov ? AC : G50, border: `1px solid ${hov ? AC : G200}`, transition: 'all 0.3s' }}>
+            <Icon className="w-4 h-4" style={{ color: hov ? W : G700, transition: 'color 0.3s' }} strokeWidth={1.5} />
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.34em] font-black"
+            style={{ color: hov ? AC : G500, transition: 'color 0.25s' }}>{s.n}</div>
+        </div>
+        <div className="text-[13px] font-bold uppercase tracking-[0.14em] mb-3"
+          style={{ color: hov ? B : G700, transition: 'color 0.25s' }}>{s.title}</div>
+        <div className="text-[12px] leading-relaxed font-light" style={{ color: G500 }}>{s.sub}</div>
+        <motion.div className="absolute top-6 right-0"
+          animate={{ opacity: hov ? 1 : 0, x: hov ? 0 : -6 }}
+          transition={{ duration: 0.2 }}>
+          <ArrowUpRight className="w-4 h-4" style={{ color: AC }} strokeWidth={2} />
+        </motion.div>
+      </div>
+    </Reveal>
+  );
+}
+
+function TestiCard({ t, i }: { t: typeof TESTIMONIALS[0]; i: number }) {
+  return (
+    <Reveal delay={i * 0.1}>
+      <div className="relative p-8 h-full"
+        style={{
+          backgroundColor: t.dark ? B : G50,
+          border: `1px solid ${t.dark ? 'rgba(255,255,255,0.07)' : G200}`,
+        }}>
+        <Brackets c={t.dark ? 'rgba(157,126,63,0.22)' : 'rgba(157,126,63,0.2)'} sz={13} w={1} />
+        <div className="flex gap-1 mb-5">
+          {Array.from({ length: t.stars }).map((_, j) => (
+            <Star key={j} className="w-3 h-3 fill-current" style={{ color: AC }} strokeWidth={0} />
+          ))}
+        </div>
+        <Quote className="w-5 h-5 mb-4" style={{ color: t.dark ? 'rgba(157,126,63,0.3)' : 'rgba(157,126,63,0.25)' }} strokeWidth={1} />
+        <p className="text-[13px] leading-relaxed font-light mb-6 italic"
+          style={{ fontFamily: SF, color: t.dark ? 'rgba(255,255,255,0.72)' : G700 }}>
+          {t.q}
+        </p>
+        <div className="pt-5" style={{ borderTop: `1px solid ${t.dark ? 'rgba(255,255,255,0.07)' : G200}` }}>
+          <div className="text-[11px] font-bold tracking-[0.08em]"
+            style={{ color: t.dark ? 'rgba(255,255,255,0.72)' : B }}>{t.name}</div>
+          <div className="text-[10px] mt-0.5 leading-snug"
+            style={{ color: t.dark ? 'rgba(255,255,255,0.3)' : G500 }}>{t.title}</div>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
+
+function SplitPanel({ img, tag, title, desc, specs, to }: {
+  img: string; tag: string; title: string; desc: string; specs: string[]; to: string;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <motion.div className="relative overflow-hidden flex-1 cursor-pointer" style={{ minHeight: '560px' }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}>
+      <motion.div className="absolute inset-0"
+        style={{ backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.04 : 1 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }} />
+      <motion.div className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(5,5,5,0.95) 40%, rgba(5,5,5,0.30) 100%)' }}
+        animate={{ opacity: hov ? 1 : 0.88 }}
+        transition={{ duration: 0.4 }} />
+      <div className="absolute inset-0 flex flex-col justify-end p-10 md:p-14">
+        <div className="text-[8px] uppercase tracking-[0.44em] font-semibold mb-4" style={{ color: AC }}>{tag}</div>
+        <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: W, lineHeight: 1.05, marginBottom: 16 }}>
+          {title}
+        </h2>
+        <motion.p className="text-[13px] leading-relaxed font-light max-w-sm mb-6"
+          style={{ color: 'rgba(255,255,255,0.52)' }}
+          animate={{ opacity: hov ? 1 : 0, y: hov ? 0 : 14 }}
+          transition={{ duration: 0.35 }}>
+          {desc}
+        </motion.p>
+        <motion.div className="space-y-2 mb-7"
+          animate={{ opacity: hov ? 1 : 0, y: hov ? 0 : 10 }}
+          transition={{ duration: 0.3, delay: 0.05 }}>
+          {specs.map(sp => (
+            <div key={sp} className="flex items-center gap-2">
+              <div className="w-1 h-1 shrink-0 rounded-full" style={{ backgroundColor: AC }} />
+              <span className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'rgba(255,255,255,0.55)' }}>{sp}</span>
+            </div>
+          ))}
+        </motion.div>
+        <motion.div
+          animate={{ opacity: hov ? 1 : 0.3, y: hov ? 0 : 4 }}
+          transition={{ duration: 0.25, delay: 0.1 }}>
+          <Link to={to} className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.28em] font-black py-3 px-6"
+            style={{ backgroundColor: AC, color: W }}>
+            Explore <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </Link>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
+function ManifestoText() {
+  const text = "We don't just construct buildings. We engineer the landmarks that define Houston's legacy — one iconic structure at a time.";
+  const words = text.split(' ');
+  return (
+    <p style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 3.5vw, 44px)', lineHeight: 1.35, color: B }}>
+      {words.map((word, i) => (
+        <motion.span key={i} className="inline-block mr-[0.22em]"
+          initial={{ opacity: 0.1 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ delay: i * 0.028, duration: 0.55, ease: 'easeOut' }}>
+          {word}
+        </motion.span>
+      ))}
+    </p>
+  );
+}
+
+/* ── Architectural grid pattern ──────────────────────────────────────── */
+const GRID = {
+  backgroundImage: `
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+  `,
+  backgroundSize: '72px 72px',
+};
+
+/* ── Page ────────────────────────────────────────────────────────────── */
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
-  const reduced = useReducedMotion();
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const heroY     = useTransform(scrollYProgress, [0, 1], ['0%', reduced ? '0%' : '24%']);
-  const heroFade  = useTransform(scrollYProgress, [0, 1], [1, 0.35]);
-  const bigNumY   = useTransform(scrollYProgress, [0, 1], ['0%', '-12%']);
+  const { scrollYProgress: heroScroll } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroY    = useTransform(heroScroll, [0, 1], [0, 80]);
+  const heroFade = useTransform(heroScroll, [0, 0.55], [1, 0]);
 
   return (
-    <PublicLayout>
+    <>
+      {/* ═══════════════════════════════════════════════════
+          HERO — Split dark + architectural photo
+      ═══════════════════════════════════════════════════ */}
+      <section ref={heroRef} className="relative overflow-hidden" style={{ backgroundColor: B, minHeight: '100svh', ...GRID }}>
 
-      {/* ══ HERO ══ */}
-      <section
-        ref={heroRef}
-        className="relative flex flex-col justify-end overflow-hidden"
-        style={{ minHeight: '100vh', backgroundColor: CREAM, ...DOT }}
-      >
-        {/* Gold hairline top */}
+        {/* Image panel (right, desktop only) */}
         <motion.div
-          className="absolute top-0 inset-x-0 h-px origin-left"
-          style={{ backgroundColor: GOLD, opacity: 0.45 }}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
-        />
+          className="hidden lg:block absolute top-0 right-0 bottom-0"
+          style={{ width: '42%' }}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 1.1, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
+          {/* Blend edge */}
+          <div className="absolute inset-y-0 left-0 w-28 z-10"
+            style={{ background: `linear-gradient(to right, ${B}, transparent)` }} />
+          <div className="absolute inset-0"
+            style={{ backgroundImage: `url(${PH.hero})`, backgroundSize: 'cover', backgroundPosition: 'center 25%' }} />
+          <div className="absolute inset-0"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)' }} />
 
-        {/* Warm glow w/ slow drift */}
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(ellipse at 80% 15%, rgba(157,126,63,0.09) 0%, transparent 52%)` }}
-          animate={reduced ? {} : { backgroundPosition: ['80% 15%', '70% 25%', '80% 15%'] }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        {/* Subtle floating blueprint lines */}
-        {!reduced && (
-          <>
-            <motion.div
-              className="absolute h-px"
-              style={{ left: 0, right: 0, top: '34%', backgroundColor: GOLD, opacity: 0.08 }}
-              animate={{ x: ['-12%', '12%', '-12%'] }}
-              transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.div
-              className="absolute w-px"
-              style={{ top: 0, bottom: 0, left: '68%', backgroundColor: GOLD, opacity: 0.06 }}
-              animate={{ y: ['-6%', '6%', '-6%'] }}
-              transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          </>
-        )}
-
-        <motion.div
-          style={{ y: heroY, opacity: heroFade }}
-          className="relative z-10 max-w-7xl mx-auto px-6 lg:px-10 pb-20 pt-36 w-full"
-        >
-          {/* Eyebrow */}
+          {/* Floating stat card */}
           <motion.div
-            className="flex items-center gap-3 mb-10"
-            initial={{ opacity: 0, x: -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.9, delay: 0.1 }}
-          >
-            <motion.div
-              className="h-px"
-              style={{ backgroundColor: GOLD }}
-              initial={{ width: 0 }}
-              animate={{ width: 40 }}
-              transition={{ duration: 1, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            />
-            <div className="text-[9px] uppercase tracking-[0.42em] font-semibold" style={{ color: GOLD }}>
-              Houston · Texas · Residential &amp; Commercial
+            className="absolute bottom-12 left-1/2 -translate-x-1/2 px-7 py-5 whitespace-nowrap"
+            style={{ backgroundColor: 'rgba(10,10,10,0.88)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, duration: 0.6 }}>
+            <Brackets c="rgba(157,126,63,0.28)" sz={10} w={1} />
+            <div className="text-center">
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '32px', color: W, lineHeight: 1 }}>500+</div>
+              <div className="text-[8px] uppercase tracking-[0.38em] font-semibold mt-1.5" style={{ color: AC }}>Projects Delivered</div>
             </div>
           </motion.div>
-
-          {/* Headline */}
-          <h1
-            className="leading-[0.88] tracking-tight mb-10"
-            style={{
-              fontSize: 'clamp(58px, 10.5vw, 144px)',
-              fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, color: DARK,
-            }}
-          >
-            <HeadlineWord delay={0.2}>Building</HeadlineWord><br />
-            <HeadlineWord delay={0.45} color={GOLD}>Houston's</HeadlineWord><br />
-            <HeadlineWord delay={0.7}>Legacy.</HeadlineWord>
-          </h1>
-
-          {/* Hairline */}
-          <motion.div
-            className="w-full h-px mb-10 origin-left"
-            style={{ backgroundColor: BORDER }}
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ duration: 1.1, delay: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          />
-
-          {/* Sub + CTAs */}
-          <div className="grid md:grid-cols-2 gap-10 items-end">
-            <Reveal delay={1}>
-              <p className="text-sm leading-relaxed font-light" style={{ color: MUTED }}>
-                Unparalleled construction excellence for residential and commercial projects. With a solid reputation built on excellence, integrity, and innovation, we deliver exceptional solutions that exceed expectations.
-              </p>
-            </Reveal>
-            <Reveal delay={1.05} className="flex flex-wrap gap-4 md:justify-end">
-              <MagneticButton as="a" href="/portfolio">
-                <Link
-                  to="/portfolio"
-                  className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-8 py-4 transition-opacity hover:opacity-90 group"
-                  style={{ backgroundColor: DARK, color: CREAM }}
-                >
-                  View Our Work
-                  <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                    <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </span>
-                </Link>
-              </MagneticButton>
-              <MagneticButton as="a" href="/contact" strength={0.3}>
-                <Link
-                  to="/contact"
-                  className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-8 py-4 transition-all hover:bg-[rgba(157,126,63,0.08)]"
-                  style={{ border: `1px solid rgba(157,126,63,0.5)`, color: GOLD }}
-                >
-                  Start a Project
-                </Link>
-              </MagneticButton>
-            </Reveal>
-          </div>
-
-          {/* Stats row */}
-          <div
-            className="grid grid-cols-2 md:grid-cols-4 gap-0 mt-16"
-            style={{ borderTop: `1px solid ${BORDER}`, borderLeft: `1px solid ${BORDER}` }}
-          >
-            {STAT_NUMBERS.map((s, i) => (
-              <Reveal
-                key={s.label}
-                delay={1.2 + i * 0.08}
-                className="px-6 py-5"
-                style={{ borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}` }}
-              >
-                <div
-                  className="leading-none mb-1"
-                  style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.9rem', color: GOLD }}
-                >
-                  <AnimatedCounter
-                    value={s.value}
-                    prefix={s.prefix}
-                    suffix={s.suffix}
-                  />
-                </div>
-                <div className="text-[9px] uppercase tracking-[0.24em]" style={{ color: 'rgba(28,24,20,0.38)' }}>{s.label}</div>
-              </Reveal>
-            ))}
-          </div>
         </motion.div>
 
-        {/* Scroll cue */}
+        {/* Content panel */}
         <motion.div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.4 }}
-          transition={{ delay: 1.6, duration: 1 }}
-        >
-          <div className="text-[8px] uppercase tracking-[0.32em]" style={{ color: GOLD }}>Scroll</div>
-          <motion.div
-            animate={reduced ? {} : { y: [0, 6, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <ArrowDown className="w-3 h-3" style={{ color: GOLD }} strokeWidth={2} />
-          </motion.div>
+          className="relative z-10 flex flex-col justify-end lg:justify-center px-8 md:px-14 lg:px-16 pb-16 lg:pb-0"
+          style={{ minHeight: '100svh', paddingTop: '110px', y: heroY, opacity: heroFade }}>
+          <div className="lg:max-w-[600px]">
+
+            {/* Eyebrow */}
+            <motion.div className="flex items-center gap-3 mb-12"
+              initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              <div className="text-[8px] uppercase tracking-[0.48em] font-semibold" style={{ color: AC }}>
+                Established 1998 · Houston, Texas
+              </div>
+            </motion.div>
+
+            {/* Massive interactive headline */}
+            <div className="mb-6" style={{ lineHeight: 0.92 }}>
+              <div style={{ fontSize: 'clamp(58px, 10vw, 148px)', fontFamily: SF, fontWeight: 400 }}>
+                <div><IW ch="Building" delay={0.1} /></div>
+                <div><IW ch="Houston's" delay={0.2} /></div>
+                <div style={{ color: AC, fontStyle: 'italic' }}>
+                  <IW ch="Finest." delay={0.3} />
+                </div>
+              </div>
+            </div>
+
+            {/* Subhead */}
+            <motion.p className="text-[14px] leading-relaxed font-light mb-10 max-w-md"
+              style={{ color: 'rgba(255,255,255,0.48)' }}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.42, ease: [0.22, 1, 0.36, 1] }}>
+              Greater Houston's premier construction firm — delivering luxury residences, Class-A commercial, and mixed-use developments for 25 years.
+            </motion.p>
+
+            {/* CTAs */}
+            <motion.div className="flex flex-wrap gap-3 mb-14"
+              initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.54, ease: [0.22, 1, 0.36, 1] }}>
+              <HeroPrimaryBtn to="/contact">
+                Start Your Project <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </HeroPrimaryBtn>
+              <HeroSecondaryBtn to="/portfolio">
+                View Portfolio <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </HeroSecondaryBtn>
+            </motion.div>
+
+            {/* Trust row */}
+            <motion.div className="flex flex-wrap items-center gap-5"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 24 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.68 }}>
+              {TRUST_BADGES.map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <Icon className="w-3 h-3 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
+                  <span className="text-[8px] uppercase tracking-[0.22em] font-medium whitespace-nowrap"
+                    style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</span>
+                </div>
+              ))}
+            </motion.div>
+
+            {/* Scroll nudge */}
+            <motion.div className="flex items-center gap-3 mt-12"
+              animate={{ y: [0, 5, 0] }}
+              transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}>
+              <ArrowDown className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.18)' }} strokeWidth={1.5} />
+              <span className="text-[8px] uppercase tracking-[0.38em]" style={{ color: 'rgba(255,255,255,0.18)' }}>Scroll</span>
+            </motion.div>
+
+          </div>
         </motion.div>
       </section>
 
-      {/* ══ TICKER ══ */}
-      <div className="py-4 overflow-hidden" style={{ backgroundColor: GOLD }}>
-        <Marquee speed={42}>
-          {TICKER.map((item, i) => (
-            <span
-              key={i}
-              className="text-[9px] uppercase tracking-[0.28em] font-black whitespace-nowrap flex items-center gap-8 pr-8"
-              style={{ color: '#fff' }}
-            >
+      {/* ═══════════════════════════════════════════════════
+          TICKER
+      ═══════════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: AC, height: '44px' }}>
+        <motion.div
+          className="flex items-center h-full whitespace-nowrap"
+          animate={{ x: [0, '-50%'] }}
+          transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}>
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+            <span key={i} className="inline-flex items-center gap-6 px-8 h-full text-[8.5px] uppercase tracking-[0.36em] font-bold"
+              style={{ color: W }}>
               {item}
-              <span className="opacity-50">◆</span>
+              <span className="w-1 h-1 rounded-full inline-block flex-shrink-0 opacity-50" style={{ backgroundColor: W }} />
             </span>
           ))}
-        </Marquee>
+        </motion.div>
       </div>
 
-      {/* ══ ABOUT INTRO ══ */}
-      <section className="py-28 md:py-40 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="grid md:grid-cols-2 gap-16 md:gap-28 items-center">
-
-            <Reveal direction="left" x={50}>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-                <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Our Story</div>
-              </div>
-              <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 3.8vw, 50px)', color: DARK, lineHeight: 1.08, marginBottom: '1.25rem' }}>
-                A Quarter Century of<br />Building Excellence
-              </h2>
-              <div className="w-10 h-px mb-7" style={{ backgroundColor: BORDER }} />
-              <p className="text-sm leading-relaxed font-light mb-5" style={{ color: MUTED }}>
-                HOU INC is a leading name in the construction industry, built on a foundation of excellence, integrity, and innovation. Our meticulous attention to detail and commitment to quality craftsmanship have made us a trusted partner for Houston's most discerning residential and commercial clients.
-              </p>
-              <p className="text-sm leading-relaxed font-light mb-10" style={{ color: MUTED }}>
-                From luxury custom homes to major commercial developments, we deliver tailored solutions that exceed expectations — turning our clients' dreams into lasting structures that define Houston's skyline.
-              </p>
-              <MagneticButton as="a" href="/about" strength={0.25}>
-                <Link
-                  to="/about"
-                  className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.26em] font-bold pb-1 transition-opacity hover:opacity-70 group"
-                  style={{ color: GOLD, borderBottom: `1px solid ${GOLD}` }}
-                >
-                  Our Full Story
-                  <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">
-                    <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                  </span>
-                </Link>
-              </MagneticButton>
-            </Reveal>
-
-            {/* Decorative number with parallax */}
-            <Reveal direction="right" x={60} className="relative flex items-center justify-center md:justify-end">
-              <div className="absolute inset-0" style={{ ...DOT, opacity: 0.5 }} />
-              <motion.div className="relative text-right pr-4" style={{ y: bigNumY }}>
-                <AnimatedCounter
-                  value={25}
-                  duration={2200}
-                  style={{
-                    fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-                    fontSize: 'clamp(100px, 18vw, 210px)',
-                    color: 'rgba(157,126,63,0.1)', lineHeight: 1, userSelect: 'none',
-                    display: 'block',
-                  }}
-                />
-                <div className="text-[9px] uppercase tracking-[0.38em] font-semibold -mt-4 md:-mt-8" style={{ color: GOLD, opacity: 0.45 }}>
-                  Years · Houston · Texas
+      {/* ═══════════════════════════════════════════════════
+          MANIFESTO
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: W }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-28 md:py-40">
+          <div className="grid lg:grid-cols-[2fr_3fr] gap-20 items-start">
+            <Reveal>
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                  <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>Our Commitment</div>
                 </div>
-              </motion.div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ SERVICES ══ */}
-      <section className="py-28 md:py-40" style={{ backgroundColor: ALT }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
-            <Reveal>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-                <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>What We Build</div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(36px, 5vw, 64px)', color: B, lineHeight: 1.05 }}>
+                  25 years of<br />uncompromising<br />excellence.
+                </div>
               </div>
-              <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 3.8vw, 50px)', color: DARK, lineHeight: 1.08 }}>
-                Our Services
-              </h2>
             </Reveal>
-            <Reveal delay={0.15}>
-              <Link
-                to="/services"
-                className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.26em] font-bold pb-1 self-start md:self-end transition-opacity hover:opacity-70 group"
-                style={{ color: GOLD, borderBottom: `1px solid ${GOLD}` }}
-              >
-                All Services
-                <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">
-                  <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                </span>
-              </Link>
-            </Reveal>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {SERVICES.map((s, i) => (
-              <Reveal key={s.n} delay={i * 0.12} y={48}>
-                <TiltCard
-                  max={6}
-                  className="h-full"
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    border: `1px solid ${BORDER}`,
-                    boxShadow: '0 2px 18px rgba(28,24,20,0.04)',
-                  }}
-                >
-                  <div className="p-8 md:p-10">
-                    <div
-                      className="leading-none mb-6"
-                      style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.6rem', color: 'rgba(157,126,63,0.3)' }}
-                    >
-                      {s.n}
-                    </div>
-                    <div className="w-8 h-px mb-5" style={{ backgroundColor: GOLD }} />
-                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.3rem', color: DARK, marginBottom: '0.3rem' }}>{s.title}</div>
-                    <div className="text-[9px] uppercase tracking-[0.22em] mb-5 font-semibold" style={{ color: GOLD }}>{s.sub}</div>
-                    <p className="text-[11px] leading-relaxed mb-7 font-light" style={{ color: MUTED }}>{s.body}</p>
-                    <div className="space-y-2">
-                      {s.specs.map(spec => (
-                        <div key={spec} className="flex items-center gap-2.5 text-[10px] uppercase tracking-[0.14em]" style={{ color: 'rgba(28,24,20,0.38)' }}>
-                          <div className="w-3 h-px shrink-0" style={{ backgroundColor: GOLD, opacity: 0.6 }} />
-                          {spec}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </TiltCard>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ FEATURED PROJECTS ══ */}
-      <section className="py-28 md:py-40" style={{ backgroundColor: '#FFFFFF' }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
-            <Reveal>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-                <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>Signature Work</div>
-              </div>
-              <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 3.8vw, 50px)', color: DARK, lineHeight: 1.08 }}>
-                Selected Projects
-              </h2>
-            </Reveal>
-            <Reveal delay={0.15}>
-              <Link
-                to="/portfolio"
-                className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.26em] font-bold pb-1 self-start md:self-end transition-opacity hover:opacity-70 group"
-                style={{ color: GOLD, borderBottom: `1px solid ${GOLD}` }}
-              >
-                Full Portfolio
-                <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">
-                  <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                </span>
-              </Link>
-            </Reveal>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {PROJECTS.map((p, i) => (
-              <Reveal key={p.name} delay={(i % 2) * 0.1} y={40}>
-                <TiltCard
-                  max={5}
-                  className="group cursor-default"
-                  style={{
-                    backgroundColor: CREAM,
-                    border: `1px solid ${BORDER}`,
-                    boxShadow: '0 2px 18px rgba(28,24,20,0.04)',
-                    minHeight: '260px',
-                    ...DOT,
-                  }}
-                >
-                  <div className="p-8 h-full flex flex-col justify-between">
-                    <div>
-                      <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-3" style={{ color: GOLD }}>{p.type}</div>
-                      <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.5rem', color: DARK, marginBottom: '0.35rem' }}>{p.name}</div>
-                      <div className="text-[10px] uppercase tracking-[0.16em]" style={{ color: 'rgba(28,24,20,0.38)' }}>{p.loc}</div>
-                    </div>
-                    <div className="flex items-center justify-between mt-8 pt-5" style={{ borderTop: `1px solid ${BORDER}` }}>
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <div className="text-[8px] uppercase tracking-[0.2em] mb-0.5" style={{ color: 'rgba(157,126,63,0.55)' }}>Area</div>
-                          <div className="text-[11px] font-semibold" style={{ color: 'rgba(28,24,20,0.45)' }}>{p.sqft}</div>
-                        </div>
-                        <div>
-                          <div className="text-[8px] uppercase tracking-[0.2em] mb-0.5" style={{ color: 'rgba(157,126,63,0.55)' }}>Year</div>
-                          <div className="text-[11px] font-semibold" style={{ color: 'rgba(28,24,20,0.45)' }}>{p.year}</div>
-                        </div>
+            <div className="pt-2 lg:pt-4">
+              <ManifestoText />
+              <Reveal delay={0.3}>
+                <div className="flex flex-wrap gap-10 mt-16">
+                  {STATS.map(st => (
+                    <div key={st.l}>
+                      <div style={{ fontFamily: SF, fontStyle: 'italic', fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 300, color: B, lineHeight: 1 }}>
+                        <AnimatedCounter target={st.v} suffix={st.s} />
                       </div>
-                      <motion.div
-                        className="opacity-0 group-hover:opacity-100"
-                        initial={false}
-                        whileHover={{ rotate: 45 }}
-                        transition={{ type: 'spring', stiffness: 280, damping: 18 }}
-                      >
-                        <ArrowUpRight className="w-5 h-5" style={{ color: GOLD }} strokeWidth={1.5} />
-                      </motion.div>
+                      <div className="text-[9px] uppercase tracking-[0.26em] font-semibold mt-1" style={{ color: AC }}>{st.l}</div>
+                      <div className="text-[9px] uppercase tracking-[0.18em] mt-0.5" style={{ color: G500 }}>{st.d}</div>
                     </div>
-                  </div>
-                </TiltCard>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ STATS — dark anchor ══ */}
-      <section className="py-24 md:py-32 overflow-hidden" style={{ backgroundColor: DARK }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <div
-            className="grid grid-cols-2 md:grid-cols-4 gap-0"
-            style={{ borderTop: '1px solid rgba(250,247,242,0.07)', borderLeft: '1px solid rgba(250,247,242,0.07)' }}
-          >
-            {[
-              { value: 25,  suffix: '+',  label: 'Years in Business',       detail: 'Founded 1998 · Houston, TX' },
-              { value: 500, suffix: '+',  label: 'Projects Completed',      detail: 'Residential · Commercial · Mixed-Use' },
-              { value: 2,   prefix: '$',  suffix: 'B+', label: 'Total Constructed Value', detail: 'Across Greater Houston Metro' },
-              { value: 12,                label: 'Property Types',          detail: 'From Estates to Industrial Parks' },
-            ].map((s, i) => (
-              <Reveal
-                key={s.label}
-                delay={i * 0.1}
-                className="p-8 md:p-10"
-                style={{ borderRight: '1px solid rgba(250,247,242,0.07)', borderBottom: '1px solid rgba(250,247,242,0.07)' }}
-              >
-                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(38px, 5vw, 62px)', color: GOLD, lineHeight: 1, marginBottom: '0.5rem' }}>
-                  <AnimatedCounter value={s.value} prefix={s.prefix} suffix={s.suffix} />
+                  ))}
                 </div>
-                <div className="text-[11px] font-bold mb-1" style={{ color: CREAM }}>{s.label}</div>
-                <div className="text-[9px] uppercase tracking-[0.16em]" style={{ color: 'rgba(250,247,242,0.2)' }}>{s.detail}</div>
               </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══ PROCESS ══ */}
-      <section className="py-28 md:py-40" style={{ backgroundColor: CREAM, ...DOT }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-16">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-px w-8" style={{ backgroundColor: GOLD }} />
-              <div className="text-[9px] uppercase tracking-[0.38em] font-semibold" style={{ color: GOLD }}>How We Work</div>
             </div>
-            <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 3.8vw, 50px)', color: DARK, lineHeight: 1.08 }}>
-              Our Process
-            </h2>
-          </Reveal>
+          </div>
+        </div>
+      </section>
 
-          <div className="grid md:grid-cols-4 gap-0 relative" style={{ borderLeft: `1px solid ${BORDER}` }}>
-            {/* Progress line that draws on scroll */}
-            <motion.div
-              className="absolute left-0 top-0 h-1 origin-left"
-              style={{ backgroundColor: GOLD, width: '100%' }}
-              initial={{ scaleX: 0 }}
-              whileInView={{ scaleX: 1 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
-            />
-            {STEPS.map((s, i) => (
-              <Reveal
-                key={s.n}
-                delay={i * 0.12}
-                className="px-8 py-8"
-                style={{ borderRight: i === 3 ? 'none' : `1px solid ${BORDER}` }}
-              >
-                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '2.5rem', color: 'rgba(157,126,63,0.22)', lineHeight: 1, marginBottom: '1.25rem' }}>{s.n}</div>
-                <div className="w-8 h-px mb-5" style={{ backgroundColor: GOLD }} />
-                <div className="text-base font-bold mb-3" style={{ color: DARK }}>{s.title}</div>
-                <p className="text-[11px] leading-relaxed font-light" style={{ color: MUTED }}>{s.body}</p>
+      {/* ═══════════════════════════════════════════════════
+          SERVICES — Image cards
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: G50, paddingTop: '80px', paddingBottom: '80px' }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14">
+          <Reveal>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-14">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                  <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>What We Build</div>
+                </div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 4vw, 52px)', color: B, lineHeight: 1.08 }}>
+                  End-to-end construction<br />services, delivered.
+                </div>
+              </div>
+              <SectionBtn to="/services">
+                All Services <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </SectionBtn>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {SERVICES.map((s, i) => (
+              <Reveal key={s.tag} delay={i * 0.1}>
+                <ServiceCard s={s} />
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ══ CLIENT PORTAL BAND ══ */}
-      <section style={{ backgroundColor: GOLD, overflow: 'hidden' }}>
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-10">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <Reveal direction="left" x={30}>
-              <div className="text-[9px] uppercase tracking-[0.38em] font-bold mb-1" style={{ color: 'rgba(28,24,20,0.5)' }}>New</div>
-              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.45rem', color: DARK, lineHeight: 1.1 }}>
-                Client Portal — connect directly with your builder.
+      {/* ═══════════════════════════════════════════════════
+          RESIDENTIAL vs COMMERCIAL — Split image panels
+      ═══════════════════════════════════════════════════ */}
+      <section>
+        <Reveal>
+          <div className="max-w-7xl mx-auto px-8 md:px-14 pt-20 pb-10">
+            <div className="text-[8px] uppercase tracking-[0.44em] font-semibold mb-3" style={{ color: AC }}>Our Expertise</div>
+            <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.8vw, 48px)', color: B, lineHeight: 1.08 }}>
+              Two specializations.<br />One team. Zero compromise.
+            </div>
+          </div>
+        </Reveal>
+        <div className="flex flex-col lg:flex-row">
+          <SplitPanel
+            img={PH.residential}
+            tag="Residential Construction"
+            title="Luxury Homes & Custom Estates"
+            desc="From River Oaks estates to Memorial custom homes — we bring your most ambitious residential vision to life with obsessive attention to detail."
+            specs={['Custom Estate Homes', 'High-Rise Residential', 'Award-Winning Design', 'LEED Certified']}
+            to="/services"
+          />
+          <div className="hidden lg:block w-px flex-shrink-0" style={{ backgroundColor: B }} />
+          <SplitPanel
+            img={PH.commercial}
+            tag="Commercial Construction"
+            title="Grade-A Office & Retail Development"
+            desc="Class-A offices, medical facilities, shopping centers, and mixed-use towers that define Houston's commercial landscape for decades."
+            specs={['Class-A Office Parks', 'Medical & Healthcare', 'Retail & Mixed-Use', 'Industrial Warehouse']}
+            to="/services"
+          />
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          SELECTED PROJECTS
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, paddingTop: '80px', paddingBottom: '80px', ...GRID }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14">
+          <Reveal>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                  <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>Selected Work</div>
+                </div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 4vw, 52px)', color: W, lineHeight: 1.08 }}>
+                  Projects that define<br />Houston's skyline.
+                </div>
+              </div>
+              <Link to="/portfolio" className="flex items-center gap-2 text-[9px] uppercase tracking-[0.28em] font-black"
+                style={{ color: AC }}
+                onMouseEnter={e => { e.currentTarget.style.color = W; }}
+                onMouseLeave={e => { e.currentTarget.style.color = AC; }}>
+                Full Portfolio <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </Link>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {PROJECTS.map((p, i) => (
+              <Reveal key={p.title} delay={i * 0.08}>
+                <ProjectCard p={p} wide={p.wide} />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          WHY HOU INC
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-24 md:py-32">
+          <Reveal>
+            <div className="grid md:grid-cols-2 gap-16 items-end mb-16">
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                  <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>Why HOU INC</div>
+                </div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 4vw, 52px)', color: W, lineHeight: 1.08 }}>
+                  The standard others<br />measure themselves by.
+                </div>
+              </div>
+              <p className="text-[13px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                HOU INC isn't just Houston's most recognized contractor — we're the firm that the city's most discerning clients return to again and again. Here's why.
+              </p>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+            {WHY.map((w, i) => (
+              <Reveal key={w.title} delay={i * 0.07}>
+                <WhyCard w={w} />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          PROCESS
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: G50 }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-24 md:py-32">
+          <Reveal>
+            <div className="text-center mb-20">
+              <div className="flex items-center justify-center gap-3 mb-5">
+                <div className="h-px w-10" style={{ backgroundColor: AC }} />
+                <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>How We Build</div>
+                <div className="h-px w-10" style={{ backgroundColor: AC }} />
+              </div>
+              <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 4vw, 52px)', color: B, lineHeight: 1.1 }}>
+                A process built on<br />precision and trust.
+              </div>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+            {PROCESS.map((s, i) => <StepCard key={s.n} s={s} i={i} />)}
+          </div>
+          <Reveal delay={0.2}>
+            <div className="mt-20 text-center">
+              <SectionBtn to="/contact">
+                Begin Your Project <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </SectionBtn>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          TESTIMONIALS
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: W }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-24 md:py-32">
+          <Reveal>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                  <div className="text-[8px] uppercase tracking-[0.44em] font-semibold" style={{ color: AC }}>Client Testimonials</div>
+                </div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 4vw, 52px)', color: B, lineHeight: 1.08 }}>
+                  What Houston's leaders<br />say about us.
+                </div>
+              </div>
+              <div className="flex gap-1 mb-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star key={i} className="w-4 h-4 fill-current" style={{ color: AC }} strokeWidth={0} />
+                ))}
+                <span className="text-[10px] font-semibold ml-2 self-center uppercase tracking-[0.2em]" style={{ color: G500 }}>5.0 Average</span>
+              </div>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {TESTIMONIALS.map((t, i) => <TestiCard key={t.name} t={t} i={i} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          AWARDS STRIP
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center">
+            {[
+              { icon: Trophy,     title: 'HBJ #1 Luxury Contractor', sub: '2022 · 2023 · 2024' },
+              { icon: Award,      title: 'AGC Build America Award',   sub: 'Associated General Contractors' },
+              { icon: BadgeCheck, title: 'BBB A+ Accredited',         sub: '20+ Years Standing' },
+              { icon: TreePine,   title: 'LEED Gold Certified',        sub: 'Sustainable Construction' },
+            ].map(({ icon: Icon, title, sub }, i) => (
+              <Reveal key={title} delay={i * 0.07}>
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0"
+                    style={{ border: '1px solid rgba(157,126,63,0.3)' }}>
+                    <Icon className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'rgba(255,255,255,0.62)' }}>{title}</div>
+                    <div className="text-[9px] uppercase tracking-[0.16em] mt-0.5" style={{ color: 'rgba(255,255,255,0.22)' }}>{sub}</div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          PORTAL BAND
+      ═══════════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: AC }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-16 md:py-20">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <Reveal>
+              <div>
+                <div className="text-[8px] uppercase tracking-[0.44em] font-semibold mb-4"
+                  style={{ color: 'rgba(255,255,255,0.55)' }}>Client Portal</div>
+                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 4vw, 48px)', color: W, lineHeight: 1.1 }}>
+                  Your project. Real time.<br />Complete transparency.
+                </div>
               </div>
             </Reveal>
-            <Reveal direction="right" x={30}>
-              <MagneticButton as="a" href="/portal">
-                <Link
-                  to="/portal"
-                  className="shrink-0 flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-8 py-3.5 transition-opacity hover:opacity-90 group"
-                  style={{ backgroundColor: DARK, color: CREAM }}
-                >
-                  Enter Portal
-                  <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                    <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </span>
-                </Link>
-              </MagneticButton>
+            <Reveal delay={0.1}>
+              <div className="flex flex-col gap-5">
+                <p className="text-[13px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.62)' }}>
+                  Track budgets, milestones, RFIs, and change orders in real time. Communicate directly with your project lead. Everything in one place.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/portal" className="relative overflow-hidden group inline-flex items-center gap-2"
+                    style={{ backgroundColor: W, color: AC, padding: '13px 26px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase' as const }}>
+                    <motion.span className="absolute inset-0" style={{ backgroundColor: B, transformOrigin: 'left' }}
+                      initial={{ scaleX: 0 }} whileHover={{ scaleX: 1 }} transition={{ duration: 0.3 }} />
+                    <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-2">
+                      Access Portal <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </span>
+                  </Link>
+                  <Link to="/finance" className="inline-flex items-center gap-2"
+                    style={{ color: 'rgba(255,255,255,0.55)', padding: '13px 26px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase' as const, border: '1px solid rgba(255,255,255,0.25)' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = W; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.6)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.55)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'; }}>
+                    Finance Hub <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+                  </Link>
+                </div>
+              </div>
             </Reveal>
           </div>
         </div>
       </section>
 
-      {/* ══ CTA ══ */}
-      <section className="py-28 md:py-40 relative overflow-hidden" style={{ backgroundColor: DARK }}>
-        {/* Drifting glow */}
-        <motion.div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(circle at 50% 50%, rgba(157,126,63,0.18), transparent 55%)` }}
-          animate={reduced ? {} : { scale: [1, 1.12, 1], opacity: [0.6, 1, 0.6] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <div className="relative max-w-4xl mx-auto px-6 lg:px-10 text-center">
+      {/* ═══════════════════════════════════════════════════
+          FINAL CTA
+      ═══════════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden" style={{ backgroundColor: B, ...GRID }}>
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(157,126,63,0.08) 0%, transparent 70%)' }} />
+        <div className="max-w-7xl mx-auto px-8 md:px-14 py-32 md:py-44 relative z-10 text-center">
           <Reveal>
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <div className="h-px w-10" style={{ backgroundColor: GOLD, opacity: 0.45 }} />
-              <div className="text-[9px] uppercase tracking-[0.42em] font-semibold" style={{ color: GOLD }}>Let's Build Together</div>
-              <div className="h-px w-10" style={{ backgroundColor: GOLD, opacity: 0.45 }} />
+            <div className="text-[8px] uppercase tracking-[0.52em] font-semibold mb-8" style={{ color: AC }}>
+              Ready to Build?
             </div>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <h2
-              className="mb-8"
-              style={{
-                fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-                fontSize: 'clamp(34px, 5.5vw, 78px)', color: CREAM, lineHeight: 1.05,
-              }}
-            >
-              Ready to Build<br />
-              <span style={{ color: GOLD }}>Something Extraordinary?</span>
-            </h2>
-          </Reveal>
-          <Reveal delay={0.2}>
-            <p className="text-sm leading-relaxed mb-12 max-w-xl mx-auto font-light" style={{ color: 'rgba(250,247,242,0.4)' }}>
-              Every landmark starts with a conversation. Tell us about your project and let Houston's premier construction team bring your vision to life.
+            <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(40px, 7vw, 110px)', color: W, lineHeight: 0.95, marginBottom: 32 }}>
+              Let's build something<br />
+              <span style={{ color: AC }}>extraordinary.</span>
+            </div>
+            <p className="text-[14px] leading-relaxed font-light mb-14 max-w-xl mx-auto"
+              style={{ color: 'rgba(255,255,255,0.38)' }}>
+              Whether you're planning a custom luxury residence or a multi-million-dollar commercial development, your HOU INC project begins with a single conversation.
             </p>
           </Reveal>
-          <Reveal delay={0.3} className="flex flex-wrap gap-4 justify-center">
-            <MagneticButton as="a" href="/contact">
-              <Link
-                to="/contact"
-                className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-opacity hover:opacity-90 group"
-                style={{ backgroundColor: GOLD, color: DARK }}
-              >
-                Start Your Project
-                <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+          <Reveal delay={0.2}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+              <Link to="/contact" className="relative overflow-hidden group inline-flex items-center gap-2"
+                style={{ backgroundColor: W, color: B, padding: '16px 36px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase' as const }}>
+                <motion.span className="absolute inset-0" style={{ backgroundColor: AC, transformOrigin: 'left' }}
+                  initial={{ scaleX: 0 }} whileHover={{ scaleX: 1 }} transition={{ duration: 0.32 }} />
+                <span className="relative z-10 group-hover:text-white transition-colors flex items-center gap-2">
+                  Start Your Project <ArrowUpRight className="w-4 h-4" strokeWidth={2.5} />
                 </span>
               </Link>
-            </MagneticButton>
-            <MagneticButton as="a" href="/portfolio" strength={0.3}>
-              <Link
-                to="/portfolio"
-                className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] font-black px-10 py-4 transition-all hover:bg-white/5"
-                style={{ border: `1px solid rgba(157,126,63,0.38)`, color: GOLD }}
-              >
-                View Portfolio
-              </Link>
-            </MagneticButton>
+              <a href="tel:+12819159595" className="inline-flex items-center gap-2"
+                style={{ color: 'rgba(255,255,255,0.38)', padding: '16px 36px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.24em', textTransform: 'uppercase' as const, border: '1px solid rgba(255,255,255,0.1)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = W; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.38)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}>
+                (281) 915-9595
+              </a>
+            </div>
+            <div className="flex items-center justify-center gap-12 flex-wrap">
+              {STATS.map(s => (
+                <div key={s.l} className="text-center">
+                  <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 4vw, 44px)', color: W, lineHeight: 1 }}>
+                    <AnimatedCounter target={s.v} suffix={s.s} />
+                  </div>
+                  <div className="text-[8px] uppercase tracking-[0.26em] font-semibold mt-2"
+                    style={{ color: 'rgba(255,255,255,0.28)' }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
           </Reveal>
         </div>
       </section>
-
-    </PublicLayout>
+    </>
   );
 }

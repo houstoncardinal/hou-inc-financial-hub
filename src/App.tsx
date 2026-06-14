@@ -20,6 +20,11 @@ import PortalAuth      from "./pages/portal/PortalAuth";
 import PortalDashboard from "./pages/portal/PortalDashboard";
 import PortalProject   from "./pages/portal/PortalProject";
 import PortalMessages  from "./pages/portal/PortalMessages";
+import PortalDocuments from "./pages/portal/PortalDocuments";
+import PortalMeetings  from "./pages/portal/PortalMeetings";
+
+// Admin
+import Admin from "./pages/Admin";
 
 // Finance dashboard
 import Index         from "./pages/Index";
@@ -63,6 +68,11 @@ const App = () => (
                 <Route path="/portal/dashboard"   element={<PortalDashboard />} />
                 <Route path="/portal/project"     element={<PortalProject />} />
                 <Route path="/portal/messages"    element={<PortalMessages />} />
+                <Route path="/portal/documents"  element={<PortalDocuments />} />
+                <Route path="/portal/meetings"   element={<PortalMeetings />} />
+
+                {/* ── Admin ── */}
+                <Route path="/admin"             element={<Admin />} />
 
                 {/* ── Finance sector ── */}
                 <Route path="/auth"             element={<Auth />} />
