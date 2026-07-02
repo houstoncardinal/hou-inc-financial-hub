@@ -26,6 +26,9 @@ import PortalMeetings  from "./pages/portal/PortalMeetings";
 // Admin
 import Admin from "./pages/Admin";
 
+// Tools
+import WebScraper from "./pages/WebScraper";
+
 // Finance dashboard
 import Index         from "./pages/Index";
 import Auth          from "./pages/Auth";
@@ -73,6 +76,9 @@ const App = () => (
 
                 {/* ── Admin ── */}
                 <Route path="/admin"             element={<Admin />} />
+
+                {/* ── Tools ── */}
+                <Route path="/scraper"           element={<WebScraper />} />
 
                 {/* ── Finance sector ── */}
                 <Route path="/auth"             element={<Auth />} />

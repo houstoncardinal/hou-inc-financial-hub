@@ -4,7 +4,7 @@ import {
   Users, MessageSquare, FolderOpen, BarChart3, Settings, Image,
   ArrowUpRight, TrendingUp, CheckCircle, Clock, AlertCircle,
   Plus, Trash2, Edit3, Eye, LogOut, X, FileText, Calendar,
-  Building2, Star, Search, RefreshCw,
+  Building2, Star, Search, RefreshCw, ScanLine,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -151,6 +151,10 @@ export default function Admin() {
     { key: 'analytics',    label: 'Analytics',         icon: TrendingUp },
   ];
 
+  const TOOL_LINKS = [
+    { to: '/scraper', label: 'Web Scraper', icon: ScanLine },
+  ];
+
   /* ── Lock screen ── */
   if (!unlocked) {
     return (
@@ -237,6 +241,20 @@ export default function Admin() {
             </button>
           ))}
         </nav>
+
+        {/* Tools section */}
+        <div className="px-3 pb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="px-3 pt-3 pb-1.5 text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: 'rgba(255,255,255,0.18)' }}>Tools</div>
+          {TOOL_LINKS.map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to} className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-semibold transition-colors"
+              style={{ color: 'rgba(255,255,255,0.45)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; }}>
+              <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
+              {label}
+            </Link>
+          ))}
+        </div>
 
         <div className="px-3 pb-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <Link to="/" className="w-full flex items-center gap-3 px-3 py-2.5 mt-3 text-[11px] font-semibold transition-colors"
