@@ -478,6 +478,96 @@ function FloatCard({
   );
 }
 
+/* ── Intent fork panel (Residential / Commercial split) ─────────────── */
+function IntentForkPanel({
+  img, tag, title, desc, cta, ctaVariant, border = false,
+}: {
+  img: string; tag: string; title: string; desc: string;
+  cta: string; ctaVariant: 'white' | 'gold'; border?: boolean;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      className="relative overflow-hidden flex flex-col justify-end cursor-pointer"
+      style={{
+        minHeight: 'clamp(380px, 44vw, 540px)',
+        borderLeft: border ? '1px solid rgba(255,255,255,0.07)' : 'none',
+      }}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{ backgroundImage: `url(${img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.05 : 1 }}
+        transition={{ duration: 0.95, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(4,3,2,0.96) 0%, rgba(4,3,2,0.52) 50%, rgba(4,3,2,0.12) 100%)' }} />
+      <motion.div
+        className="absolute left-0 top-0 bottom-0 w-0.5 origin-bottom"
+        style={{ backgroundColor: AC }}
+        animate={{ scaleY: hov ? 1 : 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="relative z-10 p-10 md:p-14">
+        <div style={{
+          fontSize: 8, fontWeight: 700, letterSpacing: '0.44em',
+          textTransform: 'uppercase' as const, color: ACL, marginBottom: 14,
+        }}>
+          {tag}
+        </div>
+        <h3 style={{
+          fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+          fontSize: 'clamp(26px, 3vw, 44px)', color: W,
+          lineHeight: 1.08, marginBottom: 16, maxWidth: '16ch',
+        }}>
+          {title}
+        </h3>
+        <p style={{
+          fontSize: 13, lineHeight: 1.75, fontWeight: 300,
+          color: 'rgba(255,255,255,0.60)', marginBottom: 28, maxWidth: '38ch',
+        }}>
+          {desc}
+        </p>
+        <FillBtn to="/services" variant={ctaVariant} size="md">
+          {cta} <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+        </FillBtn>
+      </div>
+    </div>
+  );
+}
+
+/* ── Manifest row (differentiator list item) ────────────────────────── */
+function ManifestRow({ num, title, body, delay = 0, light = false }: {
+  num: string; title: string; body: string; delay?: number; light?: boolean;
+}) {
+  const [hov, setHov] = useState(false);
+  const divider  = light ? 'rgba(0,0,0,0.09)'          : 'rgba(255,255,255,0.09)';
+  const hovBg    = light ? 'rgba(0,0,0,0.030)'          : 'rgba(255,255,255,0.026)';
+  const numCol   = hov   ? ACL : light ? 'rgba(157,126,63,0.55)' : 'rgba(196,167,107,0.5)';
+  const titleCol = hov   ? (light ? B : W) : light ? 'rgba(10,10,10,0.82)' : 'rgba(255,255,255,0.86)';
+  const bodyCol  = hov   ? (light ? G500 : 'rgba(255,255,255,0.65)') : light ? 'rgba(10,10,10,0.40)' : 'rgba(255,255,255,0.40)';
+  return (
+    <Reveal delay={delay}>
+      <div
+        className="grid md:grid-cols-[60px_1fr_1fr] gap-y-2 gap-x-10 lg:gap-x-16 py-8 md:py-10 cursor-default"
+        style={{
+          borderBottom: `1px solid ${divider}`,
+          backgroundColor: hov ? hovBg : 'transparent',
+          transition: 'background-color 0.35s ease',
+        }}
+        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      >
+        <div className="flex items-start pt-1.5">
+          <span style={{ fontFamily: SF, fontWeight: 600, fontSize: 11, letterSpacing: '0.22em', color: numCol, transition: 'color 0.35s ease' }}>{num}</span>
+        </div>
+        <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 2.6vw, 40px)', color: titleCol, lineHeight: 1.06, transition: 'color 0.35s ease' }}>{title}</h3>
+        <p style={{ fontSize: 13.5, lineHeight: 1.84, fontWeight: 300, color: bodyCol, transition: 'color 0.35s ease', alignSelf: 'end' }}>{body}</p>
+      </div>
+    </Reveal>
+  );
+}
+
 /* ── Eyebrow label ───────────────────────────────────────────────────── */
 function Eyebrow({ children, center = false }: { children: string; center?: boolean }) {
   return (
@@ -506,8 +596,8 @@ export default function Home() {
       ══════════════════════════════════════════════ */}
       <section
         ref={heroRef}
-        className="relative overflow-hidden flex flex-col"
-        style={{ height: '100svh', backgroundColor: B }}
+        className="relative overflow-hidden flex flex-col h-[74svh] md:h-[82svh]"
+        style={{ backgroundColor: B }}
       >
 
         {/* ── Background video ── */}
@@ -518,15 +608,18 @@ export default function Home() {
         />
 
         {/* ── Overlays: cinematic vignette ── */}
-        {/* Hard dark on left so text is always legible */}
+        {/* Base: overall darkening so video never fights the text */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(to right, rgba(2,2,1,0.90) 0%, rgba(2,2,1,0.72) 46%, rgba(2,2,1,0.15) 100%)' }} />
+          style={{ backgroundColor: 'rgba(2,2,1,0.42)' }} />
+        {/* Left-to-right: deep dark where text lives, gradual open on right */}
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, rgba(2,2,1,0.96) 0%, rgba(2,2,1,0.84) 42%, rgba(2,2,1,0.32) 100%)' }} />
         {/* Top: darken header zone */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, rgba(2,2,1,0.68) 0%, rgba(2,2,1,0) 28%)' }} />
-        {/* Bottom: fade into bottom bar */}
+          style={{ background: 'linear-gradient(to bottom, rgba(2,2,1,0.80) 0%, rgba(2,2,1,0) 30%)' }} />
+        {/* Bottom: fade into floating cards */}
         <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(to top, rgba(2,2,1,0.82) 0%, rgba(2,2,1,0) 30%)' }} />
+          style={{ background: 'linear-gradient(to top, rgba(2,2,1,0.92) 0%, rgba(2,2,1,0) 34%)' }} />
 
         {/* ── Subtle grid texture ── */}
         <div className="absolute inset-0 pointer-events-none" style={GRID} />
@@ -543,14 +636,13 @@ export default function Home() {
             MAIN CONTENT — flex-1, vertically centered
         ════════════════════════════════════════ */}
         <motion.div
-          className="relative z-10 flex-1 flex items-center px-8 md:px-14 lg:px-24"
-          style={{ paddingTop: 24, opacity: fade, y: textY }}
+          className="relative z-10 flex-1 flex items-end px-8 md:px-14 lg:px-24"
+          style={{ paddingBottom: 'clamp(120px, 14vh, 160px)', opacity: fade, y: textY }}
         >
-          {/* No max-width on the outer wrapper — headline can expand to full available width */}
           <div>
 
             {/* Eyebrow */}
-            <motion.div className="flex items-center gap-3 mb-4"
+            <motion.div className="flex items-center gap-3 mb-3"
               initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
               <div style={{ height: 1, width: 32, backgroundColor: 'rgba(255,255,255,0.45)', flexShrink: 0 }} />
@@ -560,10 +652,10 @@ export default function Home() {
             </motion.div>
 
             {/* Headline */}
-            <div className="mb-6" style={{ fontFamily: SF, fontWeight: 300 }}>
+            <div className="mb-5" style={{ fontFamily: SF, fontWeight: 300 }}>
               <motion.div
                 style={{
-                  fontSize:   'clamp(40px, 7vw, 112px)',
+                  fontSize:   'clamp(36px, 7vw, 112px)',
                   lineHeight: 0.92,
                   color:      W,
                   textShadow: '0 2px 10px rgba(0,0,0,0.65), 0 8px 32px rgba(0,0,0,0.35)',
@@ -574,7 +666,7 @@ export default function Home() {
               </motion.div>
               <motion.div
                 style={{
-                  fontSize:   'clamp(40px, 7vw, 112px)',
+                  fontSize:   'clamp(36px, 7vw, 112px)',
                   lineHeight: 0.92,
                   color:      ACL,
                   fontStyle:  'italic',
@@ -587,23 +679,24 @@ export default function Home() {
             </div>
 
             {/* Below-headline group */}
-            <div style={{ maxWidth: 'clamp(320px, 42vw, 580px)' }}>
+            <div style={{ maxWidth: 'clamp(300px, 42vw, 560px)' }}>
 
               {/* Description */}
               <motion.p
                 style={{
-                  fontSize: 'clamp(15px, 1.35vw, 17px)',
-                  lineHeight: 1.78, fontWeight: 300,
-                  color: 'rgba(255,255,255,0.82)', marginBottom: 28,
-                  letterSpacing: '0.005em',
+                  fontSize: 'clamp(14px, 1.4vw, 18px)',
+                  lineHeight: 1.7, fontWeight: 300,
+                  color: 'rgba(255,255,255,0.88)', marginBottom: 24,
+                  letterSpacing: '0.014em',
+                  textShadow: '0 1px 8px rgba(0,0,0,0.60)',
                 }}
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.46 }}>
-                <strong style={{ fontWeight: 600, color: W }}>Landmark residences. Iconic commercial spaces.</strong>{' '}
-                For over <strong style={{ fontWeight: 600, color: W }}>25 years</strong>, Houston Enterprise has been the firm
-                Houston's most discerning clients trust — built on{' '}
-                <em style={{ fontStyle: 'italic', color: ACL }}>uncompromising craftsmanship</em> and{' '}
-                <em style={{ fontStyle: 'italic', color: ACL }}>unwavering integrity</em>.
+                Since 1998, Houston Enterprise has delivered landmark residences
+                and grade-A commercial spaces across Texas — trusted by the
+                city's most discerning clients for craftsmanship, accountability,
+                and one unwavering standard:{' '}
+                <em style={{ fontStyle: 'italic', color: ACL }}>excellence.</em>
               </motion.p>
 
               {/* CTAs */}
@@ -676,108 +769,238 @@ export default function Home() {
       {/* ══════════════════════════════════════════════
           THE HOUSTON ENTERPRISE DIFFERENCE
       ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: W, borderTop: `1px solid ${G200}` }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 py-14 md:py-16">
+      <section style={{ backgroundColor: W }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24">
 
-          {/* Editorial header: headline left · sub + CTA right */}
+          {/* ── Header ── */}
           <Reveal>
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 md:gap-16 mb-10 md:mb-12">
-              <div className="shrink-0">
-                <Eyebrow>Why Houston Enterprise</Eyebrow>
+            <div className="pt-10 md:pt-14 pb-10 md:pb-12">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="h-px w-8" style={{ backgroundColor: AC }} />
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase' as const, color: AC }}>
+                  Why Houston Enterprise
+                </span>
+              </div>
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
                 <h2 style={{
                   fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
-                  fontSize: 'clamp(26px, 3.2vw, 46px)', color: B,
-                  lineHeight: 1.06, margin: 0,
+                  fontSize: 'clamp(42px, 6.5vw, 100px)',
+                  color: B, lineHeight: 0.95, letterSpacing: '-0.01em',
+                  flexShrink: 0,
                 }}>
                   The standard your<br />project deserves.
                 </h2>
-              </div>
-              <div className="flex flex-col items-start md:items-end gap-4">
                 <p style={{
-                  fontSize: 13, lineHeight: 1.76, fontWeight: 300,
-                  color: G500, maxWidth: '34ch', textAlign: 'left',
+                  fontSize: 13.5, lineHeight: 1.82, fontWeight: 300,
+                  color: G500, maxWidth: '38ch', paddingBottom: 6,
                 }}>
                   Construction is one of the most significant investments of your life.
                   We were built — in every sense — to protect it.
                 </p>
-                <FillBtn to="/contact" variant="outline-dark" size="sm">
-                  Free Consultation <ArrowUpRight className="w-3 h-3" strokeWidth={2} />
-                </FillBtn>
               </div>
             </div>
           </Reveal>
 
-          {/* 4 differentiator columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-8 md:pt-10"
-            style={{ borderTop: `1px solid ${G200}` }}>
+          {/* ── Manifest list ── */}
+          <div style={{ borderTop: '1px solid rgba(0,0,0,0.09)' }}>
+            <ManifestRow light delay={0.05} num="01" title="Two Decades of Houston Mastery" body="Over 20 years in this market — we know every neighborhood, code, and trusted subcontractor in Houston." />
+            <ManifestRow light delay={0.11} num="02" title="End-to-End Accountability"      body="One team. One point of contact. From first consultation to final walkthrough — no handoffs, no gaps." />
+            <ManifestRow light delay={0.17} num="03" title="On Time. On Budget."            body="Rigorous scheduling and real-time cost controls mean we deliver what we commit to — and precisely when." />
+            <ManifestRow light delay={0.23} num="04" title="Radical Transparency"           body="Direct access to your project team, milestone updates, full cost visibility. You are always in control." />
+          </div>
+
+          {/* ── Bottom CTA strip ── */}
+          <Reveal delay={0.28}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-5 py-10 md:py-12"
+              style={{ borderTop: '1px solid rgba(0,0,0,0.09)' }}>
+              <FillBtn to="/contact" variant="dark" size="md">
+                Free Consultation <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </FillBtn>
+            </div>
+          </Reveal>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          RISK & COMPLIANCE — institutional trust
+      ══════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, ...GRID }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 py-20 md:py-28">
+
+          <Reveal>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-16">
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
+                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Protection & Compliance</div>
+                </div>
+                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.8vw, 50px)', color: W, lineHeight: 1.06 }}>
+                  Your investment,<br />fully protected.
+                </h2>
+              </div>
+              <p style={{ fontSize: 13, lineHeight: 1.8, fontWeight: 300, color: 'rgba(255,255,255,0.50)', maxWidth: '42ch' }}>
+                When the stakes are measured in millions, you need more than a contractor — you need a firm with the bonding capacity, compliance record, and institutional depth to protect your project at every phase.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-16"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
             {[
-              {
-                num: '01',
-                title: 'Two Decades of Houston Mastery',
-                body: 'Over 20 years in this market — we know every neighborhood, code, and trusted subcontractor in Houston.',
-              },
-              {
-                num: '02',
-                title: 'End-to-End Accountability',
-                body: 'One team. One point of contact. From first consultation to final walkthrough — no handoffs, no gaps.',
-              },
-              {
-                num: '03',
-                title: 'On Time. On Budget.',
-                body: 'Rigorous scheduling and real-time cost controls mean we deliver what we commit to — and precisely when.',
-              },
-              {
-                num: '04',
-                title: 'Radical Transparency',
-                body: 'Direct access to your project team, milestone updates, full cost visibility. You are always in control.',
-              },
-            ].map(({ num, title, body }, i) => (
-              <Reveal key={num} delay={i * 0.08}>
-                <div className="relative overflow-hidden" style={{ paddingTop: 20 }}>
-
-                  {/* Watermark depth number */}
-                  <div style={{
-                    position: 'absolute', bottom: -10, right: -2,
-                    fontFamily: SF, fontWeight: 700, fontSize: 80, lineHeight: 1,
-                    color: 'rgba(0,0,0,0.028)', pointerEvents: 'none',
-                    userSelect: 'none' as const,
-                  }}>
-                    {num}
+              { icon: ShieldCheck,   title: 'Fully Bonded & Insured',   body: 'Licensed and fully bonded for large-scale residential and commercial projects throughout Texas. Complete coverage from day one.' },
+              { icon: HardHat,       title: 'Elite Safety Record',       body: 'Rigorous on-site safety protocols and an EMR well below the industry standard. Your job site is as safe as it is productive.' },
+              { icon: Trophy,        title: 'BBB A+ Accredited',         body: 'Over 20 years of formally verified client satisfaction, ethical business practices, and outstanding project delivery.' },
+              { icon: CalendarCheck, title: '98% On-Time Delivery',      body: 'Structured PM methodology and proactive risk planning ensure schedule integrity — from permit approval to final walkthrough.' },
+            ].map(({ icon: Icon, title, body }, i) => (
+              <Reveal key={title} delay={i * 0.08}>
+                <div className="flex flex-col gap-5 p-8"
+                  style={{ borderRight: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: 'rgba(157,126,63,0.12)', border: '1px solid rgba(157,126,63,0.22)' }}>
+                    <Icon className="w-4 h-4" strokeWidth={1.5} style={{ color: ACL }} />
                   </div>
-
-                  {/* Gold gradient rule */}
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-                    background: `linear-gradient(to right, ${AC}, ${ACL} 55%, transparent)`,
-                  }} />
-
-                  {/* Index */}
-                  <div style={{
-                    fontSize: 8, fontWeight: 700, letterSpacing: '0.46em',
-                    textTransform: 'uppercase' as const, color: AC, marginBottom: 12,
-                  }}>
-                    {num}
+                  <div>
+                    <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: 'clamp(16px, 1.4vw, 20px)', color: W, lineHeight: 1.18, marginBottom: 10 }}>
+                      {title}
+                    </h3>
+                    <p style={{ fontSize: 12.5, lineHeight: 1.8, fontWeight: 300, color: 'rgba(255,255,255,0.44)' }}>
+                      {body}
+                    </p>
                   </div>
-
-                  {/* Title */}
-                  <h3 style={{
-                    fontFamily: SF, fontStyle: 'italic', fontWeight: 400,
-                    fontSize: 'clamp(17px, 1.5vw, 21px)', color: B,
-                    lineHeight: 1.18, marginBottom: 10,
-                  }}>
-                    {title}
-                  </h3>
-
-                  {/* Body */}
-                  <p style={{ fontSize: 12.5, lineHeight: 1.8, fontWeight: 300, color: G500 }}>
-                    {body}
-                  </p>
-
                 </div>
               </Reveal>
             ))}
           </div>
 
+          {/* Houston hyper-local intelligence */}
+          <Reveal delay={0.2}>
+            <div className="grid lg:grid-cols-[1fr_1px_1.4fr] gap-10 lg:gap-16"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 40 }}>
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
+                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Houston Market Intelligence</div>
+                </div>
+                <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(20px, 2.2vw, 30px)', color: W, lineHeight: 1.12 }}>
+                  We navigate Houston's complexity<br />so you don't have to.
+                </h3>
+              </div>
+              <div className="hidden lg:block" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }} />
+              <div>
+                <p style={{ fontSize: 13.5, lineHeight: 1.85, fontWeight: 300, color: 'rgba(255,255,255,0.52)', marginBottom: 16 }}>
+                  From <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>River Oaks</strong> deed restrictions and{' '}
+                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Memorial</strong> HOA requirements to{' '}
+                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Energy Corridor</strong> zoning regulations and{' '}
+                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Montrose</strong> historic district guidelines —
+                  we've built across every Houston neighborhood and municipality.
+                </p>
+                <p style={{ fontSize: 13.5, lineHeight: 1.85, fontWeight: 300, color: 'rgba(255,255,255,0.52)' }}>
+                  Our team handles permits, variance requests, HOA approvals, and municipal compliance in{' '}
+                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>West University</strong>,{' '}
+                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Galleria</strong>, and beyond —
+                  keeping your timeline protected while you focus on the vision.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          INTENT FORK — Residential vs Commercial
+      ══════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B }}>
+        <div className="grid lg:grid-cols-2">
+          <IntentForkPanel
+            img={PH.res}
+            tag="For Homeowners & Families"
+            title="Your Dream Home, Masterfully Built."
+            desc="Custom estates, luxury renovations, and seamless additions — designed entirely around your vision and built to endure for generations."
+            cta="Explore Residential"
+            ctaVariant="white"
+          />
+          <IntentForkPanel
+            img={PH.comm}
+            tag="For Developers & Businesses"
+            title="Commercial Spaces, Delivered with Precision."
+            desc="Office buildings, retail centers, hospitality venues, and industrial facilities — on schedule, on budget, with institutional-grade rigor."
+            cta="Explore Commercial"
+            ctaVariant="gold"
+            border
+          />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          EXPERTISE — full-bleed split panels
+      ══════════════════════════════════════════════ */}
+      <section>
+        <Reveal>
+          <div className="max-w-7xl mx-auto px-8 md:px-14 pt-20 pb-10">
+            <Eyebrow>Our Expertise</Eyebrow>
+            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,3.8vw,48px)', color: B, lineHeight: 1.06 }}>
+              Two specializations.<br />One team. Zero compromise.
+            </h2>
+          </div>
+        </Reveal>
+        <div className="flex flex-col lg:flex-row">
+          <ExpertisePanel
+            img={PH.res} tag="Residential Construction"
+            title="Luxury Homes & Custom Estates"
+            desc="From River Oaks estates to Memorial custom builds — bespoke residential construction with personalized attention to every detail."
+            specs={['Custom Home Construction', 'Home Renovation & Addition', 'Kitchen & Bath Remodeling', 'Interior & Exterior Upgrades']}
+            to="/services"
+          />
+          <div className="hidden lg:block w-px shrink-0" style={{ backgroundColor: B }} />
+          <ExpertisePanel
+            img={PH.comm} tag="Commercial Construction"
+            title="Grade-A Office & Commercial"
+            desc="Office buildings, retail spaces, hospitality venues, educational facilities, and industrial warehousing delivered with precision."
+            specs={['Office Buildings', 'Retail Spaces', 'Hospitality & Entertainment', 'Industrial & Warehousing']}
+            to="/services"
+          />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          PROJECTS — dark showcase
+      ══════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, paddingTop: 80, paddingBottom: 80, ...GRID }}>
+        <div className="max-w-7xl mx-auto px-8 md:px-14">
+          <Reveal>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-14">
+              <div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
+                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Selected Work</div>
+                </div>
+                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,4vw,52px)', color: W, lineHeight: 1.06 }}>
+                  Projects that define<br />Houston's skyline.
+                </h2>
+              </div>
+              <Link to="/portfolio" className="flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-black transition-colors"
+                style={{ color: ACL }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = W; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}>
+                Full Portfolio <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </Link>
+            </div>
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Reveal delay={0}>
+              <ProjectCard img={PH.proj1} tag="River Oaks · Residential"     title="Chambord Estate"           sqft="14,500 SF" year="2024" tall />
+            </Reveal>
+            <div className="grid grid-rows-2 gap-3">
+              <Reveal delay={0.1}>
+                <ProjectCard img={PH.proj2} tag="Energy Corridor · Industrial" title="Westway Commerce Campus"  sqft="212,000 SF" year="2024" />
+              </Reveal>
+              <Reveal delay={0.18}>
+                <ProjectCard img={PH.proj3} tag="Galleria · Commercial"        title="Meridian Tower Retail"    sqft="98,000 SF"  year="2023" />
+              </Reveal>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -945,77 +1168,6 @@ export default function Home() {
               — Houston Enterprise · Est. 1998
             </p>
           </Reveal>
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          EXPERTISE — full-bleed split panels
-      ══════════════════════════════════════════════ */}
-      <section>
-        <Reveal>
-          <div className="max-w-7xl mx-auto px-8 md:px-14 pt-20 pb-10">
-            <Eyebrow>Our Expertise</Eyebrow>
-            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,3.8vw,48px)', color: B, lineHeight: 1.06 }}>
-              Two specializations.<br />One team. Zero compromise.
-            </h2>
-          </div>
-        </Reveal>
-        <div className="flex flex-col lg:flex-row">
-          <ExpertisePanel
-            img={PH.res} tag="Residential Construction"
-            title="Luxury Homes & Custom Estates"
-            desc="From River Oaks estates to Memorial custom builds — bespoke residential construction with personalized attention to every detail."
-            specs={['Custom Home Construction', 'Home Renovation & Addition', 'Kitchen & Bath Remodeling', 'Interior & Exterior Upgrades']}
-            to="/services"
-          />
-          <div className="hidden lg:block w-px shrink-0" style={{ backgroundColor: B }} />
-          <ExpertisePanel
-            img={PH.comm} tag="Commercial Construction"
-            title="Grade-A Office & Commercial"
-            desc="Office buildings, retail spaces, hospitality venues, educational facilities, and industrial warehousing delivered with precision."
-            specs={['Office Buildings', 'Retail Spaces', 'Hospitality & Entertainment', 'Industrial & Warehousing']}
-            to="/services"
-          />
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          PROJECTS — dark showcase
-      ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: B, paddingTop: 80, paddingBottom: 80, ...GRID }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14">
-          <Reveal>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-14">
-              <div>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
-                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Selected Work</div>
-                </div>
-                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,4vw,52px)', color: W, lineHeight: 1.06 }}>
-                  Projects that define<br />Houston's skyline.
-                </h2>
-              </div>
-              <Link to="/portfolio" className="flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-black transition-colors"
-                style={{ color: ACL }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = W; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}>
-                Full Portfolio <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </Link>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Reveal delay={0}>
-              <ProjectCard img={PH.proj1} tag="River Oaks · Residential"     title="Chambord Estate"           sqft="14,500 SF" year="2024" tall />
-            </Reveal>
-            <div className="grid grid-rows-2 gap-3">
-              <Reveal delay={0.1}>
-                <ProjectCard img={PH.proj2} tag="Energy Corridor · Industrial" title="Westway Commerce Campus"  sqft="212,000 SF" year="2024" />
-              </Reveal>
-              <Reveal delay={0.18}>
-                <ProjectCard img={PH.proj3} tag="Galleria · Commercial"        title="Meridian Tower Retail"    sqft="98,000 SF"  year="2023" />
-              </Reveal>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -1203,58 +1355,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════
-          FINAL CTA — dark, dramatic
-      ══════════════════════════════════════════════ */}
-      <section className="relative overflow-hidden" style={{ backgroundColor: B, ...GRID }}>
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 65% 55% at 50% 50%, rgba(157,126,63,0.07) 0%, transparent 68%)' }} />
-        <div className="absolute inset-0 pointer-events-none" style={DOT} />
-        <div className="max-w-7xl mx-auto px-8 md:px-14 py-36 md:py-52 relative z-10 text-center">
-          <Reveal>
-            <div className="text-[8px] uppercase tracking-[0.54em] font-semibold mb-8" style={{ color: ACL }}>
-              Ready to Build?
-            </div>
-            <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(38px,7.5vw,112px)', color: W, lineHeight: 0.93, marginBottom: 32 }}>
-              Let's build something<br /><span style={{ color: AC }}>extraordinary.</span>
-            </div>
-            <p className="text-[14px] leading-relaxed font-light mb-16 max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.36)' }}>
-              Whether a custom luxury residence or a multi-million-dollar commercial development, your Houston Enterprise project begins with a single conversation.
-            </p>
-          </Reveal>
-          <Reveal delay={0.18}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
-              <FillBtn to="/contact" variant="white" size="lg">
-                Start Your Project <ArrowUpRight className="w-4 h-4" strokeWidth={2.5} />
-              </FillBtn>
-              <a href="tel:+12819159595"
-                className="inline-flex items-center gap-2.5 transition-all font-bold uppercase tracking-[0.24em] text-[10px]"
-                style={{ color: 'rgba(255,255,255,0.38)', padding: '17px 38px', border: '1px solid rgba(255,255,255,0.1)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = W; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.38)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)'; }}>
-                <Phone className="w-3.5 h-3.5" strokeWidth={1.5} /> (281) 915-9595
-              </a>
-            </div>
-            {/* Bottom info row */}
-            <div className="flex flex-wrap items-center justify-center gap-8 pt-12"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-              {[
-                { icon: Phone,  val: '(281) 915-9595',                                    href: 'tel:+12819159595' },
-                { icon: Mail,   val: 'Info@Houinc.com',                                    href: 'mailto:info@houinc.com' },
-                { icon: MapPin, val: '2100 W Loop South, Suite #1115 · Houston, TX 77027', href: '#' },
-              ].map(({ icon: Icon, val, href }) => (
-                <a key={val} href={href} className="flex items-center gap-2.5 transition-colors"
-                  style={{ color: 'rgba(255,255,255,0.26)' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.26)'; }}>
-                  <Icon className="w-3 h-3 shrink-0" strokeWidth={1.5} />
-                  <span className="text-[10px] font-light">{val}</span>
-                </a>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
 
     </PublicLayout>
   );

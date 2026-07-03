@@ -363,88 +363,100 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       {/* ══════════════════════════════════════════
           FOOTER
       ══════════════════════════════════════════ */}
-      <footer style={{ backgroundColor: BLACK }}>
+      <footer style={{ backgroundColor: WHITE }}>
 
-        {/* CTA band */}
-        <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-16 md:py-20">
-            <div className="grid md:grid-cols-2 gap-12 items-end">
+        {/* Top gold accent rule */}
+        <div style={{ height: 2, background: `linear-gradient(90deg, ${ACCENT} 0%, rgba(157,126,63,0.28) 50%, transparent 100%)` }} />
+
+        {/* ── Upper: Brand + Contact ── */}
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 pt-16 md:pt-20 pb-14 md:pb-16"
+          style={{ borderBottom: `1px solid ${G200}` }}>
+          <div className="grid lg:grid-cols-[360px_1fr] gap-14 lg:gap-24">
+
+            {/* Brand block */}
+            <div className="flex flex-col justify-between gap-10">
               <div>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-px w-8" style={{ backgroundColor: ACCENT }} />
-                  <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: ACCENT }}>
-                    Ready to Build?
+                {/* Wordmark */}
+                <div className="flex items-start gap-4 mb-7">
+                  <div style={{ width: 2, height: 52, background: `linear-gradient(to bottom, ${ACCENT} 0%, transparent 100%)`, flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 30, color: BLACK, letterSpacing: '0.05em', textTransform: 'uppercase' as const, lineHeight: 1 }}>
+                      HOU INC
+                    </div>
+                    <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.42em', textTransform: 'uppercase' as const, color: ACCENT, marginTop: 6 }}>
+                      Construction · Houston, Texas
+                    </div>
                   </div>
                 </div>
-                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px, 4vw, 48px)', color: WHITE, lineHeight: 1.1 }}>
-                  Every landmark starts<br />with a conversation.
-                </div>
+                <p style={{ fontSize: 12, lineHeight: 1.92, fontWeight: 300, color: 'rgba(0,0,0,0.46)', maxWidth: '30ch' }}>
+                  Landmark construction across Greater Houston since 1998 — built on 25 years of integrity, craftsmanship, and results that endure.
+                </p>
               </div>
-              <div className="flex flex-wrap gap-3 md:justify-end md:items-end">
-                <Link to="/contact"
-                  className="relative overflow-hidden group flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-black px-8 py-4"
-                  style={{ backgroundColor: WHITE, color: BLACK }}>
-                  <motion.span className="absolute inset-0 origin-left" style={{ backgroundColor: ACCENT }}
-                    initial={{ scaleX: 0 }} whileHover={{ scaleX: 1 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} />
-                  <span className="relative z-10 group-hover:text-white transition-colors duration-150">Start Your Project</span>
-                  <ArrowUpRight className="relative z-10 w-3.5 h-3.5 group-hover:text-white transition-colors duration-150" strokeWidth={2.5} />
-                </Link>
-                <a href="tel:+12819159595"
-                  className="flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-black px-8 py-4 border transition-all"
-                  style={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.52)' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)'; e.currentTarget.style.color = WHITE; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.52)'; }}>
-                  (281) 915-9595
-                </a>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ height: 1, width: 24, backgroundColor: ACCENT, flexShrink: 0 }} />
+                <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.38em', textTransform: 'uppercase' as const, color: 'rgba(0,0,0,0.28)' }}>
+                  Est. 1998 · Licensed & Bonded · BBB A+
+                </span>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Main grid */}
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
-
-            {/* Brand */}
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-px h-8" style={{ backgroundColor: ACCENT }} />
-                <div>
-                  <div className="text-[11px] font-black tracking-[0.3em] uppercase" style={{ color: WHITE, fontFamily: SERIF }}>HOU INC</div>
-                  <div className="text-[7px] uppercase tracking-[0.36em]" style={{ color: ACCENT }}>Construction · Houston</div>
-                </div>
+            {/* Contact + CTA */}
+            <div>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase' as const, color: ACCENT, marginBottom: 22 }}>
+                Reach Us
               </div>
-              <p className="text-[11px] leading-relaxed mb-7 font-light" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                Unparalleled construction excellence across Greater Houston. Residential, commercial, retail, and industrial — built on 25 years of integrity, innovation, and results.
-              </p>
-              <div className="space-y-2.5">
+              <div className="grid sm:grid-cols-3 gap-8 mb-10">
                 {[
-                  { icon: Phone,  label: '(281) 915-9595',            href: 'tel:+12819159595'       },
-                  { icon: Mail,   label: 'Info@Houinc.com',           href: 'mailto:Info@Houinc.com' },
-                  { icon: MapPin, label: '2100 W Loop South · #1115', href: undefined                },
-                ].map(({ icon: Icon, label, href }) => (
-                  <div key={label} className="flex items-center gap-2.5">
-                    <Icon className="w-3 h-3 shrink-0" style={{ color: 'rgba(255,255,255,0.22)' }} strokeWidth={1.5} />
+                  { icon: Phone,  tag: 'Call',  val: '(281) 915-9595',      hint: 'Mon – Fri · 8am – 6pm CT', href: 'tel:+12819159595'      },
+                  { icon: Mail,   tag: 'Email', val: 'Info@Houinc.com',      hint: 'Response within 24 hours',  href: 'mailto:info@houinc.com'},
+                  { icon: MapPin, tag: 'Visit', val: '2100 W Loop South\nSuite #1115\nHouston, TX 77027', hint: 'By appointment', href: undefined },
+                ].map(({ icon: Icon, tag, val, hint, href }) => (
+                  <div key={tag}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Icon className="w-3 h-3 shrink-0" style={{ color: ACCENT }} strokeWidth={1.5} />
+                      <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase' as const, color: ACCENT }}>{tag}</span>
+                    </div>
                     {href
-                      ? <a href={href} className="text-[11px] font-light transition-colors" style={{ color: 'rgba(255,255,255,0.24)' }}
+                      ? <a href={href} className="block transition-colors"
+                          style={{ fontSize: 13, fontWeight: 500, color: BLACK, lineHeight: 1.5, whiteSpace: 'pre-line' as const }}
                           onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-                          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.24)')}>{label}</a>
-                      : <span className="text-[11px] font-light" style={{ color: 'rgba(255,255,255,0.24)' }}>{label}</span>
+                          onMouseLeave={e => (e.currentTarget.style.color = BLACK)}>{val}</a>
+                      : <div style={{ fontSize: 13, fontWeight: 500, color: BLACK, lineHeight: 1.5, whiteSpace: 'pre-line' as const }}>{val}</div>
                     }
+                    <div style={{ fontSize: 9, color: 'rgba(0,0,0,0.30)', marginTop: 5, fontWeight: 300 }}>{hint}</div>
                   </div>
                 ))}
               </div>
+              {/* CTA */}
+              <Link to="/contact"
+                className="relative overflow-hidden group inline-flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] font-black px-9 py-4"
+                style={{ backgroundColor: BLACK, color: WHITE }}>
+                <motion.div className="absolute inset-0 origin-left" style={{ backgroundColor: ACCENT }}
+                  initial={{ scaleX: 0 }} whileHover={{ scaleX: 1 }}
+                  transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }} />
+                <span className="relative z-10">Start Your Project</span>
+                <ArrowUpRight className="relative z-10 w-3.5 h-3.5" strokeWidth={2.5} />
+              </Link>
             </div>
+
+          </div>
+        </div>
+
+        {/* ── Navigation grid ── */}
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-14 md:py-16">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-10 lg:gap-16">
 
             {/* Services */}
             <div>
-              <div className="text-[8px] uppercase tracking-[0.34em] font-bold mb-6" style={{ color: ACCENT }}>Services</div>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.42em', textTransform: 'uppercase' as const, color: ACCENT, paddingBottom: 12, marginBottom: 14, borderBottom: `1px solid ${G200}` }}>
+                Services
+              </div>
               {FOOTER_SERVICES.map(s => (
                 <Link key={s} to="/services"
-                  className="block text-[11px] py-1.5 font-light transition-colors"
-                  style={{ color: 'rgba(255,255,255,0.26)' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = WHITE)}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.26)')}>
+                  className="block py-1.5 transition-colors"
+                  style={{ fontSize: 12, fontWeight: 400, color: 'rgba(0,0,0,0.52)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = BLACK)}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(0,0,0,0.52)')}>
                   {s}
                 </Link>
               ))}
@@ -452,31 +464,38 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
 
             {/* Company */}
             <div>
-              <div className="text-[8px] uppercase tracking-[0.34em] font-bold mb-6" style={{ color: ACCENT }}>Company</div>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.42em', textTransform: 'uppercase' as const, color: ACCENT, paddingBottom: 12, marginBottom: 14, borderBottom: `1px solid ${G200}` }}>
+                Company
+              </div>
               {FOOTER_LINKS.map(l => (
                 <Link key={l.label} to={l.to}
-                  className="block text-[11px] py-1.5 font-light transition-colors"
-                  style={{ color: 'rgba(255,255,255,0.26)' }}
-                  onMouseEnter={e => (e.currentTarget.style.color = WHITE)}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.26)')}>
+                  className="block py-1.5 transition-colors"
+                  style={{ fontSize: 12, fontWeight: 400, color: 'rgba(0,0,0,0.52)' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = BLACK)}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(0,0,0,0.52)')}>
                   {l.label}
                 </Link>
               ))}
             </div>
 
-            {/* Accreditation */}
-            <div>
-              <div className="text-[8px] uppercase tracking-[0.34em] font-bold mb-6" style={{ color: ACCENT }}>Recognition</div>
-              <div className="space-y-5">
+            {/* Recognition — spans 2 cols on md+ */}
+            <div className="col-span-2">
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.42em', textTransform: 'uppercase' as const, color: ACCENT, paddingBottom: 12, marginBottom: 14, borderBottom: `1px solid ${G200}` }}>
+                Recognition & Accreditation
+              </div>
+              <div className="grid sm:grid-cols-2 gap-x-12 gap-y-5">
                 {[
-                  { title: 'HBJ #1 Luxury Contractor', sub: '2022 · 2023 · 2024'           },
-                  { title: 'BBB Accredited A+',         sub: '20+ Year Accreditation'       },
-                  { title: 'AGC Houston Member',        sub: 'Associated General Contractors'},
-                  { title: 'LEED Gold Certified',       sub: 'Sustainable Construction'     },
+                  { title: 'HBJ #1 Luxury Contractor', sub: '2022 · 2023 · 2024'            },
+                  { title: 'BBB Accredited A+',         sub: '20+ Year Accreditation'        },
+                  { title: 'AGC Houston Member',        sub: 'Associated General Contractors' },
+                  { title: 'LEED Gold Certified',       sub: 'Sustainable Construction'      },
                 ].map(a => (
-                  <div key={a.title}>
-                    <div className="text-[10px] font-semibold mb-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{a.title}</div>
-                    <div className="text-[9px] uppercase tracking-[0.12em]"  style={{ color: 'rgba(255,255,255,0.2)'  }}>{a.sub}</div>
+                  <div key={a.title} className="flex items-start gap-3">
+                    <div style={{ width: 16, height: 1, backgroundColor: ACCENT, marginTop: 8, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(0,0,0,0.72)', lineHeight: 1.3 }}>{a.title}</div>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase' as const, letterSpacing: '0.16em', color: 'rgba(0,0,0,0.30)', marginTop: 3 }}>{a.sub}</div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -485,21 +504,22 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Bottom bar */}
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 flex flex-col md:flex-row items-center justify-between gap-3"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="text-[9px] uppercase tracking-[0.24em]" style={{ color: 'rgba(255,255,255,0.16)' }}>
-            © {new Date().getFullYear()} HOU INC Construction · All Rights Reserved · Houston, Texas
-          </div>
-          <div className="flex items-center gap-6">
-            {['Privacy Policy', 'Terms of Service', 'Accessibility'].map(l => (
-              <span key={l} className="text-[9px] uppercase tracking-[0.18em] cursor-pointer transition-colors"
-                style={{ color: 'rgba(255,255,255,0.16)' }}
-                onMouseEnter={e => ((e.target as HTMLElement).style.color = 'rgba(255,255,255,0.42)')}
-                onMouseLeave={e => ((e.target as HTMLElement).style.color = 'rgba(255,255,255,0.16)')}>
-                {l}
-              </span>
-            ))}
+        {/* ── Bottom bar ── */}
+        <div style={{ borderTop: `1px solid ${G200}` }}>
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 flex flex-col md:flex-row items-center justify-between gap-3">
+            <div style={{ fontSize: 9, textTransform: 'uppercase' as const, letterSpacing: '0.24em', color: 'rgba(0,0,0,0.26)' }}>
+              © {new Date().getFullYear()} HOU INC Construction · All Rights Reserved · Houston, Texas
+            </div>
+            <div className="flex items-center gap-6">
+              {['Privacy Policy', 'Terms of Service', 'Accessibility'].map(l => (
+                <span key={l} className="cursor-pointer transition-colors"
+                  style={{ fontSize: 9, textTransform: 'uppercase' as const, letterSpacing: '0.18em', color: 'rgba(0,0,0,0.26)' }}
+                  onMouseEnter={e => ((e.target as HTMLElement).style.color = 'rgba(0,0,0,0.60)')}
+                  onMouseLeave={e => ((e.target as HTMLElement).style.color = 'rgba(0,0,0,0.26)')}>
+                  {l}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
