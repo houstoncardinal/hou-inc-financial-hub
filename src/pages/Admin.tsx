@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
+import PortfolioManager from '@/components/admin/PortfolioManager';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const B     = '#0A0A0A';
@@ -92,9 +93,6 @@ async function loadFinanceData() {
   };
 }
 
-function rPortfolio()     { try { const s = localStorage.getItem('hou-admin-portfolio'); return s ? JSON.parse(s) : DEFAULT_PORTFOLIO; } catch { return DEFAULT_PORTFOLIO; } }
-function savePortfolio(items: PortfolioItem[]) { localStorage.setItem('hou-admin-portfolio', JSON.stringify(items)); }
-
 /* ── Admin actions (Supabase writes) ────────────────────────────────── */
 async function adminUpdateBriefStatus(clientId: string, status: string) {
   await supabase.from('portal_briefs').update({ status }).eq('client_id', clientId);
@@ -146,20 +144,6 @@ async function adminRejectClient(clientId: string) {
 }
 
 /* ── Types ───────────────────────────────────────────────────────────── */
-interface PortfolioItem {
-  id: string; title: string; category: string; location: string;
-  sqft: string; year: string; description: string; featured: boolean;
-}
-
-/* ── Constants ───────────────────────────────────────────────────────── */
-const DEFAULT_PORTFOLIO: PortfolioItem[] = [
-  { id: '1', title: 'Chambord River Oaks Estate',   category: 'Luxury Residential',    location: 'River Oaks, Houston',  sqft: '14,500', year: '2024', description: 'Ultra-luxury custom estate with pool house and home theatre.',           featured: true  },
-  { id: '2', title: 'Westway Commerce Campus',       category: 'Commercial Industrial', location: 'Energy Corridor',       sqft: '212,000', year: '2024', description: 'Modern Class-A industrial campus with office component.',              featured: true  },
-  { id: '3', title: 'The Meridian Tower Retail',     category: 'Retail & Mixed-Use',    location: 'Galleria District',    sqft: '98,000',  year: '2023', description: 'Flagship retail anchor with premium tenant fit-out.',                  featured: false },
-  { id: '4', title: 'Memorial Custom Home',          category: 'Luxury Residential',    location: 'Memorial, Houston',     sqft: '8,200',   year: '2023', description: 'Five-bedroom estate with bespoke interiors.',                         featured: false },
-  { id: '5', title: 'Post Oak Medical Plaza',        category: 'Medical & Healthcare',  location: 'Medical Center',       sqft: '45,000',  year: '2022', description: 'State-of-the-art medical office building.',                           featured: false },
-];
-const CATEGORIES = ['Luxury Residential', 'Commercial Industrial', 'Retail & Mixed-Use', 'Medical & Healthcare', 'High-Rise Residential', 'Renovation'];
 const ADMIN_PIN = '011491';
 const ADMIN_KEY = 'hou-admin-unlocked';
 
@@ -240,11 +224,8 @@ export default function Admin() {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
-  /* ── Portfolio state ── */
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(rPortfolio);
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [editItem, setEditItem] = useState<PortfolioItem | null>(null);
-  const [pForm, setPForm] = useState<Omit<PortfolioItem, 'id'>>({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
+  /* ── Portfolio count (for analytics) ── */
+  const [portfolioCount, setPortfolioCount] = useState(0);
 
   /* ── Client detail state ── */
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -286,21 +267,6 @@ export default function Admin() {
     }
   };
   const handleLogout = () => { localStorage.removeItem(ADMIN_KEY); setUnlocked(false); setPin(['', '', '', '', '', '']); };
-
-  /* ── Portfolio handlers ── */
-  const handleAddPortfolio = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newItems = [...portfolio, { ...pForm, id: crypto.randomUUID() }];
-    setPortfolio(newItems); savePortfolio(newItems); setShowAddItem(false);
-    setPForm({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
-  };
-  const handleDeletePortfolio = (id: string) => { const u = portfolio.filter(p => p.id !== id); setPortfolio(u); savePortfolio(u); };
-  const handleEditSave = (e: React.FormEvent) => {
-    e.preventDefault(); if (!editItem) return;
-    const u = portfolio.map(p => p.id === editItem.id ? editItem : p);
-    setPortfolio(u); savePortfolio(u); setEditItem(null);
-  };
-  const toggleFeatured = (id: string) => { const u = portfolio.map(p => p.id === id ? { ...p, featured: !p.featured } : p); setPortfolio(u); savePortfolio(u); };
 
   /* ── Client detail actions ── */
   const handleSendReply = async () => {
@@ -1281,112 +1247,7 @@ export default function Admin() {
           {/* ══════ PORTFOLIO ══════ */}
           {tab === 'portfolio' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="flex items-center justify-between mb-5">
-                <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Portfolio Projects ({portfolio.length})</div>
-                <button onClick={() => setShowAddItem(true)}
-                  className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2.5 transition-opacity hover:opacity-85"
-                  style={{ backgroundColor: B, color: W }}>
-                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add Project
-                </button>
-              </div>
-              <div className="space-y-3">
-                {portfolio.map(item => (
-                  <div key={item.id} className="flex items-center gap-5 p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                    <div className="w-11 h-11 flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.2)` }}>
-                      <Building2 className="w-4.5 h-4.5" style={{ color: AC }} strokeWidth={1.5} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div className="text-[13px] font-bold" style={{ color: B }}>{item.title}</div>
-                        {item.featured && <Star className="w-3 h-3 fill-current" style={{ color: AC }} strokeWidth={0} />}
-                      </div>
-                      <div className="flex flex-wrap gap-3 text-[10px] font-light" style={{ color: G500 }}>
-                        <span>{item.category}</span><span>·</span><span>{item.location}</span>
-                        {item.sqft && <><span>·</span><span>{item.sqft} SF</span></>}
-                        <span>·</span><span>{item.year}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => toggleFeatured(item.id)}
-                        className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all"
-                        style={{ border: `1px solid ${item.featured ? AC : G200}`, color: item.featured ? AC : G500, backgroundColor: item.featured ? 'rgba(157,126,63,0.06)' : 'transparent' }}>
-                        <Star className="w-3 h-3" style={{ fill: item.featured ? AC : 'none' }} strokeWidth={2} />
-                        {item.featured ? 'Featured' : 'Feature'}
-                      </button>
-                      <button onClick={() => setEditItem({ ...item })} className="w-8 h-8 flex items-center justify-center transition-colors" style={{ color: G500 }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = B; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; }}>
-                        <Edit3 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                      </button>
-                      <button onClick={() => handleDeletePortfolio(item.id)} className="w-8 h-8 flex items-center justify-center transition-colors" style={{ color: G500 }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; }}>
-                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <AnimatePresence>
-                {(showAddItem || editItem) && (
-                  <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-                      onClick={() => { setShowAddItem(false); setEditItem(null); }} />
-                    <motion.div className="relative z-10 w-full max-w-lg p-8" style={{ backgroundColor: W, border: `1px solid ${G200}` }}
-                      initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.94, opacity: 0 }}>
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="text-[14px] font-bold" style={{ color: B }}>{editItem ? 'Edit Project' : 'Add Portfolio Project'}</div>
-                        <button onClick={() => { setShowAddItem(false); setEditItem(null); }} style={{ color: G500 }}><X className="w-4 h-4" strokeWidth={2} /></button>
-                      </div>
-                      <form onSubmit={editItem ? handleEditSave : handleAddPortfolio} className="space-y-4">
-                        {[
-                          { label: 'Project Title', field: 'title', required: true },
-                          { label: 'Location',       field: 'location', required: true },
-                          { label: 'Square Footage', field: 'sqft', required: false },
-                          { label: 'Year Completed', field: 'year', required: true },
-                        ].map(({ label, field, required }) => (
-                          <div key={field}>
-                            <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>{label}</label>
-                            <input type="text" required={required}
-                              value={editItem ? (editItem as any)[field] : (pForm as any)[field]}
-                              onChange={e => { if (editItem) setEditItem({ ...editItem, [field]: e.target.value }); else setPForm({ ...pForm, [field]: e.target.value }); }}
-                              className="w-full text-[13px] outline-none"
-                              style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B }} />
-                          </div>
-                        ))}
-                        <div>
-                          <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Category</label>
-                          <select value={editItem ? editItem.category : pForm.category}
-                            onChange={e => { if (editItem) setEditItem({ ...editItem, category: e.target.value }); else setPForm({ ...pForm, category: e.target.value }); }}
-                            className="w-full text-[13px] outline-none" style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B }}>
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Description</label>
-                          <textarea rows={3} value={editItem ? editItem.description : pForm.description}
-                            onChange={e => { if (editItem) setEditItem({ ...editItem, description: e.target.value }); else setPForm({ ...pForm, description: e.target.value }); }}
-                            className="w-full text-[13px] outline-none resize-none"
-                            style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B, lineHeight: 1.6 }} />
-                        </div>
-                        <div className="flex gap-3 pt-2">
-                          <button type="submit" className="flex-1 py-3 text-[10px] uppercase tracking-[0.24em] font-black transition-opacity hover:opacity-85"
-                            style={{ backgroundColor: B, color: W }}>
-                            {editItem ? 'Save Changes' : 'Add Project'}
-                          </button>
-                          <button type="button" onClick={() => { setShowAddItem(false); setEditItem(null); }}
-                            className="px-5 text-[10px] uppercase tracking-[0.2em] font-bold"
-                            style={{ border: `1px solid ${G200}`, color: G500 }}>
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <PortfolioManager onCountChange={setPortfolioCount} />
             </motion.div>
           )}
 
@@ -1523,7 +1384,7 @@ export default function Admin() {
                   { label: 'Briefs Submitted',       value: Object.keys(briefs).length,                 trend: 'Portal',   color: AC },
                   { label: 'Start Project Leads',    value: startBriefs.length,                         trend: 'Website',  color: '#10b981' },
                   { label: 'Contact Form Leads',     value: contactForms.length,                        trend: 'Website',  color: '#f59e0b' },
-                  { label: 'Portfolio Projects',     value: portfolio.length,                            trend: 'Active',   color: '#8b5cf6' },
+                  { label: 'Portfolio Projects',     value: portfolioCount,                              trend: 'Active',   color: '#8b5cf6' },
                   { label: 'Avg Messages / Client',  value: clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0, trend: 'Avg', color: '#ec4899' },
                 ].map(s => (
                   <div key={s.label} className="p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>

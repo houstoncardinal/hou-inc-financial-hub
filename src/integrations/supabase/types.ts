@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      portfolio_projects: {
+        Row: {
+          id: string
+          title: string
+          category: string
+          location: string
+          sqft: string | null
+          year: string
+          description: string | null
+          featured: boolean
+          cover_url: string | null
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          category?: string
+          location?: string
+          sqft?: string | null
+          year?: string
+          description?: string | null
+          featured?: boolean
+          cover_url?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          category?: string
+          location?: string
+          sqft?: string | null
+          year?: string
+          description?: string | null
+          featured?: boolean
+          cover_url?: string | null
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portfolio_media: {
+        Row: {
+          id: string
+          project_id: string
+          url: string
+          storage_path: string
+          media_type: string
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          url: string
+          storage_path: string
+          media_type: string
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          url?: string
+          storage_path?: string
+          media_type?: string
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_media_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       audit_log: {
         Row: {
           created_at: string

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowUpRight, Plus } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
@@ -203,11 +204,48 @@ function FeaturedCard({ p }: { p: Project }) {
   );
 }
 
+/* ── Map Supabase row → Project ───────────────────────────────────── */
+function mapRow(row: any): Project {
+  const cat: string = row.category ?? '';
+  let type: Filter = 'All';
+  if (/residential/i.test(cat))   type = 'Residential';
+  else if (/retail/i.test(cat))   type = 'Retail';
+  else if (/industrial/i.test(cat) || /commercial/i.test(cat)) type = 'Commercial';
+  else if (/renovation/i.test(cat)) type = 'Renovation';
+
+  return {
+    name:     row.title,
+    type,
+    loc:      row.location ?? '',
+    year:     row.year ?? '',
+    sqft:     row.sqft ?? '',
+    value:    '',
+    area:     row.category ?? '',
+    detail:   row.description ?? '',
+    img:      row.cover_url ?? 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',
+    featured: row.featured ?? false,
+  };
+}
+
 /* ── Page ─────────────────────────────────────────────────────────── */
 export default function Portfolio() {
-  const [filter, setFilter] = useState<Filter>('All');
-  const featured = PROJECTS.find(p => p.featured)!;
-  const grid = PROJECTS.filter(p => !p.featured && (filter === 'All' || p.type === filter));
+  const [filter, setFilter]       = useState<Filter>('All');
+  const [liveProjects, setLive]   = useState<Project[] | null>(null);
+
+  useEffect(() => {
+    (supabase as any).from('portfolio_projects')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .then(({ data }: { data: any[] | null }) => {
+        if (data && data.length > 0) setLive(data.map(mapRow));
+      })
+      .catch(() => { /* stay on static fallback */ });
+  }, []);
+
+  const source   = liveProjects ?? PROJECTS;
+  const featured = (liveProjects ?? PROJECTS).find(p => p.featured) ?? source[0];
+  const grid     = source.filter(p => p !== featured && (filter === 'All' || p.type === filter));
 
   return (
     <PublicLayout>
