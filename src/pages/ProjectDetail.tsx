@@ -55,6 +55,25 @@ export default function ProjectDetail() {
     return all;
   }, [enriched]);
 
+  const costBreakdown = useMemo(() => {
+    if (!enriched) return [];
+    const byCat: Record<string, { category: string; actual: number; count: number }> = {};
+    enriched.expenseList.forEach((t: any) => {
+      const cat = t.category || 'Uncategorized';
+      if (!byCat[cat]) byCat[cat] = { category: cat, actual: 0, count: 0 };
+      byCat[cat].actual += Number(t.amount);
+      byCat[cat].count++;
+    });
+    if (enriched.checksList.length > 0) {
+      byCat['Checks Issued'] = {
+        category: 'Checks Issued',
+        actual: enriched.checksList.reduce((s: number, c: any) => s + Number(c.amount), 0),
+        count: enriched.checksList.length,
+      };
+    }
+    return Object.values(byCat).sort((a, b) => b.actual - a.actual);
+  }, [enriched]);
+
   /* ── Export ── */
   const exportPDF = () => {
     if (!enriched) return;
@@ -166,6 +185,51 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
+
+          {/* Budget vs. Actuals Line-Item Breakdown */}
+          {costBreakdown.length > 0 && (
+            <div className="border border-border">
+              <div className="px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
+                Budget vs. Actuals — Line Item Breakdown
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="px-4 py-2.5 text-left text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Category</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Items</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Actual</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">% of Spend</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costBreakdown.map((row) => (
+                      <tr key={row.category} className="border-b border-border last:border-b-0 hover:bg-secondary/20">
+                        <td className="px-4 py-3 font-medium">{row.category}</td>
+                        <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">{row.count}</td>
+                        <td className="px-4 py-3 text-right font-semibold font-mono-tab">{fmtUSD(row.actual)}</td>
+                        <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">
+                          {enriched.spent > 0 ? ((row.actual / enriched.spent) * 100).toFixed(1) + '%' : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-secondary/40">
+                      <td className="px-4 py-3 font-bold text-[11px] uppercase tracking-wider">Total</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">{enriched.expenseList.length + enriched.checksList.length}</td>
+                      <td className="px-4 py-3 text-right font-bold font-mono-tab">{fmtUSD(enriched.spent)}</td>
+                      <td className="px-4 py-3 text-right font-bold font-mono-tab">
+                        <span className={enriched.budget > 0 && enriched.spent > enriched.budget ? 'text-accent' : 'text-positive'}>
+                          {enriched.budget > 0 ? (enriched.budget > enriched.spent ? '+' : '−') + fmtUSD(Math.abs(enriched.budget - enriched.spent)) + ' vs budget' : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Recent Activity */}
           <div className="border border-border">

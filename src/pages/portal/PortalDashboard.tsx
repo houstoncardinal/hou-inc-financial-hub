@@ -46,8 +46,11 @@ export default function PortalDashboard() {
   const { client, getBrief, getMessages, getDocuments, getMeetings } = usePortal();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!client) navigate('/portal', { replace: true }); }, [client, navigate]);
-  if (!client) return null;
+  useEffect(() => {
+    if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
+  }, [client, navigate]);
+  if (!client || (client.status && client.status !== 'approved')) return null;
 
   const brief      = getBrief();
   const messages   = getMessages();

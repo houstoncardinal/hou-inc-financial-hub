@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { Check, Eye, EyeOff, Zap, ShieldCheck } from 'lucide-react';
-import { DEFAULT_EMAIL, DEFAULT_PASS } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Settings() {
   const { user, signOut } = useAuth();
@@ -22,18 +22,16 @@ export default function Settings() {
   const [showKey,        setShowKey]        = useState(false);
   const [testingStripe,  setTestingStripe]  = useState(false);
 
-  const getStoredCreds = () => {
-    try { return JSON.parse(localStorage.getItem('hou-admin-creds') || '{}'); } catch { return {}; }
-  };
-  const [newEmail,    setNewEmail]    = useState(() => getStoredCreds().email    || DEFAULT_EMAIL);
+  const [newEmail,    setNewEmail]    = useState(user?.email ?? '');
   const [newPassword, setNewPassword] = useState('');
   const [showNewPw,   setShowNewPw]   = useState(false);
   const [savingCreds, setSavingCreds] = useState(false);
 
   const saveProfile = async () => {
     setSaving(true);
-    localStorage.setItem('hou-display-name', displayName);
-    toast.success('Profile updated');
+    const { error } = await supabase.auth.updateUser({ data: { full_name: displayName } });
+    if (error) toast.error(error.message);
+    else toast.success('Profile updated');
     setSaving(false);
   };
 
@@ -117,7 +115,7 @@ export default function Settings() {
             <div className="micro-label">Security</div>
             <ShieldCheck className="w-3 h-3 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <div className="text-xs text-muted-foreground mb-5">Update the credentials used to sign into the Finance Dashboard.</div>
+          <div className="text-xs text-muted-foreground mb-5">Update your Supabase Auth email or password. Changes take effect at next sign-in.</div>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label className="micro-label">Login Email</Label>
@@ -126,7 +124,7 @@ export default function Settings() {
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
                 className="rounded-none h-10 font-mono-tab text-sm"
-                placeholder={DEFAULT_EMAIL}
+                placeholder="you@example.com"
               />
             </div>
             <div className="space-y-1.5">
@@ -150,15 +148,15 @@ export default function Settings() {
             </div>
             <Button
               disabled={savingCreds}
-              onClick={() => {
+              onClick={async () => {
                 setSavingCreds(true);
-                const current = getStoredCreds();
-                const updated = {
-                  email:    newEmail.trim() || DEFAULT_EMAIL,
-                  password: newPassword || current.password || DEFAULT_PASS,
-                };
-                localStorage.setItem('hou-admin-creds', JSON.stringify(updated));
+                const updates: Record<string, string> = {};
+                if (newEmail.trim() && newEmail.trim() !== user?.email) updates.email = newEmail.trim();
+                if (newPassword) updates.password = newPassword;
+                if (!Object.keys(updates).length) { toast.info('No changes to save.'); setSavingCreds(false); return; }
+                const { error } = await supabase.auth.updateUser(updates);
                 setSavingCreds(false);
+                if (error) { toast.error(error.message); return; }
                 setNewPassword('');
                 toast.success('Credentials updated. Use them at next sign-in.');
               }}

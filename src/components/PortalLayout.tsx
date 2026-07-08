@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, MessageSquare, LogOut, Menu, X,
   ArrowUpRight, FolderOpen, Calendar, PlusCircle, User,
-  ChevronRight, Bell,
+  ChevronRight, Bell, Layers, GitBranch, CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
@@ -50,21 +50,29 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     {
       label: 'Overview',
       items: [
-        { to: '/portal/dashboard', label: 'Dashboard',      Icon: LayoutDashboard },
+        { to: '/portal/dashboard',   label: 'Dashboard',        Icon: LayoutDashboard },
+        { to: '/portal/projects',    label: 'My Projects',      Icon: Layers },
       ],
     },
     {
       label: 'My Project',
       items: [
-        { to: '/portal/project',   label: 'Project Brief',  Icon: FileText },
-        { to: '/portal/documents', label: 'Documents',      Icon: FolderOpen, badge: pendingDocs },
-        { to: '/portal/messages',  label: 'Messages',       Icon: MessageSquare, badge: msgCount },
+        { to: '/portal/project',     label: 'Project Brief',    Icon: FileText },
+        { to: '/portal/documents',   label: 'Documents',        Icon: FolderOpen, badge: pendingDocs },
+        { to: '/portal/messages',    label: 'Messages',         Icon: MessageSquare, badge: msgCount },
       ],
     },
     {
-      label: 'Schedule',
+      label: 'Build',
       items: [
-        { to: '/portal/meetings',  label: 'Meetings',       Icon: Calendar, badge: upcomingMeetings },
+        { to: '/portal/milestones',  label: 'Timeline',         Icon: GitBranch },
+        { to: '/portal/meetings',    label: 'Meetings',         Icon: Calendar, badge: upcomingMeetings },
+      ],
+    },
+    {
+      label: 'Finance',
+      items: [
+        { to: '/portal/payments',    label: 'Payments',         Icon: CreditCard },
       ],
     },
   ];

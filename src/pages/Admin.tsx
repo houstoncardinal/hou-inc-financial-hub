@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import {
-  Users, MessageSquare, FolderOpen, BarChart3, Settings, Image,
+  Users, MessageSquare, BarChart3, Settings, Image,
   ArrowUpRight, TrendingUp, CheckCircle, Clock, AlertCircle,
-  Plus, Trash2, Edit3, Eye, LogOut, X, FileText, Calendar,
-  Building2, Star, Search, RefreshCw, ScanLine,
+  Plus, Trash2, Edit3, LogOut, X, FileText, Calendar,
+  Building2, Star, RefreshCw, ScanLine,
+  ChevronRight, ChevronDown, Send, CheckCircle2, XCircle,
+  Video, Phone, MapPin, FileCheck, Package,
+  Layers, CreditCard, Inbox, DollarSign,
+  ArrowLeft, ClipboardList, User, UserCheck, UserX, ShieldCheck,
 } from 'lucide-react';
+import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
@@ -17,202 +23,365 @@ const G500  = '#8A8580';
 const AC    = '#9D7E3F';
 const SERIF = "'Cormorant Garamond', Georgia, serif";
 
-/* ── Local storage readers ── */
-function readClients() {
-  try { return JSON.parse(localStorage.getItem('hou-portal-clients') || '[]'); } catch { return []; }
-}
-function readBriefs() {
-  try { return JSON.parse(localStorage.getItem('hou-portal-briefs') || '{}'); } catch { return {}; }
-}
-function readAllMsgs() {
-  try { return JSON.parse(localStorage.getItem('hou-portal-messages') || '{}'); } catch { return {}; }
-}
-function readPortfolio(): PortfolioItem[] {
-  try {
-    const stored = localStorage.getItem('hou-admin-portfolio');
-    if (stored) return JSON.parse(stored);
-    return DEFAULT_PORTFOLIO;
-  } catch { return DEFAULT_PORTFOLIO; }
-}
-function savePortfolio(items: PortfolioItem[]) {
-  localStorage.setItem('hou-admin-portfolio', JSON.stringify(items));
-}
-function readContactForms() {
-  try { return JSON.parse(localStorage.getItem('hou-contact-submissions') || '[]'); } catch { return []; }
-}
-function readFinanceReports() {
-  try { return JSON.parse(localStorage.getItem('hou-finance-reports') || '[]'); } catch { return []; }
+/* ── Supabase data loaders ───────────────────────────────────────────── */
+async function loadPortalData() {
+  const [clientsRes, briefsRes, msgsRes, docsRes, meetsRes] = await Promise.all([
+    supabase.from('portal_clients').select('*').order('created_at', { ascending: false }),
+    supabase.from('portal_briefs').select('*'),
+    supabase.from('portal_messages').select('*').order('created_at', { ascending: true }),
+    supabase.from('portal_documents').select('*'),
+    supabase.from('portal_meetings').select('*').order('created_at', { ascending: false }),
+  ]);
+
+  const clients = (clientsRes.data ?? []).map((c: any) => ({
+    ...c,
+    projectType:     c.project_type,
+    projectInterest: c.project_interest,
+    createdAt:       c.created_at,
+  }));
+
+  const briefs: Record<string, any> = {};
+  (briefsRes.data ?? []).forEach((b: any) => {
+    briefs[b.client_id] = { ...b, submittedAt: b.submitted_at };
+  });
+
+  const allMsgs: Record<string, any[]> = {};
+  (msgsRes.data ?? []).forEach((m: any) => {
+    if (!allMsgs[m.client_id]) allMsgs[m.client_id] = [];
+    allMsgs[m.client_id].push({ ...m, text: m.body, senderName: m.sender_name, timestamp: m.created_at });
+  });
+
+  const allDocs: Record<string, any[]> = {};
+  (docsRes.data ?? []).forEach((d: any) => {
+    if (!allDocs[d.client_id]) allDocs[d.client_id] = [];
+    allDocs[d.client_id].push({ ...d, fileType: d.file_type, uploadedAt: d.uploaded_at, requestedBy: d.requested_by });
+  });
+
+  const allMeetings: Record<string, any[]> = {};
+  (meetsRes.data ?? []).forEach((m: any) => {
+    if (!allMeetings[m.client_id]) allMeetings[m.client_id] = [];
+    allMeetings[m.client_id].push({ ...m, createdAt: m.created_at });
+  });
+
+  return { clients, briefs, allMsgs, allDocs, allMeetings };
 }
 
-/* ── Types ── */
+async function loadLeadsData() {
+  const [contactRes, startRes] = await Promise.all([
+    supabase.from('contact_submissions').select('*').order('created_at', { ascending: false }),
+    supabase.from('start_project_submissions').select('*').order('submitted_at', { ascending: false }),
+  ]);
+  return {
+    contactForms: contactRes.data ?? [],
+    startBriefs:  startRes.data ?? [],
+  };
+}
+
+async function loadFinanceData() {
+  const [projRes, chkRes, txnRes, vndRes] = await Promise.all([
+    supabase.from('projects').select('*').is('deleted_at', null),
+    supabase.from('checks').select('*').is('deleted_at', null),
+    supabase.from('transactions').select('*').is('deleted_at', null),
+    supabase.from('vendors').select('*').is('deleted_at', null),
+  ]);
+  return {
+    finProjects: projRes.data ?? [],
+    finChecks:   chkRes.data ?? [],
+    finTxns:     txnRes.data ?? [],
+    finVendors:  vndRes.data ?? [],
+  };
+}
+
+function rPortfolio()     { try { const s = localStorage.getItem('hou-admin-portfolio'); return s ? JSON.parse(s) : DEFAULT_PORTFOLIO; } catch { return DEFAULT_PORTFOLIO; } }
+function savePortfolio(items: PortfolioItem[]) { localStorage.setItem('hou-admin-portfolio', JSON.stringify(items)); }
+
+/* ── Admin actions (Supabase writes) ────────────────────────────────── */
+async function adminUpdateBriefStatus(clientId: string, status: string) {
+  await supabase.from('portal_briefs').update({ status }).eq('client_id', clientId);
+}
+
+async function adminSendMessage(clientId: string, text: string) {
+  await supabase.from('portal_messages').insert({
+    client_id:   clientId,
+    sender:      'builder',
+    sender_name: 'Jeff Ali',
+    body:        text,
+  });
+}
+
+async function adminUpdateDocStatus(clientId: string, docId: string, status: 'approved' | 'rejected') {
+  await supabase.from('portal_documents').update({ status, reviewed_at: new Date().toISOString(), reviewed_by: 'Jeff Ali' }).eq('id', docId);
+}
+
+async function adminUpdateMeetingStatus(clientId: string, meetingId: string, status: 'confirmed' | 'cancelled') {
+  await supabase.from('portal_meetings').update({ status }).eq('id', meetingId);
+}
+
+async function adminApproveClient(clientId: string, clientName: string) {
+  await supabase.from('portal_clients').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', clientId);
+
+  await supabase.from('portal_messages').insert({
+    client_id:   clientId,
+    sender:      'builder',
+    sender_name: 'Jeff Ali',
+    body:        `Welcome to the HOU INC Client Portal, ${clientName}. I'm Jeff Ali, Co-Founder and your dedicated project lead. Your account has been approved and I'm looking forward to learning about your vision. Please complete your Project Brief when you're ready — it gives me the context I need for our first consultation. You'll also find your required documents in the Documents tab. Feel free to message me anytime.`,
+  });
+
+  await supabase.from('portal_documents').insert(
+    APPROVAL_DOCS.map((d: any) => ({
+      client_id:    clientId,
+      name:         d.name,
+      file_type:    d.fileType,
+      file_size:    d.size || null,
+      category:     d.category,
+      status:       d.status,
+      requested_by: d.requestedBy,
+      description:  d.description,
+    }))
+  );
+}
+
+async function adminRejectClient(clientId: string) {
+  await supabase.from('portal_clients').update({ status: 'rejected', rejected_at: new Date().toISOString() }).eq('id', clientId);
+}
+
+/* ── Types ───────────────────────────────────────────────────────────── */
 interface PortfolioItem {
-  id: string;
-  title: string;
-  category: string;
-  location: string;
-  sqft: string;
-  year: string;
-  description: string;
-  featured: boolean;
+  id: string; title: string; category: string; location: string;
+  sqft: string; year: string; description: string; featured: boolean;
 }
 
+/* ── Constants ───────────────────────────────────────────────────────── */
 const DEFAULT_PORTFOLIO: PortfolioItem[] = [
-  { id: '1', title: 'Chambord River Oaks Estate', category: 'Luxury Residential', location: 'River Oaks, Houston', sqft: '14,500', year: '2024', description: 'Ultra-luxury custom estate with pool house and home theatre.', featured: true },
-  { id: '2', title: 'Westway Commerce Campus', category: 'Commercial Industrial', location: 'Energy Corridor', sqft: '212,000', year: '2024', description: 'Modern Class-A industrial campus with office component.', featured: true },
-  { id: '3', title: 'The Meridian Tower Retail', category: 'Retail & Mixed-Use', location: 'Galleria District', sqft: '98,000', year: '2023', description: 'Flagship retail anchor with premium tenant fit-out.', featured: false },
-  { id: '4', title: 'Memorial Custom Home', category: 'Luxury Residential', location: 'Memorial, Houston', sqft: '8,200', year: '2023', description: 'Five-bedroom estate with bespoke interiors.', featured: false },
-  { id: '5', title: 'Post Oak Medical Plaza', category: 'Medical & Healthcare', location: 'Medical Center', sqft: '45,000', year: '2022', description: 'State-of-the-art medical office building.', featured: false },
+  { id: '1', title: 'Chambord River Oaks Estate',   category: 'Luxury Residential',    location: 'River Oaks, Houston',  sqft: '14,500', year: '2024', description: 'Ultra-luxury custom estate with pool house and home theatre.',           featured: true  },
+  { id: '2', title: 'Westway Commerce Campus',       category: 'Commercial Industrial', location: 'Energy Corridor',       sqft: '212,000', year: '2024', description: 'Modern Class-A industrial campus with office component.',              featured: true  },
+  { id: '3', title: 'The Meridian Tower Retail',     category: 'Retail & Mixed-Use',    location: 'Galleria District',    sqft: '98,000',  year: '2023', description: 'Flagship retail anchor with premium tenant fit-out.',                  featured: false },
+  { id: '4', title: 'Memorial Custom Home',          category: 'Luxury Residential',    location: 'Memorial, Houston',     sqft: '8,200',   year: '2023', description: 'Five-bedroom estate with bespoke interiors.',                         featured: false },
+  { id: '5', title: 'Post Oak Medical Plaza',        category: 'Medical & Healthcare',  location: 'Medical Center',       sqft: '45,000',  year: '2022', description: 'State-of-the-art medical office building.',                           featured: false },
 ];
-
-/* ── Admin auth gate ── */
-const ADMIN_PW = 'houinc2024';
+const CATEGORIES = ['Luxury Residential', 'Commercial Industrial', 'Retail & Mixed-Use', 'Medical & Healthcare', 'High-Rise Residential', 'Renovation'];
+const ADMIN_PIN = '011491';
 const ADMIN_KEY = 'hou-admin-unlocked';
 
-type AdminTab = 'overview' | 'users' | 'submissions' | 'portfolio' | 'finance' | 'analytics';
+/* ── Status helpers ──────────────────────────────────────────────────── */
+const BRIEF_STATUSES = ['submitted', 'reviewing', 'consultation_scheduled', 'in_progress'] as const;
+function briefStatusColor(s: string) {
+  if (s === 'in_progress')             return { bg: 'rgba(16,185,129,0.08)',  color: '#10b981' };
+  if (s === 'consultation_scheduled')  return { bg: 'rgba(139,92,246,0.08)', color: '#8b5cf6' };
+  if (s === 'reviewing')               return { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' };
+  if (s === 'submitted')               return { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' };
+  return { bg: 'rgba(138,133,128,0.08)', color: G500 };
+}
+function docStatusColor(s: string) {
+  if (s === 'approved') return { bg: 'rgba(16,185,129,0.08)',  color: '#10b981' };
+  if (s === 'rejected') return { bg: 'rgba(239,68,68,0.08)',   color: '#ef4444' };
+  if (s === 'uploaded') return { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' };
+  return { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' };
+}
+function meetStatusColor(s: string) {
+  if (s === 'confirmed')  return { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' };
+  if (s === 'completed')  return { bg: 'rgba(16,185,129,0.08)', color: '#10b981' };
+  if (s === 'cancelled')  return { bg: 'rgba(239,68,68,0.08)',  color: '#ef4444' };
+  return { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' };
+}
+function StatusBadge({ label, style }: { label: string; style: { bg: string; color: string } }) {
+  return (
+    <span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 whitespace-nowrap"
+      style={{ backgroundColor: style.bg, color: style.color }}>
+      {label.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'finance' | 'analytics';
 
 export default function Admin() {
+  /* ── Auth ── */
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(ADMIN_KEY) === '1');
-  const [pw, setPw]             = useState('');
-  const [pwError, setPwError]   = useState('');
-  const [tab, setTab]           = useState<AdminTab>('overview');
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(readPortfolio);
+  const [pin, setPin]           = useState(['', '', '', '', '', '']);
+  const [pinError, setPinError] = useState('');
+  const pinRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+
+  /* ── Nav ── */
+  const [tab, setTab] = useState<AdminTab>('overview');
+
+  /* ── Portal data state ── */
+  const [clients,      setClients]      = useState<any[]>([]);
+  const [briefs,       setBriefs]       = useState<Record<string, any>>({});
+  const [allMsgs,      setAllMsgs]      = useState<Record<string, any[]>>({});
+  const [allDocs,      setAllDocs]      = useState<Record<string, any[]>>({});
+  const [allMeetings,  setAllMeetings]  = useState<Record<string, any[]>>({});
+  const [contactForms, setContactForms] = useState<any[]>([]);
+  const [startBriefs,  setStartBriefs]  = useState<any[]>([]);
+  const [finProjects,  setFinProjects]  = useState<any[]>([]);
+  const [finChecks,    setFinChecks]    = useState<any[]>([]);
+  const [finTxns,      setFinTxns]      = useState<any[]>([]);
+  const [finVendors,   setFinVendors]   = useState<any[]>([]);
+  const [finReports]                    = useState<any[]>([]);
+
+  const refreshData = useCallback(async () => {
+    const [portal, leads, finance] = await Promise.all([
+      loadPortalData(),
+      loadLeadsData(),
+      loadFinanceData(),
+    ]);
+    setClients(portal.clients);
+    setBriefs(portal.briefs);
+    setAllMsgs(portal.allMsgs);
+    setAllDocs(portal.allDocs);
+    setAllMeetings(portal.allMeetings);
+    setContactForms(leads.contactForms);
+    setStartBriefs(leads.startBriefs);
+    setFinProjects(finance.finProjects);
+    setFinChecks(finance.finChecks);
+    setFinTxns(finance.finTxns);
+    setFinVendors(finance.finVendors);
+  }, []);
+
+  useEffect(() => { refreshData(); }, [refreshData]);
+
+  /* ── Portfolio state ── */
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(rPortfolio);
   const [showAddItem, setShowAddItem] = useState(false);
-  const [editItem, setEditItem]   = useState<PortfolioItem | null>(null);
-  const [search, setSearch]       = useState('');
-  const [tick, setTick]           = useState(0);
+  const [editItem, setEditItem] = useState<PortfolioItem | null>(null);
+  const [pForm, setPForm] = useState<Omit<PortfolioItem, 'id'>>({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
 
-  const clients  = readClients();
-  const briefs   = readBriefs();
-  const allMsgs  = readAllMsgs();
-  const forms    = readContactForms();
-  const reports  = readFinanceReports();
+  /* ── Client detail state ── */
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings'>('brief');
+  const [replyDraft, setReplyDraft] = useState('');
 
-  const totalMsgs = Object.values(allMsgs as Record<string, unknown[]>).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
+  /* ── Leads state ── */
+  const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
+  const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
-  const handleUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pw === ADMIN_PW) {
-      localStorage.setItem(ADMIN_KEY, '1');
-      setUnlocked(true);
-    } else {
-      setPwError('Incorrect password.');
+
+  /* ── Computed ── */
+  const totalMsgs       = Object.values(allMsgs).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
+  const pendingDocs     = Object.entries(allDocs).flatMap(([cId, docs]) =>
+    (docs ?? []).filter((d: any) => d.status === 'uploaded').map((d: any) => ({ ...d, clientId: cId })));
+  const pendingMeets    = Object.entries(allMeetings).flatMap(([cId, meets]) =>
+    (meets ?? []).filter((m: any) => m.status === 'requested').map((m: any) => ({ ...m, clientId: cId })));
+  const allLeads        = [...startBriefs, ...contactForms].length;
+  const pendingApprovals = clients.filter((c: any) => c.status === 'pending_approval');
+  const approvedClients  = clients.filter((c: any) => c.status === 'approved' || !c.status);
+
+  const clientName = (id: string) => clients.find((c: any) => c.id === id)?.name ?? '—';
+
+  /* ── PIN handlers ── */
+  const handlePinDigit = (idx: number, val: string) => {
+    const digit = val.replace(/\D/g, '').slice(-1);
+    const next = [...pin]; next[idx] = digit; setPin(next); setPinError('');
+    if (digit && idx < 5) pinRefs[idx + 1].current?.focus();
+    if (next.every(d => d !== '')) {
+      const entered = next.join('');
+      if (entered === ADMIN_PIN) { localStorage.setItem(ADMIN_KEY, '1'); setUnlocked(true); }
+      else { setPinError('Incorrect PIN. Please try again.'); setPin(['', '', '', '', '', '']); setTimeout(() => pinRefs[0].current?.focus(), 50); }
     }
   };
-
-  const handleLogout = () => {
-    localStorage.removeItem(ADMIN_KEY);
-    setUnlocked(false);
-    setPw('');
+  const handlePinKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (pin[idx]) { const next = [...pin]; next[idx] = ''; setPin(next); }
+      else if (idx > 0) pinRefs[idx - 1].current?.focus();
+    }
   };
+  const handleLogout = () => { localStorage.removeItem(ADMIN_KEY); setUnlocked(false); setPin(['', '', '', '', '', '']); };
 
-  const refreshData = () => setTick(t => t + 1);
-
-  /* Portfolio CRUD */
-  const [form, setForm] = useState<Omit<PortfolioItem, 'id'>>({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
-
+  /* ── Portfolio handlers ── */
   const handleAddPortfolio = (e: React.FormEvent) => {
     e.preventDefault();
-    const newItems = [...portfolio, { ...form, id: crypto.randomUUID() }];
-    setPortfolio(newItems);
-    savePortfolio(newItems);
-    setShowAddItem(false);
-    setForm({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
+    const newItems = [...portfolio, { ...pForm, id: crypto.randomUUID() }];
+    setPortfolio(newItems); savePortfolio(newItems); setShowAddItem(false);
+    setPForm({ title: '', category: 'Luxury Residential', location: '', sqft: '', year: new Date().getFullYear().toString(), description: '', featured: false });
   };
-
-  const handleDeletePortfolio = (id: string) => {
-    const updated = portfolio.filter(p => p.id !== id);
-    setPortfolio(updated);
-    savePortfolio(updated);
-  };
-
+  const handleDeletePortfolio = (id: string) => { const u = portfolio.filter(p => p.id !== id); setPortfolio(u); savePortfolio(u); };
   const handleEditSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editItem) return;
-    const updated = portfolio.map(p => p.id === editItem.id ? editItem : p);
-    setPortfolio(updated);
-    savePortfolio(updated);
-    setEditItem(null);
+    e.preventDefault(); if (!editItem) return;
+    const u = portfolio.map(p => p.id === editItem.id ? editItem : p);
+    setPortfolio(u); savePortfolio(u); setEditItem(null);
+  };
+  const toggleFeatured = (id: string) => { const u = portfolio.map(p => p.id === id ? { ...p, featured: !p.featured } : p); setPortfolio(u); savePortfolio(u); };
+
+  /* ── Client detail actions ── */
+  const handleSendReply = async () => {
+    if (!selectedClientId || !replyDraft.trim()) return;
+    await adminSendMessage(selectedClientId, replyDraft.trim());
+    setReplyDraft('');
+    await refreshData();
   };
 
-  const toggleFeatured = (id: string) => {
-    const updated = portfolio.map(p => p.id === id ? { ...p, featured: !p.featured } : p);
-    setPortfolio(updated);
-    savePortfolio(updated);
-  };
-
-  const CATEGORIES = ['Luxury Residential', 'Commercial Industrial', 'Retail & Mixed-Use', 'Medical & Healthcare', 'High-Rise Residential', 'Renovation'];
-
-  const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
-    { key: 'overview',     label: 'Overview',         icon: BarChart3 },
-    { key: 'users',        label: 'Portal Users',      icon: Users },
-    { key: 'submissions',  label: 'Form Submissions',  icon: MessageSquare },
-    { key: 'portfolio',    label: 'Portfolio',          icon: Image },
-    { key: 'finance',      label: 'Finance Reports',   icon: FileText },
-    { key: 'analytics',    label: 'Analytics',         icon: TrendingUp },
+  /* ── Nav items ── */
+  const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ComponentType<any>; badge?: number; urgent?: boolean }[] = [
+    { key: 'overview',   label: 'Overview',          icon: BarChart3 },
+    { key: 'approvals',  label: 'Account Requests',  icon: ShieldCheck, badge: pendingApprovals.length || undefined, urgent: pendingApprovals.length > 0 },
+    { key: 'clients',    label: 'Portal Clients',     icon: Users,       badge: approvedClients.length },
+    { key: 'leads',      label: 'Inbound Leads',      icon: Inbox,       badge: allLeads },
+    { key: 'documents',  label: 'Documents',          icon: FileCheck,   badge: pendingDocs.length || undefined },
+    { key: 'meetings',   label: 'Meetings',           icon: Calendar,    badge: pendingMeets.length || undefined },
+    { key: 'portfolio',  label: 'Portfolio',          icon: Image },
+    { key: 'finance',    label: 'Finance Data',       icon: DollarSign },
+    { key: 'analytics',  label: 'Analytics',          icon: TrendingUp },
   ];
 
-  const TOOL_LINKS = [
-    { to: '/scraper', label: 'Web Scraper', icon: ScanLine },
-  ];
-
-  /* ── Lock screen ── */
+  /* ════════ LOCK SCREEN ════════ */
   if (!unlocked) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: B, backgroundImage: 'radial-gradient(circle, rgba(157,126,63,0.05) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
-        <motion.div className="w-full max-w-sm p-10 relative" style={{ backgroundColor: W, border: '1px solid rgba(157,126,63,0.25)' }}
+      <div className="min-h-screen flex items-center justify-center px-4"
+        style={{ backgroundColor: B, backgroundImage: 'radial-gradient(circle, rgba(157,126,63,0.05) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+        <motion.div className="w-full max-w-sm relative" style={{ backgroundColor: W, border: '1px solid rgba(157,126,63,0.22)' }}
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-px h-8" style={{ backgroundColor: AC }} />
-            <div>
-              <div className="text-[11px] font-black tracking-[0.34em] uppercase" style={{ color: B, fontFamily: SERIF }}>HOU INC</div>
-              <div className="text-[7px] uppercase tracking-[0.42em]" style={{ color: AC }}>Admin Dashboard · Secure Access</div>
+          <div style={{ height: 3, backgroundColor: AC }} />
+          <div className="p-8 sm:p-10">
+            <div className="flex items-center gap-3 mb-9">
+              <div className="w-px h-8" style={{ backgroundColor: AC }} />
+              <div>
+                <div className="text-[11px] font-black tracking-[0.34em] uppercase" style={{ color: B, fontFamily: SERIF }}>HOU INC</div>
+                <div className="text-[7px] uppercase tracking-[0.42em]" style={{ color: AC }}>Admin Dashboard · Secure Access</div>
+              </div>
             </div>
-          </div>
-          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '28px', color: B, lineHeight: 1.1, marginBottom: 8 }}>
-            Admin Access
-          </div>
-          <p className="text-[12px] font-light mb-7" style={{ color: G500 }}>Enter your admin password to access the dashboard.</p>
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <div>
-              <label className="block text-[9px] uppercase tracking-[0.32em] font-bold mb-2" style={{ color: G500 }}>Password</label>
-              <input type="password" value={pw} onChange={e => setPw(e.target.value)} required autoFocus
-                className="w-full outline-none text-[14px]"
-                style={{ padding: '13px 14px', border: `1px solid ${pw ? AC : G200}`, borderRadius: 0, color: B, transition: 'border-color 0.2s' }}
-                onFocus={e => { e.target.style.borderColor = AC; }}
-                onBlur={e => { if (!e.target.value) e.target.style.borderColor = G200; }}
-              />
+            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '28px', color: B, lineHeight: 1.1, marginBottom: 6 }}>Admin Access</div>
+            <p className="text-[12px] font-light mb-8" style={{ color: G500 }}>Enter your 6-digit PIN to access the dashboard.</p>
+            <div className="mb-2">
+              <label className="block text-[9px] uppercase tracking-[0.32em] font-bold mb-4" style={{ color: G500 }}>Admin PIN</label>
+              <div className="flex gap-2 justify-between">
+                {pin.map((digit, i) => (
+                  <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1} value={digit} autoFocus={i === 0}
+                    onChange={e => handlePinDigit(i, e.target.value)} onKeyDown={e => handlePinKeyDown(i, e)}
+                    className="outline-none text-center text-[20px] font-bold"
+                    style={{ width: 44, height: 52, flexShrink: 0, border: `1px solid ${digit ? AC : G200}`, color: B, backgroundColor: digit ? 'rgba(157,126,63,0.04)' : W, transition: 'border-color 0.18s ease, background-color 0.18s ease', caretColor: 'transparent' }}
+                    onFocus={e => { e.target.style.borderColor = AC; }}
+                    onBlur={e => { if (!e.target.value) e.target.style.borderColor = G200; }}
+                  />
+                ))}
+              </div>
             </div>
-            {pwError && <p className="text-[11px]" style={{ color: '#ef4444' }}>{pwError}</p>}
-            <button type="submit" className="w-full py-3.5 text-[10px] uppercase tracking-[0.28em] font-black transition-opacity hover:opacity-85"
-              style={{ backgroundColor: B, color: W }}>
-              Access Dashboard <ArrowUpRight className="w-3.5 h-3.5 inline ml-1" strokeWidth={2.5} />
-            </button>
-          </form>
-          <div className="mt-6 text-center">
-            <Link to="/" className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ color: G500 }}>← Back to Website</Link>
+            {pinError && <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[11px] mt-3 mb-0" style={{ color: '#ef4444' }}>{pinError}</motion.p>}
+            <div className="mt-8 pt-6" style={{ borderTop: `1px solid ${G200}` }}>
+              <Link to="/" className="text-[10px] uppercase tracking-[0.22em] font-semibold" style={{ color: G500 }}>← Back to Website</Link>
+            </div>
           </div>
         </motion.div>
       </div>
     );
   }
 
-  /* ── Admin dashboard ── */
+  /* ════════ OVERVIEW STATS ════════ */
   const OVERVIEW_STATS = [
-    { label: 'Portal Clients',     value: clients.length,  icon: Users,       color: '#3b82f6', sub: 'Registered accounts' },
-    { label: 'Project Briefs',     value: Object.keys(briefs).length, icon: FileText, color: GOLD_COLOR, sub: 'Submitted briefs' },
-    { label: 'Total Messages',     value: totalMsgs,       icon: MessageSquare, color: '#8b5cf6', sub: 'Portal communications' },
-    { label: 'Contact Submissions',value: forms.length,    icon: Building2,   color: '#10b981', sub: 'Website contact forms' },
+    { label: 'Pending Approvals', value: pendingApprovals.length,                  icon: ShieldCheck,   color: '#f59e0b', sub: 'Accounts awaiting review', urgent: true },
+    { label: 'Active Clients',    value: approvedClients.length,                   icon: Users,         color: '#3b82f6', sub: 'Approved portal accounts' },
+    { label: 'Project Briefs',    value: Object.keys(briefs).length,               icon: ClipboardList, color: AC,        sub: 'Submitted via portal' },
+    { label: 'Inbound Leads',     value: allLeads,                                 icon: Inbox,         color: '#10b981', sub: 'Website form submissions' },
+    { label: 'Pending Documents', value: pendingDocs.length,                       icon: FileCheck,     color: '#8b5cf6', sub: 'Awaiting review' },
+    { label: 'Meeting Requests',  value: pendingMeets.length,                      icon: Calendar,      color: '#ec4899', sub: 'Awaiting confirmation' },
   ];
 
-  const GOLD_COLOR = AC;
-
+  /* ════════ DASHBOARD ════════ */
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: G50 }}>
 
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 w-[240px]"
         style={{ backgroundColor: B, borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-        {/* Logo */}
         <div className="px-6 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2.5 mb-2">
             <div className="w-px h-6" style={{ backgroundColor: AC }} />
@@ -226,57 +395,41 @@ export default function Admin() {
             <span className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>System Control</span>
           </div>
         </div>
-
-        <nav className="flex-1 px-3 py-4">
-          {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setTab(key)}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {NAV_ITEMS.map(({ key, label, icon: Icon, badge, urgent }) => (
+            <button key={key} onClick={() => { setTab(key); setSelectedClientId(null); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 mb-0.5 text-left transition-all"
-              style={{
-                color: tab === key ? AC : 'rgba(255,255,255,0.45)',
-                backgroundColor: tab === key ? 'rgba(157,126,63,0.1)' : 'transparent',
-                borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent',
-              }}>
+              style={{ color: tab === key ? AC : urgent ? 'rgba(255,200,100,0.75)' : 'rgba(255,255,255,0.45)', backgroundColor: tab === key ? 'rgba(157,126,63,0.1)' : 'transparent', borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent' }}>
               <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-              <span className="text-[11px] font-semibold">{label}</span>
+              <span className="text-[11px] font-semibold flex-1">{label}</span>
+              {badge ? <span className="text-[8px] font-black px-1.5 py-0.5" style={{ backgroundColor: urgent ? 'rgba(245,158,11,0.25)' : 'rgba(157,126,63,0.2)', color: urgent ? '#f59e0b' : AC }}>{badge}</span> : null}
             </button>
           ))}
         </nav>
-
-        {/* Tools section */}
         <div className="px-3 pb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="px-3 pt-3 pb-1.5 text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: 'rgba(255,255,255,0.18)' }}>Tools</div>
-          {TOOL_LINKS.map(({ to, label, icon: Icon }) => (
-            <Link key={to} to={to} className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-semibold transition-colors"
-              style={{ color: 'rgba(255,255,255,0.45)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; }}>
-              <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-              {label}
-            </Link>
-          ))}
+          <Link to="/scraper" className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-semibold transition-colors"
+            style={{ color: 'rgba(255,255,255,0.45)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; }}>
+            <ScanLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} /> Web Scraper
+          </Link>
         </div>
-
         <div className="px-3 pb-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <Link to="/" className="w-full flex items-center gap-3 px-3 py-2.5 mt-3 text-[11px] font-semibold transition-colors"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+          <Link to="/" className="w-full flex items-center gap-3 px-3 py-2.5 mt-3 text-[11px] font-semibold transition-colors" style={{ color: 'rgba(255,255,255,0.25)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)'; }}>
-            <ArrowUpRight className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-            Back to Website
+            <ArrowUpRight className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} /> Back to Website
           </Link>
-          <Link to="/portal" className="w-full flex items-center gap-3 px-3 py-2 text-[11px] font-semibold transition-colors"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+          <Link to="/portal" className="w-full flex items-center gap-3 px-3 py-2 text-[11px] font-semibold transition-colors" style={{ color: 'rgba(255,255,255,0.25)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)'; }}>
-            <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-            Client Portal
+            <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} /> Client Portal
           </Link>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-[11px] font-semibold transition-colors mt-1"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-[11px] font-semibold transition-colors mt-1" style={{ color: 'rgba(255,255,255,0.25)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.25)'; }}>
-            <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-            Lock Dashboard
+            <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} /> Lock Dashboard
           </button>
         </div>
       </aside>
@@ -284,10 +437,23 @@ export default function Admin() {
       {/* Main */}
       <main className="flex-1 md:ml-[240px]">
         {/* Top bar */}
-        <div className="sticky top-0 z-30 flex items-center justify-between px-8 py-4" style={{ backgroundColor: W, borderBottom: `1px solid ${G200}`, boxShadow: '0 1px 12px rgba(0,0,0,0.04)' }}>
-          <div>
-            <div className="text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: AC }}>HOU INC · Admin</div>
-            <div className="text-[16px] font-bold" style={{ color: B }}>{NAV_ITEMS.find(n => n.key === tab)?.label}</div>
+        <div className="sticky top-0 z-30 flex items-center justify-between px-6 py-4"
+          style={{ backgroundColor: W, borderBottom: `1px solid ${G200}`, boxShadow: '0 1px 12px rgba(0,0,0,0.04)' }}>
+          <div className="flex items-center gap-3">
+            {selectedClientId && tab === 'clients' && (
+              <button onClick={() => setSelectedClientId(null)} className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-semibold px-3 py-2 transition-all"
+                style={{ border: `1px solid ${G200}`, color: G500 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = AC; (e.currentTarget as HTMLElement).style.color = AC; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = G200; (e.currentTarget as HTMLElement).style.color = G500; }}>
+                <ArrowLeft className="w-3 h-3" strokeWidth={2} /> All Clients
+              </button>
+            )}
+            <div>
+              <div className="text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: AC }}>HOU INC · Admin</div>
+              <div className="text-[16px] font-bold" style={{ color: B }}>
+                {selectedClientId && tab === 'clients' ? clients.find((c: any) => c.id === selectedClientId)?.name : NAV_ITEMS.find(n => n.key === tab)?.label}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={refreshData} className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-semibold px-3 py-2 transition-all"
@@ -303,84 +469,334 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="px-8 py-8">
+        <div className="px-6 py-7">
 
-          {/* ── OVERVIEW ── */}
+          {/* ══════ OVERVIEW ══════ */}
           {tab === 'overview' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-7">
                 {OVERVIEW_STATS.map(s => {
                   const Icon = s.icon;
                   return (
-                    <div key={s.label} className="p-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                      <div className="w-9 h-9 flex items-center justify-center mb-4" style={{ backgroundColor: `${s.color}12` }}>
+                    <div key={s.label} className="p-5 cursor-pointer transition-all"
+                      style={{ backgroundColor: W, border: s.urgent && s.value > 0 ? '1px solid rgba(245,158,11,0.35)' : `1px solid ${G200}`, backgroundColor: s.urgent && s.value > 0 ? 'rgba(245,158,11,0.03)' : W }}
+                      onClick={() => s.urgent ? setTab('approvals') : undefined}>
+                      <div className="w-8 h-8 flex items-center justify-center mb-3" style={{ backgroundColor: `${s.color}14` }}>
                         <Icon className="w-4 h-4" style={{ color: s.color }} strokeWidth={1.5} />
                       </div>
-                      <div className="text-[28px] font-black mb-1" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.14em] mb-0.5" style={{ color: B }}>{s.label}</div>
+                      <div className="text-[26px] font-black mb-0.5" style={{ color: s.urgent && s.value > 0 ? '#f59e0b' : B, fontFamily: SERIF }}>{s.value}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] mb-0.5" style={{ color: B }}>{s.label}</div>
                       <div className="text-[10px] font-light" style={{ color: G500 }}>{s.sub}</div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Recent portal clients */}
-              <div className="mb-8" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${G200}` }}>
-                  <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Portal Registrations</div>
-                  <button onClick={() => setTab('users')} className="text-[9px] uppercase tracking-[0.2em] font-semibold" style={{ color: G500 }}>View All →</button>
+              {/* Pending approvals alert */}
+              {pendingApprovals.length > 0 && (
+                <div className="mb-5 p-5 flex items-center gap-5" style={{ backgroundColor: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.28)' }}>
+                  <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(245,158,11,0.1)' }}>
+                    <ShieldCheck className="w-4.5 h-4.5" style={{ color: '#f59e0b' }} strokeWidth={1.5} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-bold" style={{ color: B }}>
+                      {pendingApprovals.length} account application{pendingApprovals.length > 1 ? 's' : ''} waiting for review
+                    </div>
+                    <div className="text-[10px] font-light mt-0.5" style={{ color: G500 }}>
+                      {pendingApprovals.map((c: any) => c.name).join(', ')}
+                    </div>
+                  </div>
+                  <button onClick={() => setTab('approvals')}
+                    className="text-[9px] uppercase tracking-[0.2em] font-bold px-4 py-2 whitespace-nowrap transition-all"
+                    style={{ backgroundColor: '#f59e0b', color: W }}>
+                    Review Now
+                  </button>
                 </div>
-                <div>
-                  {clients.slice(-5).reverse().map((c: any, i: number) => (
-                    <div key={c.id} className="flex items-center gap-4 px-6 py-3.5"
-                      style={{ borderBottom: i < Math.min(clients.length, 5) - 1 ? `1px solid ${G200}` : 'none' }}>
-                      <div className="w-8 h-8 flex items-center justify-center text-[10px] font-black shrink-0"
-                        style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
-                        {c.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
-                      </div>
+              )}
+
+              {/* Pending actions */}
+              {(pendingDocs.length > 0 || pendingMeets.length > 0) && (
+                <div className="mb-7" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Needs Your Attention</div>
+                  </div>
+                  {pendingDocs.map((d: any) => (
+                    <div key={d.id} className="flex items-center gap-4 px-5 py-3" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#8b5cf6' }} strokeWidth={1.5} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[12px] font-bold" style={{ color: B }}>{c.name}</div>
-                        <div className="text-[10px] font-light" style={{ color: G500 }}>{c.email}</div>
+                        <span className="text-[11px] font-semibold" style={{ color: B }}>{clientName(d.clientId)}</span>
+                        <span className="text-[11px] font-light ml-2" style={{ color: G500 }}>uploaded <strong>{d.name}</strong> — awaiting review</span>
                       </div>
-                      <div className="text-[9px] font-light" style={{ color: G500 }}>
-                        {new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
-                      <div className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
-                        style={{ backgroundColor: briefs[c.id] ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)', color: briefs[c.id] ? '#10b981' : '#f59e0b' }}>
-                        {briefs[c.id] ? 'Brief Submitted' : 'Pending Brief'}
-                      </div>
+                      <button onClick={() => { setTab('clients'); setSelectedClientId(d.clientId); setClientSubTab('docs'); }}
+                        className="text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-colors"
+                        style={{ border: `1px solid ${G200}`, color: G500 }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; (e.currentTarget as HTMLElement).style.borderColor = AC; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; (e.currentTarget as HTMLElement).style.borderColor = G200; }}>
+                        Review
+                      </button>
                     </div>
                   ))}
-                  {clients.length === 0 && (
-                    <div className="px-6 py-10 text-center text-[12px] font-light" style={{ color: G500 }}>No clients registered yet.</div>
-                  )}
+                  {pendingMeets.map((m: any) => (
+                    <div key={m.id} className="flex items-center gap-4 px-5 py-3" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: '#f59e0b' }} strokeWidth={1.5} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-semibold" style={{ color: B }}>{clientName(m.clientId)}</span>
+                        <span className="text-[11px] font-light ml-2" style={{ color: G500 }}>requested <strong>{m.type}</strong> on {m.date} at {m.time}</span>
+                      </div>
+                      <button onClick={() => { setTab('clients'); setSelectedClientId(m.clientId); setClientSubTab('meetings'); }}
+                        className="text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-colors"
+                        style={{ border: `1px solid ${G200}`, color: G500 }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; (e.currentTarget as HTMLElement).style.borderColor = AC; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; (e.currentTarget as HTMLElement).style.borderColor = G200; }}>
+                        Confirm
+                      </button>
+                    </div>
+                  ))}
                 </div>
+              )}
+
+              {/* Recent approved clients */}
+              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Active Clients</div>
+                  <button onClick={() => setTab('clients')} className="text-[9px] uppercase tracking-[0.2em] font-semibold" style={{ color: G500 }}>View All →</button>
+                </div>
+                {approvedClients.slice(-5).reverse().map((c: any, i: number) => (
+                  <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 cursor-pointer transition-colors"
+                    style={{ borderBottom: i < Math.min(approvedClients.length, 5) - 1 ? `1px solid ${G200}` : 'none' }}
+                    onClick={() => { setTab('clients'); setSelectedClientId(c.id); setClientSubTab('brief'); }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                    <div className="w-8 h-8 flex items-center justify-center text-[10px] font-black shrink-0"
+                      style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
+                      {c.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] font-bold" style={{ color: B }}>{c.name}</div>
+                      <div className="text-[10px] font-light" style={{ color: G500 }}>{c.email}</div>
+                    </div>
+                    <StatusBadge label={briefs[c.id] ? briefs[c.id].status : 'no brief'} style={briefStatusColor(briefs[c.id]?.status ?? 'none')} />
+                    <ChevronRight className="w-3.5 h-3.5" style={{ color: G500 }} strokeWidth={1.5} />
+                  </div>
+                ))}
+                {approvedClients.length === 0 && <div className="px-5 py-10 text-center text-[12px] font-light" style={{ color: G500 }}>No approved clients yet.</div>}
               </div>
             </motion.div>
           )}
 
-          {/* ── PORTAL USERS ── */}
-          {tab === 'users' && (
+          {/* ══════ APPROVALS ══════ */}
+          {tab === 'approvals' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+
+              {/* Header + stats strip */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { label: 'Pending Review',  value: pendingApprovals.length,                                        color: '#f59e0b' },
+                  { label: 'Approved',         value: clients.filter((c: any) => c.status === 'approved').length,     color: '#10b981' },
+                  { label: 'Not Approved',     value: clients.filter((c: any) => c.status === 'rejected').length,     color: '#ef4444' },
+                ].map(s => (
+                  <div key={s.label} className="p-4" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="text-[22px] font-black" style={{ color: s.color, fontFamily: SERIF }}>{s.value}</div>
+                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold mt-1" style={{ color: B }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pending applications */}
+              <div className="mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}`, backgroundColor: 'rgba(245,158,11,0.03)' }}>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: '#f59e0b' }}>Pending Review</div>
+                    <div className="text-[11px] font-light mt-0.5" style={{ color: G500 }}>Review each application and approve or decline access</div>
+                  </div>
+                  {pendingApprovals.length > 0 && (
+                    <span className="text-[8px] font-black px-2 py-0.5" style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                      {pendingApprovals.length} waiting
+                    </span>
+                  )}
+                </div>
+
+                {pendingApprovals.length === 0 && (
+                  <div className="py-14 text-center">
+                    <CheckCircle2 className="w-8 h-8 mx-auto mb-3" style={{ color: '#10b981' }} strokeWidth={1} />
+                    <div className="text-[13px] font-semibold" style={{ color: B }}>All caught up</div>
+                    <div className="text-[11px] font-light mt-1" style={{ color: G500 }}>No pending applications at this time.</div>
+                  </div>
+                )}
+
+                {pendingApprovals.map((c: any, i: number) => (
+                  <div key={c.id} style={{ borderBottom: i < pendingApprovals.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                    <div className="px-5 py-5">
+                      <div className="flex items-start gap-4">
+                        {/* Avatar */}
+                        <div className="w-10 h-10 flex items-center justify-center text-[12px] font-black shrink-0"
+                          style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#f59e0b', fontFamily: SERIF }}>
+                          {c.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 flex-wrap mb-1">
+                            <span className="text-[14px] font-bold" style={{ color: B }}>{c.name}</span>
+                            <span className="text-[7.5px] uppercase tracking-[0.2em] font-bold px-2 py-0.5" style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+                              Pending Review
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-3">
+                            <span className="text-[11px] font-light" style={{ color: G500 }}>{c.email}</span>
+                            {c.phone && <span className="text-[11px] font-light" style={{ color: G500 }}>{c.phone}</span>}
+                            <span className="text-[10px] font-light" style={{ color: G500 }}>
+                              Applied {new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+
+                          {/* Project type + description */}
+                          {c.projectType && (
+                            <div className="mb-3">
+                              <span className="text-[8px] uppercase tracking-[0.3em] font-bold px-2 py-0.5 mr-2"
+                                style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC }}>
+                                {c.projectType}
+                              </span>
+                            </div>
+                          )}
+                          {c.projectInterest && (
+                            <div className="p-3.5 mb-4" style={{ backgroundColor: G50, borderLeft: `2px solid ${G200}` }}>
+                              <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: G500 }}>Project Description</div>
+                              <p className="text-[12px] font-light leading-relaxed" style={{ color: B }}>{c.projectInterest}</p>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={async () => { await adminApproveClient(c.id, c.name); await refreshData(); }}
+                              className="flex items-center gap-2 px-5 py-2.5 transition-opacity hover:opacity-85"
+                              style={{ backgroundColor: '#10b981', color: W, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700 }}>
+                              <UserCheck className="w-3.5 h-3.5" strokeWidth={2} />
+                              Approve Access
+                            </button>
+                            <button
+                              onClick={async () => { await adminRejectClient(c.id); await refreshData(); }}
+                              className="flex items-center gap-2 px-5 py-2.5 transition-opacity hover:opacity-85"
+                              style={{ border: '1px solid rgba(239,68,68,0.35)', color: '#ef4444', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, backgroundColor: 'rgba(239,68,68,0.04)' }}>
+                              <UserX className="w-3.5 h-3.5" strokeWidth={2} />
+                              Decline
+                            </button>
+                            <a href={`mailto:${c.email}`}
+                              className="flex items-center gap-1.5 px-4 py-2.5 transition-opacity hover:opacity-70"
+                              style={{ border: `1px solid ${G200}`, color: G500, fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, textDecoration: 'none' }}>
+                              Email Applicant
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* All clients with status */}
               <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${G200}` }}>
-                  <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>All Portal Clients ({clients.length})</div>
+                <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>All Applications ({clients.length})</div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                        {['Name', 'Email', 'Phone', 'Registered', 'Brief Status', 'Messages'].map(h => (
+                        {['Applicant', 'Project Type', 'Applied', 'Status', ''].map(h => (
                           <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {clients.map((c: any, i: number) => {
-                        const brief = briefs[c.id];
-                        const msgs = (allMsgs as Record<string, unknown[]>)[c.id]?.length ?? 0;
+                      {[...clients].reverse().map((c: any, i: number) => {
+                        const statusColor = c.status === 'approved' ? { bg: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                          : c.status === 'rejected' ? { bg: 'rgba(239,68,68,0.08)', color: '#ef4444' }
+                          : { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' };
                         return (
                           <tr key={c.id} style={{ borderBottom: i < clients.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                            <td className="px-5 py-3.5">
+                              <div className="text-[12px] font-semibold" style={{ color: B }}>{c.name}</div>
+                              <div className="text-[10px] font-light" style={{ color: G500 }}>{c.email}</div>
+                            </td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.projectType || '—'}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>
+                              {new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <StatusBadge label={c.status?.replace('_', ' ') ?? 'pending'} style={statusColor} />
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {c.status === 'pending_approval' && (
+                                <div className="flex items-center gap-2">
+                                  <button onClick={async () => { await adminApproveClient(c.id, c.name); await refreshData(); }}
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2.5 py-1 transition-colors"
+                                    style={{ backgroundColor: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                    Approve
+                                  </button>
+                                  <button onClick={async () => { await adminRejectClient(c.id); await refreshData(); }}
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2.5 py-1 transition-colors"
+                                    style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+                              {c.status === 'approved' && (
+                                <button onClick={() => { setTab('clients'); setSelectedClientId(c.id); }}
+                                  className="text-[8px] uppercase tracking-[0.18em] font-bold px-2.5 py-1 transition-colors"
+                                  style={{ border: `1px solid ${G200}`, color: G500 }}>
+                                  View Profile
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {clients.length === 0 && (
+                        <tr><td colSpan={5} className="px-5 py-12 text-center text-[12px] font-light" style={{ color: G500 }}>No applications yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ══════ CLIENTS ══════ */}
+          {tab === 'clients' && !selectedClientId && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Active Portal Clients ({approvedClients.length})</div>
+                  {pendingApprovals.length > 0 && (
+                    <button onClick={() => setTab('approvals')} className="text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 flex items-center gap-1.5"
+                      style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                      <ShieldCheck className="w-3 h-3" strokeWidth={2} />
+                      {pendingApprovals.length} pending approval
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                        {['Client', 'Contact', 'Approved', 'Brief Status', 'Docs', 'Msgs', ''].map(h => (
+                          <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {approvedClients.map((c: any, i: number) => {
+                        const brief = briefs[c.id];
+                        const msgs = (allMsgs[c.id] ?? []).length;
+                        const docs = (allDocs[c.id] ?? []).length;
+                        return (
+                          <tr key={c.id} className="cursor-pointer transition-colors"
+                            style={{ borderBottom: i < approvedClients.length - 1 ? `1px solid ${G200}` : 'none' }}
+                            onClick={() => { setSelectedClientId(c.id); setClientSubTab('brief'); }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-3">
                                 <div className="w-7 h-7 flex items-center justify-center text-[9px] font-black shrink-0"
@@ -390,23 +806,24 @@ export default function Admin() {
                                 <span className="text-[12px] font-semibold" style={{ color: B }}>{c.name}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.email}</td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.phone || '—'}</td>
+                            <td className="px-5 py-3.5">
+                              <div className="text-[11px] font-light" style={{ color: G500 }}>{c.email}</div>
+                              <div className="text-[10px] font-light" style={{ color: G500 }}>{c.phone || '—'}</div>
+                            </td>
                             <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>
                               {new Date(c.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </td>
                             <td className="px-5 py-3.5">
-                              <span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
-                                style={{ backgroundColor: brief ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)', color: brief ? '#10b981' : '#f59e0b' }}>
-                                {brief ? brief.status.replace(/_/g, ' ') : 'Not Submitted'}
-                              </span>
+                              <StatusBadge label={brief ? brief.status : 'no brief'} style={briefStatusColor(brief?.status ?? 'none')} />
                             </td>
+                            <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{docs}</td>
                             <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{msgs}</td>
+                            <td className="px-5 py-3.5"><ChevronRight className="w-3.5 h-3.5" style={{ color: G500 }} strokeWidth={1.5} /></td>
                           </tr>
                         );
                       })}
-                      {clients.length === 0 && (
-                        <tr><td colSpan={6} className="px-6 py-12 text-center text-[12px] font-light" style={{ color: G500 }}>No clients registered yet.</td></tr>
+                      {approvedClients.length === 0 && (
+                        <tr><td colSpan={7} className="px-5 py-12 text-center text-[12px] font-light" style={{ color: G500 }}>No approved clients yet. <button onClick={() => setTab('approvals')} className="underline" style={{ color: AC }}>Review pending applications →</button></td></tr>
                       )}
                     </tbody>
                   </table>
@@ -415,73 +832,479 @@ export default function Admin() {
             </motion.div>
           )}
 
-          {/* ── FORM SUBMISSIONS ── */}
-          {tab === 'submissions' && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
-                  <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Contact Form Submissions ({forms.length})</div>
-                </div>
-                {forms.length === 0 ? (
-                  <div className="px-6 py-16 text-center">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
-                    <div className="text-[13px] font-light" style={{ color: G500 }}>No contact form submissions yet.</div>
-                    <p className="text-[11px] mt-2 font-light" style={{ color: G500 }}>Submissions from the website contact form will appear here.</p>
+          {/* ══════ CLIENT DETAIL ══════ */}
+          {tab === 'clients' && selectedClientId && (() => {
+            const client = clients.find((c: any) => c.id === selectedClientId);
+            if (!client) return null;
+            const brief    = briefs[selectedClientId];
+            const messages = allMsgs[selectedClientId] ?? [];
+            const docs     = allDocs[selectedClientId] ?? [];
+            const meets    = allMeetings[selectedClientId] ?? [];
+            return (
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+                {/* Client header */}
+                <div className="flex items-center gap-5 p-5 mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="w-14 h-14 flex items-center justify-center text-[16px] font-black shrink-0"
+                    style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
+                    {client.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
                   </div>
-                ) : (
-                  <div>
-                    {forms.map((f: any, i: number) => (
-                      <div key={i} className="px-6 py-5" style={{ borderBottom: i < forms.length - 1 ? `1px solid ${G200}` : 'none' }}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="text-[13px] font-bold mb-0.5" style={{ color: B }}>{f.name}</div>
-                            <div className="text-[11px] mb-1" style={{ color: G500 }}>{f.email} {f.phone ? `· ${f.phone}` : ''}</div>
-                            <div className="text-[11px] font-light" style={{ color: G500 }}>{f.message || f.description || '—'}</div>
+                  <div className="flex-1">
+                    <div className="text-[18px] font-bold mb-0.5" style={{ color: B }}>{client.name}</div>
+                    <div className="flex flex-wrap gap-4 text-[11px] font-light" style={{ color: G500 }}>
+                      <span>{client.email}</span>
+                      {client.phone && <span>· {client.phone}</span>}
+                      <span>· Joined {new Date(client.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>
+                      {messages.length} msgs
+                    </span>
+                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(139,92,246,0.08)', color: '#8b5cf6' }}>
+                      {docs.length} docs
+                    </span>
+                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(245,158,11,0.08)', color: '#f59e0b' }}>
+                      {meets.length} meetings
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-tab pills */}
+                <div className="flex gap-1 mb-5">
+                  {([['brief', 'Project Brief'], ['messages', 'Messages'], ['docs', 'Documents'], ['meetings', 'Meetings']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setClientSubTab(k)}
+                      className="text-[9px] uppercase tracking-[0.22em] font-bold px-4 py-2 transition-all"
+                      style={{ backgroundColor: clientSubTab === k ? B : W, color: clientSubTab === k ? W : G500, border: `1px solid ${clientSubTab === k ? B : G200}` }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Brief sub-tab */}
+                {clientSubTab === 'brief' && (
+                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    {brief ? (
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Project Brief</div>
+                          <StatusBadge label={brief.status} style={briefStatusColor(brief.status)} />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                          {[
+                            ['Type', brief.type],
+                            ['Location', brief.location],
+                            ['Sq Ft', brief.sqft],
+                            ['Budget', brief.budget],
+                            ['Timeline', brief.timeline],
+                            ['Style', (brief.style ?? []).join(', ') || '—'],
+                          ].map(([l, v]) => (
+                            <div key={l}>
+                              <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1" style={{ color: G500 }}>{l}</div>
+                              <div className="text-[12px] font-semibold" style={{ color: B }}>{v || '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {brief.description && (
+                          <div className="mb-6 p-4" style={{ backgroundColor: G50, border: `1px solid ${G200}` }}>
+                            <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-2" style={{ color: G500 }}>Description</div>
+                            <div className="text-[12px] font-light leading-relaxed" style={{ color: B }}>{brief.description}</div>
                           </div>
-                          <div className="text-[9px] shrink-0" style={{ color: G500 }}>
-                            {f.created_at ? new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        )}
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-3" style={{ color: G500 }}>Update Status</div>
+                          <div className="flex flex-wrap gap-2">
+                            {BRIEF_STATUSES.map(s => {
+                              const c = briefStatusColor(s);
+                              return (
+                                <button key={s} onClick={async () => { await adminUpdateBriefStatus(selectedClientId, s); await refreshData(); }}
+                                  className="text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-2 transition-all"
+                                  style={{ backgroundColor: brief.status === s ? c.color : 'transparent', color: brief.status === s ? W : c.color, border: `1px solid ${c.color}` }}>
+                                  {s.replace(/_/g, ' ')}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
+                    ) : (
+                      <div className="px-5 py-14 text-center">
+                        <ClipboardList className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                        <div className="text-[12px] font-light" style={{ color: G500 }}>No brief submitted yet.</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Messages sub-tab */}
+                {clientSubTab === 'messages' && (
+                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="max-h-[400px] overflow-y-auto p-5 space-y-3">
+                      {messages.map((m: any) => (
+                        <div key={m.id} className={`flex gap-3 ${m.sender === 'builder' ? 'flex-row-reverse' : ''}`}>
+                          <div className="w-7 h-7 flex items-center justify-center text-[9px] font-black shrink-0"
+                            style={{ backgroundColor: m.sender === 'builder' ? 'rgba(157,126,63,0.1)' : G50, color: m.sender === 'builder' ? AC : G500, fontFamily: SERIF }}>
+                            {m.senderName?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
+                          </div>
+                          <div className="max-w-[70%]">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[9px] font-bold" style={{ color: m.sender === 'builder' ? AC : B }}>{m.senderName}</span>
+                              <span className="text-[9px] font-light" style={{ color: G500 }}>{new Date(m.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                            </div>
+                            <div className="text-[12px] font-light leading-relaxed p-3"
+                              style={{ backgroundColor: m.sender === 'builder' ? 'rgba(157,126,63,0.06)' : G50, border: `1px solid ${m.sender === 'builder' ? 'rgba(157,126,63,0.15)' : G200}`, color: B }}>
+                              {m.text}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {messages.length === 0 && <div className="text-center py-8 text-[12px] font-light" style={{ color: G500 }}>No messages yet.</div>}
+                    </div>
+                    <div className="p-5" style={{ borderTop: `1px solid ${G200}` }}>
+                      <div className="flex gap-3">
+                        <textarea
+                          value={replyDraft}
+                          onChange={e => setReplyDraft(e.target.value)}
+                          placeholder="Reply as Jeff Ali…"
+                          rows={2}
+                          className="flex-1 text-[12px] font-light outline-none resize-none"
+                          style={{ padding: '10px 13px', border: `1px solid ${G200}`, color: B }}
+                          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSendReply(); }}
+                        />
+                        <button onClick={handleSendReply} disabled={!replyDraft.trim()}
+                          className="flex items-center gap-2 px-5 text-[9px] uppercase tracking-[0.22em] font-black transition-opacity"
+                          style={{ backgroundColor: replyDraft.trim() ? B : G200, color: replyDraft.trim() ? W : G500 }}>
+                          <Send className="w-3.5 h-3.5" strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents sub-tab */}
+                {clientSubTab === 'docs' && (
+                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    {docs.map((d: any, i: number) => (
+                      <div key={d.id} className="flex items-center gap-4 px-5 py-4"
+                        style={{ borderBottom: i < docs.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                        <FileText className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12px] font-semibold" style={{ color: B }}>{d.name}</div>
+                          <div className="text-[10px] font-light" style={{ color: G500 }}>{d.fileType} · {d.category} {d.uploadedAt ? `· Uploaded ${new Date(d.uploadedAt).toLocaleDateString()}` : ''}</div>
+                        </div>
+                        <StatusBadge label={d.status} style={docStatusColor(d.status)} />
+                        {d.status === 'uploaded' && (
+                          <div className="flex gap-2 ml-2">
+                            <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'approved'); await refreshData(); }}
+                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                              style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                              <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Approve
+                            </button>
+                            <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'rejected'); await refreshData(); }}
+                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                              style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                              <XCircle className="w-3 h-3" strokeWidth={2} /> Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ))}
+                    {docs.length === 0 && <div className="px-5 py-14 text-center text-[12px] font-light" style={{ color: G500 }}>No documents yet.</div>}
+                  </div>
+                )}
+
+                {/* Meetings sub-tab */}
+                {clientSubTab === 'meetings' && (
+                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    {meets.map((m: any, i: number) => {
+                      const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
+                      return (
+                        <div key={m.id} className="flex items-center gap-4 px-5 py-4"
+                          style={{ borderBottom: i < meets.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                          <FmtIcon className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-semibold" style={{ color: B }}>{m.type}</div>
+                            <div className="text-[10px] font-light" style={{ color: G500 }}>{m.date} at {m.time} · {m.format}</div>
+                            {m.notes && <div className="text-[10px] font-light mt-0.5" style={{ color: G500 }}>{m.notes}</div>}
+                          </div>
+                          <StatusBadge label={m.status} style={meetStatusColor(m.status)} />
+                          {m.status === 'requested' && (
+                            <div className="flex gap-2 ml-2">
+                              <button onClick={async () => { await adminUpdateMeetingStatus(selectedClientId, m.id, 'confirmed'); await refreshData(); }}
+                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Confirm
+                              </button>
+                              <button onClick={async () => { await adminUpdateMeetingStatus(selectedClientId, m.id, 'cancelled'); await refreshData(); }}
+                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                <XCircle className="w-3 h-3" strokeWidth={2} /> Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {meets.length === 0 && <div className="px-5 py-14 text-center text-[12px] font-light" style={{ color: G500 }}>No meetings yet.</div>}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
+
+          {/* ══════ LEADS ══════ */}
+          {tab === 'leads' && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              {/* Sub-tab toggle */}
+              <div className="flex gap-1 mb-5">
+                {([['startproject', `Start Project (${startBriefs.length})`], ['contact', `Contact Forms (${contactForms.length})`]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => { setLeadsSubTab(k); setExpandedLeadId(null); }}
+                    className="text-[9px] uppercase tracking-[0.22em] font-bold px-4 py-2.5 transition-all"
+                    style={{ backgroundColor: leadsSubTab === k ? B : W, color: leadsSubTab === k ? W : G500, border: `1px solid ${leadsSubTab === k ? B : G200}` }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {leadsSubTab === 'startproject' && (
+                <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  {startBriefs.length === 0 ? (
+                    <div className="px-5 py-14 text-center">
+                      <Inbox className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                      <div className="text-[12px] font-light" style={{ color: G500 }}>No project brief submissions yet.</div>
+                      <p className="text-[11px] mt-1 font-light" style={{ color: G500 }}>Submissions from the Start Project flow will appear here.</p>
+                    </div>
+                  ) : startBriefs.slice().reverse().map((s: any, i: number) => (
+                    <div key={s.id}>
+                      <div className="flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors"
+                        style={{ borderBottom: `1px solid ${G200}` }}
+                        onClick={() => setExpandedLeadId(expandedLeadId === s.id ? null : s.id)}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                        <div className="w-8 h-8 flex items-center justify-center text-[9px] font-black shrink-0"
+                          style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
+                          {(s.name || 'SP').split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12px] font-bold" style={{ color: B }}>{s.name || 'Anonymous'}</div>
+                          <div className="text-[10px] font-light" style={{ color: G500 }}>{s.email} · {s.type} · {s.budget}</div>
+                        </div>
+                        <div className="text-[9px] font-light shrink-0" style={{ color: G500 }}>
+                          {s.submittedAt ? new Date(s.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </div>
+                        <span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1 shrink-0" style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981' }}>Start Project</span>
+                        {expandedLeadId === s.id ? <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: G500 }} /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: G500 }} />}
+                      </div>
+                      <AnimatePresence>
+                        {expandedLeadId === s.id && (
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
+                            <div className="px-5 py-5" style={{ backgroundColor: G50, borderBottom: `1px solid ${G200}` }}>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                {[['Type', s.type], ['Scope', s.scope?.replace(/_/g, ' ')], ['Sq Ft', s.sqft?.replace(/_/g, ' ')], ['Location', s.location], ['Budget', s.budget?.replace(/_/g, ' ')], ['Timeline', s.startTimeline?.replace(/_/g, ' ')], ['Phone', s.phone || '—'], ['Priorities', (s.priorities ?? []).join(', ') || '—']].map(([l, v]) => (
+                                  <div key={l}>
+                                    <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1" style={{ color: G500 }}>{l}</div>
+                                    <div className="text-[11px] font-semibold" style={{ color: B }}>{v || '—'}</div>
+                                  </div>
+                                ))}
+                              </div>
+                              {s.description && (
+                                <div className="p-3 text-[12px] font-light leading-relaxed" style={{ backgroundColor: W, border: `1px solid ${G200}`, color: B }}>{s.description}</div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {leadsSubTab === 'contact' && (
+                <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  {contactForms.length === 0 ? (
+                    <div className="px-5 py-14 text-center">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                      <div className="text-[12px] font-light" style={{ color: G500 }}>No contact form submissions yet.</div>
+                    </div>
+                  ) : contactForms.slice().reverse().map((f: any, i: number) => (
+                    <div key={i} className="px-5 py-5" style={{ borderBottom: i < contactForms.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-[12px] font-bold mb-0.5" style={{ color: B }}>{f.name}</div>
+                          <div className="text-[10px] font-light mb-2" style={{ color: G500 }}>{f.email}{f.phone ? ` · ${f.phone}` : ''}</div>
+                          <div className="text-[11px] font-light leading-relaxed" style={{ color: G500 }}>{f.message || f.description || '—'}</div>
+                        </div>
+                        <div className="text-[9px] shrink-0" style={{ color: G500 }}>
+                          {f.created_at ? new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ══════ DOCUMENTS ══════ */}
+          {tab === 'documents' && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>
+                    All Portal Documents — {Object.values(allDocs).flatMap(d => d ?? []).length} total · {pendingDocs.length} pending review
+                  </div>
+                </div>
+                {Object.entries(allDocs).flatMap(([cId, docs]) => (docs ?? []).map((d: any) => ({ ...d, clientId: cId }))).length === 0 ? (
+                  <div className="px-5 py-14 text-center">
+                    <FileCheck className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                    <div className="text-[12px] font-light" style={{ color: G500 }}>No documents yet.</div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                          {['Client', 'Document', 'Category', 'Type', 'Status', 'Date', 'Actions'].map(h => (
+                            <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(allDocs).flatMap(([cId, docs]) =>
+                          (docs ?? []).map((d: any) => ({ ...d, clientId: cId }))
+                        ).sort((a: any, b: any) => {
+                          const order: Record<string, number> = { uploaded: 0, pending: 1, approved: 2, rejected: 3 };
+                          return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+                        }).map((d: any, i: number, arr) => (
+                          <tr key={`${d.clientId}-${d.id}`} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                            <td className="px-5 py-3.5">
+                              <button onClick={() => { setTab('clients'); setSelectedClientId(d.clientId); setClientSubTab('docs'); }}
+                                className="text-[11px] font-semibold transition-colors" style={{ color: AC }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}>
+                                {clientName(d.clientId)}
+                              </button>
+                            </td>
+                            <td className="px-5 py-3.5 text-[11px] font-semibold" style={{ color: B }}>{d.name}</td>
+                            <td className="px-5 py-3.5 text-[10px] font-light" style={{ color: G500 }}>{d.category}</td>
+                            <td className="px-5 py-3.5 text-[10px] font-light" style={{ color: G500 }}>{d.fileType}</td>
+                            <td className="px-5 py-3.5"><StatusBadge label={d.status} style={docStatusColor(d.status)} /></td>
+                            <td className="px-5 py-3.5 text-[10px] font-light" style={{ color: G500 }}>{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString() : '—'}</td>
+                            <td className="px-5 py-3.5">
+                              {d.status === 'uploaded' && (
+                                <div className="flex gap-1.5">
+                                  <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'approved'); await refreshData(); }}
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
+                                    style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                    Approve
+                                  </button>
+                                  <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'rejected'); await refreshData(); }}
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
+                                    style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
             </motion.div>
           )}
 
-          {/* ── PORTFOLIO ── */}
+          {/* ══════ MEETINGS ══════ */}
+          {tab === 'meetings' && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>
+                    All Scheduled Meetings — {pendingMeets.length} awaiting confirmation
+                  </div>
+                </div>
+                {Object.entries(allMeetings).flatMap(([cId, meets]) => (meets ?? []).map((m: any) => ({ ...m, clientId: cId }))).length === 0 ? (
+                  <div className="px-5 py-14 text-center">
+                    <Calendar className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                    <div className="text-[12px] font-light" style={{ color: G500 }}>No meetings yet.</div>
+                  </div>
+                ) : (
+                  Object.entries(allMeetings)
+                    .flatMap(([cId, meets]) => (meets ?? []).map((m: any) => ({ ...m, clientId: cId })))
+                    .sort((a: any, b: any) => {
+                      const order: Record<string, number> = { requested: 0, confirmed: 1, completed: 2, cancelled: 3 };
+                      return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+                    })
+                    .map((m: any, i: number, arr) => {
+                      const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
+                      return (
+                        <div key={`${m.clientId}-${m.id}`} className="flex items-center gap-4 px-5 py-4"
+                          style={{ borderBottom: i < arr.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                          <FmtIcon className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[12px] font-bold" style={{ color: B }}>{m.type}</span>
+                              <span className="text-[10px] font-light" style={{ color: G500 }}>with</span>
+                              <button onClick={() => { setTab('clients'); setSelectedClientId(m.clientId); setClientSubTab('meetings'); }}
+                                className="text-[11px] font-semibold transition-colors" style={{ color: AC }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}>
+                                {clientName(m.clientId)}
+                              </button>
+                            </div>
+                            <div className="text-[10px] font-light" style={{ color: G500 }}>{m.date} at {m.time} · {m.format}</div>
+                          </div>
+                          <StatusBadge label={m.status} style={meetStatusColor(m.status)} />
+                          {m.status === 'requested' && (
+                            <div className="flex gap-2">
+                              <button onClick={async () => { await adminUpdateMeetingStatus(m.clientId, m.id, 'confirmed'); await refreshData(); }}
+                                className="text-[8px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                Confirm
+                              </button>
+                              <button onClick={async () => { await adminUpdateMeetingStatus(m.clientId, m.id, 'cancelled'); await refreshData(); }}
+                                className="text-[8px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ══════ PORTFOLIO ══════ */}
           {tab === 'portfolio' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Portfolio Projects ({portfolio.length})</div>
+              <div className="flex items-center justify-between mb-5">
+                <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Portfolio Projects ({portfolio.length})</div>
                 <button onClick={() => setShowAddItem(true)}
                   className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2.5 transition-opacity hover:opacity-85"
                   style={{ backgroundColor: B, color: W }}>
                   <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add Project
                 </button>
               </div>
-
               <div className="space-y-3">
                 {portfolio.map(item => (
                   <div key={item.id} className="flex items-center gap-5 p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                    <div className="w-12 h-12 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.2)` }}>
-                      <Building2 className="w-5 h-5" style={{ color: AC }} strokeWidth={1.5} />
+                    <div className="w-11 h-11 flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.2)` }}>
+                      <Building2 className="w-4.5 h-4.5" style={{ color: AC }} strokeWidth={1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <div className="text-[13px] font-bold" style={{ color: B }}>{item.title}</div>
-                        {item.featured && (
-                          <Star className="w-3 h-3 fill-current" style={{ color: AC }} strokeWidth={0} />
-                        )}
+                        {item.featured && <Star className="w-3 h-3 fill-current" style={{ color: AC }} strokeWidth={0} />}
                       </div>
                       <div className="flex flex-wrap gap-3 text-[10px] font-light" style={{ color: G500 }}>
-                        <span>{item.category}</span>
-                        <span>·</span>
-                        <span>{item.location}</span>
+                        <span>{item.category}</span><span>·</span><span>{item.location}</span>
                         {item.sqft && <><span>·</span><span>{item.sqft} SF</span></>}
-                        <span>·</span>
-                        <span>{item.year}</span>
+                        <span>·</span><span>{item.year}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -491,16 +1314,12 @@ export default function Admin() {
                         <Star className="w-3 h-3" style={{ fill: item.featured ? AC : 'none' }} strokeWidth={2} />
                         {item.featured ? 'Featured' : 'Feature'}
                       </button>
-                      <button onClick={() => setEditItem({ ...item })}
-                        className="w-8 h-8 flex items-center justify-center transition-colors"
-                        style={{ color: G500 }}
+                      <button onClick={() => setEditItem({ ...item })} className="w-8 h-8 flex items-center justify-center transition-colors" style={{ color: G500 }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = B; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; }}>
                         <Edit3 className="w-3.5 h-3.5" strokeWidth={1.5} />
                       </button>
-                      <button onClick={() => handleDeletePortfolio(item.id)}
-                        className="w-8 h-8 flex items-center justify-center transition-colors"
-                        style={{ color: G500 }}
+                      <button onClick={() => handleDeletePortfolio(item.id)} className="w-8 h-8 flex items-center justify-center transition-colors" style={{ color: G500 }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = G500; }}>
                         <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
@@ -509,8 +1328,6 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
-
-              {/* Add/Edit Modal */}
               <AnimatePresence>
                 {(showAddItem || editItem) && (
                   <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -521,44 +1338,38 @@ export default function Admin() {
                       initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.94, opacity: 0 }}>
                       <div className="flex items-center justify-between mb-6">
                         <div className="text-[14px] font-bold" style={{ color: B }}>{editItem ? 'Edit Project' : 'Add Portfolio Project'}</div>
-                        <button onClick={() => { setShowAddItem(false); setEditItem(null); }} style={{ color: G500 }}>
-                          <X className="w-4 h-4" strokeWidth={2} />
-                        </button>
+                        <button onClick={() => { setShowAddItem(false); setEditItem(null); }} style={{ color: G500 }}><X className="w-4 h-4" strokeWidth={2} /></button>
                       </div>
                       <form onSubmit={editItem ? handleEditSave : handleAddPortfolio} className="space-y-4">
                         {[
-                          { label: 'Project Title', field: 'title', type: 'text', required: true },
-                          { label: 'Location', field: 'location', type: 'text', required: true },
-                          { label: 'Square Footage', field: 'sqft', type: 'text', required: false },
-                          { label: 'Year Completed', field: 'year', type: 'text', required: true },
-                        ].map(({ label, field, type, required }) => (
+                          { label: 'Project Title', field: 'title', required: true },
+                          { label: 'Location',       field: 'location', required: true },
+                          { label: 'Square Footage', field: 'sqft', required: false },
+                          { label: 'Year Completed', field: 'year', required: true },
+                        ].map(({ label, field, required }) => (
                           <div key={field}>
                             <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>{label}</label>
-                            <input type={type} required={required}
-                              value={editItem ? (editItem as any)[field] : (form as any)[field]}
-                              onChange={e => {
-                                if (editItem) setEditItem({ ...editItem, [field]: e.target.value });
-                                else setForm({ ...form, [field]: e.target.value });
-                              }}
+                            <input type="text" required={required}
+                              value={editItem ? (editItem as any)[field] : (pForm as any)[field]}
+                              onChange={e => { if (editItem) setEditItem({ ...editItem, [field]: e.target.value }); else setPForm({ ...pForm, [field]: e.target.value }); }}
                               className="w-full text-[13px] outline-none"
-                              style={{ padding: '11px 13px', border: `1px solid ${G200}`, borderRadius: 0, color: B }} />
+                              style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B }} />
                           </div>
                         ))}
                         <div>
                           <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Category</label>
-                          <select value={editItem ? editItem.category : form.category}
-                            onChange={e => { if (editItem) setEditItem({ ...editItem, category: e.target.value }); else setForm({ ...form, category: e.target.value }); }}
-                            className="w-full text-[13px] outline-none"
-                            style={{ padding: '11px 13px', border: `1px solid ${G200}`, borderRadius: 0, color: B }}>
+                          <select value={editItem ? editItem.category : pForm.category}
+                            onChange={e => { if (editItem) setEditItem({ ...editItem, category: e.target.value }); else setPForm({ ...pForm, category: e.target.value }); }}
+                            className="w-full text-[13px] outline-none" style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B }}>
                             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-[9px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Description</label>
-                          <textarea rows={3} value={editItem ? editItem.description : form.description}
-                            onChange={e => { if (editItem) setEditItem({ ...editItem, description: e.target.value }); else setForm({ ...form, description: e.target.value }); }}
+                          <textarea rows={3} value={editItem ? editItem.description : pForm.description}
+                            onChange={e => { if (editItem) setEditItem({ ...editItem, description: e.target.value }); else setPForm({ ...pForm, description: e.target.value }); }}
                             className="w-full text-[13px] outline-none resize-none"
-                            style={{ padding: '11px 13px', border: `1px solid ${G200}`, borderRadius: 0, color: B, lineHeight: 1.6 }} />
+                            style={{ padding: '11px 13px', border: `1px solid ${G200}`, color: B, lineHeight: 1.6 }} />
                         </div>
                         <div className="flex gap-3 pt-2">
                           <button type="submit" className="flex-1 py-3 text-[10px] uppercase tracking-[0.24em] font-black transition-opacity hover:opacity-85"
@@ -579,36 +1390,118 @@ export default function Admin() {
             </motion.div>
           )}
 
-          {/* ── FINANCE REPORTS ── */}
+          {/* ══════ FINANCE DATA ══════ */}
           {tab === 'finance' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="mb-6 p-6 flex items-center gap-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              {/* Finance hub link */}
+              <div className="flex items-center gap-5 p-5 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
                 <div className="w-10 h-10 flex items-center justify-center" style={{ backgroundColor: 'rgba(157,126,63,0.1)' }}>
-                  <FileText className="w-4.5 h-4.5" style={{ color: AC }} strokeWidth={1.5} />
+                  <DollarSign className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <div className="text-[13px] font-bold mb-0.5" style={{ color: B }}>Finance Dashboard Reports</div>
-                  <div className="text-[11px] font-light" style={{ color: G500 }}>
-                    Exported reports from the HOU INC Finance Dashboard will appear here automatically.
-                  </div>
+                  <div className="text-[13px] font-bold mb-0.5" style={{ color: B }}>HOU INC Finance Hub</div>
+                  <div className="text-[11px] font-light" style={{ color: G500 }}>Live financial data — projects, checks, income, and vendor records.</div>
                 </div>
                 <Link to="/finance" className="ml-auto flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2.5 shrink-0"
                   style={{ backgroundColor: AC, color: W }}>
-                  Finance Hub <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                  Open Finance Hub <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
                 </Link>
               </div>
-              {reports.length === 0 ? (
-                <div className="text-center py-16" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  <FileText className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
-                  <div className="text-[13px] font-light" style={{ color: G500 }}>No exported reports yet.</div>
-                  <p className="text-[11px] mt-2 font-light max-w-xs mx-auto" style={{ color: G500 }}>
-                    Export reports from the Finance Dashboard and they'll be logged here automatically.
-                  </p>
+
+              {/* Finance stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: 'Projects',        value: finProjects.length,  icon: Layers,      color: '#3b82f6' },
+                  { label: 'Checks Issued',   value: finChecks.length,    icon: CreditCard,  color: AC },
+                  { label: 'Transactions',    value: finTxns.length,      icon: FileText,    color: '#8b5cf6' },
+                  { label: 'Vendors',         value: finVendors.length,   icon: Package,     color: '#10b981' },
+                ].map(s => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.label} className="p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                      <div className="w-8 h-8 flex items-center justify-center mb-3" style={{ backgroundColor: `${s.color}12` }}>
+                        <Icon className="w-4 h-4" style={{ color: s.color }} strokeWidth={1.5} />
+                      </div>
+                      <div className="text-[24px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: B }}>{s.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Recent projects */}
+              {finProjects.length > 0 && (
+                <div className="mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Active Projects</div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                        {['Project', 'Status', 'Budget', 'Created'].map(h => (
+                          <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {finProjects.slice(0, 8).map((p: any, i: number) => (
+                          <tr key={p.id} style={{ borderBottom: i < Math.min(finProjects.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
+                            <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{p.name || '—'}</td>
+                            <td className="px-5 py-3.5"><span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1" style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC }}>{p.status || '—'}</span></td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{p.budget ? `$${Number(p.budget).toLocaleString()}` : '—'}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Recent checks */}
+              {finChecks.length > 0 && (
                 <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  {reports.map((r: any, i: number) => (
-                    <div key={i} className="flex items-center gap-5 px-6 py-4" style={{ borderBottom: i < reports.length - 1 ? `1px solid ${G200}` : 'none' }}>
+                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Checks</div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                        {['Check #', 'Amount', 'Payee', 'Project', 'Date', 'Status'].map(h => (
+                          <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {finChecks.slice(0, 8).map((c: any, i: number) => (
+                          <tr key={c.id} style={{ borderBottom: i < Math.min(finChecks.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.check_number || '—'}</td>
+                            <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{c.amount ? `$${Number(c.amount).toLocaleString()}` : '—'}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.payee_name || '—'}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.projects?.name || '—'}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.issue_date || '—'}</td>
+                            <td className="px-5 py-3.5"><span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1" style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981' }}>{c.status || 'issued'}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {finProjects.length === 0 && finChecks.length === 0 && (
+                <div className="text-center py-16" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <DollarSign className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                  <div className="text-[12px] font-light" style={{ color: G500 }}>No finance data yet. Add projects and checks in the Finance Hub.</div>
+                </div>
+              )}
+
+              {/* Finance reports */}
+              {finReports.length > 0 && (
+                <div className="mt-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Exported Reports</div>
+                  </div>
+                  {finReports.map((r: any, i: number) => (
+                    <div key={i} className="flex items-center gap-5 px-5 py-4" style={{ borderBottom: i < finReports.length - 1 ? `1px solid ${G200}` : 'none' }}>
                       <FileText className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
                       <div className="flex-1">
                         <div className="text-[12px] font-semibold" style={{ color: B }}>{r.name || 'Finance Export'}</div>
@@ -621,33 +1514,33 @@ export default function Admin() {
             </motion.div>
           )}
 
-          {/* ── ANALYTICS ── */}
+          {/* ══════ ANALYTICS ══════ */}
           {tab === 'analytics' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-7">
                 {[
-                  { label: 'Total Portal Registrations',  value: clients.length,                           trend: '+12%',  color: '#3b82f6' },
-                  { label: 'Project Briefs Submitted',     value: Object.keys(briefs).length,               trend: '+8%',   color: AC },
-                  { label: 'Avg. Messages / Client',       value: clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0, trend: '+5%', color: '#8b5cf6' },
-                  { label: 'Portfolio Projects',            value: portfolio.length,                          trend: 'Active',  color: '#10b981' },
-                  { label: 'Featured Projects',             value: portfolio.filter(p => p.featured).length, trend: 'Homepage', color: GOLD_COLOR },
-                  { label: 'Contact Submissions',           value: forms.length,                             trend: 'Total',   color: '#f59e0b' },
+                  { label: 'Portal Registrations',  value: clients.length,                              trend: 'Total',    color: '#3b82f6' },
+                  { label: 'Briefs Submitted',       value: Object.keys(briefs).length,                 trend: 'Portal',   color: AC },
+                  { label: 'Start Project Leads',    value: startBriefs.length,                         trend: 'Website',  color: '#10b981' },
+                  { label: 'Contact Form Leads',     value: contactForms.length,                        trend: 'Website',  color: '#f59e0b' },
+                  { label: 'Portfolio Projects',     value: portfolio.length,                            trend: 'Active',   color: '#8b5cf6' },
+                  { label: 'Avg Messages / Client',  value: clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0, trend: 'Avg', color: '#ec4899' },
                 ].map(s => (
-                  <div key={s.label} className="p-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                    <div className="text-[32px] font-black mb-1" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
+                  <div key={s.label} className="p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="text-[30px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
                     <div className="text-[11px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
-                    <div className="text-[9px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 inline-block" style={{ backgroundColor: `${s.color}12`, color: s.color }}>{s.trend}</div>
+                    <div className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 inline-block" style={{ backgroundColor: `${s.color}12`, color: s.color }}>{s.trend}</div>
                   </div>
                 ))}
               </div>
 
-              <div className="p-8" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="text-[10px] uppercase tracking-[0.3em] font-bold mb-6" style={{ color: AC }}>Portal Conversion Funnel</div>
+              <div className="p-7 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Portal Conversion Funnel</div>
                 <div className="space-y-4">
                   {[
-                    { label: 'Registered Accounts',  count: clients.length,                   color: '#3b82f6' },
-                    { label: 'Brief Submitted',        count: Object.keys(briefs).length,        color: AC },
-                    { label: 'At least 1 Message',     count: Object.keys(allMsgs as Record<string, unknown[]>).filter(k => (allMsgs as Record<string, unknown[]>)[k]?.length > 1).length, color: '#8b5cf6' },
+                    { label: 'Registered Accounts',  count: clients.length,                color: '#3b82f6' },
+                    { label: 'Brief Submitted',       count: Object.keys(briefs).length,    color: AC },
+                    { label: 'Messaging Active',      count: Object.keys(allMsgs).filter(k => (allMsgs[k]?.length ?? 0) > 1).length, color: '#8b5cf6' },
                   ].map((s, i, arr) => {
                     const pct = arr[0].count > 0 ? Math.round((s.count / arr[0].count) * 100) : 0;
                     return (
@@ -660,6 +1553,28 @@ export default function Admin() {
                           <motion.div className="h-full" style={{ backgroundColor: s.color }}
                             initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: i * 0.1 }} />
                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-7" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Lead Sources</div>
+                <div className="flex gap-6">
+                  {[
+                    { label: 'Start Project Form', count: startBriefs.length, color: '#10b981' },
+                    { label: 'Contact Form',       count: contactForms.length, color: '#f59e0b' },
+                    { label: 'Portal Sign-up',     count: clients.length,      color: '#3b82f6' },
+                  ].map(s => {
+                    const total = startBriefs.length + contactForms.length + clients.length;
+                    const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                    return (
+                      <div key={s.label} className="flex-1 text-center">
+                        <div className="text-[28px] font-black mb-1" style={{ color: B, fontFamily: SERIF }}>{pct}%</div>
+                        <div className="text-[10px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
+                        <div className="text-[11px] font-light" style={{ color: G500 }}>{s.count} submissions</div>
+                        <div className="h-1 mt-3" style={{ backgroundColor: s.color, width: `${pct}%`, margin: '12px auto 0' }} />
                       </div>
                     );
                   })}

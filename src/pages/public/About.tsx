@@ -45,10 +45,10 @@ function Brackets({ c = 'rgba(255,255,255,0.12)', sz = 16, w = 1 }: { c?: string
 
 /* ── Data ─────────────────────────────────────────────────────────── */
 const VALUES = [
-  { Icon: ShieldCheck, title: 'Uncompromising Integrity', body: 'Every commitment made is a commitment kept. Transparent contracts, honest timelines, and zero hidden costs — on every project, every time.' },
-  { Icon: Award,       title: 'Pursuit of Excellence',   body: 'We set the standard others measure against. From premium materials to master craftsmanship, excellence is not an aspiration — it is our baseline.' },
-  { Icon: Building2,   title: 'Precision Engineering',   body: 'Construction is a discipline of exactness. Our teams bring engineering rigor and meticulous quality control to every phase of every build.' },
-  { Icon: Leaf,        title: 'Responsible Building',    body: 'LEED certification, responsible sourcing, and sustainable practices are integrated into our commercial portfolio — because great buildings last generations.' },
+  { Icon: Award,       title: 'Excellence',       body: 'We set the standard others measure against. From premium materials to master craftsmanship, excellence is not an aspiration — it is our baseline on every project.' },
+  { Icon: ShieldCheck, title: 'Integrity',         body: 'Every commitment made is a commitment kept. Transparent contracts, honest timelines, and zero hidden costs — on every project, every time.' },
+  { Icon: Building2,   title: 'Innovation',        body: 'We continuously push the boundaries of what construction can achieve — leveraging advanced techniques, new materials, and smarter project delivery methods.' },
+  { Icon: Users,       title: 'Customer Service',  body: "Our clients are partners. A dedicated project lead, daily communication, and a 24/7 portal ensure you're never left wondering about your project's status." },
 ];
 
 const TIMELINE = [
@@ -62,12 +62,8 @@ const TIMELINE = [
 ];
 
 const TEAM = [
-  { initials: 'WH', name: 'William Holt',     title: 'Founder & CEO',              bg: '#0A0A0A', color: W },
-  { initials: 'MC', name: 'Margaret Chen',    title: 'President & COO',            bg: '#111111', color: W },
-  { initials: 'DR', name: 'David Rodriguez',  title: 'VP Commercial Construction', bg: '#0A0A0A', color: W },
-  { initials: 'JT', name: 'James Thompson',   title: 'VP Residential Development', bg: '#111111', color: W },
-  { initials: 'SP', name: 'Sarah Park',       title: 'Director of Architecture',   bg: '#0A0A0A', color: W },
-  { initials: 'RO', name: 'Robert Okonkwo',   title: 'Chief Estimator',            bg: '#111111', color: W },
+  { initials: 'JA', name: 'Jeff Ali',      title: 'Co-Founder', bg: '#0A0A0A', color: W },
+  { initials: 'DA', name: 'David Alvares', title: 'Co-Founder', bg: '#111111', color: W },
 ];
 
 const AWARDS = [
@@ -235,10 +231,10 @@ export default function About() {
                 A Vision for Something Extraordinary
               </div>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.32)' }}>
-                HOU INC was founded in 1998 by William Holt, a third-generation builder who grew up watching his grandfather build churches and schools across East Texas. William moved to Houston in 1994 and quickly recognized the city's insatiable appetite for premium construction — and the shortage of firms capable of delivering it without compromise.
+                HOU INC was founded in 1998 by Jeff Ali and David Alvares — two Houston construction veterans who refused to accept the industry's tolerance for compromise. Jeff brought 25 years of hands-on building expertise; David brought deep experience in commercial project management and client relations.
               </p>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                He founded HOU INC with a 4-person team and a single River Oaks renovation project. The work was meticulous. The client referred three neighbors. Within 18 months, the firm had its first commercial contract.
+                Together they launched with a 4-person team and a single River Oaks renovation project. The work was meticulous. The client referred three neighbors. Within 18 months, the firm had its first commercial contract.
               </p>
             </Reveal>
             <Reveal direction="right" x={40}
@@ -252,7 +248,7 @@ export default function About() {
                 Today, HOU INC employs 150+ craftsmen, engineers, and project managers across residential, commercial, retail, industrial, and renovation divisions. We have completed over 500 projects totaling more than $2 billion in constructed value across the Greater Houston Metropolitan Area.
               </p>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                The firm remains privately held and owner-led. William Holt is in the office every day. The same standard that built our first project in 1998 defines every project we deliver in 2024.
+                The firm remains privately held and founder-led. Jeff and David are in the office every day. The same standard that built our first project in 1998 defines every project we deliver today.
               </p>
             </Reveal>
           </div>

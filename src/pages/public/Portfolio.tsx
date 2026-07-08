@@ -48,31 +48,27 @@ type Filter = typeof FILTERS[number];
 
 type Project = {
   name: string; type: Filter; loc: string; year: string; sqft: string; value: string;
-  area: string; detail: string; featured?: boolean;
+  area: string; detail: string; img: string; featured?: boolean;
 };
 
 const PROJECTS: Project[] = [
-  { name: 'The River Oaks Estate',       type: 'Residential',  loc: 'River Oaks, Houston',        year: '2024', sqft: '14,200', value: '$8.4M',   area: 'Residential', detail: 'A fully custom 6-bedroom estate featuring a 12-car motor court, resort pool complex, home theater, and wine cellar. Delivered 18 months from groundbreaking.', featured: true },
-  { name: 'Galleria Commerce Center',    type: 'Commercial',   loc: 'Galleria District, Houston', year: '2023', sqft: '280,000', value: '$124M',  area: 'Class A Office', detail: 'A Class A mixed-use office tower — 24 floors of premium office, ground-floor retail, and 1,400-space structured garage. Delivered on schedule.' },
-  { name: 'Energy Corridor Plaza',       type: 'Commercial',   loc: 'Energy Corridor, Houston',   year: '2023', sqft: '340,000', value: '$155M',  area: 'Corporate Campus', detail: 'A three-building LEED Gold corporate campus. Executive amenities, 2,000+ parking spaces, and full campus infrastructure.' },
-  { name: 'Memorial Park Residence',     type: 'Residential',  loc: 'Memorial Park, Houston',     year: '2024', sqft: '8,900',  value: '$5.2M',   area: 'Luxury Residential', detail: 'A contemporary estate with indoor-outdoor living areas, climate-controlled wine cellar, and resort-grade pool.' },
-  { name: 'Houston Lifestyle Center',    type: 'Retail',       loc: 'Midtown, Houston',           year: '2022', sqft: '185,000', value: '$62M',   area: 'Retail Center', detail: 'An open-air lifestyle center with 65 tenants, curated dining, and 900 structured parking spaces — delivered 3 weeks early.' },
-  { name: 'Northwest Industrial Park',   type: 'Industrial',   loc: 'Northwest Houston',          year: '2023', sqft: '520,000', value: '$38M',   area: 'Industrial', detail: 'A Class A distribution campus with 120 dock doors, 36-foot clear heights, and full truck court buildout.' },
-  { name: 'The Woodlands Tower',         type: 'Commercial',   loc: 'The Woodlands, TX',         year: '2022', sqft: '210,000', value: '$88M',   area: 'Office Tower', detail: 'A 16-story Class A office tower serving the energy corridor with full LEED Gold certification.' },
-  { name: 'Tanglewood Estate',           type: 'Residential',  loc: 'Tanglewood, Houston',        year: '2023', sqft: '11,400', value: '$7.1M',   area: 'Custom Residential', detail: 'A European-inspired limestone estate with formal gardens, 7 bedrooms, and a carriage house guest quarters.' },
-  { name: 'Pearland Retail Commons',     type: 'Retail',       loc: 'Pearland, TX',              year: '2022', sqft: '95,000',  value: '$29M',   area: 'Neighborhood Retail', detail: 'An anchor retail center anchored by national grocery and pharmacy tenants — full delivery in 14 months.' },
-  { name: 'Uptown Repositioning',        type: 'Renovation',   loc: 'Uptown District, Houston',  year: '2023', sqft: '160,000', value: '$44M',   area: 'Office Renovation', detail: 'A complete repositioning of a 1980s office building into Class A space — occupied throughout with zero tenant disruption.' },
-  { name: 'Katy Logistics Hub',          type: 'Industrial',   loc: 'Katy, TX',                  year: '2024', sqft: '780,000', value: '$67M',   area: 'Distribution', detail: 'A two-building logistics campus with 200+ dock doors, ESFR sprinkler systems, and rail spur access.' },
-  { name: 'Sugar Land Town Center',      type: 'Retail',       loc: 'Sugar Land, TX',            year: '2024', sqft: '140,000', value: '$52M',   area: 'Mixed-Use Retail', detail: 'A mixed-use town center with 42 retail tenants, restaurant row, and a 4-screen specialty cinema.' },
+  { name: 'The River Oaks Estate',       type: 'Residential',  loc: 'River Oaks, Houston',        year: '2024', sqft: '14,200', value: '$8.4M',   area: 'Residential',        img: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85', detail: 'A fully custom 6-bedroom estate featuring a 12-car motor court, resort pool complex, home theater, and wine cellar. Delivered 18 months from groundbreaking.', featured: true },
+  { name: 'Galleria Commerce Center',    type: 'Commercial',   loc: 'Galleria District, Houston', year: '2023', sqft: '280,000', value: '$124M',  area: 'Class A Office',     img: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=85', detail: 'A Class A mixed-use office tower — 24 floors of premium office, ground-floor retail, and 1,400-space structured garage. Delivered on schedule.' },
+  { name: 'Energy Corridor Plaza',       type: 'Commercial',   loc: 'Energy Corridor, Houston',   year: '2023', sqft: '340,000', value: '$155M',  area: 'Corporate Campus',   img: 'https://images.unsplash.com/photo-1526948128573-703ee1aeb6fa?auto=format&fit=crop&w=1400&q=85', detail: 'A three-building LEED Gold corporate campus. Executive amenities, 2,000+ parking spaces, and full campus infrastructure.' },
+  { name: 'Memorial Park Residence',     type: 'Residential',  loc: 'Memorial Park, Houston',     year: '2024', sqft: '8,900',  value: '$5.2M',   area: 'Luxury Residential', img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=85', detail: 'A contemporary estate with indoor-outdoor living areas, climate-controlled wine cellar, and resort-grade pool.' },
+  { name: 'Houston Lifestyle Center',    type: 'Retail',       loc: 'Midtown, Houston',           year: '2022', sqft: '185,000', value: '$62M',   area: 'Retail Center',      img: 'https://images.unsplash.com/photo-1519642918688-7e43b19245d8?auto=format&fit=crop&w=1400&q=85', detail: 'An open-air lifestyle center with 65 tenants, curated dining, and 900 structured parking spaces — delivered 3 weeks early.' },
+  { name: 'Northwest Industrial Park',   type: 'Industrial',   loc: 'Northwest Houston',          year: '2023', sqft: '520,000', value: '$38M',   area: 'Industrial',         img: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=1400&q=85', detail: 'A Class A distribution campus with 120 dock doors, 36-foot clear heights, and full truck court buildout.' },
+  { name: 'The Woodlands Tower',         type: 'Commercial',   loc: 'The Woodlands, TX',         year: '2022', sqft: '210,000', value: '$88M',   area: 'Office Tower',       img: 'https://images.unsplash.com/photo-1434626881859-194d67b2b86f?auto=format&fit=crop&w=1400&q=85', detail: 'A 16-story Class A office tower serving the energy corridor with full LEED Gold certification.' },
+  { name: 'Tanglewood Estate',           type: 'Residential',  loc: 'Tanglewood, Houston',        year: '2023', sqft: '11,400', value: '$7.1M',   area: 'Custom Residential', img: 'https://images.unsplash.com/photo-1599809275671-b5942cabc7a2?auto=format&fit=crop&w=1400&q=85', detail: 'A European-inspired limestone estate with formal gardens, 7 bedrooms, and a carriage house guest quarters.' },
+  { name: 'Pearland Retail Commons',     type: 'Retail',       loc: 'Pearland, TX',              year: '2022', sqft: '95,000',  value: '$29M',   area: 'Neighborhood Retail', img: 'https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=1400&q=85', detail: 'An anchor retail center anchored by national grocery and pharmacy tenants — full delivery in 14 months.' },
+  { name: 'Uptown Repositioning',        type: 'Renovation',   loc: 'Uptown District, Houston',  year: '2023', sqft: '160,000', value: '$44M',   area: 'Office Renovation',  img: 'https://images.unsplash.com/photo-1497366412874-3415097a27e7?auto=format&fit=crop&w=1400&q=85', detail: 'A complete repositioning of a 1980s office building into Class A space — occupied throughout with zero tenant disruption.' },
+  { name: 'Katy Logistics Hub',          type: 'Industrial',   loc: 'Katy, TX',                  year: '2024', sqft: '780,000', value: '$67M',   area: 'Distribution',       img: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1400&q=85', detail: 'A two-building logistics campus with 200+ dock doors, ESFR sprinkler systems, and rail spur access.' },
+  { name: 'Sugar Land Town Center',      type: 'Retail',       loc: 'Sugar Land, TX',            year: '2024', sqft: '140,000', value: '$52M',   area: 'Mixed-Use Retail',   img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1400&q=85', detail: 'A mixed-use town center with 42 retail tenants, restaurant row, and a 4-screen specialty cinema.' },
 ];
 
 /* ── Grid card with slide-up overlay ─────────────────────────────── */
-function ProjectCard({ p, dark = false }: { p: Project; dark?: boolean }) {
+function ProjectCard({ p }: { p: Project }) {
   const [hov, setHov] = useState(false);
-  const bg  = dark ? '#111111' : OW;
-  const pat = dark ? GRID_D    : DOT_L;
-  const tc  = dark ? W         : B;
-  const sc  = dark ? 'rgba(255,255,255,0.28)' : G500;
 
   return (
     <motion.div
@@ -82,26 +78,36 @@ function ProjectCard({ p, dark = false }: { p: Project; dark?: boolean }) {
       exit={{ opacity: 0, filter: 'blur(8px)' }}
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       className="relative overflow-hidden cursor-default"
-      style={{ minHeight: 280, backgroundColor: bg, ...pat }}
+      style={{ minHeight: 280, backgroundColor: '#0e0e0e' }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
     >
-      <Brackets c={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'} sz={14} />
+      {/* Background image */}
+      <motion.div
+        className="absolute inset-0"
+        style={{ backgroundImage: `url(${p.img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.06 : 1 }}
+        transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
+      />
+      {/* Gradient overlay — always readable */}
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(5,4,3,0.97) 0%, rgba(5,4,3,0.64) 50%, rgba(5,4,3,0.22) 100%)' }} />
+
+      <Brackets c="rgba(255,255,255,0.07)" sz={14} />
 
       {/* Default state */}
       <div className="absolute inset-0 p-7 md:p-9 flex flex-col justify-between z-10">
         <div className="flex items-start justify-between">
           <div className="text-[7px] uppercase tracking-[0.28em] font-bold px-2 py-1"
-            style={{ backgroundColor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', color: sc }}>
+            style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.50)' }}>
             {p.area}
           </div>
-          <div className="text-[8px] font-mono" style={{ color: dark ? 'rgba(255,255,255,0.18)' : G200 }}>{p.year}</div>
+          <div className="text-[8px] font-mono" style={{ color: 'rgba(255,255,255,0.24)' }}>{p.year}</div>
         </div>
         <div>
-          <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.45rem', color: tc, lineHeight: 1.08, marginBottom: '0.25rem' }}>
+          <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: '1.45rem', color: W, lineHeight: 1.08, marginBottom: '0.25rem' }}>
             {p.name}
           </div>
-          <div className="text-[9px] uppercase tracking-[0.18em]" style={{ color: sc }}>{p.loc}</div>
+          <div className="text-[9px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.42)' }}>{p.loc}</div>
         </div>
       </div>
 
@@ -147,7 +153,16 @@ function ProjectCard({ p, dark = false }: { p: Project; dark?: boolean }) {
 function FeaturedCard({ p }: { p: Project }) {
   const [hov, setHov] = useState(false);
   return (
-    <TiltCard max={3} className="relative overflow-hidden cursor-default" style={{ minHeight: 540, backgroundColor: B, ...GRID_D }}>
+    <TiltCard max={3} className="relative overflow-hidden cursor-default" style={{ minHeight: 540, backgroundColor: B }}>
+      {/* Background image */}
+      <motion.div
+        className="absolute inset-0"
+        style={{ backgroundImage: `url(${p.img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ scale: hov ? 1.04 : 1 }}
+        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(5,4,3,0.98) 0%, rgba(5,4,3,0.70) 55%, rgba(5,4,3,0.28) 100%)' }} />
+
       <Brackets c="rgba(157,126,63,0.22)" sz={22} />
       <div
         className="absolute inset-0 p-10 md:p-14 flex flex-col justify-between z-10"
@@ -281,7 +296,7 @@ export default function Portfolio() {
             <motion.div layout className="grid md:grid-cols-2 lg:grid-cols-3 gap-0" style={{ border: `1px solid ${LB}` }}>
               {grid.map((p, i) => (
                 <div key={p.name} style={{ borderRight: `1px solid ${LB}`, borderBottom: `1px solid ${LB}` }}>
-                  <ProjectCard p={p} dark={i % 3 === 1} />
+                  <ProjectCard p={p} />
                 </div>
               ))}
             </motion.div>
@@ -336,7 +351,7 @@ export default function Portfolio() {
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <MagneticButton as="div">
-                <Link to="/contact"
+                <Link to="/start-project"
                   className="relative overflow-hidden group flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4"
                   style={{ backgroundColor: W, color: B }}>
                   <motion.span className="absolute inset-0 origin-left" style={{ backgroundColor: AC }}

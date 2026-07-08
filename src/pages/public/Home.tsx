@@ -1,16 +1,15 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight, Phone, Mail, MapPin,
   HardHat,
   Star, Compass, Ruler, Hammer, ClipboardCheck,
   Trophy, Users, Quote, CheckCircle2, ShieldCheck,
-  CalendarCheck, ChevronRight,
+  CalendarCheck, ChevronRight, ChevronLeft,
 } from 'lucide-react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useTransform, LayoutGroup } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
 import Reveal from '@/components/motion/Reveal';
-import AnimatedCounter from '@/components/motion/AnimatedCounter';
 import TiltCard from '@/components/motion/TiltCard';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
@@ -25,6 +24,7 @@ const AC   = '#9D7E3F';   /* gold */
 const ACL  = '#C4A76B';   /* light gold */
 const SF   = "'Cormorant Garamond', Georgia, serif";
 
+
 /* ── Photos ──────────────────────────────────────────────────────────── */
 const PH = {
   hero:     'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1800&q=90',
@@ -32,11 +32,44 @@ const PH = {
   res:      'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=85',
   comm:     'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=85',
   svcRes:   'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=900&q=85',
-  svcComm:  'https://images.unsplash.com/photo-1497366754035-f200581374d3?auto=format&fit=crop&w=900&q=85',
+  svcComm:  'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=900&q=85',
   svcPM:    'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=900&q=85',
-  proj1:    'https://images.unsplash.com/photo-1600607687939-ce8a6d350b8b?auto=format&fit=crop&w=1400&q=85',
+  proj1:    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=85',
   proj2:    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=900&q=80',
   proj3:    'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=900&q=80',
+};
+
+/* ── Portfolio carousel data ─────────────────────────────────────────── */
+const PORTFOLIO = [
+  { img: PH.proj1,   tag: 'River Oaks · Residential',    title: 'Chambord Estate',          sf: '14,500 SF',  yr: '2024' },
+  { img: PH.proj2,   tag: 'Energy Corridor · Industrial', title: 'Westway Commerce Campus',  sf: '212,000 SF', yr: '2024' },
+  { img: PH.proj3,   tag: 'Galleria · Commercial',        title: 'Meridian Tower Retail',    sf: '98,000 SF',  yr: '2023' },
+  { img: PH.svcRes,  tag: 'Memorial · Residential',       title: 'Memorial Parkview Estate', sf: '8,200 SF',   yr: '2023' },
+  { img: PH.comm,    tag: 'Midtown · Commercial',          title: 'Chronicle Tower',          sf: '148,000 SF', yr: '2022' },
+  { img: PH.svcComm, tag: 'The Woodlands · Office',       title: 'Pinnacle Business Center', sf: '64,000 SF',  yr: '2022' },
+];
+
+/* ── Crane transition variants ───────────────────────────────────────── */
+const craneVariants = {
+  enter: (dir: number) => ({
+    y: -110, x: dir * 72, opacity: 0,
+  }),
+  center: {
+    y: 0, x: 0, opacity: 1,
+    transition: {
+      x: { duration: 0.50, ease: [0.22, 1, 0.36, 1] as const },
+      y: { duration: 0.56, delay: 0.44, ease: [0.22, 1, 0.36, 1] as const },
+      opacity: { duration: 0.28, delay: 0.38 },
+    },
+  },
+  exit: (dir: number) => ({
+    y: -110, x: -dir * 72, opacity: 0,
+    transition: {
+      y: { duration: 0.26, ease: [0.4, 0, 1, 1] as const },
+      x: { duration: 0.46, delay: 0.20, ease: [0.4, 0, 1, 1] as const },
+      opacity: { duration: 0.26, delay: 0.12 },
+    },
+  }),
 };
 
 /* ── Grid pattern ────────────────────────────────────────────────────── */
@@ -537,34 +570,107 @@ function IntentForkPanel({
   );
 }
 
-/* ── Manifest row (differentiator list item) ────────────────────────── */
-function ManifestRow({ num, title, body, delay = 0, light = false }: {
-  num: string; title: string; body: string; delay?: number; light?: boolean;
+
+/* ── Portfolio sidebar item with hover effects ───────────────────────── */
+function PgSidebarItem({
+  p, i, active, onClick,
+}: {
+  p: { img: string; tag: string; title: string; sf: string; yr: string };
+  i: number; active: boolean; onClick: () => void;
 }) {
   const [hov, setHov] = useState(false);
-  const divider  = light ? 'rgba(0,0,0,0.09)'          : 'rgba(255,255,255,0.09)';
-  const hovBg    = light ? 'rgba(0,0,0,0.030)'          : 'rgba(255,255,255,0.026)';
-  const numCol   = hov   ? ACL : light ? 'rgba(157,126,63,0.55)' : 'rgba(196,167,107,0.5)';
-  const titleCol = hov   ? (light ? B : W) : light ? 'rgba(10,10,10,0.82)' : 'rgba(255,255,255,0.86)';
-  const bodyCol  = hov   ? (light ? G500 : 'rgba(255,255,255,0.65)') : light ? 'rgba(10,10,10,0.40)' : 'rgba(255,255,255,0.40)';
   return (
-    <Reveal delay={delay}>
-      <div
-        className="grid md:grid-cols-[60px_1fr_1fr] gap-y-2 gap-x-10 lg:gap-x-16 py-8 md:py-10 cursor-default"
-        style={{
-          borderBottom: `1px solid ${divider}`,
-          backgroundColor: hov ? hovBg : 'transparent',
-          transition: 'background-color 0.35s ease',
-        }}
-        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        flex: 1, display: 'flex', alignItems: 'center', gap: 18,
+        padding: '0 clamp(20px,2.5vw,36px)',
+        textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        position: 'relative', overflow: 'hidden',
+        transition: 'background-color 0.4s ease',
+        backgroundColor: active ? 'rgba(157,126,63,0.07)' : 'transparent',
+      }}
+    >
+      {/* Spring-animated left indicator */}
+      {active && (
+        <motion.div
+          layoutId="pg-bar"
+          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, background: `linear-gradient(to bottom, ${AC}, ${ACL})` }}
+          transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+        />
+      )}
+
+      {/* Hover: image preview layer */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        style={{ backgroundImage: `url(${p.img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        animate={{ opacity: hov && !active ? 0.16 : 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      />
+      {/* Hover: dark scrim so text remains legible */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'linear-gradient(to right, rgba(4,3,2,0.88) 0%, rgba(4,3,2,0.62) 100%)' }}
+        animate={{ opacity: hov && !active ? 1 : 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      />
+
+      {/* Number */}
+      <motion.div
+        style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, lineHeight: 1, flexShrink: 0, position: 'relative', fontSize: 'clamp(20px,2vw,28px)' }}
+        animate={{ color: active ? ACL : hov ? ACL : 'rgba(255,255,255,0.10)', scale: hov ? 1.14 : 1 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="flex items-start pt-1.5">
-          <span style={{ fontFamily: SF, fontWeight: 600, fontSize: 11, letterSpacing: '0.22em', color: numCol, transition: 'color 0.35s ease' }}>{num}</span>
-        </div>
-        <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 2.6vw, 40px)', color: titleCol, lineHeight: 1.06, transition: 'color 0.35s ease' }}>{title}</h3>
-        <p style={{ fontSize: 13.5, lineHeight: 1.84, fontWeight: 300, color: bodyCol, transition: 'color 0.35s ease', alignSelf: 'end' }}>{body}</p>
-      </div>
-    </Reveal>
+        {String(i + 1).padStart(2, '0')}
+      </motion.div>
+
+      {/* Divider rule */}
+      <motion.div
+        style={{ width: 1, alignSelf: 'stretch', margin: '14px 0', flexShrink: 0, position: 'relative' }}
+        animate={{ backgroundColor: active ? 'rgba(196,167,107,0.22)' : hov ? 'rgba(196,167,107,0.18)' : 'rgba(255,255,255,0.06)' }}
+        transition={{ duration: 0.3 }}
+      />
+
+      {/* Title + tag */}
+      <motion.div
+        style={{ minWidth: 0, position: 'relative' }}
+        animate={{ x: hov && !active ? 5 : 0 }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <motion.div
+          style={{ fontFamily: SF, fontWeight: 500, fontSize: 'clamp(12px,1.1vw,15px)', lineHeight: 1.25,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          animate={{ color: active ? W : hov ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.28)' }}
+          transition={{ duration: 0.3 }}
+        >
+          {p.title}
+        </motion.div>
+        <motion.div
+          style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase' as const,
+            marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          animate={{ color: active ? ACL : hov ? 'rgba(196,167,107,0.65)' : 'rgba(255,255,255,0.12)' }}
+          transition={{ duration: 0.3 }}
+        >
+          {p.tag}
+        </motion.div>
+      </motion.div>
+
+      {/* Arrow — visible on active or hover */}
+      <AnimatePresence>
+        {(active || hov) && (
+          <motion.div
+            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.24 }}
+            style={{ marginLeft: 'auto', flexShrink: 0, position: 'relative' }}
+          >
+            <ArrowUpRight style={{ width: 13, height: 13, color: active ? ACL : 'rgba(196,167,107,0.52)' }} strokeWidth={1.8} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </button>
   );
 }
 
@@ -587,6 +693,32 @@ export default function Home() {
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const fade  = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const textY = useTransform(scrollYProgress, [0, 1], [0, 48]);
+
+  const [slide, setSlide] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSlide(s => (s + 1) % PORTFOLIO.length), 5500);
+    return () => clearInterval(t);
+  }, []);
+
+  // Portfolio showcase (crane section)
+  const [pgSlide, setPgSlide] = useState(0);
+  const [pgDir, setPgDir]   = useState(1);
+  const pgRef = useRef<ReturnType<typeof setInterval>>();
+  const startPgTimer = () => {
+    clearInterval(pgRef.current);
+    pgRef.current = setInterval(() => {
+      setPgDir(1);
+      setPgSlide(s => (s + 1) % PORTFOLIO.length);
+    }, 4800);
+  };
+  useEffect(() => { startPgTimer(); return () => clearInterval(pgRef.current); }, []);
+  const goToPg = (i: number) => {
+    setPgDir(i >= pgSlide ? 1 : -1);
+    setPgSlide(i);
+    startPgTimer();
+  };
+
+  const [photoHov, setPhotoHov] = useState(false);
 
   return (
     <PublicLayout>
@@ -703,7 +835,7 @@ export default function Home() {
               <motion.div className="flex flex-wrap gap-3"
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.56 }}>
-                <FillBtn to="/contact" variant="gold" size="lg">
+                <FillBtn to="/start-project" variant="gold" size="lg">
                   Start Your Project <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </FillBtn>
                 <FillBtn to="/portfolio" variant="outline-white" size="lg">
@@ -770,49 +902,119 @@ export default function Home() {
           THE HOUSTON ENTERPRISE DIFFERENCE
       ══════════════════════════════════════════════ */}
       <section style={{ backgroundColor: W }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24">
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 py-16 md:py-24">
 
           {/* ── Header ── */}
           <Reveal>
-            <div className="pt-10 md:pt-14 pb-10 md:pb-12">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="h-px w-8" style={{ backgroundColor: AC }} />
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase' as const, color: AC }}>
-                  Why Houston Enterprise
-                </span>
-              </div>
-              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
-                <h2 style={{
-                  fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
-                  fontSize: 'clamp(42px, 6.5vw, 100px)',
-                  color: B, lineHeight: 0.95, letterSpacing: '-0.01em',
-                  flexShrink: 0,
-                }}>
-                  The standard your<br />project deserves.
+            <div className="flex flex-col lg:flex-row lg:items-end gap-8 lg:gap-20 mb-14 md:mb-16">
+              <div style={{ flexShrink: 0 }}>
+                <div className="flex items-center gap-3 mb-6">
+                  <div style={{ height: 1, width: 28, backgroundColor: AC, flexShrink: 0 }} />
+                  <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.52em', textTransform: 'uppercase' as const, color: AC }}>
+                    Why Houston Enterprise
+                  </span>
+                </div>
+                <h2>
+                  <span style={{
+                    display: 'block', fontFamily: SF, fontStyle: 'normal', fontWeight: 600,
+                    fontSize: 'clamp(36px, 5vw, 80px)', color: B,
+                    lineHeight: 0.94, letterSpacing: '-0.025em',
+                  }}>The standard your</span>
+                  <span style={{
+                    display: 'block', fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                    fontSize: 'clamp(36px, 5vw, 80px)', color: ACL, lineHeight: 1.04,
+                  }}>project deserves.</span>
                 </h2>
-                <p style={{
-                  fontSize: 13.5, lineHeight: 1.82, fontWeight: 300,
-                  color: G500, maxWidth: '38ch', paddingBottom: 6,
-                }}>
-                  Construction is one of the most significant investments of your life.
-                  We were built — in every sense — to protect it.
-                </p>
               </div>
+              <p style={{ fontSize: 15, lineHeight: 1.78, fontWeight: 300, color: G500, maxWidth: '38ch', paddingBottom: 6 }}>
+                Construction is one of the most significant investments you will ever make.
+                We were built — in every sense — to protect it.
+              </p>
             </div>
           </Reveal>
 
-          {/* ── Manifest list ── */}
-          <div style={{ borderTop: '1px solid rgba(0,0,0,0.09)' }}>
-            <ManifestRow light delay={0.05} num="01" title="Two Decades of Houston Mastery" body="Over 20 years in this market — we know every neighborhood, code, and trusted subcontractor in Houston." />
-            <ManifestRow light delay={0.11} num="02" title="End-to-End Accountability"      body="One team. One point of contact. From first consultation to final walkthrough — no handoffs, no gaps." />
-            <ManifestRow light delay={0.17} num="03" title="On Time. On Budget."            body="Rigorous scheduling and real-time cost controls mean we deliver what we commit to — and precisely when." />
-            <ManifestRow light delay={0.23} num="04" title="Radical Transparency"           body="Direct access to your project team, milestone updates, full cost visibility. You are always in control." />
+          {/* ── 4 differentiator cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+            style={{ gap: 1, backgroundColor: 'rgba(0,0,0,0.07)' }}>
+            {[
+              {
+                num: '01',
+                title: '26 Years\nHouston-Deep',
+                body: 'Two and a half decades in the same market. We know every inspector, every code nuance, and every subcontractor worth trusting.',
+                metric: '$800M+',
+                metricLabel: 'Total Delivered',
+              },
+              {
+                num: '02',
+                title: 'One Team,\nStart to Finish',
+                body: 'Co-founders personally engaged on every project above $2M. No handoffs, no surprises — the same people who scope your project finish it.',
+                metric: 'Zero',
+                metricLabel: 'Project Handoffs',
+              },
+              {
+                num: '03',
+                title: '98% On-Time.\nDocumented.',
+                body: 'Verified across 200+ completed projects with CPM scheduling and contractual milestone accountability. Not a claim — a record.',
+                metric: '98%',
+                metricLabel: 'On-Time Delivery',
+              },
+              {
+                num: '04',
+                title: 'Nothing Hidden,\nEver.',
+                body: 'Your private portal shows every permit, invoice, and site photo in real time. Full transparency is the baseline, not an upgrade.',
+                metric: '24/7',
+                metricLabel: 'Portal Access',
+              },
+            ].map((item, i) => (
+              <Reveal key={item.num} delay={i * 0.06}>
+                <div className="flex flex-col h-full" style={{ backgroundColor: W, padding: '32px 28px 28px', position: 'relative' }}>
+                  {/* Short gold top accent */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, width: 36, height: 2, backgroundColor: AC }} />
+
+                  {/* Number */}
+                  <span style={{
+                    fontSize: 8, fontWeight: 700, letterSpacing: '0.44em',
+                    textTransform: 'uppercase' as const, color: AC,
+                    display: 'block', marginBottom: 18,
+                  }}>{item.num}</span>
+
+                  {/* Title */}
+                  <h3 style={{
+                    fontFamily: SF, fontStyle: 'normal', fontWeight: 600,
+                    fontSize: 'clamp(20px, 1.8vw, 26px)', color: B,
+                    lineHeight: 1.14, letterSpacing: '-0.018em', marginBottom: 14,
+                    whiteSpace: 'pre-line',
+                  }}>{item.title}</h3>
+
+                  {/* Body */}
+                  <p style={{
+                    fontSize: 13.5, lineHeight: 1.80, fontWeight: 300, color: G500,
+                    flex: 1, paddingBottom: 24,
+                  }}>{item.body}</p>
+
+                  {/* Metric */}
+                  <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: 18 }}>
+                    <div style={{
+                      fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                      fontSize: 'clamp(30px, 2.6vw, 42px)', color: ACL, lineHeight: 1,
+                    }}>{item.metric}</div>
+                    <div style={{
+                      fontSize: 7, fontWeight: 700, letterSpacing: '0.38em',
+                      textTransform: 'uppercase' as const, color: 'rgba(0,0,0,0.30)', marginTop: 7,
+                    }}>{item.metricLabel}</div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
           </div>
 
-          {/* ── Bottom CTA strip ── */}
-          <Reveal delay={0.28}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-5 py-10 md:py-12"
-              style={{ borderTop: '1px solid rgba(0,0,0,0.09)' }}>
+          {/* ── Bottom CTA ── */}
+          <Reveal delay={0.18}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 pt-12 md:pt-14">
+              <p style={{ fontSize: 14, fontWeight: 300, color: G500, maxWidth: '48ch', lineHeight: 1.74 }}>
+                Every project begins with a conversation.{' '}
+                <span style={{ color: B, fontWeight: 400 }}>Schedule your free consultation today.</span>
+              </p>
               <FillBtn to="/contact" variant="dark" size="md">
                 Free Consultation <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
               </FillBtn>
@@ -825,289 +1027,495 @@ export default function Home() {
       {/* ══════════════════════════════════════════════
           RISK & COMPLIANCE — institutional trust
       ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: B, ...GRID }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 py-20 md:py-28">
+      <section style={{ backgroundColor: B, ...GRID, position: 'relative', overflow: 'hidden' }}>
 
+        {/* Architectural watermark */}
+        <div aria-hidden="true" style={{
+          position: 'absolute', right: '-4%', top: '50%', transform: 'translateY(-50%)',
+          fontFamily: SF, fontWeight: 700, fontSize: 'clamp(120px, 20vw, 320px)',
+          lineHeight: 1, color: 'rgba(255,255,255,0.014)', letterSpacing: '0.06em',
+          userSelect: 'none', pointerEvents: 'none', whiteSpace: 'nowrap',
+        }}>PROTECTED</div>
+
+        {/* Gold top edge */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+          background: `linear-gradient(to right, transparent, ${ACL}, transparent)`,
+          opacity: 0.45,
+        }} />
+
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 pt-20 pb-0 md:pt-28 relative z-10">
+
+          {/* ── Eyebrow ── */}
           <Reveal>
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 mb-16">
-              <div>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
-                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Protection & Compliance</div>
-                </div>
-                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.8vw, 50px)', color: W, lineHeight: 1.06 }}>
-                  Your investment,<br />fully protected.
-                </h2>
-              </div>
-              <p style={{ fontSize: 13, lineHeight: 1.8, fontWeight: 300, color: 'rgba(255,255,255,0.50)', maxWidth: '42ch' }}>
-                When the stakes are measured in millions, you need more than a contractor — you need a firm with the bonding capacity, compliance record, and institutional depth to protect your project at every phase.
-              </p>
+            <div className="flex items-center gap-3 mb-8 md:mb-10">
+              <div className="h-px w-8 shrink-0" style={{ backgroundColor: ACL }} />
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.46em',
+                textTransform: 'uppercase' as const, color: ACL,
+              }}>Protection & Compliance</span>
             </div>
           </Reveal>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-16"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderLeft: '1px solid rgba(255,255,255,0.07)' }}>
-            {[
-              { icon: ShieldCheck,   title: 'Fully Bonded & Insured',   body: 'Licensed and fully bonded for large-scale residential and commercial projects throughout Texas. Complete coverage from day one.' },
-              { icon: HardHat,       title: 'Elite Safety Record',       body: 'Rigorous on-site safety protocols and an EMR well below the industry standard. Your job site is as safe as it is productive.' },
-              { icon: Trophy,        title: 'BBB A+ Accredited',         body: 'Over 20 years of formally verified client satisfaction, ethical business practices, and outstanding project delivery.' },
-              { icon: CalendarCheck, title: '98% On-Time Delivery',      body: 'Structured PM methodology and proactive risk planning ensure schedule integrity — from permit approval to final walkthrough.' },
-            ].map(({ icon: Icon, title, body }, i) => (
-              <Reveal key={title} delay={i * 0.08}>
-                <div className="flex flex-col gap-5 p-8"
-                  style={{ borderRight: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div className="w-10 h-10 flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: 'rgba(157,126,63,0.12)', border: '1px solid rgba(157,126,63,0.22)' }}>
-                    <Icon className="w-4 h-4" strokeWidth={1.5} style={{ color: ACL }} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 400, fontSize: 'clamp(16px, 1.4vw, 20px)', color: W, lineHeight: 1.18, marginBottom: 10 }}>
-                      {title}
-                    </h3>
-                    <p style={{ fontSize: 12.5, lineHeight: 1.8, fontWeight: 300, color: 'rgba(255,255,255,0.44)' }}>
-                      {body}
-                    </p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-
-          {/* Houston hyper-local intelligence */}
-          <Reveal delay={0.2}>
-            <div className="grid lg:grid-cols-[1fr_1px_1.4fr] gap-10 lg:gap-16"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 40 }}>
-              <div>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
-                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Houston Market Intelligence</div>
-                </div>
-                <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(20px, 2.2vw, 30px)', color: W, lineHeight: 1.12 }}>
-                  We navigate Houston's complexity<br />so you don't have to.
-                </h3>
-              </div>
-              <div className="hidden lg:block" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }} />
-              <div>
-                <p style={{ fontSize: 13.5, lineHeight: 1.85, fontWeight: 300, color: 'rgba(255,255,255,0.52)', marginBottom: 16 }}>
-                  From <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>River Oaks</strong> deed restrictions and{' '}
-                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Memorial</strong> HOA requirements to{' '}
-                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Energy Corridor</strong> zoning regulations and{' '}
-                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Montrose</strong> historic district guidelines —
-                  we've built across every Houston neighborhood and municipality.
-                </p>
-                <p style={{ fontSize: 13.5, lineHeight: 1.85, fontWeight: 300, color: 'rgba(255,255,255,0.52)' }}>
-                  Our team handles permits, variance requests, HOA approvals, and municipal compliance in{' '}
-                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>West University</strong>,{' '}
-                  <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.80)' }}>Galleria</strong>, and beyond —
-                  keeping your timeline protected while you focus on the vision.
-                </p>
-              </div>
-            </div>
-          </Reveal>
-
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          INTENT FORK — Residential vs Commercial
-      ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: B }}>
-        <div className="grid lg:grid-cols-2">
-          <IntentForkPanel
-            img={PH.res}
-            tag="For Homeowners & Families"
-            title="Your Dream Home, Masterfully Built."
-            desc="Custom estates, luxury renovations, and seamless additions — designed entirely around your vision and built to endure for generations."
-            cta="Explore Residential"
-            ctaVariant="white"
-          />
-          <IntentForkPanel
-            img={PH.comm}
-            tag="For Developers & Businesses"
-            title="Commercial Spaces, Delivered with Precision."
-            desc="Office buildings, retail centers, hospitality venues, and industrial facilities — on schedule, on budget, with institutional-grade rigor."
-            cta="Explore Commercial"
-            ctaVariant="gold"
-            border
-          />
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          EXPERTISE — full-bleed split panels
-      ══════════════════════════════════════════════ */}
-      <section>
-        <Reveal>
-          <div className="max-w-7xl mx-auto px-8 md:px-14 pt-20 pb-10">
-            <Eyebrow>Our Expertise</Eyebrow>
-            <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,3.8vw,48px)', color: B, lineHeight: 1.06 }}>
-              Two specializations.<br />One team. Zero compromise.
+          {/* ── Massive headline ── */}
+          <Reveal delay={0.06}>
+            <h2 style={{ marginBottom: 20, lineHeight: 0.92 }}>
+              <span style={{
+                display: 'block',
+                fontFamily: SF, fontStyle: 'normal', fontWeight: 600,
+                fontSize: 'clamp(52px, 8vw, 128px)', color: W,
+                letterSpacing: '-0.028em',
+              }}>Your investment,</span>
+              <span style={{
+                display: 'block',
+                fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                fontSize: 'clamp(52px, 8vw, 128px)', color: ACL,
+                letterSpacing: '-0.018em',
+              }}>fully protected.</span>
             </h2>
+          </Reveal>
+
+          {/* ── One-line tagline ── */}
+          <Reveal delay={0.10}>
+            <p style={{
+              fontSize: 'clamp(14px, 1.3vw, 17px)', fontWeight: 300,
+              color: 'rgba(255,255,255,0.70)', lineHeight: 1.6,
+              maxWidth: '56ch', marginBottom: 0,
+            }}>
+              $50M+ bonded. 26 years licensed. A+ rated. Every phase of your project, covered.
+            </p>
+          </Reveal>
+
+        </div>
+
+        {/* ── 4 massive metric blocks — gap-px grid ── */}
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 pt-14 md:pt-18 pb-0 relative z-10">
+          <Reveal delay={0.13}>
+            <div
+              className="grid grid-cols-2 lg:grid-cols-4"
+              style={{ gap: 1, backgroundColor: 'rgba(255,255,255,0.07)' }}
+            >
+              {[
+                { metric: '$50M+', label: 'Bonding Capacity',   sub: 'Texas Licensed & Fully Insured' },
+                { metric: '0.42',  label: 'EMR Safety Rating',  sub: '57% Below Industry Average' },
+                { metric: 'A+',    label: 'BBB Accredited',     sub: '26 Years of Verified Excellence' },
+                { metric: '98%',   label: 'On-Time Delivery',   sub: 'Documented Across 200+ Projects' },
+              ].map(({ metric, label, sub }, i) => (
+                <Reveal key={label} delay={i * 0.06}>
+                  <div style={{
+                    backgroundColor: B,
+                    padding: 'clamp(28px, 4vw, 52px) clamp(20px, 3vw, 40px)',
+                    position: 'relative',
+                  }}>
+                    {/* Gold top bar */}
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+                      background: `linear-gradient(to right, ${AC}, ${ACL})`,
+                    }} />
+
+                    <div style={{
+                      fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                      fontSize: 'clamp(52px, 6vw, 96px)', color: ACL,
+                      lineHeight: 1, letterSpacing: '-0.02em',
+                      marginBottom: 14,
+                    }}>{metric}</div>
+
+                    <div style={{
+                      fontSize: 8, fontWeight: 700, letterSpacing: '0.44em',
+                      textTransform: 'uppercase' as const, color: W,
+                      marginBottom: 8,
+                    }}>{label}</div>
+
+                    <div style={{
+                      fontSize: 11, fontWeight: 300, color: 'rgba(255,255,255,0.55)',
+                      letterSpacing: '0.02em',
+                    }}>{sub}</div>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+
+        {/* ── Bottom CTA strip ── */}
+        <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 py-10 md:py-12 relative z-10">
+          <Reveal delay={0.18}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 36 }}>
+              <p style={{
+                fontSize: 13.5, fontWeight: 300,
+                color: 'rgba(255,255,255,0.72)', maxWidth: '48ch', lineHeight: 1.76,
+              }}>
+                Every project begins with a site visit and an honest assessment.{' '}
+                <span style={{ color: W, fontWeight: 500 }}>No obligation. No sales pressure.</span>
+              </p>
+              <FillBtn to="/start-project" variant="gold" size="md">
+                Start Your Project <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </FillBtn>
+            </div>
+          </Reveal>
+        </div>
+
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          PORTFOLIO SHOWCASE — crane transition
+      ══════════════════════════════════════════════ */}
+      <section style={{ backgroundColor: B, position: 'relative' }}>
+
+        {/* ── Eyebrow header bar ── */}
+        <Reveal>
+          <div className="flex items-end justify-between px-8 md:px-14 lg:px-20 pt-16 pb-10 md:pt-20 md:pb-12">
+            <div>
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ height: 1, width: 28, backgroundColor: ACL, flexShrink: 0 }} />
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.48em', textTransform: 'uppercase' as const, color: ACL }}>
+                  Selected Work
+                </span>
+              </div>
+              <h2 style={{ fontFamily: SF, lineHeight: 0.92, letterSpacing: '-0.028em' }}>
+                <span style={{ display: 'block', fontWeight: 600, fontSize: 'clamp(36px,5.5vw,84px)', color: W }}>
+                  Defining Houston,
+                </span>
+                <span style={{ display: 'block', fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(36px,5.5vw,84px)', color: ACL }}>
+                  one landmark at a time.
+                </span>
+              </h2>
+            </div>
+
+            <div className="hidden sm:flex flex-col items-end gap-4 shrink-0 pb-1">
+              <span style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 14, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.1em' }}>
+                {String(pgSlide + 1).padStart(2, '0')} — {String(PORTFOLIO.length).padStart(2, '0')}
+              </span>
+              <FillBtn to="/portfolio" variant="outline-white" size="sm">
+                Full Portfolio <ArrowUpRight className="w-3 h-3" strokeWidth={2} />
+              </FillBtn>
+            </div>
           </div>
         </Reveal>
-        <div className="flex flex-col lg:flex-row">
-          <ExpertisePanel
-            img={PH.res} tag="Residential Construction"
-            title="Luxury Homes & Custom Estates"
-            desc="From River Oaks estates to Memorial custom builds — bespoke residential construction with personalized attention to every detail."
-            specs={['Custom Home Construction', 'Home Renovation & Addition', 'Kitchen & Bath Remodeling', 'Interior & Exterior Upgrades']}
-            to="/services"
-          />
-          <div className="hidden lg:block w-px shrink-0" style={{ backgroundColor: B }} />
-          <ExpertisePanel
-            img={PH.comm} tag="Commercial Construction"
-            title="Grade-A Office & Commercial"
-            desc="Office buildings, retail spaces, hospitality venues, educational facilities, and industrial warehousing delivered with precision."
-            specs={['Office Buildings', 'Retail Spaces', 'Hospitality & Entertainment', 'Industrial & Warehousing']}
-            to="/services"
-          />
+
+        {/* ── Split showcase ── */}
+        <div className="flex flex-col lg:flex-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+
+          {/* ── Photo panel ── */}
+          <div
+            className="relative overflow-hidden"
+            style={{ flexBasis: '70%', flexShrink: 0, minHeight: 'clamp(480px, 60vh, 700px)', cursor: 'pointer' }}
+            onMouseEnter={() => setPhotoHov(true)}
+            onMouseLeave={() => setPhotoHov(false)}
+          >
+            <AnimatePresence mode="wait" custom={pgDir}>
+              <motion.div
+                key={pgSlide}
+                className="absolute inset-0"
+                custom={pgDir}
+                variants={craneVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+              >
+                {/* Ken Burns image */}
+                <motion.div
+                  className="absolute inset-0"
+                  style={{ backgroundImage: `url(${PORTFOLIO[pgSlide].img})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                  initial={{ scale: 1.07 }}
+                  animate={{ scale: 1.0 }}
+                  transition={{ duration: 8, ease: 'linear' }}
+                />
+
+                {/* Gradient stack — deep at bottom, subtle at top */}
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(4,3,2,0.97) 0%, rgba(4,3,2,0.52) 42%, rgba(4,3,2,0.08) 72%, transparent 100%)' }} />
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(4,3,2,0.35) 0%, transparent 50%)' }} />
+
+                {/* Project info — bottom left */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 'clamp(28px,4vw,56px)' }}>
+
+                  {/* Category tag */}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '5px 12px', border: '1px solid rgba(196,167,107,0.25)', backgroundColor: 'rgba(157,126,63,0.08)' }}>
+                    <div style={{ width: 3, height: 3, borderRadius: '50%', backgroundColor: ACL }} />
+                    <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.42em', textTransform: 'uppercase' as const, color: ACL }}>
+                      {PORTFOLIO[pgSlide].tag}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 style={{
+                    fontFamily: SF, fontWeight: 600,
+                    fontSize: 'clamp(32px, 4.8vw, 72px)',
+                    color: W, lineHeight: 0.96, letterSpacing: '-0.026em',
+                    marginBottom: 20,
+                  }}>
+                    {PORTFOLIO[pgSlide].title}
+                  </h3>
+
+                  {/* Meta row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 300, color: 'rgba(255,255,255,0.48)', letterSpacing: '0.18em', textTransform: 'uppercase' as const }}>
+                      {PORTFOLIO[pgSlide].sf}
+                    </span>
+                    <span style={{ margin: '0 14px', color: 'rgba(255,255,255,0.14)', fontSize: 10 }}>·</span>
+                    <span style={{ fontSize: 10, fontWeight: 300, color: 'rgba(255,255,255,0.48)', letterSpacing: '0.18em', textTransform: 'uppercase' as const }}>
+                      {PORTFOLIO[pgSlide].yr}
+                    </span>
+                    <Link
+                      to="/portfolio"
+                      style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: ACL }}
+                    >
+                      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.36em', textTransform: 'uppercase' as const }}>View Project</span>
+                      <ArrowUpRight style={{ width: 11, height: 11 }} strokeWidth={2} />
+                    </Link>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Progress bar */}
+            <div className="absolute bottom-0 left-0 right-0 z-30" style={{ height: 1 }}>
+              <motion.div
+                key={pgSlide + '-pgbar'}
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 4.8, ease: 'linear' }}
+                style={{ height: '100%', background: `linear-gradient(to right, ${AC}, ${ACL})`, transformOrigin: 'left', opacity: 0.7 }}
+              />
+            </div>
+
+            {/* Photo panel hover overlay */}
+            <motion.div
+              className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
+              animate={{ opacity: photoHov ? 1 : 0 }}
+              transition={{ duration: 0.38, ease: 'easeOut' }}
+              style={{ background: 'rgba(4,3,2,0.22)' }}
+            >
+              <motion.div
+                animate={{ y: photoHov ? 0 : 14, opacity: photoHov ? 1 : 0 }}
+                transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1], delay: photoHov ? 0.07 : 0 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 26px',
+                  border: `1px solid rgba(196,167,107,0.42)`, backgroundColor: 'rgba(4,3,2,0.68)', backdropFilter: 'blur(8px)' }}
+              >
+                <Link
+                  to="/portfolio"
+                  className="pointer-events-auto flex items-center gap-2.5"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase' as const, color: ACL }}>
+                    Explore Portfolio
+                  </span>
+                  <ArrowUpRight style={{ width: 11, height: 11, color: ACL }} strokeWidth={2} />
+                </Link>
+              </motion.div>
+            </motion.div>
+          </div>
+
+          {/* ── Sidebar — desktop ── */}
+          <div
+            className="hidden lg:flex flex-col flex-1"
+            style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}
+          >
+            {/* Large ghost number — decorative watermark */}
+            <div aria-hidden="true" style={{
+              position: 'absolute', right: -10, bottom: -10,
+              fontFamily: SF, fontStyle: 'italic', fontWeight: 700,
+              fontSize: 'clamp(120px, 16vw, 220px)', lineHeight: 1,
+              color: 'rgba(255,255,255,0.022)', userSelect: 'none', pointerEvents: 'none',
+              letterSpacing: '-0.04em',
+            }}>
+              {String(pgSlide + 1).padStart(2, '0')}
+            </div>
+
+            <LayoutGroup>
+              {PORTFOLIO.map((p, i) => (
+                <PgSidebarItem key={p.title} p={p} i={i} active={i === pgSlide} onClick={() => goToPg(i)} />
+              ))}
+            </LayoutGroup>
+          </div>
+
+          {/* ── Mobile thumbnail row ── */}
+          <div className="flex lg:hidden" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            {PORTFOLIO.map((p, i) => {
+              const active = i === pgSlide;
+              return (
+                <button
+                  key={p.title}
+                  onClick={() => goToPg(i)}
+                  style={{
+                    flex: 1, height: 64, position: 'relative', overflow: 'hidden',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    borderRight: i < PORTFOLIO.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    backgroundImage: `url(${p.img})`,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    filter: active ? 'brightness(0.85)' : 'brightness(0.22) saturate(0.5)',
+                    transition: 'filter 0.4s ease',
+                  }} />
+                  {active && (
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: `linear-gradient(to right, ${AC}, ${ACL})` }} />
+                  )}
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontFamily: SF, fontStyle: 'italic', fontSize: 11, color: active ? W : 'rgba(255,255,255,0.35)', transition: 'color 0.4s' }}>
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
         </div>
       </section>
 
       {/* ══════════════════════════════════════════════
-          PROJECTS — dark showcase
+          PORTFOLIO CAROUSEL — cinematic project showcase
       ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: B, paddingTop: 80, paddingBottom: 80, ...GRID }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14">
-          <Reveal>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-14">
-              <div>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-px w-8" style={{ backgroundColor: ACL }} />
-                  <div className="text-[8px] uppercase tracking-[0.46em] font-bold" style={{ color: ACL }}>Selected Work</div>
+      <section className="relative overflow-hidden" style={{ height: '88vh', minHeight: 520, backgroundColor: B }}>
+
+        {/* Crossfading background images */}
+        <AnimatePresence mode="sync">
+          <motion.div
+            key={slide}
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.4, ease: [0.25, 0.1, 0.25, 1] }}
+          >
+            <motion.div
+              className="absolute inset-0"
+              initial={{ scale: 1.06 }}
+              animate={{ scale: 1.0 }}
+              transition={{ duration: 7, ease: 'linear' }}
+              style={{
+                backgroundImage: `url(${PORTFOLIO[slide].img})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Cinematic gradient stack */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(5,4,3,0.96) 0%, rgba(5,4,3,0.55) 35%, rgba(5,4,3,0.08) 68%, transparent 100%)' }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(5,4,3,0.52) 0%, transparent 28%)' }} />
+        <div className="absolute inset-0 pointer-events-none" style={GRID} />
+
+        {/* Top bar: eyebrow + portfolio link */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-8 md:px-14 lg:px-24 pt-8 md:pt-10">
+          <div className="flex items-center gap-3">
+            <div className="h-px w-7 shrink-0" style={{ backgroundColor: ACL }} />
+            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.48em', textTransform: 'uppercase' as const, color: ACL }}>
+              Selected Work
+            </span>
+          </div>
+          <Link
+            to="/portfolio"
+            className="flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-bold transition-colors"
+            style={{ color: 'rgba(255,255,255,0.50)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.50)'; }}
+          >
+            Full Portfolio <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+          </Link>
+        </div>
+
+        {/* Prev arrow */}
+        <button
+          onClick={() => setSlide(s => (s - 1 + PORTFOLIO.length) % PORTFOLIO.length)}
+          className="absolute left-4 md:left-8 lg:left-14 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border flex items-center justify-center transition-all duration-200"
+          style={{ borderColor: 'rgba(255,255,255,0.18)', opacity: 0.45 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.55)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.45'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'; }}
+          aria-label="Previous project"
+        >
+          <ChevronLeft className="w-4 h-4" style={{ color: W }} strokeWidth={1.5} />
+        </button>
+
+        {/* Next arrow */}
+        <button
+          onClick={() => setSlide(s => (s + 1) % PORTFOLIO.length)}
+          className="absolute right-4 md:right-8 lg:right-14 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border flex items-center justify-center transition-all duration-200"
+          style={{ borderColor: 'rgba(255,255,255,0.18)', opacity: 0.45 }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.55)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.45'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'; }}
+          aria-label="Next project"
+        >
+          <ChevronRight className="w-4 h-4" style={{ color: W }} strokeWidth={1.5} />
+        </button>
+
+        {/* Bottom content */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-8 md:px-14 lg:px-24 pb-10 md:pb-14">
+          <div className="flex items-end justify-between gap-8">
+
+            {/* Project info — slides with each change */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={slide + '-info'}
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-px w-6 shrink-0" style={{ backgroundColor: ACL }} />
+                  <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.38em', textTransform: 'uppercase' as const, color: ACL }}>
+                    {PORTFOLIO[slide].tag}
+                  </span>
                 </div>
-                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,4vw,52px)', color: W, lineHeight: 1.06 }}>
-                  Projects that define<br />Houston's skyline.
+                <h2 style={{
+                  fontFamily: SF, fontStyle: 'normal', fontWeight: 600,
+                  fontSize: 'clamp(28px, 4.5vw, 64px)', color: W,
+                  lineHeight: 1.0, letterSpacing: '-0.022em', marginBottom: 10,
+                }}>
+                  {PORTFOLIO[slide].title}
                 </h2>
+                <div className="flex items-center gap-3">
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.08em' }}>{PORTFOLIO[slide].sf}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.20)' }}>·</span>
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.08em' }}>{PORTFOLIO[slide].yr}</span>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Right: counter + dot nav */}
+            <div className="flex flex-col items-end gap-4 shrink-0">
+              <span style={{
+                fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                fontSize: 13, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em',
+              }}>
+                {String(slide + 1).padStart(2, '0')} / {String(PORTFOLIO.length).padStart(2, '0')}
+              </span>
+              <div className="flex items-center gap-2">
+                {PORTFOLIO.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSlide(i)}
+                    aria-label={`Go to slide ${i + 1}`}
+                    className="transition-all duration-300"
+                    style={{
+                      height: 3,
+                      width: i === slide ? 24 : 4,
+                      backgroundColor: i === slide ? ACL : 'rgba(255,255,255,0.28)',
+                    }}
+                  />
+                ))}
               </div>
-              <Link to="/portfolio" className="flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-black transition-colors"
-                style={{ color: ACL }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = W; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}>
-                Full Portfolio <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </Link>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Reveal delay={0}>
-              <ProjectCard img={PH.proj1} tag="River Oaks · Residential"     title="Chambord Estate"           sqft="14,500 SF" year="2024" tall />
-            </Reveal>
-            <div className="grid grid-rows-2 gap-3">
-              <Reveal delay={0.1}>
-                <ProjectCard img={PH.proj2} tag="Energy Corridor · Industrial" title="Westway Commerce Campus"  sqft="212,000 SF" year="2024" />
-              </Reveal>
-              <Reveal delay={0.18}>
-                <ProjectCard img={PH.proj3} tag="Galleria · Commercial"        title="Meridian Tower Retail"    sqft="98,000 SF"  year="2023" />
-              </Reveal>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* ══════════════════════════════════════════════
-          ABOUT — company story (CREAM bg)
-      ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: CR }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14 py-28 md:py-40">
-          <div className="grid lg:grid-cols-2 gap-16 xl:gap-24 items-center">
-
-            {/* Text */}
-            <div>
-              <Reveal>
-                <Eyebrow>Houston Enterprise</Eyebrow>
-                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(32px,4.5vw,58px)', color: B, lineHeight: 1.06, marginBottom: 24 }}>
-                  Transforming your vision<br />into lasting excellence.
-                </h2>
-              </Reveal>
-              <Reveal delay={0.1}>
-                <p className="text-[14px] leading-[1.85] font-light mb-5" style={{ color: G500 }}>
-                  At Houston Enterprise, we transform your dreams into reality. As one of Houston's premier residential and commercial construction companies, we are committed to quality, integrity, and innovation in everything we build.
-                </p>
-                <p className="text-[14px] leading-[1.85] font-light mb-10" style={{ color: G500 }}>
-                  From concept to completion, we make the construction process a rewarding experience — built on our collaborative approach, knowledgeable team, and unwavering commitment to your satisfaction.
-                </p>
-              </Reveal>
-              <Reveal delay={0.18}>
-                <div className="flex flex-wrap gap-3 mb-12">
-                  <FillBtn to="/about" variant="dark">
-                    Our Story <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </FillBtn>
-                  <FillBtn to="/contact" variant="outline-dark">
-                    Free Consultation <ArrowUpRight className="w-3 h-3" strokeWidth={2} />
-                  </FillBtn>
-                </div>
-              </Reveal>
-              {/* Credentials strip */}
-              <Reveal delay={0.22}>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { icon: Trophy,    label: 'BBB A+ Accredited',      sub: '20+ Years' },
-                    { icon: HardHat,   label: 'Licensed & Insured',      sub: 'Texas State' },
-                    { icon: Users,     label: '500+ Projects',           sub: 'Res · Comm · PM' },
-                    { icon: CheckCircle2, label: '98% On-Time',          sub: 'Delivery Rate' },
-                  ].map(({ icon: Icon, label, sub }) => (
-                    <div key={label} className="flex items-center gap-3 p-4"
-                      style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                      <div className="w-8 h-8 flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: 'rgba(157,126,63,0.08)' }}>
-                        <Icon className="w-3.5 h-3.5" style={{ color: AC }} strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-bold" style={{ color: B }}>{label}</div>
-                        <div className="text-[9px] font-light" style={{ color: G500 }}>{sub}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Reveal>
-            </div>
-
-            {/* Image with stat overlay */}
-            <Reveal delay={0.12} direction="right">
-              <div className="relative">
-                <div className="overflow-hidden" style={{ height: 560 }}>
-                  <motion.div className="h-full w-full"
-                    style={{ backgroundImage: `url(${PH.about})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-                    whileHover={{ scale: 1.03 }} transition={{ duration: 0.7 }} />
-                </div>
-                {/* Gold border accent */}
-                <div className="absolute -bottom-4 -right-4 w-full h-full pointer-events-none"
-                  style={{ border: `2px solid rgba(157,126,63,0.25)`, zIndex: -1 }} />
-                {/* Floating stat */}
-                <div className="absolute -bottom-6 -left-6 px-7 py-5"
-                  style={{ backgroundColor: B, border: `1px solid rgba(157,126,63,0.2)` }}>
-                  <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 36, color: W, lineHeight: 1 }}>25+</div>
-                  <div className="text-[8px] uppercase tracking-[0.36em] mt-1.5 font-semibold" style={{ color: ACL }}>Years Experience</div>
-                </div>
-              </div>
-            </Reveal>
-
-          </div>
+        {/* Progress bar */}
+        <div className="absolute bottom-0 left-0 right-0 z-30" style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}>
+          <motion.div
+            key={slide + '-bar'}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 5.5, ease: 'linear' }}
+            style={{ height: '100%', backgroundColor: ACL, transformOrigin: 'left', opacity: 0.55 }}
+          />
         </div>
-      </section>
 
-      {/* ══════════════════════════════════════════════
-          STATS — animated numbers (dark band)
-      ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: B, ...GRID }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14 py-20">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
-            {[
-              { v: 25,  s: '+',  l: 'Years in Houston',    d: 'Founded 1998' },
-              { v: 500, s: '+',  l: 'Projects Delivered',  d: 'Res · Comm · PM' },
-              { v: 98,  s: '%',  l: 'On-Time Delivery',    d: 'Schedule adherence' },
-              { v: 100, s: '%',  l: 'Client Satisfaction', d: 'Quality guaranteed' },
-            ].map(st => (
-              <div key={st.l} className="py-12 px-8 text-center" style={{ backgroundColor: B }}>
-                <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(42px,5vw,68px)', color: W, lineHeight: 1 }}>
-                  <AnimatedCounter value={st.v} suffix={st.s} />
-                </div>
-                <div className="text-[9px] uppercase tracking-[0.28em] font-bold mt-3" style={{ color: AC }}>{st.l}</div>
-                <div className="text-[9px] uppercase tracking-[0.18em] mt-1 font-light" style={{ color: 'rgba(255,255,255,0.22)' }}>{st.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       {/* ══════════════════════════════════════════════
@@ -1308,7 +1716,7 @@ export default function Home() {
             </Reveal>
             <Reveal delay={0.12} direction="right">
               <div className="flex flex-col gap-3">
-                <FillBtn to="/contact" variant="dark" size="lg">
+                <FillBtn to="/start-project" variant="dark" size="lg">
                   Start Your Project <ArrowUpRight className="w-4 h-4" strokeWidth={2.5} />
                 </FillBtn>
                 <FillBtn to="/about" variant="outline-dark" size="md">

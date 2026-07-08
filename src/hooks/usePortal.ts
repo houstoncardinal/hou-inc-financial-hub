@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface PortalClient {
   id: string;
@@ -6,6 +7,9 @@ export interface PortalClient {
   email: string;
   phone: string;
   createdAt: string;
+  status: 'pending_approval' | 'approved' | 'rejected';
+  projectType?: string;
+  projectInterest?: string;
 }
 
 export interface ProjectBrief {
@@ -71,27 +75,150 @@ export const COMPANY = {
   address: '2100 W Loop South, Suite #1115, Houston, TX 77027',
 };
 
-const CLIENTS_KEY  = 'hou-portal-clients';
-const SESSION_KEY  = 'hou-portal-session';
-const BRIEFS_KEY   = 'hou-portal-briefs';
-const MSGS_KEY     = 'hou-portal-messages';
-const DOCS_KEY     = 'hou-portal-docs';
-const MEETINGS_KEY = 'hou-portal-meetings';
+const SESSION_KEY = 'hou-portal-session';
 
-function readClients(): PortalClient[] {
-  try { return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]'); } catch { return []; }
+export const APPROVAL_DOCS: Omit<PortalDocument, 'id'>[] = [
+  {
+    name: 'Government-Issued Photo ID',
+    fileType: 'PDF / Image',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: "A clear copy of your driver's license, passport, or state-issued ID for identity verification.",
+  },
+  {
+    name: 'Signed Project Intake Form',
+    fileType: 'PDF',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'Complete, sign, and upload the HOU INC Project Intake Form. A copy will be sent to your email.',
+  },
+  {
+    name: 'Proof of Property Ownership or Site LOI',
+    fileType: 'PDF',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'Your property deed, title report, purchase agreement, or a Letter of Intent for the build site.',
+  },
+  {
+    name: 'Proof of Funds or Construction Loan Pre-Approval',
+    fileType: 'PDF',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'Bank statement, line-of-credit letter, or construction loan pre-approval confirming project financing.',
+  },
+  {
+    name: 'Site Survey / Plat Map',
+    fileType: 'PDF / CAD',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'Current survey of the property including legal boundaries, easements, and dimensions. Upload if available.',
+  },
+  {
+    name: 'Design Inspiration & References',
+    fileType: 'PDF / Images',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'Photos, mood boards, architectural images, or Pinterest boards that capture your vision and style.',
+  },
+  {
+    name: 'HOA Architectural Review Approval',
+    fileType: 'PDF',
+    size: '',
+    category: 'required',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: 'If your property is within an HOA, upload the architectural committee approval. Mark N/A if not applicable.',
+  },
+  {
+    name: 'Existing Plans or Sketches (if available)',
+    fileType: 'PDF / CAD / Images',
+    size: '',
+    category: 'uploaded',
+    status: 'pending',
+    requestedBy: 'HOU INC',
+    description: "Any existing architectural drawings, floor plan sketches, or design concepts you'd like to share.",
+  },
+];
+
+// ── Row mappers ───────────────────────────────────────────────────────────────
+
+function mapClient(row: any): PortalClient {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone ?? '',
+    createdAt: row.created_at,
+    status: row.status,
+    projectType: row.project_type,
+    projectInterest: row.project_interest,
+  };
 }
-function readBriefs(): Record<string, ProjectBrief> {
-  try { return JSON.parse(localStorage.getItem(BRIEFS_KEY) || '{}'); } catch { return {}; }
+
+function mapBrief(row: any): ProjectBrief {
+  return {
+    type: row.type ?? '',
+    location: row.location ?? '',
+    sqft: row.sqft ?? '',
+    bedrooms: row.bedrooms ?? '',
+    bathrooms: row.bathrooms ?? '',
+    floors: row.floors ?? '',
+    style: row.style ?? [],
+    budget: row.budget ?? '',
+    timeline: row.timeline ?? '',
+    description: row.description ?? '',
+    status: row.status,
+    submittedAt: row.submitted_at,
+  };
 }
-function readAllMsgs(): Record<string, PortalMessage[]> {
-  try { return JSON.parse(localStorage.getItem(MSGS_KEY) || '{}'); } catch { return {}; }
+
+function mapMessage(row: any): PortalMessage {
+  return {
+    id: row.id,
+    sender: row.sender,
+    senderName: row.sender_name,
+    text: row.body,
+    timestamp: row.created_at,
+  };
 }
-function readAllDocs(): Record<string, PortalDocument[]> {
-  try { return JSON.parse(localStorage.getItem(DOCS_KEY) || '{}'); } catch { return {}; }
+
+function mapDocument(row: any): PortalDocument {
+  return {
+    id: row.id,
+    name: row.name,
+    fileType: row.file_type,
+    size: row.file_size ?? '',
+    category: row.category,
+    status: row.status,
+    requestedBy: row.requested_by,
+    description: row.description,
+    uploadedAt: row.uploaded_at,
+  };
 }
-function readAllMeetings(): Record<string, PortalMeeting[]> {
-  try { return JSON.parse(localStorage.getItem(MEETINGS_KEY) || '{}'); } catch { return {}; }
+
+function mapMeeting(row: any): PortalMeeting {
+  return {
+    id: row.id,
+    type: row.type,
+    date: row.date,
+    time: row.time,
+    format: row.format,
+    notes: row.notes ?? '',
+    status: row.status,
+    createdAt: row.created_at,
+  };
 }
 
 function autoReply(text: string, clientName: string): string {
@@ -111,243 +238,322 @@ function autoReply(text: string, clientName: string): string {
   return `Thank you for reaching out, ${clientName}. I have noted your message and will follow up with a detailed response shortly. In the meantime, if you have not yet completed your project brief, that will help me prepare the most relevant information for our first conversation.`;
 }
 
-const SEED_DOCS: Omit<PortalDocument, 'id'>[] = [
-  {
-    name: 'Signed Project Intake Form',
-    fileType: 'PDF',
-    size: '',
-    category: 'required',
-    status: 'pending',
-    requestedBy: 'HOU INC',
-    description: 'Please complete, sign, and upload the project intake form to begin the consultation process.',
-  },
-  {
-    name: 'Proof of Property Ownership',
-    fileType: 'PDF / Image',
-    size: '',
-    category: 'required',
-    status: 'pending',
-    requestedBy: 'HOU INC',
-    description: 'Upload a copy of your property deed, title, or purchase agreement.',
-  },
-  {
-    name: 'Design Inspiration & References',
-    fileType: 'PDF / Images',
-    size: '',
-    category: 'required',
-    status: 'pending',
-    requestedBy: 'HOU INC',
-    description: 'Share photos, mood boards, or architectural images that inspire your vision.',
-  },
-];
+// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePortal() {
-  const [client, setClient] = useState<PortalClient | null>(() => {
-    try {
-      const id = localStorage.getItem(SESSION_KEY);
-      if (!id) return null;
-      return readClients().find(c => c.id === id) ?? null;
-    } catch { return null; }
-  });
+  const [clientId, setClientId] = useState<string | null>(() =>
+    localStorage.getItem(SESSION_KEY)
+  );
+  const [client, setClient] = useState<PortalClient | null>(null);
+  const [brief, setBrief]   = useState<ProjectBrief | null>(null);
+  const [messages, setMessages]   = useState<PortalMessage[]>([]);
+  const [documents, setDocuments] = useState<PortalDocument[]>([]);
+  const [meetings, setMeetings]   = useState<PortalMeeting[]>([]);
 
-  const register = useCallback((name: string, email: string, phone: string): { ok: boolean; error?: string } => {
-    const clients = readClients();
-    if (clients.find(c => c.email.toLowerCase() === email.toLowerCase()))
-      return { ok: false, error: 'An account with this email already exists. Please sign in instead.' };
-    const nc: PortalClient = { id: crypto.randomUUID(), name, email, phone, createdAt: new Date().toISOString() };
-    localStorage.setItem(CLIENTS_KEY, JSON.stringify([...clients, nc]));
+  // Load client from Supabase when clientId changes
+  useEffect(() => {
+    if (!clientId) { setClient(null); return; }
+    supabase.from('portal_clients').select('*').eq('id', clientId).single()
+      .then(({ data }) => {
+        if (data) setClient(mapClient(data));
+        else { localStorage.removeItem(SESSION_KEY); setClientId(null); }
+      });
+  }, [clientId]);
+
+  // Load all client data once the client record is resolved
+  useEffect(() => {
+    if (!client) {
+      setBrief(null); setMessages([]); setDocuments([]); setMeetings([]);
+      return;
+    }
+    Promise.all([
+      supabase.from('portal_briefs').select('*').eq('client_id', client.id).maybeSingle(),
+      supabase.from('portal_messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true }),
+      supabase.from('portal_documents').select('*').eq('client_id', client.id),
+      supabase.from('portal_meetings').select('*').eq('client_id', client.id).order('created_at', { ascending: false }),
+    ]).then(([bRes, mRes, dRes, mtRes]) => {
+      if (bRes.data)  setBrief(mapBrief(bRes.data));
+      if (mRes.data)  setMessages(mRes.data.map(mapMessage));
+      if (dRes.data)  setDocuments(dRes.data.map(mapDocument));
+      if (mtRes.data) setMeetings(mtRes.data.map(mapMeeting));
+    });
+  }, [client?.id]);
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  const register = useCallback(async (
+    name: string, email: string, phone: string,
+    projectType?: string, projectInterest?: string,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const { data: existing } = await supabase
+      .from('portal_clients')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+    if (existing) return { ok: false, error: 'An account with this email already exists. Please sign in instead.' };
+
+    const { data, error } = await supabase
+      .from('portal_clients')
+      .insert({
+        name,
+        email: email.toLowerCase(),
+        phone,
+        project_type:     projectType     ?? '',
+        project_interest: projectInterest ?? '',
+        status: 'pending_approval',
+      })
+      .select()
+      .single();
+    if (error || !data) return { ok: false, error: error?.message ?? 'Registration failed.' };
+
+    const nc = mapClient(data);
     localStorage.setItem(SESSION_KEY, nc.id);
-
-    // Seed welcome message
-    const msgs = readAllMsgs();
-    msgs[nc.id] = [{
-      id: crypto.randomUUID(),
-      sender: 'builder',
-      senderName: BUILDER.name,
-      text: `Welcome to the HOU INC Client Portal, ${name}. I'm ${BUILDER.name}, Co-Founder and your dedicated project lead. I'm looking forward to learning about your vision and helping bring it to life. Please complete your Project Brief when you're ready — it gives me the context I need to prepare for our first consultation. You can also upload any required documents from the Documents tab. Feel free to message me anytime.`,
-      timestamp: new Date().toISOString(),
-    }];
-    localStorage.setItem(MSGS_KEY, JSON.stringify(msgs));
-
-    // Seed required documents
-    const allDocs = readAllDocs();
-    allDocs[nc.id] = SEED_DOCS.map(d => ({ ...d, id: crypto.randomUUID() }));
-    localStorage.setItem(DOCS_KEY, JSON.stringify(allDocs));
-
+    setClientId(nc.id);
     setClient(nc);
     return { ok: true };
   }, []);
 
-  const login = useCallback((email: string): { ok: boolean; error?: string } => {
-    const found = readClients().find(c => c.email.toLowerCase() === email.toLowerCase());
-    if (!found) return { ok: false, error: 'No account found with that email address.' };
-    localStorage.setItem(SESSION_KEY, found.id);
-    setClient(found);
-    return { ok: true };
+  const login = useCallback(async (
+    email: string,
+  ): Promise<{ ok: boolean; status?: PortalClient['status']; error?: string }> => {
+    const { data, error } = await supabase
+      .from('portal_clients')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .single();
+    if (error || !data) return { ok: false, error: 'No account found with that email address.' };
+
+    const c = mapClient(data);
+    localStorage.setItem(SESSION_KEY, c.id);
+    setClientId(c.id);
+    setClient(c);
+    return { ok: true, status: c.status };
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
+    setClientId(null);
     setClient(null);
+    setBrief(null);
+    setMessages([]);
+    setDocuments([]);
+    setMeetings([]);
   }, []);
 
-  const getBrief = useCallback((): ProjectBrief | null => {
-    if (!client) return null;
-    return readBriefs()[client.id] ?? null;
-  }, [client]);
+  // ── Brief ─────────────────────────────────────────────────────────────────
 
-  const saveBrief = useCallback((partial: Partial<ProjectBrief>) => {
-    if (!client) return;
-    const all = readBriefs();
-    all[client.id] = { ...(all[client.id] ?? {}), ...partial } as ProjectBrief;
-    localStorage.setItem(BRIEFS_KEY, JSON.stringify(all));
-  }, [client]);
+  const getBrief = useCallback((): ProjectBrief | null => brief, [brief]);
 
-  const submitBrief = useCallback((brief: ProjectBrief) => {
+  const saveBrief = useCallback(async (partial: Partial<ProjectBrief>) => {
     if (!client) return;
-    const all = readBriefs();
-    all[client.id] = { ...brief, status: 'submitted', submittedAt: new Date().toISOString() };
-    localStorage.setItem(BRIEFS_KEY, JSON.stringify(all));
-    const msgs = readAllMsgs();
-    const thread = msgs[client.id] ?? [];
-    thread.push({
-      id: crypto.randomUUID(),
-      sender: 'builder',
-      senderName: BUILDER.name,
-      text: `Excellent, ${client.name} — I've received your project brief. A ${brief.type} in ${brief.location || 'the Houston area'}, approximately ${brief.sqft} sq ft, ${brief.budget} budget. This is a strong foundation. I'm preparing a preliminary project outline and will reach out within one business day to schedule our first consultation. Very much looking forward to working together. — ${BUILDER.name}`,
-      timestamp: new Date().toISOString(),
+    const merged = { ...(brief ?? {}), ...partial } as ProjectBrief;
+    const { data, error } = await supabase
+      .from('portal_briefs')
+      .upsert({
+        client_id:   client.id,
+        type:        merged.type,
+        location:    merged.location,
+        sqft:        merged.sqft,
+        bedrooms:    merged.bedrooms,
+        bathrooms:   merged.bathrooms,
+        floors:      merged.floors,
+        style:       merged.style,
+        budget:      merged.budget,
+        timeline:    merged.timeline,
+        description: merged.description,
+        status:      merged.status ?? 'draft',
+      }, { onConflict: 'client_id' })
+      .select()
+      .single();
+    if (!error && data) setBrief(mapBrief(data));
+  }, [client, brief]);
+
+  const submitBrief = useCallback(async (briefData: ProjectBrief) => {
+    if (!client) return;
+    const { data, error } = await supabase
+      .from('portal_briefs')
+      .upsert({
+        client_id:   client.id,
+        type:        briefData.type,
+        location:    briefData.location,
+        sqft:        briefData.sqft,
+        bedrooms:    briefData.bedrooms,
+        bathrooms:   briefData.bathrooms,
+        floors:      briefData.floors,
+        style:       briefData.style,
+        budget:      briefData.budget,
+        timeline:    briefData.timeline,
+        description: briefData.description,
+        status:      'submitted',
+        submitted_at: new Date().toISOString(),
+      }, { onConflict: 'client_id' })
+      .select()
+      .single();
+    if (!error && data) setBrief(mapBrief(data));
+
+    // Auto-confirmation message
+    const welcomeText = `Excellent, ${client.name} — I've received your project brief. A ${briefData.type} in ${briefData.location || 'the Houston area'}, approximately ${briefData.sqft} sq ft, ${briefData.budget} budget. This is a strong foundation. I'm preparing a preliminary project outline and will reach out within one business day to schedule our first consultation. Very much looking forward to working together. — ${BUILDER.name}`;
+    await supabase.from('portal_messages').insert({
+      client_id:   client.id,
+      sender:      'builder',
+      sender_name: BUILDER.name,
+      body:        welcomeText,
     });
-    msgs[client.id] = thread;
-    localStorage.setItem(MSGS_KEY, JSON.stringify(msgs));
+    const { data: msgData } = await supabase
+      .from('portal_messages')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: true });
+    if (msgData) setMessages(msgData.map(mapMessage));
   }, [client]);
 
-  const getMessages = useCallback((): PortalMessage[] => {
-    if (!client) return [];
-    return readAllMsgs()[client.id] ?? [];
-  }, [client]);
+  // ── Messages ──────────────────────────────────────────────────────────────
 
-  const sendMessage = useCallback((text: string): PortalMessage[] => {
-    if (!client) return [];
-    const msgs = readAllMsgs();
-    const thread = msgs[client.id] ?? [];
-    const clientMsg: PortalMessage = {
-      id: crypto.randomUUID(), sender: 'client', senderName: client.name,
-      text, timestamp: new Date().toISOString(),
-    };
-    const updated = [...thread, clientMsg];
-    msgs[client.id] = updated;
-    localStorage.setItem(MSGS_KEY, JSON.stringify(msgs));
+  const getMessages = useCallback((): PortalMessage[] => messages, [messages]);
+
+  const sendMessage = useCallback(async (text: string): Promise<PortalMessage[]> => {
+    if (!client) return messages;
+    const { data } = await supabase.from('portal_messages').insert({
+      client_id:   client.id,
+      sender:      'client',
+      sender_name: client.name,
+      body:        text,
+    }).select().single();
+    if (!data) return messages;
+    const updated = [...messages, mapMessage(data)];
+    setMessages(updated);
     return updated;
-  }, [client]);
+  }, [client, messages]);
 
-  const commitBuilderReply = useCallback((clientText: string): PortalMessage[] => {
-    if (!client) return [];
-    const msgs = readAllMsgs();
-    const thread = msgs[client.id] ?? [];
-    const builderMsg: PortalMessage = {
-      id: crypto.randomUUID(), sender: 'builder', senderName: BUILDER.name,
-      text: autoReply(clientText, client.name),
-      timestamp: new Date().toISOString(),
-    };
-    const updated = [...thread, builderMsg];
-    msgs[client.id] = updated;
-    localStorage.setItem(MSGS_KEY, JSON.stringify(msgs));
+  const commitBuilderReply = useCallback(async (clientText: string): Promise<PortalMessage[]> => {
+    if (!client) return messages;
+    const { data } = await supabase.from('portal_messages').insert({
+      client_id:   client.id,
+      sender:      'builder',
+      sender_name: BUILDER.name,
+      body:        autoReply(clientText, client.name),
+    }).select().single();
+    if (!data) return messages;
+    const updated = [...messages, mapMessage(data)];
+    setMessages(updated);
     return updated;
-  }, [client]);
+  }, [client, messages]);
 
-  const getMessageCount = useCallback((): number => {
-    if (!client) return 0;
-    return (readAllMsgs()[client.id] ?? []).length;
-  }, [client]);
+  const getMessageCount = useCallback((): number => messages.length, [messages]);
 
-  /* ── Documents ── */
-  const getDocuments = useCallback((): PortalDocument[] => {
-    if (!client) return [];
-    return readAllDocs()[client.id] ?? [];
-  }, [client]);
+  // ── Documents ─────────────────────────────────────────────────────────────
 
-  const uploadDocument = useCallback((name: string, fileType: string, size: string, category: PortalDocument['category'] = 'uploaded'): PortalDocument => {
+  const getDocuments = useCallback((): PortalDocument[] => documents, [documents]);
+
+  const uploadDocument = useCallback(async (
+    name: string, fileType: string, size: string,
+    category: PortalDocument['category'] = 'uploaded',
+  ): Promise<PortalDocument> => {
     if (!client) throw new Error('Not authenticated');
-    const all = readAllDocs();
-    const docs = all[client.id] ?? [];
-    const newDoc: PortalDocument = {
-      id: crypto.randomUUID(),
-      name, fileType, size, category,
-      status: 'uploaded',
-      uploadedAt: new Date().toISOString(),
-    };
-    all[client.id] = [...docs, newDoc];
-    localStorage.setItem(DOCS_KEY, JSON.stringify(all));
+    const { data, error } = await supabase.from('portal_documents').insert({
+      client_id:   client.id,
+      name,
+      file_type:   fileType,
+      file_size:   size,
+      category,
+      status:      'uploaded',
+      uploaded_at: new Date().toISOString(),
+    }).select().single();
+    if (error || !data) throw new Error(error?.message ?? 'Upload failed');
+    const newDoc = mapDocument(data);
+    setDocuments(prev => [...prev, newDoc]);
     return newDoc;
   }, [client]);
 
-  const fulfillRequiredDoc = useCallback((docId: string, file: { name: string; size: string; fileType: string }) => {
+  const fulfillRequiredDoc = useCallback(async (
+    docId: string,
+    file: { name: string; size: string; fileType: string },
+  ) => {
     if (!client) return;
-    const all = readAllDocs();
-    const docs = (all[client.id] ?? []).map(d =>
-      d.id === docId ? { ...d, status: 'uploaded' as const, uploadedAt: new Date().toISOString(), size: file.size, name: file.name } : d
-    );
-    all[client.id] = docs;
-    localStorage.setItem(DOCS_KEY, JSON.stringify(all));
+    const { error } = await supabase.from('portal_documents').update({
+      status:      'uploaded',
+      uploaded_at: new Date().toISOString(),
+      file_size:   file.size,
+      name:        file.name,
+    }).eq('id', docId);
+    if (!error) {
+      setDocuments(prev => prev.map(d =>
+        d.id === docId ? { ...d, status: 'uploaded', uploadedAt: new Date().toISOString(), size: file.size, name: file.name } : d
+      ));
+    }
   }, [client]);
 
-  const deleteDocument = useCallback((docId: string) => {
+  const deleteDocument = useCallback(async (docId: string) => {
     if (!client) return;
-    const all = readAllDocs();
-    all[client.id] = (all[client.id] ?? []).filter(d => d.id !== docId);
-    localStorage.setItem(DOCS_KEY, JSON.stringify(all));
+    const { error } = await supabase.from('portal_documents').delete().eq('id', docId);
+    if (!error) setDocuments(prev => prev.filter(d => d.id !== docId));
   }, [client]);
 
-  /* ── Meetings ── */
-  const getMeetings = useCallback((): PortalMeeting[] => {
-    if (!client) return [];
-    return readAllMeetings()[client.id] ?? [];
-  }, [client]);
+  // ── Meetings ──────────────────────────────────────────────────────────────
 
-  const requestMeeting = useCallback((meeting: Omit<PortalMeeting, 'id' | 'createdAt' | 'status'>): PortalMeeting => {
+  const getMeetings = useCallback((): PortalMeeting[] => meetings, [meetings]);
+
+  const requestMeeting = useCallback(async (
+    meeting: Omit<PortalMeeting, 'id' | 'createdAt' | 'status'>,
+  ): Promise<PortalMeeting> => {
     if (!client) throw new Error('Not authenticated');
-    const all = readAllMeetings();
-    const meetings = all[client.id] ?? [];
-    const newMeeting: PortalMeeting = {
-      ...meeting,
-      id: crypto.randomUUID(),
-      status: 'requested',
-      createdAt: new Date().toISOString(),
-    };
-    all[client.id] = [...meetings, newMeeting];
-    localStorage.setItem(MEETINGS_KEY, JSON.stringify(all));
+    const { data, error } = await supabase.from('portal_meetings').insert({
+      client_id: client.id,
+      type:      meeting.type,
+      date:      meeting.date,
+      time:      meeting.time,
+      format:    meeting.format,
+      notes:     meeting.notes,
+      status:    'requested',
+    }).select().single();
+    if (error || !data) throw new Error(error?.message ?? 'Failed to schedule meeting');
+    const newMeeting = mapMeeting(data);
+    setMeetings(prev => [newMeeting, ...prev]);
 
-    // Auto-confirm message
-    const msgs = readAllMsgs();
-    const thread = msgs[client.id] ?? [];
-    thread.push({
-      id: crypto.randomUUID(),
-      sender: 'builder',
-      senderName: BUILDER.name,
-      text: `Thank you for scheduling a ${meeting.type} on ${meeting.date} at ${meeting.time} (${meeting.format}). I'll send a calendar confirmation to your email shortly. Looking forward to connecting with you. — ${BUILDER.name}`,
-      timestamp: new Date().toISOString(),
+    // Auto-confirmation message
+    await supabase.from('portal_messages').insert({
+      client_id:   client.id,
+      sender:      'builder',
+      sender_name: BUILDER.name,
+      body:        `Thank you for scheduling a ${meeting.type} on ${meeting.date} at ${meeting.time} (${meeting.format}). I'll send a calendar confirmation to your email shortly. Looking forward to connecting with you. — ${BUILDER.name}`,
     });
-    msgs[client.id] = thread;
-    localStorage.setItem(MSGS_KEY, JSON.stringify(msgs));
+    const { data: msgData } = await supabase
+      .from('portal_messages')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: true });
+    if (msgData) setMessages(msgData.map(mapMessage));
 
     return newMeeting;
   }, [client]);
 
-  const cancelMeeting = useCallback((meetingId: string) => {
+  const cancelMeeting = useCallback(async (meetingId: string) => {
     if (!client) return;
-    const all = readAllMeetings();
-    all[client.id] = (all[client.id] ?? []).map(m =>
-      m.id === meetingId ? { ...m, status: 'cancelled' as const } : m
-    );
-    localStorage.setItem(MEETINGS_KEY, JSON.stringify(all));
+    const { error } = await supabase.from('portal_meetings').update({ status: 'cancelled' }).eq('id', meetingId);
+    if (!error) {
+      setMeetings(prev => prev.map(m => m.id === meetingId ? { ...m, status: 'cancelled' as const } : m));
+    }
   }, [client]);
 
   return {
-    client, register, login, logout,
-    getBrief, saveBrief, submitBrief,
-    getMessages, sendMessage, commitBuilderReply, getMessageCount,
-    getDocuments, uploadDocument, fulfillRequiredDoc, deleteDocument,
-    getMeetings, requestMeeting, cancelMeeting,
+    client,
+    register,
+    login,
+    logout,
+    getBrief,
+    saveBrief,
+    submitBrief,
+    getMessages,
+    sendMessage,
+    commitBuilderReply,
+    getMessageCount,
+    getDocuments,
+    uploadDocument,
+    fulfillRequiredDoc,
+    deleteDocument,
+    getMeetings,
+    requestMeeting,
+    cancelMeeting,
     builder: BUILDER,
   };
 }

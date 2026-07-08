@@ -358,7 +358,7 @@ export default function Services() {
               <p className="text-[13px] leading-relaxed font-light mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 Six specialized service divisions — one unified standard of excellence. Every HOU INC project is delivered with uncompromising quality, complete transparency, and industry-leading schedule adherence.
               </p>
-              <FillBtn to="/contact" dark>Start a Project</FillBtn>
+              <FillBtn to="/start-project" dark>Start a Project</FillBtn>
             </Reveal>
           </div>
         </div>

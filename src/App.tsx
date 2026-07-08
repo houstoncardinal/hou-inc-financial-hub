@@ -12,16 +12,20 @@ import Protected from "@/components/Protected";
 import Home      from "./pages/public/Home";
 import Services  from "./pages/public/Services";
 import Portfolio from "./pages/public/Portfolio";
-import About     from "./pages/public/About";
-import Contact   from "./pages/public/Contact";
+import About        from "./pages/public/About";
+import Contact      from "./pages/public/Contact";
+import StartProject from "./pages/public/StartProject";
 
 // Client portal
 import PortalAuth      from "./pages/portal/PortalAuth";
 import PortalDashboard from "./pages/portal/PortalDashboard";
 import PortalProject   from "./pages/portal/PortalProject";
-import PortalMessages  from "./pages/portal/PortalMessages";
-import PortalDocuments from "./pages/portal/PortalDocuments";
-import PortalMeetings  from "./pages/portal/PortalMeetings";
+import PortalMessages   from "./pages/portal/PortalMessages";
+import PortalDocuments  from "./pages/portal/PortalDocuments";
+import PortalMeetings   from "./pages/portal/PortalMeetings";
+import PortalProjects   from "./pages/portal/PortalProjects";
+import PortalMilestones from "./pages/portal/PortalMilestones";
+import PortalPayments   from "./pages/portal/PortalPayments";
 
 // Admin
 import Admin from "./pages/Admin";
@@ -64,7 +68,8 @@ const App = () => (
                 <Route path="/services"  element={<Services />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/about"     element={<About />} />
-                <Route path="/contact"   element={<Contact />} />
+                <Route path="/contact"        element={<Contact />} />
+                <Route path="/start-project" element={<StartProject />} />
 
                 {/* ── Client portal ── */}
                 <Route path="/portal"             element={<PortalAuth />} />
@@ -72,7 +77,10 @@ const App = () => (
                 <Route path="/portal/project"     element={<PortalProject />} />
                 <Route path="/portal/messages"    element={<PortalMessages />} />
                 <Route path="/portal/documents"  element={<PortalDocuments />} />
-                <Route path="/portal/meetings"   element={<PortalMeetings />} />
+                <Route path="/portal/meetings"    element={<PortalMeetings />} />
+                <Route path="/portal/projects"   element={<PortalProjects />} />
+                <Route path="/portal/milestones" element={<PortalMilestones />} />
+                <Route path="/portal/payments"   element={<PortalPayments />} />
 
                 {/* ── Admin ── */}
                 <Route path="/admin"             element={<Admin />} />

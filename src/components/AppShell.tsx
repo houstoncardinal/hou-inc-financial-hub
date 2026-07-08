@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useRole } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useInvoices } from '@/hooks/useInvoices';
 import {
@@ -56,6 +56,7 @@ const mobileNav = [
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
+  const role = useRole();
   const { toggle, isDark } = useTheme();
   const { invoices } = useInvoices();
   const navigate = useNavigate();
@@ -138,7 +139,14 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
             {initials}
           </div>
           <div className="flex-1 min-w-0 text-left">
-            <div className="truncate text-foreground text-[11px]">{displayName || 'User'}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-foreground text-[11px]">{displayName || 'User'}</span>
+              {role === 'viewer' && (
+                <span className="shrink-0 text-[7px] uppercase tracking-[0.16em] px-1 py-0.5 font-bold bg-accent/10 text-accent border border-accent/30">
+                  Viewer
+                </span>
+              )}
+            </div>
             <div className="truncate text-muted-foreground text-[9px]">{user?.email}</div>
           </div>
           <Settings className="w-3 h-3 text-muted-foreground shrink-0" strokeWidth={1.5} />
