@@ -11,6 +11,7 @@ import { motion, AnimatePresence, useScroll, useTransform, LayoutGroup } from 'f
 import PublicLayout from '@/components/PublicLayout';
 import Reveal from '@/components/motion/Reveal';
 import TiltCard from '@/components/motion/TiltCard';
+import HowCanWeHelpSection from '@/components/HowCanWeHelpSection';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const B    = '#0A0A0A';
@@ -1519,48 +1520,9 @@ export default function Home() {
       </section>
 
       {/* ══════════════════════════════════════════════
-          SERVICES — cream bg, TiltCard hover
+          HOW CAN WE HELP — interactive guided form
       ══════════════════════════════════════════════ */}
-      <section style={{ backgroundColor: W, paddingTop: 80, paddingBottom: 80 }}>
-        <div className="max-w-7xl mx-auto px-8 md:px-14">
-          <Reveal>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-14">
-              <div>
-                <Eyebrow>What We Build</Eyebrow>
-                <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px,4vw,52px)', color: B, lineHeight: 1.06 }}>
-                  Comprehensive construction<br />services, tailored to you.
-                </h2>
-              </div>
-              <FillBtn to="/services" variant="dark">
-                All Services <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              </FillBtn>
-            </div>
-          </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                img: PH.svcRes, tag: '01 · Residential', title: 'Residential Construction',
-                sub: 'From new custom home builds to renovations, we handle it all — from concept to completion with unmatched quality craftsmanship.',
-                spec: ['Custom Home Construction', 'Home Renovation', 'Home Additions', 'Kitchen & Bath Remodeling', 'Interior & Exterior Upgrades'],
-              },
-              {
-                img: PH.svcComm, tag: '02 · Commercial', title: 'Commercial Construction',
-                sub: 'Our commercial projects range from office buildings to retail spaces, ensuring every detail aligns with your business needs and vision.',
-                spec: ['Office Buildings', 'Retail Spaces', 'Hospitality & Entertainment', 'Educational Facilities', 'Industrial & Warehousing'],
-              },
-              {
-                img: PH.svcPM, tag: '03 · Management', title: 'Project Management',
-                sub: 'Enjoy peace of mind as we oversee your project from start to finish — meticulous planning, budget control, and quality assurance throughout.',
-                spec: ['Collaborative Planning', 'Detailed Scheduling', 'Budget Management', 'Quality Assurance', 'Risk Management'],
-              },
-            ].map((s, i) => (
-              <Reveal key={s.tag} delay={i * 0.1}>
-                <ServiceCard s={s} />
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HowCanWeHelpSection />
 
       {/* ══════════════════════════════════════════════
           MANIFESTO — cream with word-reveal

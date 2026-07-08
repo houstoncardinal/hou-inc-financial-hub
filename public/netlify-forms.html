@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Netlify Form Definitions</title>
+</head>
+<body>
+  <!--
+    This file registers all forms with Netlify at build time.
+    The Netlify build bot crawls static HTML to discover forms.
+    React/SPA forms submit via fetch() to /?form-name=<name>
+    and reference the form-name declared here.
+  -->
+
+  <!-- Contact page form -->
+  <form name="contact-form" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input name="bot-field" />
+    <input type="text" name="name" />
+    <input type="email" name="email" />
+    <input type="tel" name="phone" />
+    <input type="text" name="company" />
+    <input type="text" name="service" />
+    <input type="text" name="budget" />
+    <textarea name="message"></textarea>
+  </form>
+
+  <!-- Homepage "How Can We Help" guided project inquiry -->
+  <form name="project-inquiry" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input name="bot-field" />
+    <input type="text" name="name" />
+    <input type="email" name="email" />
+    <input type="tel" name="phone" />
+    <input type="text" name="type" />
+    <input type="text" name="scope" />
+    <input type="text" name="sqft" />
+    <input type="text" name="location" />
+    <input type="text" name="budget" />
+    <input type="text" name="start_timeline" />
+    <textarea name="description"></textarea>
+  </form>
+
+  <!-- Portal registration form (mirrors PortalAuth.tsx fields) -->
+  <form name="portal-registration" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input name="bot-field" />
+    <input type="text" name="name" />
+    <input type="email" name="email" />
+    <input type="tel" name="phone" />
+    <input type="text" name="project_type" />
+    <textarea name="interest"></textarea>
+  </form>
+
+</body>
+</html>

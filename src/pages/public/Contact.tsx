@@ -125,6 +125,9 @@ export default function Contact() {
     return Object.keys(e).length === 0;
   };
 
+  const encodeForm = (data: Record<string, string>) =>
+    Object.keys(data).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(data[k])).join('&');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -137,6 +140,23 @@ export default function Contact() {
         budget_range: form.budget || null, message: form.message,
       });
       if (error) throw error;
+
+      // Netlify dual-submit (best-effort, non-blocking)
+      fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: encodeForm({
+          'form-name': 'contact-form',
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          company: form.company,
+          service: form.service,
+          budget: form.budget,
+          message: form.message,
+        }),
+      }).catch(() => {/* best-effort */});
+
       setSuccess(true);
     } catch {
       setServerErr('Something went wrong. Please call us directly at (281) 915-9595.');
