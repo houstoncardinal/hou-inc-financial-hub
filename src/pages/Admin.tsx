@@ -5,12 +5,14 @@ import {
   Users, MessageSquare, BarChart3, Settings, Image,
   ArrowUpRight, TrendingUp, CheckCircle, Clock, AlertCircle,
   Plus, Trash2, Edit3, LogOut, X, FileText, Calendar,
-  Building2, Star, RefreshCw, ScanLine,
+  Building2, Star, RefreshCw,
   ChevronRight, ChevronDown, Send, CheckCircle2, XCircle,
   Video, Phone, MapPin, FileCheck, Package,
   Layers, CreditCard, Inbox, DollarSign,
   ArrowLeft, ClipboardList, User, UserCheck, UserX, ShieldCheck,
+  Map,
 } from 'lucide-react';
+import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortfolioManager from '@/components/admin/PortfolioManager';
@@ -177,7 +179,7 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'finance' | 'analytics';
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics';
 
 export default function Admin() {
   /* ── Auth ── */
@@ -285,6 +287,7 @@ export default function Admin() {
     { key: 'documents',  label: 'Documents',          icon: FileCheck,   badge: pendingDocs.length || undefined },
     { key: 'meetings',   label: 'Meetings',           icon: Calendar,    badge: pendingMeets.length || undefined },
     { key: 'portfolio',  label: 'Portfolio',          icon: Image },
+    { key: 'map',        label: 'Client Map',         icon: Map },
     { key: 'finance',    label: 'Finance Data',       icon: DollarSign },
     { key: 'analytics',  label: 'Analytics',          icon: TrendingUp },
   ];
@@ -343,7 +346,7 @@ export default function Admin() {
 
   /* ════════ DASHBOARD ════════ */
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: G50 }}>
+    <div className="flex" style={{ backgroundColor: G50, height: '100vh', overflow: 'hidden' }}>
 
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 w-[240px]"
@@ -372,15 +375,6 @@ export default function Admin() {
             </button>
           ))}
         </nav>
-        <div className="px-3 pb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="px-3 pt-3 pb-1.5 text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: 'rgba(255,255,255,0.18)' }}>Tools</div>
-          <Link to="/scraper" className="w-full flex items-center gap-3 px-3 py-2.5 text-[11px] font-semibold transition-colors"
-            style={{ color: 'rgba(255,255,255,0.45)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = AC; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; }}>
-            <ScanLine className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} /> Web Scraper
-          </Link>
-        </div>
         <div className="px-3 pb-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <Link to="/" className="w-full flex items-center gap-3 px-3 py-2.5 mt-3 text-[11px] font-semibold transition-colors" style={{ color: 'rgba(255,255,255,0.25)' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'; }}
@@ -401,7 +395,7 @@ export default function Admin() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 md:ml-[240px]">
+      <main className="flex-1 md:ml-[240px] flex flex-col overflow-y-auto">
         {/* Top bar */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-6 py-4"
           style={{ backgroundColor: W, borderBottom: `1px solid ${G200}`, boxShadow: '0 1px 12px rgba(0,0,0,0.04)' }}>
@@ -435,7 +429,13 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="px-6 py-7">
+        {tab === 'map' && (
+          <div className="flex-1" style={{ overflow: 'hidden' }}>
+            <ClientMap />
+          </div>
+        )}
+
+        {tab !== 'map' && <div className="px-6 py-7">
 
           {/* ══════ OVERVIEW ══════ */}
           {tab === 'overview' && (
@@ -1444,7 +1444,7 @@ export default function Admin() {
             </motion.div>
           )}
 
-        </div>
+        </div>}
       </main>
     </div>
   );
