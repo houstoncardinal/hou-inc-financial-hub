@@ -54,9 +54,10 @@ const SCOPE_LABEL: Record<ProjectType, string> = { residential: 'Project Type', 
 const STAGE_LABEL: Record<ProjectType, string> = { residential: 'Project Stage', commercial: 'Project Stage', project_management: 'Current Stage' };
 
 /* ── Dropdown menu content ───────────────────────────────────────────── */
+type MenuItem = { label: string; slug: string };
 type DropdownMenu = {
-  col1: { heading: string; items: string[] };
-  col2: { heading: string; items: string[] };
+  col1: { heading: string; items: MenuItem[] };
+  col2: { heading: string; items: MenuItem[] };
   trends: string[];
   trendNote: string;
   ctaLabel: string;
@@ -69,23 +70,23 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     col1: {
       heading: 'Home Styles & Design',
       items: [
-        'Modern Farmhouse',
-        'Warm Contemporary',
-        'Traditional Colonial',
-        'Mediterranean Estate',
-        'Mid-Century Modern',
-        'Indoor-Outdoor Living',
+        { label: 'Modern Farmhouse',      slug: 'modern-farmhouse' },
+        { label: 'Warm Contemporary',     slug: 'warm-contemporary' },
+        { label: 'Traditional Colonial',  slug: 'traditional-colonial' },
+        { label: 'Mediterranean Estate',  slug: 'mediterranean-estate' },
+        { label: 'Mid-Century Modern',    slug: 'mid-century-modern' },
+        { label: 'Indoor-Outdoor Living', slug: 'indoor-outdoor-living' },
       ],
     },
     col2: {
       heading: 'Project Types',
       items: [
-        'New Custom Home Build',
-        'Full Home Renovation',
-        'Kitchen & Bath Upgrade',
-        'Home Addition',
-        'Master Suite Expansion',
-        'Pool House & Outdoor',
+        { label: 'New Custom Home Build',   slug: 'custom-home-build' },
+        { label: 'Full Home Renovation',    slug: 'home-renovation' },
+        { label: 'Kitchen & Bath Upgrade',  slug: 'kitchen-bath-upgrade' },
+        { label: 'Home Addition',           slug: 'home-addition' },
+        { label: 'Master Suite Expansion',  slug: 'master-suite-expansion' },
+        { label: 'Pool House & Outdoor',    slug: 'pool-house-outdoor' },
       ],
     },
     trends: ['Warm Minimalism', 'Biophilic Design', 'Statement Ceilings', 'Japandi Style', 'Arch Detailing'],
@@ -98,23 +99,23 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     col1: {
       heading: 'Building Types',
       items: [
-        'Class A Office Space',
-        'Retail & Mixed-Use',
-        'Restaurant / Hospitality',
-        'Industrial & Logistics',
-        'Healthcare / Medical',
-        'Educational Facility',
+        { label: 'Class A Office Space',       slug: 'class-a-office' },
+        { label: 'Retail & Mixed-Use',         slug: 'retail-mixed-use' },
+        { label: 'Restaurant / Hospitality',   slug: 'restaurant-hospitality' },
+        { label: 'Industrial & Logistics',     slug: 'industrial-logistics' },
+        { label: 'Healthcare / Medical',       slug: 'healthcare-medical' },
+        { label: 'Educational Facility',       slug: 'educational-facility' },
       ],
     },
     col2: {
       heading: 'Specialty Builds',
       items: [
-        'Ground-Up Construction',
-        'Tenant Improvements',
-        'Exterior Facade & Skin',
-        'Interior Fitout & FF&E',
-        'Adaptive Reuse',
-        'LEED-Ready Development',
+        { label: 'Ground-Up Construction',  slug: 'ground-up-construction' },
+        { label: 'Tenant Improvements',     slug: 'tenant-improvements' },
+        { label: 'Exterior Facade & Skin',  slug: 'exterior-facade' },
+        { label: 'Interior Fitout & FF&E',  slug: 'interior-fitout' },
+        { label: 'Adaptive Reuse',          slug: 'adaptive-reuse' },
+        { label: 'LEED-Ready Development',  slug: 'leed-development' },
       ],
     },
     trends: ['Activity-Based Workplaces', 'Living Walls', 'Industrial Chic', 'Warm Material Palettes', 'Hybrid Office Design'],
@@ -127,23 +128,23 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     col1: {
       heading: 'PM Services',
       items: [
-        'Pre-Construction Planning',
-        'Budget & Cost Control',
-        'Schedule Management',
-        'Subcontractor Coordination',
-        'Quality Assurance',
-        'Closeout & Handover',
+        { label: 'Pre-Construction Planning',    slug: 'pre-construction-planning' },
+        { label: 'Budget & Cost Control',        slug: 'budget-cost-control' },
+        { label: 'Schedule Management',          slug: 'schedule-management' },
+        { label: 'Subcontractor Coordination',   slug: 'subcontractor-coordination' },
+        { label: 'Quality Assurance',            slug: 'quality-assurance' },
+        { label: 'Closeout & Handover',          slug: 'project-closeout' },
       ],
     },
     col2: {
       heading: 'PM Expertise',
       items: [
-        'Residential Projects',
-        'Commercial Builds',
-        'Multi-Family Developments',
-        'Industrial Projects',
-        'Crisis & Recovery PM',
-        "Owner's Rep / Consulting",
+        { label: 'Residential Projects',       slug: 'residential-pm' },
+        { label: 'Commercial Builds',          slug: 'commercial-pm' },
+        { label: 'Multi-Family Developments',  slug: 'multi-family-pm' },
+        { label: 'Industrial Projects',        slug: 'industrial-pm' },
+        { label: 'Crisis & Recovery PM',       slug: 'crisis-recovery-pm' },
+        { label: "Owner's Rep / Consulting",   slug: 'owners-rep' },
       ],
     },
     trends: ['BIM & Digital Twins', 'Lean Construction', 'Real-Time Dashboards', 'Prefab Integration', 'Sustainable Builds'],
@@ -235,8 +236,8 @@ function CardDropdown({
                 style={{ listStyle: 'none', margin: 0, padding: 0 }}
               >
                 {col.items.map(item => (
-                  <motion.li key={item} variants={itemVar}>
-                    <DropdownItem label={item} onClick={() => onSelect(type)} />
+                  <motion.li key={item.slug} variants={itemVar}>
+                    <DropdownItem label={item.label} slug={item.slug} />
                   </motion.li>
                 ))}
               </motion.ul>
@@ -323,22 +324,20 @@ function CardDropdown({
   );
 }
 
-/* ── Dropdown item ───────────────────────────────────────────────────── */
-function DropdownItem({ label, onClick }: { label: string; onClick: () => void }) {
+/* ── Dropdown item — links to /services/:slug ────────────────────────── */
+function DropdownItem({ label, slug }: { label: string; slug: string }) {
   const [hov, setHov] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      to={`/services/${slug}`}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', background: hov ? 'rgba(157,126,63,0.06)' : 'none',
-        border: 'none',
         borderLeft: `2px solid ${hov ? AC : 'transparent'}`,
         padding: '10px 10px 10px 12px',
-        cursor: 'pointer', textAlign: 'left',
+        textDecoration: 'none', textAlign: 'left',
         color: hov ? W : 'rgba(255,255,255,0.75)',
         fontSize: 14, fontFamily: 'inherit',
         transition: 'color 0.14s, background 0.14s, border-color 0.14s',
@@ -350,7 +349,7 @@ function DropdownItem({ label, onClick }: { label: string; onClick: () => void }
         strokeWidth={2.5}
       />
       {label}
-    </button>
+    </Link>
   );
 }
 

@@ -9,12 +9,13 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
 
 // Public website
-import Home      from "./pages/public/Home";
-import Services  from "./pages/public/Services";
-import Portfolio from "./pages/public/Portfolio";
-import About        from "./pages/public/About";
-import Contact      from "./pages/public/Contact";
-import StartProject from "./pages/public/StartProject";
+import Home          from "./pages/public/Home";
+import Services      from "./pages/public/Services";
+import ServiceDetail from "./pages/public/ServiceDetail";
+import Portfolio     from "./pages/public/Portfolio";
+import About         from "./pages/public/About";
+import Contact       from "./pages/public/Contact";
+import StartProject  from "./pages/public/StartProject";
 
 // Client portal
 import PortalAuth      from "./pages/portal/PortalAuth";
@@ -65,7 +66,8 @@ const App = () => (
               <Routes>
                 {/* ── Public website ── */}
                 <Route path="/"          element={<Home />} />
-                <Route path="/services"  element={<Services />} />
+                <Route path="/services"          element={<Services />} />
+                <Route path="/services/:slug"   element={<ServiceDetail />} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/about"     element={<About />} />
                 <Route path="/contact"        element={<Contact />} />
