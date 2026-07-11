@@ -265,7 +265,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         ? 'Add VITE_OPENAI_API_KEY to .env to enable AI scanning'
         : (e.message || 'Could not read receipt');
       setScanError(msg);
-      if (e.message === 'OPENAI_API_KEY_MISSING') toast.error(msg);
+      toast.error(msg);
     } finally {
       setScanning(false);
     }
@@ -335,11 +335,11 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     <AppShell>
       {/* Hidden inputs for quick-scan (page-level) */}
       <input ref={quickCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFileInput(e, 'quick')} />
-      <input ref={quickUploadRef} type="file" accept="image/*,.pdf"                  className="hidden" onChange={e => handleFileInput(e, 'quick')} />
+      <input ref={quickUploadRef} type="file" accept="image/*"                       className="hidden" onChange={e => handleFileInput(e, 'quick')} />
 
       {/* Hidden inputs for in-dialog scanner */}
       <input ref={dialogCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFileInput(e, 'dialog')} />
-      <input ref={dialogUploadRef} type="file" accept="image/*,.pdf"                  className="hidden" onChange={e => handleFileInput(e, 'dialog')} />
+      <input ref={dialogUploadRef} type="file" accept="image/*"                       className="hidden" onChange={e => handleFileInput(e, 'dialog')} />
 
       <PageHeader
         eyebrow={isIncome ? 'Capital Inflow' : 'Capital Outflow'}

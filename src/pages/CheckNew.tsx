@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -31,8 +31,8 @@ export default function CheckNew() {
     issue_date: new Date().toISOString().slice(0, 10), memo: '', project_id: '', status: 'pending' as const,
   });
 
-  // sync default check #
-  useMemo(() => { if (form.check_number === '1001' || !form.check_number) setForm(f => ({ ...f, check_number: nextNumber })); }, [nextNumber]);
+  // sync default check # once async checks data loads
+  useEffect(() => { if (form.check_number === '1001' || !form.check_number) setForm(f => ({ ...f, check_number: nextNumber })); }, [nextNumber]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

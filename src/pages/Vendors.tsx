@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useTransactions, useUpsert, useVendors } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
-import { Trash2, Download, FileText } from 'lucide-react';
+import { Trash2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/reports';
 

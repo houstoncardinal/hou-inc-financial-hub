@@ -25,6 +25,7 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 
 const ROUTES = new Set([
   '/finance',
+  '/finance/dashboard',
   '/ledger',
   '/checks',
   '/checks/new',

@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useRole } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
@@ -8,17 +8,18 @@ import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
   Settings, Sun, Moon, Receipt, BookMarked, Globe,
-  Building2, Zap, Landmark, ChevronRight, RefreshCw,
+  Building2, Zap, Landmark, Layers, FolderOpen,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
+import { useState } from 'react';
 
 const navGroups = [
   {
     label: 'Daily',
     items: [
-      { to: '/finance', label: 'Overview', icon: LayoutGrid, end: true },
+      { to: '/finance/dashboard', label: 'Overview', icon: LayoutGrid, end: true },
       { to: '/ledger', label: 'Ledger', icon: BookOpen },
       { to: '/checks', label: 'Checks', icon: FileText },
       { to: '/income', label: 'Income', icon: ArrowDownToLine },
@@ -46,23 +47,29 @@ const navGroups = [
       { to: '/glossary', label: 'Glossary', icon: BookMarked },
     ],
   },
+  {
+    label: 'Storage',
+    items: [
+      { to: '/documents', label: 'Documents', icon: FolderOpen },
+    ],
+  },
 ];
 
 const mobileNav = [
-  { to: '/finance', label: 'Home', icon: LayoutGrid, end: true },
+  { to: '/finance', label: 'Entity', icon: Layers, end: true },
+  { to: '/finance/dashboard', label: 'Overview', icon: LayoutGrid, end: true },
   { to: '/checks', label: 'Checks', icon: FileText },
   { to: '/income', label: 'Income', icon: ArrowDownToLine },
-  { to: '/expenses', label: 'Expenses', icon: ArrowUpFromLine },
-  { to: '/concierge', label: 'Assist', icon: ConciergeBell },
+  { to: '/documents', label: 'Docs', icon: FolderOpen },
 ];
 
 const ENTITY_ICONS: Record<string, React.ComponentType<any>> = {
-  'houston-enterprise':          Building2,
-  'houston-generator-pros':      Zap,
-  'houston-enterprise-holdings': Landmark,
+  'houston-enterprise':           Building2,
+  'houston-generator-pros':       Zap,
+  'houston-enterprise-holdings':  Landmark,
 };
 
-function NavContent({ onNavigate }: { onNavigate?: () => void }) {
+function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; isMobileSheet?: boolean }) {
   const { user, signOut } = useAuth();
   const role = useRole();
   const { toggle, isDark } = useTheme();
@@ -73,9 +80,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const displayName = user?.user_metadata?.full_name || '';
   const initials = (displayName || user?.email || 'U').charAt(0).toUpperCase();
   const overdueCount = invoices.filter(i => i.status === 'overdue').length;
-  const [entityDropOpen, setEntityDropOpen] = useState(false);
-
-  const EntityIcon = entity ? (ENTITY_ICONS[entity.id] ?? Building2) : Building2;
 
   const handleSettings = () => {
     navigate('/settings');
@@ -83,98 +87,112 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
     sounds.tap();
   };
 
+  const handleEntitySwitch = (id: string) => {
+    const found = ENTITIES.find(e => e.id === id);
+    if (found) {
+      setEntity(found);
+      navigate('/finance/dashboard');
+      onNavigate?.();
+      sounds.tap();
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Brand + Theme Toggle */}
-      <div className="px-5 h-14 flex items-center justify-between border-b border-border shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-0.5 h-5 bg-accent" />
-          <div>
+      <div className="px-5 h-14 flex items-center border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className="w-0.5 h-5 bg-accent shrink-0" />
+          <div className="min-w-0">
             <div className="text-xs font-bold tracking-[0.12em] uppercase">HOU INC</div>
             <div className="text-[7px] uppercase tracking-[0.2em] text-muted-foreground">Finance Sector</div>
           </div>
         </div>
+        {/* Theme toggle — pushed to right but not touching close button */}
         <button
           onClick={() => { toggle(); sounds.tap(); }}
-          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded-sm transition-all"
+          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded-sm transition-all shrink-0"
+          style={{ marginRight: isMobileSheet ? 40 : 0 }}
           aria-label="Toggle theme"
         >
           {isDark ? <Sun className="w-3.5 h-3.5" strokeWidth={1.5} /> : <Moon className="w-3.5 h-3.5" strokeWidth={1.5} />}
         </button>
       </div>
 
-      {/* Entity selector */}
-      <div className="px-3 py-2 shrink-0 relative" style={{ borderBottom: '1px solid var(--border)' }}>
-        <button
-          onClick={() => setEntityDropOpen(v => !v)}
-          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-sm transition-colors hover:bg-secondary/50 text-left"
-        >
-          <div
-            className="w-5 h-5 flex items-center justify-center shrink-0"
-            style={{ backgroundColor: entity ? entity.colorMuted : 'rgba(157,126,63,0.08)', border: `1px solid ${entity?.color ?? 'rgba(157,126,63,0.2)'}` }}
+      {/* ── Entity Switcher Panel ── */}
+      <div className="shrink-0 border-b border-border">
+        {/* Section header */}
+        <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
+          <span className="text-[7px] uppercase tracking-[0.3em] font-bold text-muted-foreground/60">Entity</span>
+          <NavLink
+            to="/finance"
+            onClick={() => { onNavigate?.(); sounds.tap(); }}
+            className={({ isActive }) =>
+              `text-[7px] uppercase tracking-[0.2em] font-semibold transition-colors ${
+                isActive ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
+              }`
+            }
           >
-            <EntityIcon className="w-2.5 h-2.5" style={{ color: entity?.color ?? '#9D7E3F', strokeWidth: 1.5 }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            {entity ? (
-              <>
-                <div className="text-[10px] font-semibold truncate text-foreground leading-tight">{entity.shortName}</div>
-                <div className="text-[7px] uppercase tracking-[0.14em] text-muted-foreground truncate leading-tight">{entity.category}</div>
-              </>
-            ) : (
-              <>
-                <div className="text-[10px] font-semibold text-muted-foreground leading-tight">No entity</div>
-                <div className="text-[7px] uppercase tracking-[0.14em] text-muted-foreground/60 leading-tight">Select an entity</div>
-              </>
-            )}
-          </div>
-          <ChevronRight
-            className="w-3 h-3 shrink-0 text-muted-foreground transition-transform"
-            style={{ transform: entityDropOpen ? 'rotate(90deg)' : 'none' }}
-            strokeWidth={1.5}
-          />
-        </button>
+            Full Selector →
+          </NavLink>
+        </div>
 
-        {/* Entity dropdown */}
-        {entityDropOpen && (
-          <div
-            className="absolute left-2 right-2 z-50 py-1 shadow-lg"
-            style={{ top: '100%', marginTop: 2, backgroundColor: 'var(--background)', border: '1px solid var(--border)' }}
-          >
-            {ENTITIES.map(e => {
-              const EIcon = ENTITY_ICONS[e.id] ?? Building2;
-              const active = entity?.id === e.id;
-              return (
-                <button
-                  key={e.id}
-                  onClick={() => { setEntity(e); setEntityDropOpen(false); navigate('/finance'); onNavigate?.(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-secondary/40"
-                  style={{ backgroundColor: active ? 'var(--secondary)' : 'transparent' }}
-                >
+        {/* 3 entity buttons — always visible, one-click switch */}
+        <div className="px-2 pb-2.5 space-y-0.5">
+          {ENTITIES.map(e => {
+            const EIcon = ENTITY_ICONS[e.id] ?? Building2;
+            const active = entity?.id === e.id;
+            return (
+              <button
+                key={e.id}
+                onClick={() => handleEntitySwitch(e.id)}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-all duration-200 relative overflow-hidden"
+                style={{
+                  backgroundColor: active ? e.colorMuted : 'transparent',
+                  border: `1px solid ${active ? e.color : 'transparent'}`,
+                }}
+              >
+                {/* Active indicator bar */}
+                {active && (
                   <div
-                    className="w-4 h-4 flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: e.colorMuted, border: `1px solid ${e.color}` }}
+                    className="absolute left-0 top-0 bottom-0 w-0.5"
+                    style={{ backgroundColor: e.color }}
+                  />
+                )}
+                <div
+                  className="w-5 h-5 flex items-center justify-center shrink-0"
+                  style={{
+                    backgroundColor: active ? e.colorMuted : 'var(--secondary)',
+                    border: `1px solid ${active ? e.color : 'var(--border)'}`,
+                    transition: 'background 0.2s, border-color 0.2s',
+                  }}
+                >
+                  <EIcon
+                    className="w-2.5 h-2.5"
+                    style={{ color: active ? e.color : 'var(--muted-foreground)', strokeWidth: 1.5 }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-[9px] font-bold uppercase tracking-[0.1em] truncate leading-tight"
+                    style={{ color: active ? e.color : 'var(--foreground)' }}
                   >
-                    <EIcon className="w-2.5 h-2.5" style={{ color: e.color, strokeWidth: 1.5 }} />
+                    {e.shortName}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-semibold text-foreground truncate leading-tight">{e.shortName}</div>
-                    <div className="text-[7px] uppercase tracking-[0.12em] text-muted-foreground truncate">{e.category}</div>
+                  <div className="text-[7px] text-muted-foreground uppercase tracking-[0.14em] truncate leading-tight">
+                    {e.category}
                   </div>
-                  {active && <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: e.color }} />}
-                </button>
-              );
-            })}
-            <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-            <button
-              onClick={() => { setEntityDropOpen(false); navigate('/finance/select'); onNavigate?.(); }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[9px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"
-            >
-              <RefreshCw className="w-3 h-3 shrink-0" strokeWidth={1.5} />
-              Switch Entity
-            </button>
-          </div>
-        )}
+                </div>
+                {active && (
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: e.color }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Navigation */}
@@ -296,7 +314,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile drawer */}
       <Sheet open={sheetOpen} onOpenChange={o => { setSheetOpen(o); if (!o) sounds.close(); }}>
         <SheetContent side="left" className="p-0 w-64 rounded-none border-r border-border">
-          <NavContent onNavigate={() => setSheetOpen(false)} />
+          <NavContent onNavigate={() => setSheetOpen(false)} isMobileSheet />
         </SheetContent>
       </Sheet>
 

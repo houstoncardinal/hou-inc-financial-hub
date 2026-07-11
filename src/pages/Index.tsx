@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo, useState, useRef } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
@@ -7,12 +7,132 @@ import { useInvoices, invoiceTotal } from '@/hooks/useInvoices';
 import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
-import { FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap, ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle, X, Building2, RefreshCw } from 'lucide-react';
+import {
+  FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap,
+  ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle,
+  X, RefreshCw, Camera, BookOpen, Grid3X3, BookMarked, FolderOpen,
+  Upload, ChevronRight, Layers,
+} from 'lucide-react';
 import { generateLedgerReport, savePDF } from '@/lib/reports';
 import { toast } from 'sonner';
 import TimeFilter, { getDateRange } from '@/components/TimeFilter';
 import { CashFlowChart } from '@/components/FinancialChartPanel';
 import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from '@/components/StatChartPanel';
+import { AnimatePresence, motion } from 'framer-motion';
+
+/* ── Mobile Finance Menu ──────────────────────────────────────────────────── */
+const FINANCE_SECTIONS = [
+  {
+    group: 'Daily',
+    items: [
+      { to: '/finance/dashboard', label: 'Overview', icon: Grid3X3, desc: 'Balance, stats & charts' },
+      { to: '/ledger', label: 'Ledger', icon: BookOpen, desc: 'Full transaction log' },
+      { to: '/checks', label: 'Checks', icon: FileText, desc: 'Issue & track checks' },
+      { to: '/income', label: 'Income', icon: ArrowDownToLine, desc: 'Log revenue' },
+      { to: '/expenses', label: 'Expenses', icon: ArrowUpFromLine, desc: 'Record payments' },
+    ],
+  },
+  {
+    group: 'Management',
+    items: [
+      { to: '/projects', label: 'Projects', icon: FolderKanban, desc: 'Active & archived jobs' },
+      { to: '/vendors', label: 'Vendors', icon: Users, desc: 'Vendor directory' },
+      { to: '/invoices', label: 'Invoices', icon: Receipt, desc: 'Billing & collections' },
+    ],
+  },
+  {
+    group: 'Tools',
+    items: [
+      { to: '/charts', label: 'Charts', icon: BarChart3, desc: 'Visual analytics' },
+      { to: '/concierge', label: 'Concierge', icon: ConciergeBell, desc: 'Guided assistant' },
+      { to: '/documents', label: 'Documents', icon: FolderOpen, desc: 'Receipts & files' },
+      { to: '/glossary', label: 'Glossary', icon: BookMarked, desc: 'Terms & definitions' },
+      { to: '/finance', label: 'Switch Entity', icon: Layers, desc: 'Change active entity' },
+    ],
+  },
+];
+
+function MobileFinanceMenu({
+  open, onClose, entityColor,
+}: { open: boolean; onClose: () => void; entityColor?: string }) {
+  const navigate = useNavigate();
+  const color = entityColor || '#9D7E3F';
+
+  const go = (to: string) => {
+    onClose();
+    navigate(to);
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
+          {/* Sheet */}
+          <motion.div
+            className="fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border"
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+            style={{ maxHeight: '85vh', overflowY: 'auto', paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            {/* Handle + header */}
+            <div className="sticky top-0 bg-background border-b border-border z-10">
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
+              <div className="px-5 pb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground">Finance Hub</div>
+                  <div className="text-sm font-semibold tracking-tight">All Sections</div>
+                </div>
+                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 py-3 space-y-4">
+              {FINANCE_SECTIONS.map(section => (
+                <div key={section.group}>
+                  <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground/60 mb-2 px-1">
+                    {section.group}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {section.items.map(item => (
+                      <button
+                        key={item.to}
+                        onClick={() => go(item.to)}
+                        className="flex items-center gap-2.5 p-3 border border-border bg-background hover:bg-secondary/40 active:bg-secondary transition-colors text-left"
+                      >
+                        <div
+                          className="w-8 h-8 flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: `${color}14` }}
+                        >
+                          <item.icon className="w-3.5 h-3.5" style={{ color }} strokeWidth={1.5} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold truncate">{item.label}</div>
+                          <div className="text-[9px] text-muted-foreground truncate">{item.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="h-4" />
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 function StatusBadge({ status }: { status: string | null }) {
   if (!status || status === '—') return null;
@@ -30,7 +150,9 @@ function StatusBadge({ status }: { status: string | null }) {
 
 export default function Index() {
   const navigate = useNavigate();
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
+
+  // All hooks must be called unconditionally (Rules of Hooks)
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
@@ -39,6 +161,8 @@ export default function Index() {
   const { invoices } = useInvoices();
   const [timePeriod, setTimePeriod] = useState('all');
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const { start, end } = getDateRange(timePeriod);
@@ -105,7 +229,7 @@ export default function Index() {
       const inflow = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const exp = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
-      data.push({ month: months[(d.getMonth() + i) % 12] || '', balance: inflow - (exp + chk) });
+      data.push({ month: months[d.getMonth()] || '', balance: inflow - (exp + chk) });
     }
     return data;
   }, [income, expenses, checks]);
@@ -118,7 +242,7 @@ export default function Index() {
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
       const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= start && d2 < end; };
-      data.push({ month: months[(d.getMonth() + i) % 12] || '', inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) });
+      data.push({ month: months[d.getMonth()] || '', inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) });
     }
     return data;
   }, [income]);
@@ -188,8 +312,12 @@ export default function Index() {
     return { overdueCount: overdue.length, overdueTotal, outstanding };
   }, [invoices]);
 
-  const stalePendingCount = pendingAgingData[3]?.count ?? 0; // 30d+ bucket
+  const stalePendingCount = pendingAgingData[3]?.count ?? 0;
   const stalePendingValue = pendingAgingData[3]?.value ?? 0;
+
+  // Early returns AFTER all hooks (Rules of Hooks requires hooks to be unconditional)
+  if (!ready) return null;
+  if (!entity) return <Navigate to="/finance" replace />;
 
   /* ── 4 stat cards with soft color accents and glass bokeh ── */
   const statCards = [
@@ -249,15 +377,41 @@ export default function Index() {
     },
   ];
 
-  const quickActions = [
-    { to: '/income', label: 'Log Income', icon: ArrowDownToLine, description: 'Record new revenue', accent: true },
-    { to: '/expenses', label: 'Record Expense', icon: ArrowUpFromLine, description: 'Log outgoing payment' },
-    { to: '/checks/new', label: 'New Check', icon: FileText, description: 'Issue a new check' },
-    { to: '/concierge', label: 'Concierge', icon: ConciergeBell, description: 'Guided assistant' },
+  const quickActions: Array<{ label: string; icon: any; description: string; accent?: boolean; onClick: () => void }> = [
+    { label: 'Log Income', icon: ArrowDownToLine, description: 'Record new revenue', accent: true, onClick: () => navigate('/income') },
+    { label: 'Record Expense', icon: ArrowUpFromLine, description: 'Log outgoing payment', onClick: () => navigate('/expenses') },
+    { label: 'Scan Receipt', icon: Camera, description: 'Capture with camera', onClick: () => cameraRef.current?.click() },
+    { label: 'Upload Doc', icon: Upload, description: 'Store any document', onClick: () => navigate('/documents') },
+    { label: 'New Check', icon: FileText, description: 'Issue a new check', onClick: () => navigate('/checks/new') },
+    { label: 'Concierge', icon: ConciergeBell, description: 'Guided assistant', onClick: () => navigate('/concierge') },
   ];
+
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    navigate('/documents', { state: { capturedFile: file } });
+    toast.info('Processing captured image…');
+  };
 
   return (
     <AppShell>
+      {/* Hidden camera input — triggers native camera on mobile */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleCameraCapture}
+      />
+
+      <MobileFinanceMenu
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        entityColor={entity?.color}
+      />
+
       <PageHeader
         eyebrow={entity ? entity.category : 'Command Center'}
         title={entity ? entity.name : 'Account Overview'}
@@ -266,7 +420,7 @@ export default function Index() {
             {/* Entity badge */}
             {entity && (
               <button
-                onClick={() => navigate('/finance/select')}
+                onClick={() => navigate('/finance')}
                 className="hidden sm:flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1.5 border transition-opacity hover:opacity-70"
                 style={{ borderColor: entity.color, color: entity.color, backgroundColor: entity.colorMuted }}
               >
@@ -370,15 +524,15 @@ export default function Index() {
             ))}
           </div>
           {/* Action tiles below */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border border border-border">
             {quickActions.map(a => (
-              <button key={a.label} onClick={() => navigate(a.to)}
+              <button key={a.label} onClick={a.onClick}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 bg-background hover:bg-secondary/30 active:bg-secondary transition-all duration-200 group ${a.accent ? 'ring-1 ring-inset ring-foreground/10 bg-foreground/[0.02]' : ''}`}
               >
                 <div className={`w-9 h-9 flex items-center justify-center transition-all duration-200 group-hover:scale-110 ${a.accent ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground group-hover:text-foreground'}`}>
                   <a.icon className="w-4 h-4" strokeWidth={1.5} />
                 </div>
-                <span className="text-xs font-semibold tracking-tight">{a.label}</span>
+                <span className="text-[10px] sm:text-xs font-semibold tracking-tight text-center leading-tight">{a.label}</span>
                 <span className="text-[8px] text-muted-foreground uppercase tracking-[0.1em] hidden sm:block">{a.description}</span>
               </button>
             ))}
@@ -509,7 +663,21 @@ export default function Index() {
         </div>
       </div>
 
+      {/* Mobile: floating "All Sections" button — above bottom nav */}
       <div className="md:hidden pb-8" />
+      <div className="md:hidden fixed bottom-16 right-4 z-30">
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 shadow-lg border border-border text-xs font-bold uppercase tracking-[0.14em] transition-all active:scale-95"
+          style={{
+            backgroundColor: entity?.color ?? '#9D7E3F',
+            color: '#fff',
+          }}
+        >
+          <Grid3X3 className="w-3.5 h-3.5" strokeWidth={2} />
+          All Sections
+        </button>
+      </div>
     </AppShell>
   );
 }

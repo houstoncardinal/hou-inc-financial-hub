@@ -1,40 +1,30 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Building2, Zap, Landmark, ChevronRight } from 'lucide-react';
+import { Building2, Zap, Landmark, ArrowRight, Check } from 'lucide-react';
 import { ENTITIES, Entity, useEntity } from '@/contexts/EntityContext';
 
-/* ── Tokens ──────────────────────────────────────────────────────────── */
-const DARK   = '#09080A';
-const PANEL  = '#0F0D10';
-const W      = '#FFFFFF';
-const CREAM  = '#FAF9F7';
-const MU     = 'rgba(255,255,255,0.32)';
-const BORDER = 'rgba(255,255,255,0.07)';
-const SERIF  = "'Cormorant Garamond', Georgia, serif";
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+const INK   = '#0D0D0D';
+const MU    = '#78716C';
+const MU2   = '#A8A29E';
+const GOLD  = '#9D7E3F';
+const SERIF = "'Cormorant Garamond', Georgia, serif";
 
-const GRID: React.CSSProperties = {
-  backgroundImage: [
-    'linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px)',
-    'linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)',
-  ].join(','),
-  backgroundSize: '64px 64px',
-};
-
-/* ── Icon map ────────────────────────────────────────────────────────── */
 const ICONS: Record<string, React.ComponentType<any>> = {
-  'houston-enterprise':         Building2,
-  'houston-generator-pros':     Zap,
-  'houston-enterprise-holdings': Landmark,
+  'houston-enterprise':           Building2,
+  'houston-generator-pros':       Zap,
+  'houston-enterprise-holdings':  Landmark,
 };
 
-/* ── Entity card ─────────────────────────────────────────────────────── */
+/* ── Entity Card — horizontal, compact ──────────────────────────────────── */
 function EntityCard({
-  entity, selected, onSelect,
+  entity, selected, onSelect, index,
 }: {
   entity: Entity;
   selected: boolean;
   onSelect: () => void;
+  index: number;
 }) {
   const [hov, setHov] = useState(false);
   const Icon = ICONS[entity.id] ?? Building2;
@@ -45,130 +35,117 @@ function EntityCard({
       onClick={onSelect}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      whileTap={{ scale: 0.985 }}
-      transition={{ duration: 0.18 }}
-      className="relative w-full text-left overflow-hidden flex flex-col"
+      initial={{ opacity: 0, x: -18 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.45, delay: 0.08 + index * 0.07, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ x: 4 }}
+      whileTap={{ scale: 0.99 }}
+      className="relative w-full text-left flex items-stretch overflow-hidden"
       style={{
         background: selected
-          ? `linear-gradient(135deg, ${entity.colorMuted}, rgba(255,255,255,0.02))`
+          ? `linear-gradient(110deg, #fff 60%, ${entity.colorMuted} 140%)`
+          : hov ? 'rgba(255,255,255,0.85)' : '#fff',
+        border: `1px solid ${selected ? entity.color : active ? 'rgba(0,0,0,0.14)' : 'rgba(0,0,0,0.07)'}`,
+        boxShadow: selected
+          ? `0 8px 32px ${entity.color}22, 0 2px 8px rgba(0,0,0,0.06)`
           : active
-            ? 'rgba(255,255,255,0.025)'
-            : 'rgba(255,255,255,0.015)',
-        border: `1px solid ${selected ? entity.color : active ? 'rgba(255,255,255,0.12)' : BORDER}`,
-        transition: 'border-color 0.22s, background 0.22s',
-        padding: '28px 28px 24px',
+            ? '0 4px 20px rgba(0,0,0,0.08)'
+            : '0 1px 3px rgba(0,0,0,0.04)',
+        transition: 'border-color 0.2s, box-shadow 0.25s, background 0.25s',
         cursor: 'pointer',
-        minHeight: 'unset',
+        minHeight: 88,
       }}
     >
-      {/* Animated color bar — left edge */}
+      {/* Left entity-color bar */}
+      <motion.div
+        style={{ width: 3, flexShrink: 0, backgroundColor: entity.color }}
+        animate={{ opacity: active ? 1 : 0.28 }}
+        transition={{ duration: 0.2 }}
+      />
+
+      {/* Shimmer on hover */}
       <motion.div
         style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 2,
-          backgroundColor: entity.color,
-          transformOrigin: 'top',
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `linear-gradient(100deg, transparent 38%, ${entity.colorMuted} 50%, transparent 62%)`,
         }}
-        animate={{ scaleY: active ? 1 : 0 }}
-        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ x: '-110%', opacity: 0 }}
+        animate={hov ? { x: '110%', opacity: 1 } : { x: '-110%', opacity: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
       />
 
-      {/* Category tag */}
-      <div className="flex items-center gap-2 mb-5">
-        <div
-          className="flex items-center justify-center"
-          style={{
-            width: 34, height: 34, flexShrink: 0,
-            backgroundColor: active ? entity.colorMuted : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${active ? entity.color : 'rgba(255,255,255,0.08)'}`,
-            transition: 'background 0.22s, border-color 0.22s',
-          }}>
-          <Icon
-            style={{ width: 15, height: 15, color: active ? entity.color : 'rgba(255,255,255,0.28)', transition: 'color 0.22s', strokeWidth: 1.5 }}
-          />
-        </div>
-        <span style={{
-          fontSize: 7, fontWeight: 700, letterSpacing: '0.42em',
-          textTransform: 'uppercase',
-          color: active ? entity.color : 'rgba(255,255,255,0.22)',
-          transition: 'color 0.22s',
-        }}>
-          {entity.category}
-        </span>
-      </div>
-
-      {/* Name */}
-      <div style={{
-        fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-        fontSize: 'clamp(20px,2.6vw,28px)', color: active ? W : 'rgba(255,255,255,0.72)',
-        lineHeight: 1.12, marginBottom: 6, transition: 'color 0.2s',
-      }}>
-        {entity.name}
-      </div>
-
-      {/* Tagline */}
-      <div style={{
-        fontSize: 9, fontWeight: 600, letterSpacing: '0.22em',
-        textTransform: 'uppercase', color: active ? entity.color : 'rgba(255,255,255,0.22)',
-        marginBottom: 14, transition: 'color 0.22s',
-      }}>
-        {entity.tagline}
-      </div>
-
-      {/* Divider */}
-      <motion.div
-        style={{ height: 1, marginBottom: 14, backgroundColor: entity.color, transformOrigin: 'left', opacity: 0.25 }}
-        animate={{ scaleX: active ? 1 : 0.3, opacity: active ? 0.4 : 0.12 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-      />
-
-      {/* Description */}
-      <p style={{
-        fontSize: 11, fontWeight: 300, lineHeight: 1.72,
-        color: active ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.24)',
-        marginBottom: 20, flexGrow: 1, transition: 'color 0.2s',
-      }}>
-        {entity.description}
-      </p>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between">
-        <div style={{
-          fontSize: 8, fontWeight: 600, letterSpacing: '0.18em',
-          color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase',
-        }}>
-          Est. {entity.since}
-        </div>
+      {/* Main content */}
+      <div className="flex-1 flex items-center gap-4 px-5 py-4">
+        {/* Icon box */}
         <motion.div
-          animate={{ x: active ? 0 : -4, opacity: active ? 1 : 0 }}
-          transition={{ duration: 0.22 }}
-          className="flex items-center gap-1.5"
-          style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.24em', textTransform: 'uppercase', color: entity.color }}
+          animate={{
+            backgroundColor: active ? entity.colorMuted : 'rgba(0,0,0,0.035)',
+            borderColor: active ? entity.color : 'rgba(0,0,0,0.09)',
+            scale: active ? 1.05 : 1,
+          }}
+          transition={{ duration: 0.2 }}
+          style={{
+            width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1.5px solid', flexShrink: 0,
+          }}
         >
-          Select <ChevronRight style={{ width: 12, height: 12, strokeWidth: 2.5 }} />
+          <Icon style={{ width: 15, height: 15, color: active ? entity.color : MU, transition: 'color 0.2s', strokeWidth: 1.5 }} />
         </motion.div>
+
+        {/* Text block */}
+        <div className="flex-1 min-w-0">
+          {/* Category eyebrow */}
+          <div style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.42em', textTransform: 'uppercase', color: active ? entity.color : MU2, marginBottom: 3, transition: 'color 0.2s' }}>
+            {entity.category}
+          </div>
+          {/* Large entity name — dominant heading */}
+          <div style={{
+            fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
+            fontSize: 'clamp(26px, 3.2vw, 38px)',
+            color: active ? INK : '#2C2825',
+            lineHeight: 1.0,
+            letterSpacing: '-0.01em',
+            transition: 'color 0.2s',
+          }}>
+            {entity.name}
+          </div>
+          {/* Description — 1 line, only on desktop */}
+          <p className="hidden sm:block line-clamp-1 mt-1.5" style={{ fontSize: 10.5, color: MU, lineHeight: 1.5, fontWeight: 300 }}>
+            {entity.description}
+          </p>
+        </div>
       </div>
 
-      {/* Selected checkmark */}
-      {selected && (
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={{
-            position: 'absolute', top: 14, right: 16,
-            width: 20, height: 20, borderRadius: '50%',
-            backgroundColor: entity.color,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M1.5 5L3.5 7.5L8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </motion.div>
-      )}
+      {/* Right side: checkmark or arrow */}
+      <div className="flex items-center pr-5 pl-2">
+        <AnimatePresence mode="wait">
+          {selected ? (
+            <motion.div
+              key="check"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+              style={{ width: 22, height: 22, borderRadius: '50%', backgroundColor: entity.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              <Check style={{ width: 10, height: 10, color: '#fff', strokeWidth: 2.5 }} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="arrow"
+              initial={{ opacity: 0 }} animate={{ opacity: active ? 1 : 0.2 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <ArrowRight style={{ width: 14, height: 14, color: entity.color, strokeWidth: 2 }} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.button>
   );
 }
 
-/* ── Page ────────────────────────────────────────────────────────────── */
+/* ── Page ────────────────────────────────────────────────────────────────── */
 export default function EntitySelect() {
   const { entity: current, setEntity } = useEntity();
   const navigate = useNavigate();
@@ -179,139 +156,163 @@ export default function EntitySelect() {
     if (!selected) return;
     setEntering(true);
     setEntity(selected);
-    setTimeout(() => navigate('/finance'), 340);
+    setTimeout(() => navigate('/finance/dashboard'), 300);
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: DARK, ...GRID }}>
-
-      {/* Top line */}
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4 py-10"
+      style={{
+        backgroundColor: '#FAFAF9',
+        backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.055) 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
+      }}
+    >
+      {/* Gold top rule */}
       <motion.div
-        className="h-px w-full origin-left"
-        style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
-        initial={{ scaleX: 0 }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 2, backgroundColor: GOLD, zIndex: 50 }}
+        initial={{ scaleX: 0, transformOrigin: 'left' }}
         animate={{ scaleX: 1 }}
-        transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
       />
 
-      <div className="flex-1 flex flex-col justify-center max-w-6xl mx-auto w-full px-6 lg:px-10 py-16">
+      <div className="w-full max-w-2xl">
 
-        {/* Brand */}
+        {/* ── Header ── */}
         <motion.div
-          initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-          className="flex items-center gap-3 mb-14"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="flex items-center gap-3 mb-6"
         >
-          <div style={{ width: 2, height: 28, backgroundColor: '#9D7E3F' }} />
+          <motion.div
+            style={{ width: 2, backgroundColor: GOLD }}
+            initial={{ height: 0 }}
+            animate={{ height: 40 }}
+            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          />
           <div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.38em', textTransform: 'uppercase', color: CREAM, fontFamily: SERIF }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.46em', textTransform: 'uppercase', color: INK, fontFamily: SERIF }}>
               HOU INC
             </div>
-            <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.42em', fontWeight: 500, color: '#9D7E3F', marginTop: 1 }}>
+            <div style={{ fontSize: 6.5, textTransform: 'uppercase', letterSpacing: '0.52em', fontWeight: 700, color: GOLD, marginTop: 2 }}>
               Finance Sector
             </div>
           </div>
         </motion.div>
 
-        {/* Heading */}
-        <div className="mb-12">
-          <motion.div
-            initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 0.1 }}
-            className="flex items-center gap-3 mb-5"
-          >
-            <motion.div
-              className="h-px"
-              style={{ backgroundColor: '#9D7E3F' }}
-              initial={{ width: 0 }} animate={{ width: 32 }}
-              transition={{ duration: 1, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            />
-            <span style={{ fontSize: 8, letterSpacing: '0.5em', fontWeight: 700, textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)' }}>
-              Entity Selection
-            </span>
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.85, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
-              fontSize: 'clamp(36px,6vw,72px)', color: W, lineHeight: 0.96,
-              letterSpacing: '-0.01em', marginBottom: 16,
-            }}
-          >
-            Which entity are<br />
-            <span style={{ color: '#9D7E3F' }}>you managing today?</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            style={{ fontSize: 13, fontWeight: 300, lineHeight: 1.7, color: MU, maxWidth: 480 }}
-          >
-            Select a company entity to enter its dedicated financial dashboard. You can switch entities at any time from the sidebar.
-          </motion.p>
-        </div>
-
-        {/* Entity cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.85, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8"
-          style={{ borderTop: BORDER }}
+        {/* ── Headline ── */}
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-8"
+          style={{
+            fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300,
+            fontSize: 'clamp(28px, 4.5vw, 52px)',
+            color: INK, lineHeight: 1.0, letterSpacing: '-0.01em',
+          }}
         >
-          {ENTITIES.map(e => (
+          Which entity are you{' '}
+          <em style={{ color: GOLD }}>managing today?</em>
+        </motion.h1>
+
+        {/* ── Entity cards ── */}
+        <div className="flex flex-col gap-2.5 mb-7">
+          {ENTITIES.map((e, i) => (
             <EntityCard
               key={e.id}
               entity={e}
               selected={selected?.id === e.id}
               onSelect={() => setSelected(e)}
+              index={i}
             />
           ))}
-        </motion.div>
+        </div>
 
-        {/* Enter button */}
+        {/* ── CTA row ── */}
         <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.38 }}
-          className="flex items-center gap-5"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.36 }}
+          className="flex items-center justify-between gap-3 pt-5"
+          style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}
         >
+          {/* Left hint */}
+          <AnimatePresence mode="wait">
+            {current && selected?.id !== current.id ? (
+              <motion.button
+                key="back"
+                initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                onClick={() => setSelected(current)}
+                style={{ fontSize: 8, letterSpacing: '0.24em', textTransform: 'uppercase', color: MU, fontWeight: 700 }}
+                className="hover:opacity-55 transition-opacity"
+              >
+                ← Back to {current.shortName}
+              </motion.button>
+            ) : (
+              <motion.div
+                key="hint"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                style={{ fontSize: 11.5, color: MU2, fontStyle: 'italic', fontFamily: SERIF }}
+              >
+                {selected ? `${selected.shortName} selected.` : 'Select an entity above to continue.'}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Enter button */}
           <AnimatePresence mode="wait">
             {selected ? (
               <motion.button
                 key="enter"
-                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
                 onClick={handleEnter}
                 disabled={entering}
-                className="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] font-black px-8 py-4 transition-opacity hover:opacity-85 disabled:opacity-50"
-                style={{ backgroundColor: selected.color, color: W }}
+                whileHover={{ scale: 1.025 }}
+                whileTap={{ scale: 0.97 }}
+                className="relative flex items-center gap-2.5 text-[9px] uppercase tracking-[0.3em] font-black disabled:opacity-50 overflow-hidden shrink-0"
+                style={{
+                  backgroundColor: selected.color,
+                  color: '#fff',
+                  paddingTop: 14, paddingBottom: 14, paddingLeft: 28, paddingRight: 28,
+                }}
               >
+                <motion.div
+                  style={{
+                    position: 'absolute', inset: 0, pointerEvents: 'none',
+                    background: 'linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.2) 50%, transparent 65%)',
+                  }}
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '200%' }}
+                  transition={{ duration: 0.65, delay: 0.05, ease: 'easeOut' }}
+                />
                 {entering ? (
-                  <span>Loading…</span>
+                  <span>Opening…</span>
                 ) : (
                   <>
                     <span>Enter {selected.shortName} Dashboard</span>
-                    <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    <ArrowRight className="w-3 h-3" strokeWidth={2.5} />
                   </>
                 )}
               </motion.button>
             ) : (
               <motion.div
-                key="prompt"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', fontStyle: 'italic', fontFamily: SERIF }}
+                key="placeholder"
+                initial={{ opacity: 0 }} animate={{ opacity: 0.3 }} exit={{ opacity: 0 }}
+                className="flex items-center gap-2.5 text-[9px] uppercase tracking-[0.3em] font-black"
+                style={{ color: MU2, paddingTop: 14, paddingBottom: 14, paddingLeft: 28, paddingRight: 28, border: '1px solid rgba(0,0,0,0.08)' }}
               >
-                Select an entity above to continue →
+                <span>Enter Dashboard</span>
+                <ArrowRight className="w-3 h-3" strokeWidth={2.5} />
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
 
       </div>
-
-      {/* Bottom line */}
-      <div style={{ height: 1, backgroundColor: BORDER }} />
-
     </div>
   );
 }

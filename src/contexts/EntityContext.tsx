@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 /* ── Entity definitions ──────────────────────────────────────────────── */
 export interface Entity {
@@ -58,37 +59,69 @@ export const ENTITIES: Entity[] = [
 
 /* ── Context ─────────────────────────────────────────────────────────── */
 const STORAGE_KEY = 'hou-finance-entity';
+const META_KEY    = 'preferred_entity';
 
 interface EntityContextValue {
   entity: Entity | null;
   setEntity: (e: Entity | null) => void;
+  ready: boolean; // true once DB preference has been resolved
 }
 
 const EntityContext = createContext<EntityContextValue>({
   entity: null,
   setEntity: () => {},
+  ready: false,
 });
 
 export function EntityProvider({ children }: { children: ReactNode }) {
-  const [entity, setEntityState] = useState<Entity | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const found = ENTITIES.find(e => e.id === saved);
-        return found ?? null;
+  const [entity, setEntityState] = useState<Entity | null>(null);
+  const [ready,  setReady]       = useState(false);
+
+  // On mount: load preference from Supabase user_metadata, fall back to localStorage
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const fromDB = data.user?.user_metadata?.[META_KEY] as string | undefined;
+        const fromLS = localStorage.getItem(STORAGE_KEY);
+        const id = fromDB ?? fromLS ?? null;
+        if (id) {
+          const found = ENTITIES.find(e => e.id === id);
+          if (found) {
+            setEntityState(found);
+            // Back-sync localStorage if it was loaded from DB
+            localStorage.setItem(STORAGE_KEY, found.id);
+          }
+        }
+      } catch {
+        // Auth not available — fall back to localStorage only
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const found = ENTITIES.find(e => e.id === saved);
+            if (found) setEntityState(found);
+          }
+        } catch {}
+      } finally {
+        setReady(true);
       }
-    } catch {}
-    return null;
-  });
+    }
+    load();
+  }, []);
 
   const setEntity = (e: Entity | null) => {
     setEntityState(e);
+
+    // Sync to localStorage immediately (fast, synchronous)
     if (e) localStorage.setItem(STORAGE_KEY, e.id);
-    else localStorage.removeItem(STORAGE_KEY);
+    else   localStorage.removeItem(STORAGE_KEY);
+
+    // Persist to Supabase user_metadata (durable, async — fire and forget)
+    supabase.auth.updateUser({ data: { [META_KEY]: e?.id ?? null } }).catch(() => {});
   };
 
   return (
-    <EntityContext.Provider value={{ entity, setEntity }}>
+    <EntityContext.Provider value={{ entity, setEntity, ready }}>
       {children}
     </EntityContext.Provider>
   );

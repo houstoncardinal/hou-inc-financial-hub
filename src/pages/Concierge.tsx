@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate } from '@/hooks/useFinance';
+import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
 import {
@@ -15,7 +16,7 @@ import {
   BookOpen, ChevronRight, Camera, Upload, X, Plus,
   PartyPopper, Check, ArrowLeft, DollarSign, Building2, User,
   Hash, CreditCard, FileSpreadsheet, MessageSquare, Calendar,
-  Sparkles
+  Sparkles, RefreshCw,
 } from 'lucide-react';
 
 /* ─── TYPES ─── */
@@ -140,6 +141,7 @@ function SimpleInput({ type, value, onChange, placeholder, options }: { type: st
 /* ─── MAIN ─── */
 export default function Concierge() {
   const navigate = useNavigate();
+  const { entity } = useEntity();
   const inputFileRef = useRef<HTMLInputElement>(null);
   const captureFileRef = useRef<HTMLInputElement>(null);
   const guidedFormRef = useRef<HTMLFormElement>(null);
@@ -154,6 +156,14 @@ export default function Concierge() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [customCat, setCustomCat] = useState(false);
   const [customCatVal, setCustomCatVal] = useState('');
+
+  // Inline quick-create forms (replaces browser prompt())
+  const [quickVendorOpen, setQuickVendorOpen] = useState(false);
+  const [quickVendorName, setQuickVendorName] = useState('');
+  const [quickProjectOpen, setQuickProjectOpen] = useState(false);
+  const [quickProjectName, setQuickProjectName] = useState('');
+  const [quickProjectCode, setQuickProjectCode] = useState('');
+  const [quickProjectBudget, setQuickProjectBudget] = useState('');
 
   const incomeUpsert = useUpsert('transactions', [['transactions']]);
   const expenseUpsert = useUpsert('transactions', [['transactions']]);
@@ -258,25 +268,30 @@ export default function Concierge() {
   }, []);
 
   const createVendorNow = async () => {
-    const name = prompt('Enter new vendor name:');
-    if (!name || !name.trim()) return;
+    if (!quickVendorName.trim()) { toast.error('Enter a vendor name'); return; }
     setCreatingVendor(true);
     try {
-      const result = await vendorCreate.mutateAsync({ name: name.trim() });
-      toast.success(`Vendor "${name.trim()}" created`);
+      const result = await vendorCreate.mutateAsync({ name: quickVendorName.trim() });
+      toast.success(`Vendor "${quickVendorName.trim()}" created`);
       setVal('vendor_id', result.id);
+      setQuickVendorOpen(false);
+      setQuickVendorName('');
     } catch (err: any) { toast.error(err.message || 'Failed'); }
     setCreatingVendor(false);
   };
 
   const createProjectNow = async () => {
-    const name = prompt('Enter new project name:');
-    if (!name || !name.trim()) return;
+    if (!quickProjectName.trim()) { toast.error('Enter a project name'); return; }
     setCreatingProject(true);
     try {
-      const result = await projectCreate.mutateAsync({ name: name.trim() });
-      toast.success(`Project "${name.trim()}" created`);
+      const payload: Record<string, any> = { name: quickProjectName.trim(), status: 'active' };
+      if (quickProjectCode.trim()) payload.code = quickProjectCode.trim();
+      if (quickProjectBudget) payload.budget = parseFloat(quickProjectBudget) || 0;
+      const result = await projectCreate.mutateAsync(payload);
+      toast.success(`Project "${quickProjectName.trim()}" created`);
       setVal('project_id', result.id);
+      setQuickProjectOpen(false);
+      setQuickProjectName(''); setQuickProjectCode(''); setQuickProjectBudget('');
     } catch (err: any) { toast.error(err.message || 'Failed'); }
     setCreatingProject(false);
   };
@@ -310,9 +325,40 @@ export default function Concierge() {
   if (phase === 'welcome') {
     return (
       <AppShell>
-        <PageHeader eyebrow="Concierge" title="Your Dedicated Assistant" />
+        <PageHeader
+          eyebrow="Concierge"
+          title="Your Dedicated Assistant"
+          actions={entity && (
+            <button
+              onClick={() => navigate('/finance')}
+              className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1.5 border transition-opacity hover:opacity-70"
+              style={{ borderColor: entity.color, color: entity.color, backgroundColor: entity.colorMuted }}
+            >
+              <RefreshCw className="w-2.5 h-2.5" strokeWidth={2} />
+              {entity.shortName}
+            </button>
+          )}
+        />
         <div className="px-4 sm:px-8 py-6 flex-1">
           <div className="max-w-6xl mx-auto w-full space-y-6">
+            {/* Entity context banner */}
+            {entity && (
+              <div
+                className="flex items-center gap-3 px-4 py-3 border"
+                style={{ borderColor: entity.color, backgroundColor: entity.colorMuted }}
+              >
+                <div className="w-1 self-stretch shrink-0" style={{ backgroundColor: entity.color }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: entity.color }}>Active Entity</div>
+                  <div className="text-sm font-semibold truncate">{entity.name}</div>
+                  <div className="text-[10px] text-muted-foreground">{entity.category} · All entries below are scoped to this entity</div>
+                </div>
+                <button onClick={() => navigate('/finance')} className="text-[9px] uppercase tracking-[0.18em] font-bold hover:opacity-70 transition-opacity shrink-0" style={{ color: entity.color }}>
+                  Switch →
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border">
               {[
                 { l: 'MTD Inflow', v: fmtUSD(mtd.inflow), c: 'text-positive' },
@@ -411,7 +457,7 @@ export default function Concierge() {
       if (q.type === 'receipt') {
         return (
           <div className="space-y-3">
-            <input ref={inputFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleReceipt(f); e.target.value = ''; }} />
+            <input ref={inputFileRef} type="file" accept="*/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleReceipt(f); e.target.value = ''; }} />
             <input ref={captureFileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleReceipt(f); e.target.value = ''; }} />
             {receiptPreview ? (
               <div className="relative border border-border p-3 bg-secondary/20">
@@ -419,24 +465,23 @@ export default function Concierge() {
                 <button type="button" onClick={() => handleReceipt(null)} className="absolute top-3 right-3 w-7 h-7 bg-background/90 border border-border flex items-center justify-center hover:bg-accent hover:text-white transition-colors"><X className="w-3.5 h-3.5" /></button>
                 {receiptFile && <div className="text-[10px] text-muted-foreground mt-1.5 font-mono-tab truncate px-1">{(receiptFile.size / 1024 / 1024).toFixed(1)} MB · {receiptFile.name}</div>}
                 <div className="flex gap-2 mt-3">
-                  <Button type="button" variant="outline" onClick={() => inputFileRef.current?.click()} className="rounded-none flex-1 h-9 text-xs">Change</Button>
+                  <Button type="button" variant="outline" onClick={() => captureFileRef.current?.click()} className="rounded-none flex-1 h-9 text-xs">Retake</Button>
                   <Button type="submit" className="rounded-none flex-1 h-9 text-xs bg-foreground text-background hover:opacity-90">Looks good</Button>
                 </div>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => inputFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
-                    <Upload className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.5} />
-                    <span className="text-xs text-muted-foreground group-hover:text-foreground">Upload Document</span>
-                    <span className="text-[9px] text-muted-foreground">PDF, JPG, PNG</span>
-                  </button>
-                  <button type="button" onClick={() => captureFileRef.current?.click()} className="flex-1 flex flex-col items-center justify-center gap-2 py-8 border border-border hover:bg-secondary/50 transition-colors group">
-                    <Camera className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" strokeWidth={1.5} />
-                    <span className="text-xs text-muted-foreground group-hover:text-foreground">Take Photo</span>
-                    <span className="text-[9px] text-muted-foreground">No size limit</span>
-                  </button>
-                </div>
+                {/* Camera is primary — full width prominent */}
+                <button type="button" onClick={() => captureFileRef.current?.click()} className="w-full flex flex-col items-center justify-center gap-2 py-10 bg-foreground text-background hover:opacity-90 transition-opacity group">
+                  <Camera className="w-7 h-7" strokeWidth={1.5} />
+                  <span className="text-sm font-semibold">Take Photo</span>
+                  <span className="text-[9px] opacity-60 uppercase tracking-[0.15em]">Opens your camera</span>
+                </button>
+                {/* Upload as secondary */}
+                <button type="button" onClick={() => inputFileRef.current?.click()} className="w-full flex items-center justify-center gap-2 py-3 border border-border hover:bg-secondary/50 transition-colors text-xs text-muted-foreground hover:text-foreground">
+                  <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
+                  Upload from device · All file types accepted
+                </button>
                 <Button type="submit" variant="outline" className="rounded-none w-full h-10 text-xs">Skip — no receipt</Button>
               </div>
             )}
@@ -448,15 +493,37 @@ export default function Concierge() {
       if (q.type === 'vendor') {
         return (
           <div className="space-y-3">
-            <Select value={getVal('vendor_id')} onValueChange={v => setVal('vendor_id', v)}>
+            <Select value={getVal('vendor_id')} onValueChange={v => { setVal('vendor_id', v); setQuickVendorOpen(false); }}>
               <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select a vendor" /></SelectTrigger>
               <SelectContent>
                 {vendors.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" disabled={creatingVendor} onClick={createVendorNow} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
-              <Plus className="w-3 h-3" /> {creatingVendor ? 'Creating...' : 'Create new vendor'}
-            </Button>
+
+            {/* Inline vendor quick-create */}
+            {quickVendorOpen ? (
+              <div className="border border-foreground/20 p-4 space-y-3 bg-secondary/30">
+                <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">New Vendor</div>
+                <Input
+                  autoFocus
+                  className="rounded-none h-11 text-base"
+                  placeholder="Business name"
+                  value={quickVendorName}
+                  onChange={e => setQuickVendorName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createVendorNow(); } if (e.key === 'Escape') { setQuickVendorOpen(false); setQuickVendorName(''); } }}
+                />
+                <div className="flex gap-2">
+                  <Button type="button" onClick={createVendorNow} disabled={creatingVendor || !quickVendorName.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
+                    {creatingVendor ? 'Creating…' : 'Create Vendor'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => { setQuickVendorOpen(false); setQuickVendorName(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setQuickVendorOpen(true)} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
+                <Plus className="w-3 h-3" /> Create new vendor
+              </Button>
+            )}
           </div>
         );
       }
@@ -465,15 +532,53 @@ export default function Concierge() {
       if (q.type === 'project') {
         return (
           <div className="space-y-3">
-            <Select value={getVal('project_id')} onValueChange={v => setVal('project_id', v)}>
+            <Select value={getVal('project_id')} onValueChange={v => { setVal('project_id', v); setQuickProjectOpen(false); }}>
               <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="No project (skip)" /></SelectTrigger>
               <SelectContent>
                 {projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" disabled={creatingProject} onClick={createProjectNow} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
-              <Plus className="w-3 h-3" /> {creatingProject ? 'Creating...' : 'Create new project'}
-            </Button>
+
+            {/* Inline project quick-create */}
+            {quickProjectOpen ? (
+              <div className="border border-foreground/20 p-4 space-y-3 bg-secondary/30">
+                <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">New Project</div>
+                <Input
+                  autoFocus
+                  className="rounded-none h-11 text-base"
+                  placeholder="Project name *"
+                  value={quickProjectName}
+                  onChange={e => setQuickProjectName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setQuickProjectOpen(false); setQuickProjectName(''); setQuickProjectCode(''); setQuickProjectBudget(''); } }}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    className="rounded-none h-10 text-sm font-mono-tab"
+                    placeholder="Code (e.g. PRJ-001)"
+                    value={quickProjectCode}
+                    onChange={e => setQuickProjectCode(e.target.value)}
+                  />
+                  <Input
+                    type="number"
+                    className="rounded-none h-10 text-sm font-mono-tab text-right"
+                    placeholder="Budget $"
+                    value={quickProjectBudget}
+                    onChange={e => setQuickProjectBudget(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createProjectNow(); } }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" onClick={createProjectNow} disabled={creatingProject || !quickProjectName.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
+                    {creatingProject ? 'Creating…' : 'Create Project'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => { setQuickProjectOpen(false); setQuickProjectName(''); setQuickProjectCode(''); setQuickProjectBudget(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setQuickProjectOpen(true)} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
+                <Plus className="w-3 h-3" /> Create new project
+              </Button>
+            )}
           </div>
         );
       }
@@ -656,7 +761,7 @@ export default function Concierge() {
             <Button onClick={() => setPhase('welcome')} className="rounded-none h-12 px-8 bg-foreground text-background hover:opacity-90">
               <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} /> Do Another
             </Button>
-            <Button variant="outline" onClick={() => navigate('/finance')} className="rounded-none h-12 px-8">
+            <Button variant="outline" onClick={() => navigate('/finance/dashboard')} className="rounded-none h-12 px-8">
               Back to Overview
             </Button>
           </div>

@@ -222,7 +222,17 @@ function InvoiceCard({ inv, onEdit, onDelete, onStatusChange }: { inv: Invoice; 
     <div className="border border-border p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-sm font-mono-tab">{inv.invoice_number}</span>
-        <span className={`text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border font-medium ${STATUS_STYLES[inv.status]}`}>{inv.status}</span>
+        <Select value={inv.status} onValueChange={s => onStatusChange(s as Invoice['status'])}>
+          <SelectTrigger className={`rounded-none h-6 text-[9px] border px-1.5 py-0 w-auto ${STATUS_STYLES[inv.status]}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <div className="text-sm font-medium">{inv.client_name}</div>

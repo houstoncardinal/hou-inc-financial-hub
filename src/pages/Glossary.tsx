@@ -464,7 +464,7 @@ const TERMS: Term[] = [
     term: 'JSON Export',
     category: 'Workflows',
     definition:
-      'A raw data export available in Settings that serializes financial data as structured JSON — for consumption by custom systems, external APIs, or developer workflows.',
+      'A raw data export available on individual invoices (Invoice Builder → Export → JSON) that serializes invoice data as structured JSON — for consumption by custom systems, external APIs, or developer workflows.',
   },
 ];
 

@@ -59,8 +59,7 @@ export default function Ledger() {
   const { data: vendors = [] } = useVendors();
   const deleteCheck = useDelete('checks', [['checks']]);
   const deleteTxn = useDelete('transactions', [['transactions']]);
-  const incomeUpsert = useUpsert('transactions', [['transactions']]);
-  const expenseUpsert = useUpsert('transactions', [['transactions']]);
+  const txnUpsert = useUpsert('transactions', [['transactions']]);
   const checkUpsert = useUpsert('checks', [['checks']]);
   const createVendor = useQuickCreate('vendors');
   const createProject = useQuickCreate('projects');
@@ -69,7 +68,6 @@ export default function Ledger() {
   const [project, setProject] = useState('all');
   const [type, setType] = useState('all');
   const [addOpen, setAddOpen] = useState<'income' | 'expense' | 'check' | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'check' | 'txn' } | null>(null);
 
   const blankIncome = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), source_name: '', project_id: '', category: '', notes: '' };
   const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '' };
@@ -111,27 +109,17 @@ export default function Ledger() {
     toast.success('Ledger exported as Excel (4 sheets)');
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      if (deleteTarget.type === 'check') await deleteCheck.mutateAsync(deleteTarget.id);
-      else await deleteTxn.mutateAsync(deleteTarget.id);
-      toast.success('Deleted');
-    } catch (err: any) { toast.error(err.message); }
-    setDeleteTarget(null);
-  };
-
   const submitIncome = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formIncome.amount) { toast.error('Amount required'); return; }
-    await incomeUpsert.mutateAsync({ type: 'income', amount: parseFloat(formIncome.amount), transaction_date: formIncome.transaction_date, source_name: formIncome.source_name || null, project_id: formIncome.project_id || null, category: formIncome.category || null, notes: formIncome.notes || null } as any);
+    await txnUpsert.mutateAsync({ type: 'income', amount: parseFloat(formIncome.amount), transaction_date: formIncome.transaction_date, source_name: formIncome.source_name || null, project_id: formIncome.project_id || null, category: formIncome.category || null, notes: formIncome.notes || null } as any);
     toast.success('Income logged'); setAddOpen(null); setFormIncome(blankIncome);
   };
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formExpense.amount) { toast.error('Amount required'); return; }
-    await expenseUpsert.mutateAsync({ type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date, vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null, category: formExpense.category || null, notes: formExpense.notes || null, payment_method: formExpense.payment_method || null } as any);
+    await txnUpsert.mutateAsync({ type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date, vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null, category: formExpense.category || null, notes: formExpense.notes || null, payment_method: formExpense.payment_method || null } as any);
     toast.success('Expense recorded'); setAddOpen(null); setFormExpense(blankExpense);
   };
 

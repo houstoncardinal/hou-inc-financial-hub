@@ -133,7 +133,7 @@ export default function Projects() {
                 <AlertDialog>
                   <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                   <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
-                    <AlertDialogHeader><AlertDialogTitle>Archive project?</AlertDialogTitle><AlertDialogDescription>This unlinks all transactions from {p.name}.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogHeader><AlertDialogTitle>Archive project?</AlertDialogTitle><AlertDialogDescription>This will archive {p.name} and hide it from active views. Transactions linked to this project are preserved.</AlertDialogDescription></AlertDialogHeader>
                     <AlertDialogFooter className="flex-col sm:flex-row gap-2"><AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-accent w-full sm:w-auto" onClick={() => del.mutate(p.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

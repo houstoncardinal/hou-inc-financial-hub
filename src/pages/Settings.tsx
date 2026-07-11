@@ -158,7 +158,10 @@ export default function Settings() {
                 setSavingCreds(false);
                 if (error) { toast.error(error.message); return; }
                 setNewPassword('');
-                toast.success('Credentials updated. Use them at next sign-in.');
+                const msg = updates.email
+                  ? 'Check your new email for a confirmation link, then sign in with it.'
+                  : 'Password updated. Use it at next sign-in.';
+                toast.success(msg);
               }}
               className="rounded-none h-9 text-xs bg-foreground text-background hover:opacity-90"
             >

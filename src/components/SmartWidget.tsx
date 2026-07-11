@@ -280,7 +280,7 @@ export default function SmartWidget() {
 
   /* ── Navigation ── */
   const quickNav = [
-    { to: '/finance', label: 'Overview', icon: LayoutGrid },
+    { to: '/finance/dashboard', label: 'Overview', icon: LayoutGrid },
     { to: '/checks', label: 'Checks', icon: FileText },
     { to: '/income', label: 'Income', icon: ArrowDownToLine },
     { to: '/expenses', label: 'Expenses', icon: ArrowUpFromLine },

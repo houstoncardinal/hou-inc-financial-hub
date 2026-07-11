@@ -1,4 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useEntity } from '@/contexts/EntityContext';
 
 export interface LineItem {
   id: string;
@@ -28,16 +31,7 @@ export interface Invoice {
   updated_at: string;
 }
 
-const STORAGE_KEY = 'hou-invoices';
-
-function load(): Invoice[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-  catch { return []; }
-}
-
-function persist(invoices: Invoice[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
-}
+// ── Pure math helpers (unchanged API) ────────────────────────────────────────
 
 export function lineItemTotal(item: LineItem) {
   return item.qty * item.rate;
@@ -63,41 +57,119 @@ export function nextInvoiceNumber(invoices: Invoice[]): string {
   return `INV-${next}`;
 }
 
+// ── Row mapper ────────────────────────────────────────────────────────────────
+
+function mapRow(row: Record<string, unknown>): Invoice {
+  return {
+    id:                  row.id as string,
+    invoice_number:      row.invoice_number as string,
+    status:              row.status as InvoiceStatus,
+    client_name:         (row.client_name as string) ?? '',
+    client_email:        (row.client_email as string) ?? '',
+    client_company:      (row.client_company as string) ?? '',
+    client_address:      (row.client_address as string) ?? '',
+    issue_date:          row.issue_date as string,
+    due_date:            row.due_date as string,
+    line_items:          (row.line_items as LineItem[]) ?? [],
+    tax_rate:            Number(row.tax_rate ?? 0),
+    notes:               (row.notes as string) ?? '',
+    terms:               (row.terms as string) ?? '',
+    stripe_payment_link: row.stripe_payment_link as string | undefined,
+    created_at:          row.created_at as string,
+    updated_at:          row.updated_at as string,
+  };
+}
+
+// ── Auto-overdue check (server-side preferred; this handles edge cases) ───────
+
+function applyAutoOverdue(invoices: Invoice[]): Invoice[] {
+  const today = new Date().toISOString().slice(0, 10);
+  return invoices.map(inv =>
+    inv.status === 'sent' && inv.due_date && inv.due_date < today
+      ? { ...inv, status: 'overdue' as const }
+      : inv,
+  );
+}
+
+// ── Main hook ─────────────────────────────────────────────────────────────────
+
 export function useInvoices() {
-  const [invoices, setInvoicesState] = useState<Invoice[]>(() => {
-    const raw = load();
-    const today = new Date().toISOString().slice(0, 10);
-    let changed = false;
-    const autoUpdated = raw.map(inv => {
-      if (inv.status === 'sent' && inv.due_date && inv.due_date < today) {
-        changed = true;
-        return { ...inv, status: 'overdue' as const, updated_at: new Date().toISOString() };
-      }
-      return inv;
-    });
-    if (changed) persist(autoUpdated);
-    return autoUpdated;
+  const { user } = useAuth();
+  const { entity } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  const qc = useQueryClient();
+
+  const QUERY_KEY = ['invoices', entityId];
+
+  // ── Read ──
+  const { data: rawInvoices = [] } = useQuery({
+    queryKey: QUERY_KEY,
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('entity_id', entityId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return applyAutoOverdue((data ?? []).map(mapRow));
+    },
   });
 
-  const setInvoices = useCallback((inv: Invoice[]) => {
-    setInvoicesState(inv);
-    persist(inv);
-  }, []);
+  const invoices: Invoice[] = rawInvoices;
 
-  const create = useCallback((data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>): Invoice => {
-    const now = new Date().toISOString();
-    const newInv: Invoice = { ...data, id: crypto.randomUUID(), created_at: now, updated_at: now };
-    setInvoices([newInv, ...invoices]);
-    return newInv;
-  }, [invoices, setInvoices]);
+  // ── Create ──
+  const createMutation = useMutation({
+    mutationFn: async (data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => {
+      const { data: created, error } = await supabase
+        .from('invoices')
+        .insert({
+          ...data,
+          user_id:   user!.id,
+          entity_id: entityId,
+          line_items: data.line_items ?? [],
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return mapRow(created as Record<string, unknown>);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
 
-  const update = useCallback((id: string, updates: Partial<Invoice>) => {
-    setInvoices(invoices.map(inv => inv.id === id ? { ...inv, ...updates, updated_at: new Date().toISOString() } : inv));
-  }, [invoices, setInvoices]);
+  // ── Update ──
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Invoice> }) => {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
 
-  const remove = useCallback((id: string) => {
-    setInvoices(invoices.filter(inv => inv.id !== id));
-  }, [invoices, setInvoices]);
+  // ── Delete ──
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('invoices').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  });
+
+  // Expose same API shape as the old hook so no pages need to change
+  const create = (data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => {
+    createMutation.mutate(data);
+  };
+
+  const update = (id: string, updates: Partial<Invoice>) => {
+    updateMutation.mutate({ id, updates });
+  };
+
+  const remove = (id: string) => {
+    removeMutation.mutate(id);
+  };
 
   return { invoices, create, update, remove };
 }

@@ -934,15 +934,15 @@ export default function Home() {
             </div>
           </Reveal>
 
-          {/* ── 4 differentiator cards ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          {/* ── 3 differentiator cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3"
             style={{ gap: 1, backgroundColor: 'rgba(0,0,0,0.07)' }}>
             {[
               {
                 num: '01',
                 title: '26 Years\nHouston-Deep',
                 body: 'Two and a half decades in the same market. We know every inspector, every code nuance, and every subcontractor worth trusting.',
-                metric: '$800M+',
+                metric: '$200M+',
                 metricLabel: 'Total Delivered',
               },
               {
@@ -954,13 +954,6 @@ export default function Home() {
               },
               {
                 num: '03',
-                title: '98% On-Time.\nDocumented.',
-                body: 'Verified across 200+ completed projects with CPM scheduling and contractual milestone accountability. Not a claim — a record.',
-                metric: '98%',
-                metricLabel: 'On-Time Delivery',
-              },
-              {
-                num: '04',
                 title: 'Nothing Hidden,\nEver.',
                 body: 'Your private portal shows every permit, invoice, and site photo in real time. Full transparency is the baseline, not an upgrade.',
                 metric: '24/7',
@@ -1093,14 +1086,13 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-8 md:px-14 lg:px-24 pt-14 md:pt-18 pb-0 relative z-10">
           <Reveal delay={0.13}>
             <div
-              className="grid grid-cols-2 lg:grid-cols-4"
+              className="grid grid-cols-3"
               style={{ gap: 1, backgroundColor: 'rgba(255,255,255,0.07)' }}
             >
               {[
-                { metric: '$50M+', label: 'Bonding Capacity',   sub: 'Texas Licensed & Fully Insured' },
-                { metric: '0.42',  label: 'EMR Safety Rating',  sub: '57% Below Industry Average' },
-                { metric: 'A+',    label: 'BBB Accredited',     sub: '26 Years of Verified Excellence' },
-                { metric: '98%',   label: 'On-Time Delivery',   sub: 'Documented Across 200+ Projects' },
+                { metric: '$50M+', label: 'Bonding Capacity',  sub: 'Texas Licensed & Fully Insured' },
+                { metric: '0.42',  label: 'EMR Safety Rating', sub: '57% Below Industry Average' },
+                { metric: 'A+',    label: 'BBB Accredited',    sub: '26 Years of Verified Excellence' },
               ].map(({ metric, label, sub }, i) => (
                 <Reveal key={label} delay={i * 0.06}>
                   <div style={{

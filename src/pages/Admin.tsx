@@ -238,6 +238,9 @@ export default function Admin() {
   const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
+  /* ── Finance entity filter ── */
+  const [finEntityTab, setFinEntityTab] = useState<string>('all');
+
 
   /* ── Computed ── */
   const totalMsgs       = Object.values(allMsgs).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
@@ -1270,128 +1273,270 @@ export default function Admin() {
           )}
 
           {/* ══════ FINANCE DATA ══════ */}
-          {tab === 'finance' && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              {/* Finance hub link */}
-              <div className="flex items-center gap-5 p-5 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="w-10 h-10 flex items-center justify-center" style={{ backgroundColor: 'rgba(157,126,63,0.1)' }}>
-                  <DollarSign className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <div className="text-[13px] font-bold mb-0.5" style={{ color: B }}>HOU INC Finance Hub</div>
-                  <div className="text-[11px] font-light" style={{ color: G500 }}>Live financial data — projects, checks, income, and vendor records.</div>
-                </div>
-                <Link to="/finance" className="ml-auto flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2.5 shrink-0"
-                  style={{ backgroundColor: AC, color: W }}>
-                  Open Finance Hub <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                </Link>
-              </div>
+          {tab === 'finance' && (() => {
+            const ENTITY_DEFS: { id: string; name: string; short: string; color: string }[] = [
+              { id: 'houston-enterprise',          name: 'Houston Enterprise',          short: 'HE',  color: '#9D7E3F' },
+              { id: 'houston-generator-pros',      name: 'Houston Generator Pros',      short: 'HGP', color: '#1B72B5' },
+              { id: 'houston-enterprise-holdings', name: 'Houston Enterprise Holdings', short: 'HEH', color: '#2C5F8A' },
+            ];
 
-              {/* Finance stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                {[
-                  { label: 'Projects',        value: finProjects.length,  icon: Layers,      color: '#3b82f6' },
-                  { label: 'Checks Issued',   value: finChecks.length,    icon: CreditCard,  color: AC },
-                  { label: 'Transactions',    value: finTxns.length,      icon: FileText,    color: '#8b5cf6' },
-                  { label: 'Vendors',         value: finVendors.length,   icon: Package,     color: '#10b981' },
-                ].map(s => {
-                  const Icon = s.icon;
-                  return (
-                    <div key={s.label} className="p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                      <div className="w-8 h-8 flex items-center justify-center mb-3" style={{ backgroundColor: `${s.color}12` }}>
-                        <Icon className="w-4 h-4" style={{ color: s.color }} strokeWidth={1.5} />
-                      </div>
-                      <div className="text-[24px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: B }}>{s.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
+            const activeEntities = finEntityTab === 'all' ? ENTITY_DEFS.map(e => e.id) : [finEntityTab];
 
-              {/* Recent projects */}
-              {finProjects.length > 0 && (
-                <div className="mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
-                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Active Projects</div>
+            const entityIncome  = (id: string) => finTxns.filter((t: any) => t.entity_id === id && t.kind === 'income').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+            const entityExpense = (id: string) => finTxns.filter((t: any) => t.entity_id === id && t.kind === 'expense').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+            const entityChecks  = (id: string) => finChecks.filter((c: any) => c.entity_id === id);
+            const entityProjects = (id: string) => finProjects.filter((p: any) => p.entity_id === id);
+
+            const filteredProjects = finProjects.filter((p: any) => activeEntities.includes(p.entity_id));
+            const filteredChecks   = finChecks.filter((c: any) => activeEntities.includes(c.entity_id));
+            const filteredTxns     = finTxns.filter((t: any) => activeEntities.includes(t.entity_id));
+
+            const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+            return (
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+                {/* Finance Hub link + quick-access row */}
+                <div className="flex flex-wrap items-center gap-3 p-4 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.1)' }}>
+                    <DollarSign className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                        {['Project', 'Status', 'Budget', 'Created'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
-                        ))}
-                      </tr></thead>
-                      <tbody>
-                        {finProjects.slice(0, 8).map((p: any, i: number) => (
-                          <tr key={p.id} style={{ borderBottom: i < Math.min(finProjects.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
-                            <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{p.name || '—'}</td>
-                            <td className="px-5 py-3.5"><span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1" style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC }}>{p.status || '—'}</span></td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{p.budget ? `$${Number(p.budget).toLocaleString()}` : '—'}</td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-bold mb-0.5" style={{ color: B }}>HOU INC Finance Hub</div>
+                    <div className="text-[10px] font-light" style={{ color: G500 }}>Live entity-aware financial data — multi-company P&amp;L, projects, checks, and transactions.</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {ENTITY_DEFS.map(e => (
+                      <Link key={e.id} to={`/finance/dashboard`}
+                        className="text-[8px] uppercase tracking-[0.2em] font-black px-3 py-1.5 transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: e.color + '18', color: e.color, border: `1px solid ${e.color}40` }}>
+                        {e.short}
+                      </Link>
+                    ))}
+                    <Link to="/finance" className="flex items-center gap-1.5 text-[8px] uppercase tracking-[0.22em] font-black px-4 py-1.5"
+                      style={{ backgroundColor: AC, color: W }}>
+                      Open Hub <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                    </Link>
                   </div>
                 </div>
-              )}
 
-              {/* Recent checks */}
-              {finChecks.length > 0 && (
-                <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
-                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Checks</div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                        {['Check #', 'Amount', 'Payee', 'Project', 'Date', 'Status'].map(h => (
-                          <th key={h} className="px-5 py-3 text-left text-[9px] uppercase tracking-[0.26em] font-bold" style={{ color: G500 }}>{h}</th>
-                        ))}
-                      </tr></thead>
-                      <tbody>
-                        {finChecks.slice(0, 8).map((c: any, i: number) => (
-                          <tr key={c.id} style={{ borderBottom: i < Math.min(finChecks.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.check_number || '—'}</td>
-                            <td className="px-5 py-3.5 text-[12px] font-semibold" style={{ color: B }}>{c.amount ? `$${Number(c.amount).toLocaleString()}` : '—'}</td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.payee_name || '—'}</td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.projects?.name || '—'}</td>
-                            <td className="px-5 py-3.5 text-[11px] font-light" style={{ color: G500 }}>{c.issue_date || '—'}</td>
-                            <td className="px-5 py-3.5"><span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1" style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981' }}>{c.status || 'issued'}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {finProjects.length === 0 && finChecks.length === 0 && (
-                <div className="text-center py-16" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  <DollarSign className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
-                  <div className="text-[12px] font-light" style={{ color: G500 }}>No finance data yet. Add projects and checks in the Finance Hub.</div>
-                </div>
-              )}
-
-              {/* Finance reports */}
-              {finReports.length > 0 && (
-                <div className="mt-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                  <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
-                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Exported Reports</div>
-                  </div>
-                  {finReports.map((r: any, i: number) => (
-                    <div key={i} className="flex items-center gap-5 px-5 py-4" style={{ borderBottom: i < finReports.length - 1 ? `1px solid ${G200}` : 'none' }}>
-                      <FileText className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
-                      <div className="flex-1">
-                        <div className="text-[12px] font-semibold" style={{ color: B }}>{r.name || 'Finance Export'}</div>
-                        <div className="text-[10px] font-light" style={{ color: G500 }}>{r.date || '—'}</div>
-                      </div>
-                    </div>
+                {/* Entity tabs */}
+                <div className="flex items-center gap-1 mb-5 overflow-x-auto">
+                  {[{ id: 'all', name: 'All Entities', short: 'All', color: AC }, ...ENTITY_DEFS].map(e => (
+                    <button key={e.id} onClick={() => setFinEntityTab(e.id)}
+                      className="text-[8px] uppercase tracking-[0.24em] font-black px-4 py-2 shrink-0 transition-all"
+                      style={{
+                        backgroundColor: finEntityTab === e.id ? e.color : 'transparent',
+                        color: finEntityTab === e.id ? W : G500,
+                        border: `1px solid ${finEntityTab === e.id ? e.color : G200}`,
+                      }}>
+                      {e.short}
+                    </button>
                   ))}
                 </div>
-              )}
-            </motion.div>
-          )}
+
+                {/* Per-entity P&L summary cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                  {ENTITY_DEFS.filter(e => finEntityTab === 'all' || e.id === finEntityTab).map(e => {
+                    const income  = entityIncome(e.id);
+                    const expense = entityExpense(e.id);
+                    const net     = income - expense;
+                    const checks  = entityChecks(e.id).length;
+                    const projects = entityProjects(e.id).length;
+                    return (
+                      <div key={e.id} style={{ backgroundColor: W, border: `1px solid ${G200}`, borderTop: `3px solid ${e.color}` }}>
+                        <div className="px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${G200}` }}>
+                          <div className="text-[8px] font-black uppercase tracking-[0.38em] mb-1" style={{ color: e.color }}>{e.short}</div>
+                          <div className="text-[13px] font-semibold" style={{ color: B }}>{e.name}</div>
+                        </div>
+                        <div className="p-5 space-y-3">
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Income</span>
+                            <span className="text-[15px] font-black" style={{ color: '#10b981', fontFamily: SERIF }}>{fmt(income)}</span>
+                          </div>
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Expenses</span>
+                            <span className="text-[15px] font-black" style={{ color: '#ef4444', fontFamily: SERIF }}>{fmt(expense)}</span>
+                          </div>
+                          <div style={{ height: 1, backgroundColor: G200 }} />
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[9px] uppercase tracking-[0.2em] font-black" style={{ color: B }}>Net Balance</span>
+                            <span className="text-[17px] font-black" style={{ color: net >= 0 ? '#10b981' : '#ef4444', fontFamily: SERIF }}>{fmt(Math.abs(net))}</span>
+                          </div>
+                          <div className="flex gap-4 pt-1">
+                            <div>
+                              <span className="text-[18px] font-black" style={{ color: B, fontFamily: SERIF }}>{projects}</span>
+                              <div className="text-[7.5px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Projects</div>
+                            </div>
+                            <div>
+                              <span className="text-[18px] font-black" style={{ color: B, fontFamily: SERIF }}>{checks}</span>
+                              <div className="text-[7.5px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Checks</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-5 py-3" style={{ borderTop: `1px solid ${G200}` }}>
+                          <Link to="/finance/dashboard"
+                            className="flex items-center gap-1 text-[8px] uppercase tracking-[0.22em] font-black hover:opacity-70 transition-opacity"
+                            style={{ color: e.color }}>
+                            Open Dashboard <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Aggregate stats row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { label: 'Projects',      value: filteredProjects.length, icon: Layers,    color: '#3b82f6' },
+                    { label: 'Checks',        value: filteredChecks.length,   icon: CreditCard, color: AC },
+                    { label: 'Transactions',  value: filteredTxns.length,     icon: FileText,  color: '#8b5cf6' },
+                    { label: 'Vendors',       value: finVendors.length,       icon: Package,   color: '#10b981' },
+                  ].map(s => {
+                    const Icon = s.icon;
+                    return (
+                      <div key={s.label} className="flex items-center gap-3 p-4" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                        <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}12` }}>
+                          <Icon className="w-3.5 h-3.5" style={{ color: s.color }} strokeWidth={1.5} />
+                        </div>
+                        <div>
+                          <div className="text-[20px] font-black leading-none" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
+                          <div className="text-[8.5px] font-bold uppercase tracking-[0.14em] mt-0.5" style={{ color: G500 }}>{s.label}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Projects table */}
+                {filteredProjects.length > 0 && (
+                  <div className="mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Projects</div>
+                      <Link to="/projects" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
+                        Manage <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                      </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                          {['Entity', 'Project', 'Status', 'Budget', 'Created'].map(h => (
+                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {filteredProjects.slice(0, 10).map((p: any, i: number) => {
+                            const eDef = ENTITY_DEFS.find(e => e.id === p.entity_id);
+                            return (
+                              <tr key={p.id} style={{ borderBottom: i < Math.min(filteredProjects.length, 10) - 1 ? `1px solid ${G200}` : 'none' }}>
+                                <td className="px-4 py-3">
+                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
+                                </td>
+                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: B }}>{p.name || '—'}</td>
+                                <td className="px-4 py-3"><span className="text-[7.5px] uppercase tracking-[0.18em] font-bold px-2 py-0.5" style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC }}>{p.status || '—'}</span></td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{p.budget ? fmt(Number(p.budget)) : '—'}</td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Checks table */}
+                {filteredChecks.length > 0 && (
+                  <div className="mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Checks</div>
+                      <Link to="/checks" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
+                        View All <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                      </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                          {['Entity', 'Check #', 'Amount', 'Payee', 'Date', 'Status'].map(h => (
+                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {filteredChecks.slice(0, 8).map((c: any, i: number) => {
+                            const eDef = ENTITY_DEFS.find(e => e.id === c.entity_id);
+                            return (
+                              <tr key={c.id} style={{ borderBottom: i < Math.min(filteredChecks.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
+                                <td className="px-4 py-3">
+                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
+                                </td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.check_number || '—'}</td>
+                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: B }}>{c.amount ? fmt(Number(c.amount)) : '—'}</td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.payee_name || '—'}</td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.issue_date || '—'}</td>
+                                <td className="px-4 py-3"><span className="text-[7.5px] uppercase tracking-[0.18em] font-bold px-2 py-0.5" style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981' }}>{c.status || 'issued'}</span></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent transactions */}
+                {filteredTxns.length > 0 && (
+                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Transactions</div>
+                      <Link to="/ledger" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
+                        Full Ledger <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+                      </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                          {['Entity', 'Type', 'Description', 'Amount', 'Date'].map(h => (
+                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {filteredTxns.slice(0, 8).map((t: any, i: number) => {
+                            const eDef = ENTITY_DEFS.find(e => e.id === t.entity_id);
+                            const isIncome = t.kind === 'income';
+                            return (
+                              <tr key={t.id} style={{ borderBottom: i < Math.min(filteredTxns.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
+                                <td className="px-4 py-3">
+                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-[7.5px] font-bold uppercase tracking-[0.18em] px-2 py-0.5" style={{ backgroundColor: isIncome ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', color: isIncome ? '#10b981' : '#ef4444' }}>
+                                    {t.kind || '—'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-[11px] font-light max-w-[180px] truncate" style={{ color: B }}>{t.description || t.memo || '—'}</td>
+                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: isIncome ? '#10b981' : '#ef4444' }}>
+                                  {isIncome ? '+' : '-'}{t.amount ? fmt(Number(t.amount)) : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{t.date ? new Date(t.date).toLocaleDateString() : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {filteredProjects.length === 0 && filteredChecks.length === 0 && filteredTxns.length === 0 && (
+                  <div className="text-center py-16" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <DollarSign className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
+                    <div className="text-[12px] font-light mb-1" style={{ color: G500 }}>No financial data yet for this entity.</div>
+                    <Link to="/finance" className="text-[9px] uppercase tracking-[0.24em] font-black" style={{ color: AC }}>Open Finance Hub →</Link>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
 
           {/* ══════ ANALYTICS ══════ */}
           {tab === 'analytics' && (

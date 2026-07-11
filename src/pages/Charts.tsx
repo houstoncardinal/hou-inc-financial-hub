@@ -499,11 +499,6 @@ export default function Charts() {
     return months;
   }, [filteredChecks, end]);
 
-  /* ── Total exposure ── */
-  const totalExposure = useMemo(() => {
-    return projects.filter((p: any) => p.status === 'active').reduce((s: number, p: any) => s + Number(p.budget), 0);
-  }, [projects]);
-
   const handleCustomChange = useCallback((s: string, e: string) => {
     setCustomStart(s);
     setCustomEnd(e);
