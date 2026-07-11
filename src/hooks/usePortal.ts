@@ -45,6 +45,8 @@ export interface PortalDocument {
   requestedBy?: string;
   description?: string;
   uploadedAt?: string;
+  storagePath?: string;
+  fileUrl?: string;
 }
 
 export interface PortalMeeting {
@@ -205,6 +207,8 @@ function mapDocument(row: any): PortalDocument {
     requestedBy: row.requested_by,
     description: row.description,
     uploadedAt: row.uploaded_at,
+    storagePath: row.storage_path,
+    fileUrl: row.file_url,
   };
 }
 
@@ -253,9 +257,10 @@ export function usePortal() {
   // Load client from Supabase when clientId changes
   useEffect(() => {
     if (!clientId) { setClient(null); return; }
-    supabase.from('portal_clients').select('*').eq('id', clientId).single()
-      .then(({ data }) => {
-        if (data) setClient(mapClient(data));
+    (supabase as any).rpc('get_portal_client_by_id', { p_id: clientId })
+      .then(({ data }: { data: any }) => {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setClient(mapClient(row));
         else { localStorage.removeItem(SESSION_KEY); setClientId(null); }
       });
   }, [clientId]);
@@ -284,29 +289,24 @@ export function usePortal() {
   const register = useCallback(async (
     name: string, email: string, phone: string,
     projectType?: string, projectInterest?: string,
+    password?: string,
   ): Promise<{ ok: boolean; error?: string }> => {
-    const { data: existing } = await supabase
-      .from('portal_clients')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .maybeSingle();
-    if (existing) return { ok: false, error: 'An account with this email already exists. Please sign in instead.' };
+    if (!password?.trim()) return { ok: false, error: 'Please create a password for your account.' };
 
-    const { data, error } = await supabase
-      .from('portal_clients')
-      .insert({
-        name,
-        email: email.toLowerCase(),
-        phone,
-        project_type:     projectType     ?? '',
-        project_interest: projectInterest ?? '',
-        status: 'pending_approval',
-      })
-      .select()
-      .single();
-    if (error || !data) return { ok: false, error: error?.message ?? 'Registration failed.' };
+    const { data, error } = await (supabase as any).rpc('create_portal_client', {
+      p_name:             name.trim(),
+      p_email:            email.trim().toLowerCase(),
+      p_password:         password,
+      p_phone:            phone.trim(),
+      p_project_type:     projectType     ?? '',
+      p_project_interest: projectInterest ?? '',
+    });
 
-    const nc = mapClient(data);
+    if (error) return { ok: false, error: error.message ?? 'Registration failed.' };
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { ok: false, error: 'Registration failed — please try again.' };
+
+    const nc = mapClient(row);
     localStorage.setItem(SESSION_KEY, nc.id);
     setClientId(nc.id);
     setClient(nc);
@@ -315,19 +315,41 @@ export function usePortal() {
 
   const login = useCallback(async (
     email: string,
+    password: string,
   ): Promise<{ ok: boolean; status?: PortalClient['status']; error?: string }> => {
-    const { data, error } = await supabase
-      .from('portal_clients')
-      .select('*')
-      .eq('email', email.toLowerCase())
-      .single();
-    if (error || !data) return { ok: false, error: 'No account found with that email address.' };
+    if (!password?.trim()) return { ok: false, error: 'Please enter your password.' };
 
-    const c = mapClient(data);
+    const { data, error } = await (supabase as any).rpc('verify_portal_password', {
+      p_email:    email.trim().toLowerCase(),
+      p_password: password,
+    });
+
+    if (error) return { ok: false, error: 'Sign in failed — please try again.' };
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { ok: false, error: 'Incorrect email or password.' };
+
+    const c = mapClient(row);
     localStorage.setItem(SESSION_KEY, c.id);
     setClientId(c.id);
     setClient(c);
     return { ok: true, status: c.status };
+  }, []);
+
+  const loginBypass = useCallback(async (
+    pin: string,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (pin !== '011491') return { ok: false, error: 'Invalid bypass code.' };
+    const { data, error } = await (supabase as any).rpc('get_portal_client_by_email', {
+      p_email: 'cardinal.hunain@gmail.com',
+    });
+    if (error) return { ok: false, error: 'Demo account lookup failed — run portal-setup.sql first.' };
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { ok: false, error: 'Demo account not found — run portal-setup.sql to seed it.' };
+    const c = mapClient(row);
+    localStorage.setItem(SESSION_KEY, c.id);
+    setClientId(c.id);
+    setClient(c);
+    return { ok: true };
   }, []);
 
   const logout = useCallback(() => {
@@ -448,16 +470,20 @@ export function usePortal() {
   const uploadDocument = useCallback(async (
     name: string, fileType: string, size: string,
     category: PortalDocument['category'] = 'uploaded',
+    storagePath?: string,
+    fileUrl?: string,
   ): Promise<PortalDocument> => {
     if (!client) throw new Error('Not authenticated');
     const { data, error } = await supabase.from('portal_documents').insert({
-      client_id:   client.id,
+      client_id:    client.id,
       name,
-      file_type:   fileType,
-      file_size:   size,
+      file_type:    fileType,
+      file_size:    size,
       category,
-      status:      'uploaded',
-      uploaded_at: new Date().toISOString(),
+      status:       'uploaded',
+      uploaded_at:  new Date().toISOString(),
+      storage_path: storagePath ?? null,
+      file_url:     fileUrl ?? null,
     }).select().single();
     if (error || !data) throw new Error(error?.message ?? 'Upload failed');
     const newDoc = mapDocument(data);
@@ -467,18 +493,28 @@ export function usePortal() {
 
   const fulfillRequiredDoc = useCallback(async (
     docId: string,
-    file: { name: string; size: string; fileType: string },
+    file: { name: string; size: string; fileType: string; storagePath?: string; fileUrl?: string },
   ) => {
     if (!client) return;
     const { error } = await supabase.from('portal_documents').update({
-      status:      'uploaded',
-      uploaded_at: new Date().toISOString(),
-      file_size:   file.size,
-      name:        file.name,
+      status:       'uploaded',
+      uploaded_at:  new Date().toISOString(),
+      file_size:    file.size,
+      name:         file.name,
+      storage_path: file.storagePath ?? null,
+      file_url:     file.fileUrl ?? null,
     }).eq('id', docId);
     if (!error) {
       setDocuments(prev => prev.map(d =>
-        d.id === docId ? { ...d, status: 'uploaded', uploadedAt: new Date().toISOString(), size: file.size, name: file.name } : d
+        d.id === docId ? {
+          ...d,
+          status:      'uploaded',
+          uploadedAt:  new Date().toISOString(),
+          size:        file.size,
+          name:        file.name,
+          storagePath: file.storagePath,
+          fileUrl:     file.fileUrl,
+        } : d
       ));
     }
   }, [client]);
@@ -539,6 +575,7 @@ export function usePortal() {
     client,
     register,
     login,
+    loginBypass,
     logout,
     getBrief,
     saveBrief,

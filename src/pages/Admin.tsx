@@ -5,12 +5,12 @@ import {
   Users, MessageSquare, BarChart3, Settings, Image,
   ArrowUpRight, TrendingUp, CheckCircle, Clock, AlertCircle,
   Plus, Trash2, Edit3, LogOut, X, FileText, Calendar,
-  Building2, Star, RefreshCw,
+  Building2, Star, RefreshCw, Menu,
   ChevronRight, ChevronDown, Send, CheckCircle2, XCircle,
   Video, Phone, MapPin, FileCheck, Package,
   Layers, CreditCard, Inbox, DollarSign,
   ArrowLeft, ClipboardList, User, UserCheck, UserX, ShieldCheck,
-  Map,
+  Map, Download,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
@@ -958,20 +958,29 @@ export default function Admin() {
                           <div className="text-[10px] font-light" style={{ color: G500 }}>{d.fileType} · {d.category} {d.uploadedAt ? `· Uploaded ${new Date(d.uploadedAt).toLocaleDateString()}` : ''}</div>
                         </div>
                         <StatusBadge label={d.status} style={docStatusColor(d.status)} />
-                        {d.status === 'uploaded' && (
-                          <div className="flex gap-2 ml-2">
-                            <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'approved'); await refreshData(); }}
-                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                              style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                              <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Approve
-                            </button>
-                            <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'rejected'); await refreshData(); }}
-                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                              style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
-                              <XCircle className="w-3 h-3" strokeWidth={2} /> Reject
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex gap-2 ml-2 flex-wrap">
+                          {d.file_url && (
+                            <a href={d.file_url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-opacity hover:opacity-75"
+                              style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)`, textDecoration: 'none' }}>
+                              <Download className="w-3 h-3" strokeWidth={2} /> View
+                            </a>
+                          )}
+                          {d.status === 'uploaded' && (
+                            <>
+                              <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'approved'); await refreshData(); }}
+                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Approve
+                              </button>
+                              <button onClick={async () => { await adminUpdateDocStatus(selectedClientId, d.id, 'rejected'); await refreshData(); }}
+                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                <XCircle className="w-3 h-3" strokeWidth={2} /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ))}
                     {docs.length === 0 && <div className="px-5 py-14 text-center text-[12px] font-light" style={{ color: G500 }}>No documents yet.</div>}
@@ -1156,20 +1165,29 @@ export default function Admin() {
                             <td className="px-5 py-3.5"><StatusBadge label={d.status} style={docStatusColor(d.status)} /></td>
                             <td className="px-5 py-3.5 text-[10px] font-light" style={{ color: G500 }}>{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString() : '—'}</td>
                             <td className="px-5 py-3.5">
-                              {d.status === 'uploaded' && (
-                                <div className="flex gap-1.5">
-                                  <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'approved'); await refreshData(); }}
-                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
-                                    style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                    Approve
-                                  </button>
-                                  <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'rejected'); await refreshData(); }}
-                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
-                                    style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                    Reject
-                                  </button>
-                                </div>
-                              )}
+                              <div className="flex gap-1.5 flex-wrap">
+                                {d.file_url && (
+                                  <a href={d.file_url} target="_blank" rel="noopener noreferrer"
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1 flex items-center gap-1 transition-opacity hover:opacity-75"
+                                    style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)`, textDecoration: 'none' }}>
+                                    <Download className="w-2.5 h-2.5" strokeWidth={2} /> View
+                                  </a>
+                                )}
+                                {d.status === 'uploaded' && (
+                                  <>
+                                    <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'approved'); await refreshData(); }}
+                                      className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
+                                      style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                      Approve
+                                    </button>
+                                    <button onClick={async () => { await adminUpdateDocStatus(d.clientId, d.id, 'rejected'); await refreshData(); }}
+                                      className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1"
+                                      style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}

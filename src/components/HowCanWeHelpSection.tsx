@@ -5,7 +5,7 @@ import {
   ArrowRight, ChevronRight, ChevronLeft, ChevronDown,
   Check, Loader2, CheckCircle2, Sparkles,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── Tokens ──────────────────────────────────────────────────────────── */
@@ -92,8 +92,8 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     trends: ['Warm Minimalism', 'Biophilic Design', 'Statement Ceilings', 'Japandi Style', 'Arch Detailing'],
     trendNote: '2025 design movements shaping Houston homes',
     ctaLabel: 'Start My Home Project',
-    secondaryLabel: 'View Residential Portfolio',
-    secondaryTo: '/portfolio',
+    secondaryLabel: 'Explore Residential Services',
+    secondaryTo: '/services/residential-construction',
   },
   commercial: {
     col1: {
@@ -121,8 +121,8 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     trends: ['Activity-Based Workplaces', 'Living Walls', 'Industrial Chic', 'Warm Material Palettes', 'Hybrid Office Design'],
     trendNote: 'Emerging directions in commercial design for 2025',
     ctaLabel: 'Request a Commercial Proposal',
-    secondaryLabel: 'Commercial Portfolio',
-    secondaryTo: '/portfolio',
+    secondaryLabel: 'Explore Commercial Services',
+    secondaryTo: '/services/commercial-construction',
   },
   project_management: {
     col1: {
@@ -150,8 +150,8 @@ const MENUS: Record<ProjectType, DropdownMenu> = {
     trends: ['BIM & Digital Twins', 'Lean Construction', 'Real-Time Dashboards', 'Prefab Integration', 'Sustainable Builds'],
     trendNote: 'Tools and methods redefining how projects get delivered',
     ctaLabel: 'Get a PM Assessment',
-    secondaryLabel: 'Our PM Process',
-    secondaryTo: '/services',
+    secondaryLabel: 'Explore PM Services',
+    secondaryTo: '/services/project-management',
   },
 };
 
@@ -166,7 +166,7 @@ function CardDropdown({
   type, onSelect, onMouseEnter, onMouseLeave, isStatic,
 }: {
   type: ProjectType;
-  onSelect: (t: ProjectType) => void;
+  onSelect?: (t: ProjectType) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   isStatic?: boolean;   /* true on mobile: in-flow, not absolute */
@@ -292,21 +292,22 @@ function CardDropdown({
             justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
           }}
         >
-          <motion.button
-            type="button"
-            onClick={() => onSelect(type)}
-            whileHover={{ backgroundColor: ACL }}
-            transition={{ duration: 0.18 }}
+          <Link
+            to={m.secondaryTo}
+            onClick={e => e.stopPropagation()}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
+              display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '13px 22px', backgroundColor: AC, color: W,
-              border: 'none', cursor: 'pointer',
+              textDecoration: 'none',
               fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 800,
+              transition: 'background-color 0.18s',
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = ACL; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = AC; }}
           >
             {m.ctaLabel}
             <ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2.5} />
-          </motion.button>
+          </Link>
 
           <Link
             to={m.secondaryTo}
@@ -465,6 +466,7 @@ const TYPE_CARDS: {
 
 /* ── Main export ─────────────────────────────────────────────────────── */
 export default function HowCanWeHelpSection() {
+  const navigate = useNavigate();
   const [step, setStep]               = useState<0 | 1 | 2 | 3>(0);
   const [hoveredType, setHoveredType] = useState<ProjectType | null>(null);
   const [mobileOpen, setMobileOpen]   = useState<ProjectType | null>(null);
@@ -506,12 +508,18 @@ export default function HowCanWeHelpSection() {
     setStep(1);
   };
 
-  /* On touch: tap card → toggle mobile menu; tap CTA inside → selectType */
+  const CATEGORY_TO: Record<ProjectType, string> = {
+    residential:        '/services/residential-construction',
+    commercial:         '/services/commercial-construction',
+    project_management: '/services/project-management',
+  };
+
+  /* On touch: tap card → toggle mobile dropdown; desktop click → navigate to category page */
   const handleCardClick = (key: ProjectType) => {
     if (isTouch) {
       setMobileOpen(prev => prev === key ? null : key);
     } else {
-      selectType(key);
+      navigate(CATEGORY_TO[key]);
     }
   };
 

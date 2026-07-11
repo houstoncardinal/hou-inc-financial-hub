@@ -4,9 +4,10 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
 import { useInvoices, invoiceTotal } from '@/hooks/useInvoices';
+import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
-import { FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap, ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle, X } from 'lucide-react';
+import { FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap, ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle, X, Building2, RefreshCw } from 'lucide-react';
 import { generateLedgerReport, savePDF } from '@/lib/reports';
 import { toast } from 'sonner';
 import TimeFilter, { getDateRange } from '@/components/TimeFilter';
@@ -29,6 +30,7 @@ function StatusBadge({ status }: { status: string | null }) {
 
 export default function Index() {
   const navigate = useNavigate();
+  const { entity } = useEntity();
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
@@ -256,9 +258,22 @@ export default function Index() {
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Command Center" title="Account Overview"
+      <PageHeader
+        eyebrow={entity ? entity.category : 'Command Center'}
+        title={entity ? entity.name : 'Account Overview'}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {/* Entity badge */}
+            {entity && (
+              <button
+                onClick={() => navigate('/finance/select')}
+                className="hidden sm:flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-semibold px-2.5 py-1.5 border transition-opacity hover:opacity-70"
+                style={{ borderColor: entity.color, color: entity.color, backgroundColor: entity.colorMuted }}
+              >
+                <RefreshCw className="w-2.5 h-2.5" strokeWidth={2} />
+                {entity.shortName}
+              </button>
+            )}
             <TimeFilter value={timePeriod} onChange={setTimePeriod} className="hidden sm:flex" />
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px]" onClick={() => navigate('/charts')}>

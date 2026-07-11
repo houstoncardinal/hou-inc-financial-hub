@@ -27,7 +27,7 @@ export default function Auth() {
   const { user, signIn } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
-  const from      = (location.state as any)?.from || '/finance';
+  const from      = (location.state as any)?.from || '/finance/select';
 
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');

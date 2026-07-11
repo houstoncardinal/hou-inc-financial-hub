@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowUpRight, Lock, Clock, CheckCircle2, XCircle, Building2, Home, ChevronDown } from 'lucide-react';
+import { ArrowUpRight, Lock, Clock, CheckCircle2, XCircle, Building2, Home, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -56,7 +56,7 @@ const FEATURES = [
 ];
 
 export default function PortalAuth() {
-  const { client, register, login } = usePortal();
+  const { client, register, login, loginBypass } = usePortal();
   const navigate = useNavigate();
 
   const [mode,            setMode]            = useState<'register' | 'login'>('login');
@@ -77,8 +77,15 @@ export default function PortalAuth() {
   const [rInterest, setRInterest] = useState('');
   const [typeOpen,  setTypeOpen]  = useState(false);
 
-  // Login field
-  const [lEmail, setLEmail] = useState('');
+  // Login fields
+  const [lEmail,    setLEmail]    = useState('');
+  const [lPassword, setLPassword] = useState('');
+  const [lShowPw,   setLShowPw]   = useState(false);
+
+  // Register password fields
+  const [rPassword,  setRPassword]  = useState('');
+  const [rPassword2, setRPassword2] = useState('');
+  const [rShowPw,    setRShowPw]    = useState(false);
 
   if (client && !pendingOtp && !pendingApproval && !accountRejected) {
     if (!client.status || client.status === 'approved') { navigate('/portal/dashboard', { replace: true }); return null; }
@@ -92,8 +99,10 @@ export default function PortalAuth() {
     e.preventDefault();
     setError('');
     if (!rType) { setError('Please select a project type.'); return; }
+    if (rPassword.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (rPassword !== rPassword2) { setError('Passwords do not match.'); return; }
     setLoading(true);
-    const { ok, error: err } = await register(rName.trim(), rEmail.trim(), rPhone.trim(), rType, rInterest.trim());
+    const { ok, error: err } = await register(rName.trim(), rEmail.trim(), rPhone.trim(), rType, rInterest.trim(), rPassword);
     setLoading(false);
     if (!ok) { setError(err ?? 'Registration failed.'); return; }
     setPendingApproval(true);
@@ -103,7 +112,17 @@ export default function PortalAuth() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { ok, status, error: err } = await login(lEmail.trim());
+
+    // Demo bypass — PIN lets staff show the portal without the real password
+    if (lPassword.trim() === '011491') {
+      const { ok, error: err } = await loginBypass('011491');
+      setLoading(false);
+      if (!ok) { setError(err ?? 'Bypass failed.'); return; }
+      navigate('/portal/dashboard');
+      return;
+    }
+
+    const { ok, status, error: err } = await login(lEmail.trim(), lPassword);
     setLoading(false);
     if (!ok) { setError(err ?? 'Sign in failed.'); return; }
     if (status === 'pending_approval') { setPendingApproval(true); return; }
@@ -297,7 +316,7 @@ export default function PortalAuth() {
                 Welcome back.
               </h1>
               <p style={{ fontSize: '13px', color: '#6B5D52', lineHeight: 1.65, marginBottom: '2rem', fontWeight: 300 }}>
-                Enter your email to access your portal and project communications.
+                Enter your email and password to access your project portal.
               </p>
               <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
                 <div>
@@ -306,6 +325,20 @@ export default function PortalAuth() {
                     placeholder="jane@example.com" style={field}
                     onFocus={e => (e.target.style.borderBottomColor = GOLD)}
                     onBlur={e => (e.target.style.borderBottomColor = BORDER)} />
+                </div>
+                <div>
+                  <label style={lbl}>Password *</label>
+                  <div style={{ position: 'relative' }}>
+                    <input required type={lShowPw ? 'text' : 'password'} value={lPassword}
+                      onChange={e => setLPassword(e.target.value)}
+                      placeholder="Your password" style={{ ...field, paddingRight: '36px' }}
+                      onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                      onBlur={e => (e.target.style.borderBottomColor = BORDER)} />
+                    <button type="button" onClick={() => setLShowPw(v => !v)}
+                      style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9A8E85', display: 'flex', alignItems: 'center', padding: '4px' }}>
+                      {lShowPw ? <EyeOff className="w-4 h-4" strokeWidth={1.5} /> : <Eye className="w-4 h-4" strokeWidth={1.5} />}
+                    </button>
+                  </div>
                 </div>
                 {error && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '14px', color: '#b94a38', marginTop: '-0.75rem' }}>{error}</motion.p>}
                 <button type="submit" disabled={loading}
@@ -353,6 +386,32 @@ export default function PortalAuth() {
                     placeholder="(713) 555-0100" style={field}
                     onFocus={e => (e.target.style.borderBottomColor = GOLD)}
                     onBlur={e => (e.target.style.borderBottomColor = BORDER)} />
+                </div>
+                <div>
+                  <label style={lbl}>Create Password * <span style={{ opacity: 0.55, fontSize: '8px', textTransform: 'none', letterSpacing: '0' }}>min. 8 characters</span></label>
+                  <div style={{ position: 'relative' }}>
+                    <input required type={rShowPw ? 'text' : 'password'} value={rPassword}
+                      onChange={e => setRPassword(e.target.value)} minLength={8}
+                      placeholder="Create a secure password" style={{ ...field, paddingRight: '36px' }}
+                      onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                      onBlur={e => (e.target.style.borderBottomColor = BORDER)} />
+                    <button type="button" onClick={() => setRShowPw(v => !v)}
+                      style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9A8E85', display: 'flex', alignItems: 'center', padding: '4px' }}>
+                      {rShowPw ? <EyeOff className="w-4 h-4" strokeWidth={1.5} /> : <Eye className="w-4 h-4" strokeWidth={1.5} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>Confirm Password *</label>
+                  <input required type={rShowPw ? 'text' : 'password'} value={rPassword2}
+                    onChange={e => setRPassword2(e.target.value)}
+                    placeholder="Re-enter your password"
+                    style={{ ...field, borderBottomColor: rPassword2 && rPassword2 !== rPassword ? '#b94a38' : BORDER }}
+                    onFocus={e => (e.target.style.borderBottomColor = rPassword2 !== rPassword ? '#b94a38' : GOLD)}
+                    onBlur={e => (e.target.style.borderBottomColor = rPassword2 && rPassword2 !== rPassword ? '#b94a38' : BORDER)} />
+                  {rPassword2 && rPassword2 !== rPassword && (
+                    <p style={{ fontSize: '11px', color: '#b94a38', marginTop: '4px', fontFamily: SERIF, fontStyle: 'italic' }}>Passwords don't match</p>
+                  )}
                 </div>
 
                 {/* Project type dropdown */}

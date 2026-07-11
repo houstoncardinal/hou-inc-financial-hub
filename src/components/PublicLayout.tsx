@@ -39,32 +39,57 @@ const FOOTER_LINKS = [
 
 /* ── Mega-menu data ─────────────────────────────────────────── */
 type IconType = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+interface MegaItem { label: string; slug: string; }
 interface MegaColData {
-  Icon: IconType; tag: string; title: string; tagline: string; items: readonly string[];
+  Icon: IconType; tag: string; title: string; tagline: string; to: string; items: readonly MegaItem[];
 }
 const MEGA_COLS: MegaColData[] = [
   {
     Icon: Home, tag: 'Residential', title: 'Residential\nConstruction',
     tagline: 'Bespoke luxury homes built to endure generations.',
-    items: ['Custom Luxury Homes','High-Rise Residential','Multi-Family Development','Renovation & Repositioning','Premium Interior Finishes','Accessory Structures'],
+    to: '/services/residential-construction',
+    items: [
+      { label: 'Custom Home Build',      slug: 'custom-home-build'      },
+      { label: 'Home Renovation',        slug: 'home-renovation'        },
+      { label: 'Home Addition',          slug: 'home-addition'          },
+      { label: 'Kitchen & Bath Upgrade', slug: 'kitchen-bath-upgrade'   },
+      { label: 'Master Suite Expansion', slug: 'master-suite-expansion' },
+      { label: 'Pool House & Outdoor',   slug: 'pool-house-outdoor'     },
+    ],
   },
   {
     Icon: Building2, tag: 'Commercial', title: 'Commercial\nConstruction',
     tagline: 'Grade-A commercial spaces engineered to perform.',
-    items: ['Office & Class-A Buildings','Shopping Centers & Retail','Industrial & Warehouse','Hospitality & Hotel','Medical Facilities','Mixed-Use Development'],
+    to: '/services/commercial-construction',
+    items: [
+      { label: 'Class-A Office Space',      slug: 'class-a-office'         },
+      { label: 'Retail & Mixed-Use',        slug: 'retail-mixed-use'       },
+      { label: 'Restaurant & Hospitality',  slug: 'restaurant-hospitality' },
+      { label: 'Industrial & Logistics',    slug: 'industrial-logistics'   },
+      { label: 'Healthcare & Medical',      slug: 'healthcare-medical'     },
+      { label: 'Educational Facility',      slug: 'educational-facility'   },
+    ],
   },
   {
     Icon: ClipboardList, tag: 'Management', title: 'Project\nManagement',
     tagline: 'End-to-end delivery with total accountability.',
-    items: ['Pre-Construction Planning','Cost Estimation & Budgeting','Permitting & Compliance','Site Supervision','Subcontractor Management',"Owner's Representation"],
+    to: '/services/project-management',
+    items: [
+      { label: 'Pre-Construction Planning',  slug: 'pre-construction-planning'  },
+      { label: 'Budget & Cost Control',      slug: 'budget-cost-control'        },
+      { label: 'Schedule Management',        slug: 'schedule-management'        },
+      { label: 'Subcontractor Coordination', slug: 'subcontractor-coordination' },
+      { label: 'Quality Assurance',          slug: 'quality-assurance'          },
+      { label: "Owner's Rep / Consulting",   slug: 'owners-rep'                 },
+    ],
   },
 ];
 
 /* ── Mega-menu service item ─────────────────────────────────── */
-function MegaItem({ label }: { label: string }) {
+function MegaServiceItem({ label, slug }: { label: string; slug: string }) {
   const [hov, setHov] = useState(false);
   return (
-    <Link to="/services" style={{ textDecoration: 'none' }}
+    <Link to={`/services/${slug}`} style={{ textDecoration: 'none' }}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 0' }}>
         <div style={{
@@ -132,7 +157,7 @@ function MegaCard({ col, index }: { col: MegaColData; index: number }) {
       }}>{col.tag}</div>
 
       {/* Category title — the primary navigation target */}
-      <Link to="/services" style={{ textDecoration: 'none' }}>
+      <Link to={col.to} style={{ textDecoration: 'none' }}>
         <div style={{
           fontFamily: SERIF,
           fontSize: 'clamp(20px, 1.7vw, 26px)',
@@ -156,23 +181,25 @@ function MegaCard({ col, index }: { col: MegaColData; index: number }) {
 
       {/* Service list */}
       <div style={{ position: 'relative', zIndex: 1 }}>
-        {col.items.map(item => <MegaItem key={item} label={item} />)}
+        {col.items.map(item => <MegaServiceItem key={item.slug} label={item.label} slug={item.slug} />)}
       </div>
 
       {/* "Explore" CTA — reveals on hover */}
-      <div style={{
-        marginTop: 14, display: 'flex', alignItems: 'center', gap: 5,
-        opacity: hov ? 1 : 0,
-        transform: hov ? 'translateY(0)' : 'translateY(6px)',
-        transition: 'opacity 0.22s, transform 0.22s',
-        position: 'relative', zIndex: 1,
-      }}>
-        <span style={{
-          fontSize: 7, fontWeight: 700, letterSpacing: '0.36em',
-          textTransform: 'uppercase' as const, color: ACCENT,
-        }}>Explore {col.tag}</span>
-        <ArrowUpRight size={10} strokeWidth={2.5} style={{ color: ACCENT }} />
-      </div>
+      <Link to={col.to} style={{ textDecoration: 'none' }}>
+        <div style={{
+          marginTop: 14, display: 'flex', alignItems: 'center', gap: 5,
+          opacity: hov ? 1 : 0,
+          transform: hov ? 'translateY(0)' : 'translateY(6px)',
+          transition: 'opacity 0.22s, transform 0.22s',
+          position: 'relative', zIndex: 1,
+        }}>
+          <span style={{
+            fontSize: 7, fontWeight: 700, letterSpacing: '0.36em',
+            textTransform: 'uppercase' as const, color: ACCENT,
+          }}>Explore {col.tag}</span>
+          <ArrowUpRight size={10} strokeWidth={2.5} style={{ color: ACCENT }} />
+        </div>
+      </Link>
     </div>
   );
 }
@@ -581,7 +608,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                                     initial={{ opacity: 0, x: 12 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: ci * 0.06, duration: 0.26 }}>
-                                    <Link to="/services" onClick={() => setOpen(false)} style={{ textDecoration: 'none', display: 'block' }}>
+                                    <Link to={cat.to} onClick={() => setOpen(false)} style={{ textDecoration: 'none', display: 'block' }}>
                                       <div style={{
                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                         padding: '11px 12px 11px 0',
