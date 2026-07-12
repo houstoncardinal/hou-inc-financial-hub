@@ -273,7 +273,7 @@ export default function Portfolio() {
             </motion.h1>
             <Reveal direction="right" x={40} className="max-w-md">
               <p className="text-[13px] leading-relaxed font-light mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                A curated selection of HOU INC's most significant residential and commercial projects across the Greater Houston Metropolitan Area.
+                A curated selection of Houston Enterprise's most significant residential and commercial projects across the Greater Houston Metropolitan Area.
               </p>
               <div className="grid grid-cols-3 gap-6">
                 {[['500+', 'Projects'], ['$2B+', 'Built Value'], ['25 Yrs', 'In Houston']].map(([v, l]) => (

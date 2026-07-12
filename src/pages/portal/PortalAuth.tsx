@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import PhoneInput from '@/components/ui/smart/PhoneInput';
+import EmailInput from '@/components/ui/smart/EmailInput';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Eye, EyeOff, ChevronDown, CheckCircle2, ArrowRight,
-  Lock, Clock, XCircle, Home, Building2,
+  Lock, Clock, XCircle, Home, Building2, Mail, Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { supabase } from '@/integrations/supabase/client';
 
 /* ── Design tokens ─────────────────────────────────────────────── */
 const DARK  = '#07060A';
@@ -60,8 +62,7 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
 
 /* ── Password field with toggle ────────────────────────────────── */
 function PwFld({
-  label, hint, value, onChange, placeholder, show, onToggle, required,
-  invalid,
+  label, hint, value, onChange, placeholder, show, onToggle, required, invalid,
 }: {
   label: string; hint?: string; value: string; onChange: (v: string) => void;
   placeholder: string; show: boolean; onToggle: () => void; required?: boolean; invalid?: boolean;
@@ -96,19 +97,42 @@ function PwFld({
 
 /* ════════════════════════════════════════════════════════════════ */
 export default function PortalAuth() {
-  const { client, register, login, loginBypass } = usePortal();
+  const { client, register, login, loginBypass, loginByEmail } = usePortal();
   const navigate = useNavigate();
 
   /* ── UI state ── */
   const [mode,            setMode]            = useState<'login' | 'register'>('login');
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState('');
-  const [pendingOtp,      setPendingOtp]      = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
   const [accountRejected, setAccountRejected] = useState(false);
-  const [otpCode,         setOtpCode]         = useState('');
-  const [otpValue,        setOtpValue]        = useState('');
-  const [otpError,        setOtpError]        = useState('');
+
+  /* ── Forgot password ── */
+  const [showForgot,      setShowForgot]      = useState(false);
+  const [forgotEmail,     setForgotEmail]     = useState('');
+  const [forgotSent,      setForgotSent]      = useState(false);
+  const [forgotLoading,   setForgotLoading]   = useState(false);
+
+  /* ── Magic link login ── */
+  const [magicMode,       setMagicMode]       = useState(false);
+  const [magicEmail,      setMagicEmail]      = useState('');
+  const [magicSent,       setMagicSent]       = useState(false);
+  const [magicLoading,    setMagicLoading]    = useState(false);
+
+  /* ── Password reset (returning from email link) ── */
+  const [resetMode,       setResetMode]       = useState(false);
+  const [resetEmail,      setResetEmail]      = useState('');
+  const [resetClientId,   setResetClientId]   = useState('');
+  const [resetPw,         setResetPw]         = useState('');
+  const [resetPw2,        setResetPw2]        = useState('');
+  const [resetShow,       setResetShow]       = useState(false);
+  const [resetLoading,    setResetLoading]    = useState(false);
+  const [resetDone,       setResetDone]       = useState(false);
+  const [resetError,      setResetError]      = useState('');
+
+  /* ── Verifying magic link on return ── */
+  const [verifying,       setVerifying]       = useState(false);
+  const [verifyError,     setVerifyError]     = useState('');
 
   /* ── Login fields ── */
   const [lEmail,  setLEmail]  = useState('');
@@ -116,18 +140,66 @@ export default function PortalAuth() {
   const [lShow,   setLShow]   = useState(false);
 
   /* ── Register fields ── */
-  const [rName,   setRName]   = useState('');
-  const [rEmail,  setREmail]  = useState('');
-  const [rPhone,  setRPhone]  = useState('');
-  const [rPw,     setRPw]     = useState('');
-  const [rPw2,    setRPw2]    = useState('');
-  const [rShow,   setRShow]   = useState(false);
-  const [rType,   setRType]   = useState('');
-  const [rNotes,  setRNotes]  = useState('');
-  const [typeOpen,setTypeOpen] = useState(false);
+  const [rName,    setRName]   = useState('');
+  const [rEmail,   setREmail]  = useState('');
+  const [rPhone,   setRPhone]  = useState('');
+  const [rPw,      setRPw]     = useState('');
+  const [rPw2,     setRPw2]    = useState('');
+  const [rShow,    setRShow]   = useState(false);
+  const [rType,    setRType]   = useState('');
+  const [rNotes,   setRNotes]  = useState('');
+  const [typeOpen, setTypeOpen] = useState(false);
+
+  /* ── Detect returning magic link / reset link ── */
+  useEffect(() => {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    const isReset = params.get('reset') === 'true';
+
+    if (!hash.includes('access_token') && !isReset) return;
+
+    setVerifying(true);
+    window.history.replaceState({}, '', '/portal');
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user?.email) {
+        setVerifying(false);
+        setVerifyError('Your link has expired or is invalid. Please request a new one.');
+        return;
+      }
+      const email = session.user.email;
+
+      if (isReset) {
+        // Look up portal client to get their ID for password update
+        (supabase as any).rpc('get_portal_client_by_email', { p_email: email.toLowerCase() })
+          .then(({ data }: { data: any }) => {
+            const row = Array.isArray(data) ? data[0] : data;
+            if (!row) {
+              setVerifying(false);
+              setVerifyError('No portal account found for this email address. Contact your builder team.');
+              return;
+            }
+            setResetEmail(email);
+            setResetClientId(row.id);
+            setVerifying(false);
+            setResetMode(true);
+          });
+      } else {
+        // Magic link login — bridge Supabase session to portal session
+        loginByEmail(email).then(({ ok, status, error: err }) => {
+          setVerifying(false);
+          if (!ok) { setVerifyError(err ?? 'No portal account found for this email.'); return; }
+          if (status === 'pending_approval') { setPendingApproval(true); return; }
+          if (status === 'rejected') { setAccountRejected(true); return; }
+          navigate('/portal/dashboard', { replace: true });
+        });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Session redirect ── */
-  if (client && !pendingOtp && !pendingApproval && !accountRejected) {
+  if (client && !pendingApproval && !accountRejected && !resetMode) {
     if (!client.status || client.status === 'approved') {
       navigate('/portal/dashboard', { replace: true });
       return null;
@@ -135,8 +207,9 @@ export default function PortalAuth() {
   }
 
   /* ── Helpers ── */
-  const switchMode = (m: typeof mode) => { setMode(m); setError(''); };
-  const genCode = () => String(Math.floor(100000 + Math.random() * 900000));
+  const switchMode = (m: typeof mode) => {
+    setMode(m); setError(''); setShowForgot(false); setMagicMode(false); setMagicSent(false);
+  };
   const pwMismatch = !!rPw2 && rPw2 !== rPw;
 
   /* ── Handlers ── */
@@ -145,7 +218,6 @@ export default function PortalAuth() {
     setError('');
     setLoading(true);
 
-    // Demo bypass PIN
     if (lPw.trim() === '011491') {
       const { ok, error: err } = await loginBypass('011491');
       setLoading(false);
@@ -159,9 +231,7 @@ export default function PortalAuth() {
     if (!ok) { setError(err ?? 'Incorrect email or password.'); return; }
     if (status === 'pending_approval') { setPendingApproval(true); return; }
     if (status === 'rejected') { setAccountRejected(true); return; }
-    const code = genCode();
-    setOtpCode(code);
-    setPendingOtp(true);
+    navigate('/portal/dashboard');
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -177,25 +247,65 @@ export default function PortalAuth() {
     setPendingApproval(true);
   };
 
-  const handleVerifyOtp = () => {
-    if (otpValue.length < 6) return;
-    if (otpValue === otpCode) {
-      setPendingOtp(false);
-      navigate('/portal/dashboard');
-    } else {
-      setOtpError('Incorrect code. Please try again.');
-      setOtpValue('');
-    }
+  /* ── Forgot password → sends real email via Supabase OTP ── */
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    await supabase.auth.signInWithOtp({
+      email: forgotEmail.trim().toLowerCase(),
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/portal?reset=true`,
+      },
+    });
+    setForgotLoading(false);
+    setForgotSent(true);
+  };
+
+  /* ── Magic link login → sends email, user clicks to auto-login ── */
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!magicEmail.trim()) return;
+    setMagicLoading(true);
+    const { error: err } = await supabase.auth.signInWithOtp({
+      email: magicEmail.trim().toLowerCase(),
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/portal`,
+      },
+    });
+    setMagicLoading(false);
+    if (err) { setError(err.message); return; }
+    setMagicSent(true);
+  };
+
+  /* ── Password reset form ── */
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (resetPw.length < 8) { setResetError('Password must be at least 8 characters.'); return; }
+    if (resetPw !== resetPw2) { setResetError('Passwords do not match.'); return; }
+    setResetLoading(true);
+    const { error: err } = await (supabase as any).rpc('set_portal_password', {
+      p_id: resetClientId,
+      p_password: resetPw,
+    });
+    setResetLoading(false);
+    if (err) { setResetError('Failed to update password. Please try again.'); return; }
+    setResetDone(true);
   };
 
   /* ── Current view key ── */
-  type View = 'form' | 'otp' | 'pending' | 'rejected';
-  const view: View = pendingApproval ? 'pending'
+  type View = 'verifying' | 'reset' | 'form' | 'forgot' | 'pending' | 'rejected';
+  const view: View = verifying ? 'verifying'
+    : resetMode ? 'reset'
+    : pendingApproval ? 'pending'
     : accountRejected ? 'rejected'
-    : pendingOtp ? 'otp'
+    : showForgot ? 'forgot'
     : 'form';
 
-  /* ════════ RENDER ════════ */
+  /* ════ RENDER ════ */
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: DARK }}>
 
@@ -203,21 +313,16 @@ export default function PortalAuth() {
       <aside className="hidden lg:flex flex-col w-[42%] shrink-0 relative overflow-hidden"
         style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}>
 
-        {/* Dot grid texture */}
         <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
           backgroundSize: '26px 26px',
         }} />
-        {/* Warm radial glow */}
         <div className="absolute inset-0 pointer-events-none" style={{
           background: 'radial-gradient(ellipse at 35% 52%, rgba(157,126,63,0.07) 0%, transparent 62%)',
         }} />
-        {/* Gold hairline top */}
         <div className="absolute top-0 inset-x-0 h-px" style={{ backgroundColor: GOLD, opacity: 0.45 }} />
 
         <div className="relative z-10 flex flex-col h-full px-12 xl:px-16 py-12">
-
-          {/* Brand mark */}
           <Link to="/" className="inline-flex items-center gap-3 select-none">
             <div style={{ width: 2, height: 26, backgroundColor: GOLD }} />
             <div>
@@ -232,7 +337,6 @@ export default function PortalAuth() {
             </div>
           </Link>
 
-          {/* Center headline */}
           <div className="flex-1 flex flex-col justify-center">
             <div style={{
               fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.46em',
@@ -257,7 +361,6 @@ export default function PortalAuth() {
             </p>
           </div>
 
-          {/* Bottom credentials */}
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 22 }}>
             {[
               'Texas Licensed & Fully Insured',
@@ -278,13 +381,11 @@ export default function PortalAuth() {
       {/* ── RIGHT FORM PANEL ─────────────────────────────────── */}
       <main className="flex-1 relative flex flex-col" style={{ backgroundColor: PANEL }}>
 
-        {/* Subtle grid */}
         <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: 'radial-gradient(rgba(157,126,63,0.035) 1px, transparent 1px)',
           backgroundSize: '26px 26px',
         }} />
 
-        {/* Scrollable content area */}
         <div className="relative flex-1 overflow-y-auto">
           <div className="min-h-full flex flex-col items-center justify-center px-6 sm:px-10 py-12 lg:py-16">
 
@@ -305,10 +406,9 @@ export default function PortalAuth() {
               </Link>
             </div>
 
-            {/* ── Animated view switcher ── */}
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={view === 'form' ? `form-${mode}` : view}
+                key={view === 'form' ? `form-${mode}${magicMode ? '-magic' : ''}` : view}
                 className="w-full"
                 style={{ maxWidth: 460 }}
                 initial={{ opacity: 0, y: 18 }}
@@ -316,6 +416,139 @@ export default function PortalAuth() {
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               >
+
+                {/* ════ VERIFYING LINK ════ */}
+                {view === 'verifying' && (
+                  <div style={{ textAlign: 'center', paddingTop: 40 }}>
+                    {verifyError ? (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, margin: '0 auto 20px',
+                          backgroundColor: 'rgba(185,68,68,0.08)',
+                          border: '1px solid rgba(185,68,68,0.25)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <XCircle style={{ width: 16, height: 16, color: ERR }} strokeWidth={1.5} />
+                        </div>
+                        <h1 style={{
+                          fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                          fontSize: 'clamp(24px, 3.5vw, 34px)', color: INK, marginBottom: 12,
+                        }}>Link expired.</h1>
+                        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300, marginBottom: 24 }}>
+                          {verifyError}
+                        </p>
+                        <button onClick={() => { setVerifying(false); setVerifyError(''); setShowForgot(true); }}
+                          style={{
+                            backgroundColor: GOLD, color: '#FFF', height: 50, width: '100%',
+                            fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                            fontWeight: 700, border: 'none', cursor: 'pointer',
+                          }}>
+                          Request a new link
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{
+                          width: 40, height: 40, margin: '0 auto 20px',
+                          backgroundColor: 'rgba(157,126,63,0.08)',
+                          border: '1px solid rgba(157,126,63,0.25)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Zap style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                        </div>
+                        <p style={{ fontSize: 13, color: MUTED, fontWeight: 300 }}>Verifying your link…</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ════ SET NEW PASSWORD (returning from reset link) ════ */}
+                {view === 'reset' && (
+                  <div>
+                    <div style={{
+                      width: 40, height: 40,
+                      backgroundColor: 'rgba(157,126,63,0.08)',
+                      border: '1px solid rgba(157,126,63,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      marginBottom: 20,
+                    }}>
+                      <Lock style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                    </div>
+
+                    <h1 style={{
+                      fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                      fontSize: 'clamp(26px, 4vw, 36px)', color: INK,
+                      lineHeight: 1.08, marginBottom: 8,
+                    }}>
+                      {resetDone ? 'Password updated.' : 'Set a new password.'}
+                    </h1>
+
+                    {resetDone ? (
+                      <>
+                        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300, marginBottom: 28 }}>
+                          Your password has been updated successfully. You can now sign in with your new password.
+                        </p>
+                        <button
+                          onClick={() => { setResetMode(false); setResetDone(false); }}
+                          className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85"
+                          style={{
+                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                            fontWeight: 700, border: 'none', cursor: 'pointer',
+                          }}>
+                          <span>Sign In</span>
+                          <ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, fontWeight: 300, marginBottom: 28 }}>
+                          Choose a new password for <strong style={{ color: INK, fontWeight: 500 }}>{resetEmail}</strong>.
+                        </p>
+                        <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+                          <PwFld
+                            label="New Password" hint="min. 8 chars"
+                            value={resetPw} onChange={setResetPw}
+                            placeholder="Create new password"
+                            show={resetShow} onToggle={() => setResetShow(v => !v)}
+                            required
+                          />
+                          <PwFld
+                            label="Confirm New Password"
+                            value={resetPw2} onChange={setResetPw2}
+                            placeholder="Re-enter password"
+                            show={resetShow} onToggle={() => setResetShow(v => !v)}
+                            required invalid={!!resetPw2 && resetPw2 !== resetPw}
+                          />
+                          {resetPw2 && resetPw2 !== resetPw && (
+                            <p style={{ fontSize: 11, color: ERR, fontFamily: SF, fontStyle: 'italic', marginTop: -16 }}>
+                              Passwords don't match
+                            </p>
+                          )}
+                          <AnimatePresence>
+                            {resetError && (
+                              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                style={{ fontSize: 12, color: ERR, fontFamily: SF, fontStyle: 'italic', marginTop: -8 }}>
+                                {resetError}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                          <button type="submit" disabled={resetLoading}
+                            className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                            style={{
+                              backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                              fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                              fontWeight: 700, border: 'none', cursor: resetLoading ? 'not-allowed' : 'pointer',
+                            }}>
+                            {resetLoading
+                              ? 'Updating…'
+                              : <><span>Update Password</span><ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} /></>}
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* ════ MAIN FORM VIEW ════ */}
                 {view === 'form' && (
@@ -361,49 +594,152 @@ export default function PortalAuth() {
 
                     {/* ── LOGIN FORM ── */}
                     {mode === 'login' && (
-                      <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-                        <Fld label="Email Address">
-                          <input required type="email" value={lEmail}
-                            onChange={e => setLEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            style={F}
-                            onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-                            onBlur={e => (e.target.style.borderBottomColor = BDR)} />
-                        </Fld>
+                      <>
+                        {/* Magic link sent confirmation */}
+                        {magicSent ? (
+                          <div>
+                            <div style={{
+                              padding: 20,
+                              backgroundColor: 'rgba(157,126,63,0.04)',
+                              border: '1px solid rgba(157,126,63,0.18)',
+                              marginBottom: 20,
+                            }}>
+                              <div style={{
+                                fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.36em',
+                                fontWeight: 700, color: GOLD, marginBottom: 8,
+                              }}>Check your inbox</div>
+                              <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300 }}>
+                                We sent a sign-in link to <strong style={{ color: INK, fontWeight: 500 }}>{magicEmail}</strong>.
+                                Click it to access your portal instantly — no password needed.
+                              </p>
+                            </div>
+                            <button onClick={() => { setMagicSent(false); setMagicMode(false); setMagicEmail(''); }}
+                              style={{
+                                fontSize: 11, color: MUTED, fontFamily: SF, fontStyle: 'italic',
+                                fontWeight: 300, background: 'none', border: 'none', cursor: 'pointer',
+                              }}
+                              className="transition-opacity hover:opacity-60">
+                              ← Back to sign in
+                            </button>
+                          </div>
+                        ) : magicMode ? (
+                          /* Magic link email form */
+                          <div>
+                            <form onSubmit={handleMagicLink} style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+                              <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, fontWeight: 300 }}>
+                                Enter your email and we'll send you a link that signs you in instantly.
+                              </p>
+                              <Fld label="Email Address">
+                                <input required type="email" value={magicEmail}
+                                  onChange={e => setMagicEmail(e.target.value)}
+                                  placeholder="you@example.com"
+                                  style={F}
+                                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                                  onBlur={e => (e.target.style.borderBottomColor = BDR)} />
+                              </Fld>
+                              <AnimatePresence>
+                                {error && (
+                                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                    style={{ fontSize: 12, color: ERR, fontFamily: SF, fontStyle: 'italic', marginTop: -8 }}>
+                                    {error}
+                                  </motion.p>
+                                )}
+                              </AnimatePresence>
+                              <button type="submit" disabled={magicLoading || !magicEmail.trim()}
+                                className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                                style={{
+                                  backgroundColor: INK, color: PANEL, height: 52, width: '100%',
+                                  fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                                  fontWeight: 700, border: 'none', cursor: magicLoading ? 'not-allowed' : 'pointer',
+                                }}>
+                                {magicLoading
+                                  ? 'Sending…'
+                                  : <><span>Send Magic Link</span><Zap style={{ width: 13, height: 13 }} strokeWidth={2} /></>}
+                              </button>
+                            </form>
+                            <button onClick={() => { setMagicMode(false); setError(''); }}
+                              style={{
+                                fontSize: 11, color: MUTED, fontFamily: SF, fontStyle: 'italic',
+                                fontWeight: 300, marginTop: 20, background: 'none',
+                                border: 'none', cursor: 'pointer',
+                              }}
+                              className="transition-opacity hover:opacity-60">
+                              ← Sign in with password instead
+                            </button>
+                          </div>
+                        ) : (
+                          /* Standard login form */
+                          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+                            <Fld label="Email Address">
+                              <input required type="email" value={lEmail}
+                                onChange={e => setLEmail(e.target.value)}
+                                placeholder="you@example.com"
+                                style={F}
+                                onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                                onBlur={e => (e.target.style.borderBottomColor = BDR)} />
+                            </Fld>
 
-                        <PwFld label="Password" value={lPw} onChange={setLPw}
-                          placeholder="Your password" show={lShow}
-                          onToggle={() => setLShow(v => !v)} required />
+                            <div>
+                              <PwFld label="Password" value={lPw} onChange={setLPw}
+                                placeholder="Your password" show={lShow}
+                                onToggle={() => setLShow(v => !v)} required />
+                              <button
+                                type="button"
+                                onClick={() => { setShowForgot(true); setForgotEmail(lEmail); setForgotSent(false); }}
+                                style={{
+                                  marginTop: 8, fontSize: 11, color: MUTED,
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  padding: 0, fontStyle: 'italic', fontFamily: SF,
+                                }}
+                                className="transition-opacity hover:opacity-70">
+                                Forgot password?
+                              </button>
+                            </div>
 
-                        <AnimatePresence>
-                          {error && (
-                            <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                              style={{ fontSize: 12, color: ERR, fontFamily: SF, fontStyle: 'italic', marginTop: -8 }}>
-                              {error}
-                            </motion.p>
-                          )}
-                        </AnimatePresence>
+                            <AnimatePresence>
+                              {error && (
+                                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                  style={{ fontSize: 12, color: ERR, fontFamily: SF, fontStyle: 'italic', marginTop: -8 }}>
+                                  {error}
+                                </motion.p>
+                              )}
+                            </AnimatePresence>
 
-                        <button type="submit" disabled={loading}
-                          className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
-                          style={{
-                            backgroundColor: GOLD, color: '#FFF',
-                            height: 52, width: '100%', fontSize: 10,
-                            textTransform: 'uppercase', letterSpacing: '0.32em', fontWeight: 700,
-                            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                          }}>
-                          {loading
-                            ? 'Signing in…'
-                            : <><span>Enter Portal</span><ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} /></>}
-                        </button>
-                      </form>
+                            <button type="submit" disabled={loading}
+                              className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                              style={{
+                                backgroundColor: GOLD, color: '#FFF',
+                                height: 52, width: '100%', fontSize: 10,
+                                textTransform: 'uppercase', letterSpacing: '0.32em', fontWeight: 700,
+                                border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                              }}>
+                              {loading
+                                ? 'Signing in…'
+                                : <><span>Enter Portal</span><ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} /></>}
+                            </button>
+
+                            {/* Magic link alternative */}
+                            <div style={{ borderTop: `1px solid ${BDR}`, paddingTop: 20, textAlign: 'center' }}>
+                              <button type="button"
+                                onClick={() => { setMagicMode(true); setMagicEmail(lEmail); setError(''); }}
+                                className="transition-opacity hover:opacity-70"
+                                style={{
+                                  fontSize: 11, color: MUTED, background: 'none', border: 'none',
+                                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                }}>
+                                <Zap style={{ width: 11, height: 11, color: GOLDF }} strokeWidth={2} />
+                                Sign in with a magic link instead
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </>
                     )}
 
                     {/* ── REGISTER FORM ── */}
                     {mode === 'register' && (
                       <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
-                        {/* Row: Name + Phone */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
                           <Fld label="Full Name">
                             <input required value={rName} onChange={e => setRName(e.target.value)}
@@ -412,21 +748,32 @@ export default function PortalAuth() {
                               onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                           </Fld>
                           <Fld label="Phone">
-                            <input required type="tel" value={rPhone} onChange={e => setRPhone(e.target.value)}
-                              placeholder="(713) 555-0100" style={F}
+                            <PhoneInput
+                              value={rPhone}
+                              onChange={setRPhone}
+                              placeholder="(713) 555-0100"
+                              inputStyle={F}
+                              showIcon={false}
                               onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-                              onBlur={e => (e.target.style.borderBottomColor = BDR)} />
+                              onBlur={e => (e.target.style.borderBottomColor = BDR)}
+                              required
+                            />
                           </Fld>
                         </div>
 
                         <Fld label="Email Address">
-                          <input required type="email" value={rEmail} onChange={e => setREmail(e.target.value)}
-                            placeholder="you@example.com" style={F}
+                          <EmailInput
+                            value={rEmail}
+                            onChange={setREmail}
+                            placeholder="you@example.com"
+                            inputStyle={F}
+                            showIcon={false}
                             onFocus={e => (e.target.style.borderBottomColor = GOLD)}
-                            onBlur={e => (e.target.style.borderBottomColor = BDR)} />
+                            onBlur={e => (e.target.style.borderBottomColor = BDR)}
+                            required
+                          />
                         </Fld>
 
-                        {/* Row: Password + Confirm */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
                           <PwFld label="Password" hint="min. 8 chars" value={rPw} onChange={setRPw}
                             placeholder="Create password" show={rShow}
@@ -441,7 +788,6 @@ export default function PortalAuth() {
                           </p>
                         )}
 
-                        {/* Project type dropdown */}
                         <Fld label="Project Type">
                           <div className="relative">
                             <button type="button" onClick={() => setTypeOpen(o => !o)}
@@ -539,18 +885,18 @@ export default function PortalAuth() {
                   </>
                 )}
 
-                {/* ════ OTP VERIFICATION ════ */}
-                {view === 'otp' && (
+                {/* ════ FORGOT PASSWORD ════ */}
+                {view === 'forgot' && (
                   <div>
                     <button
-                      onClick={() => { setPendingOtp(false); setOtpValue(''); setOtpError(''); }}
+                      onClick={() => { setShowForgot(false); setForgotSent(false); }}
                       style={{
                         fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.28em',
                         fontWeight: 700, color: MUTED, marginBottom: 28,
                         background: 'none', border: 'none', cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6,
                       }}>
-                      ← Back
+                      ← Back to sign in
                     </button>
 
                     <div style={{
@@ -560,7 +906,7 @@ export default function PortalAuth() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       marginBottom: 20,
                     }}>
-                      <Lock style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                      <Mail style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
                     </div>
 
                     <h1 style={{
@@ -568,72 +914,65 @@ export default function PortalAuth() {
                       fontSize: 'clamp(26px, 4vw, 36px)', color: INK,
                       lineHeight: 1.08, marginBottom: 8,
                     }}>
-                      Verify your identity.
+                      Reset your password.
                     </h1>
-                    <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, fontWeight: 300, marginBottom: 24 }}>
-                      Enter the 6-digit verification code sent to your email.
-                    </p>
 
-                    {/* Demo code reveal */}
-                    <div style={{
-                      marginBottom: 24, padding: '12px 16px',
-                      backgroundColor: 'rgba(157,126,63,0.06)',
-                      border: '1px solid rgba(157,126,63,0.16)',
-                    }}>
-                      <div style={{
-                        fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.38em',
-                        fontWeight: 700, color: GOLD, marginBottom: 6,
-                      }}>Demo — your code</div>
-                      <div style={{
-                        fontFamily: SF, fontStyle: 'italic', fontSize: '1.85rem',
-                        color: INK, letterSpacing: '0.22em', fontWeight: 300, lineHeight: 1,
-                      }}>{otpCode}</div>
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={LBL}>6-Digit Code</label>
-                      <div style={{ marginTop: 10 }}>
-                        <InputOTP
-                          maxLength={6}
-                          value={otpValue}
-                          onChange={v => { setOtpValue(v); setOtpError(''); }}
-                          onComplete={handleVerifyOtp}
-                          containerClassName="gap-2">
-                          <InputOTPGroup>
-                            {[0, 1, 2, 3, 4, 5].map(i => (
-                              <InputOTPSlot key={i} index={i}
-                                className="rounded-none border-[#DDD4C4] data-[active]:border-[#9D7E3F] data-[active]:ring-[#9D7E3F]"
-                                style={{
-                                  width: 48, height: 56,
-                                  fontFamily: SF, fontStyle: 'italic',
-                                  fontSize: '1.25rem', color: INK,
-                                }} />
-                            ))}
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {otpError && (
-                        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          style={{ fontSize: 12, color: ERR, fontFamily: SF, fontStyle: 'italic', marginBottom: 14 }}>
-                          {otpError}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-
-                    <button onClick={handleVerifyOtp} disabled={otpValue.length < 6}
-                      className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
-                      style={{
-                        backgroundColor: INK, color: PANEL,
-                        height: 52, fontSize: 10,
-                        textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700,
-                        border: 'none', cursor: otpValue.length < 6 ? 'not-allowed' : 'pointer',
-                      }}>
-                      Verify & Enter Portal
-                      <ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} />
-                    </button>
+                    {forgotSent ? (
+                      <>
+                        <div style={{
+                          padding: 20, marginBottom: 24,
+                          backgroundColor: 'rgba(157,126,63,0.04)',
+                          border: '1px solid rgba(157,126,63,0.14)',
+                        }}>
+                          <div style={{
+                            fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.36em',
+                            fontWeight: 700, color: GOLD, marginBottom: 10,
+                          }}>Check your inbox</div>
+                          <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300 }}>
+                            If <strong style={{ color: INK, fontWeight: 500 }}>{forgotEmail}</strong> has a portal account, you'll receive a reset link shortly.
+                            Click it to set a new password — the link expires in 1 hour.
+                          </p>
+                        </div>
+                        <p style={{ fontSize: 11, color: MUTED, lineHeight: 1.65, marginBottom: 24, fontStyle: 'italic', fontFamily: SF }}>
+                          Didn't receive it? Check your spam folder, or contact the HOU INC team directly.
+                        </p>
+                        <button
+                          onClick={() => { setShowForgot(false); setForgotSent(false); }}
+                          className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85"
+                          style={{
+                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                            fontWeight: 700, border: 'none', cursor: 'pointer',
+                          }}>
+                          Back to Sign In
+                        </button>
+                      </>
+                    ) : (
+                      <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+                        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, fontWeight: 300 }}>
+                          Enter your email address and we'll send you a secure link to reset your password.
+                        </p>
+                        <Fld label="Email Address">
+                          <input required type="email" value={forgotEmail}
+                            onChange={e => setForgotEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            style={F}
+                            onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                            onBlur={e => (e.target.style.borderBottomColor = BDR)} />
+                        </Fld>
+                        <button type="submit" disabled={forgotLoading || !forgotEmail.trim()}
+                          className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                          style={{
+                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
+                            fontWeight: 700, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer',
+                          }}>
+                          {forgotLoading
+                            ? 'Sending…'
+                            : <><span>Send Reset Link</span><ArrowRight style={{ width: 14, height: 14 }} strokeWidth={2} /></>}
+                        </button>
+                      </form>
+                    )}
                   </div>
                 )}
 

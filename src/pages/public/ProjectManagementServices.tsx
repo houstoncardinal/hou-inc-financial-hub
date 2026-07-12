@@ -23,7 +23,7 @@ const SCHEMA = {
       name: 'Construction Project Management Services — Houston, TX',
       provider: {
         '@type': 'LocalBusiness',
-        name: 'HOU INC Construction',
+        name: 'Houston Enterprise Construction',
         telephone: '+12819159595',
         email: 'info@houinc.com',
         url: 'https://houinc.com',
@@ -52,7 +52,7 @@ const SCHEMA = {
           name: "What is the difference between a general contractor and a construction project manager?",
           acceptedAnswer: {
             '@type': 'Answer',
-            text: "A general contractor (GC) assumes financial risk by bidding a lump-sum price and self-performing or subcontracting all work. A construction project manager (PM) works on behalf of the owner — managing schedule, budget, and quality without holding the risk of a lump-sum contract. The PM model offers greater transparency and owner control. HOU INC can serve in either role.",
+            text: "A general contractor (GC) assumes financial risk by bidding a lump-sum price and self-performing or subcontracting all work. A construction project manager (PM) works on behalf of the owner — managing schedule, budget, and quality without holding the risk of a lump-sum contract. The PM model offers greater transparency and owner control. Houston Enterprise can serve in either role.",
           },
         },
         {
@@ -65,7 +65,7 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: "Can HOU INC serve as my Owner's Representative?",
+          name: "Can Houston Enterprise serve as my Owner's Representative?",
           acceptedAnswer: {
             '@type': 'Answer',
             text: "Yes. We offer Owner's Representative services as a standalone engagement — representing your interests throughout the design, bidding, and construction phases without self-performing construction work. This is appropriate when you want independent oversight of a third-party GC.",
@@ -73,7 +73,7 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: "Can HOU INC take over management of a troubled project already underway?",
+          name: "Can Houston Enterprise take over management of a troubled project already underway?",
           acceptedAnswer: {
             '@type': 'Answer',
             text: "Yes. We have experience stepping into projects that are behind schedule, over budget, or experiencing contractor performance issues. We conduct an initial assessment, stabilize the project, and develop a recovery plan. Outcomes depend on the specific conditions we inherit.",
@@ -81,7 +81,7 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: "How does HOU INC manage construction budgets?",
+          name: "How does Houston Enterprise manage construction budgets?",
           acceptedAnswer: {
             '@type': 'Answer',
             text: "We employ rigorous cost control measures from pre-construction through closeout — developing detailed cost estimates, tracking committed versus actual costs, managing change orders with discipline, and providing regular cost reports. We leverage our industry relationships to source competitive pricing from qualified subcontractors and suppliers.",
@@ -161,14 +161,14 @@ const SERVICES = [
 const FAQS = [
   {
     q: "What's the difference between a GC and a project manager?",
-    a: "A GC bids a lump-sum price and assumes financial risk. A PM works on behalf of the owner with full cost transparency and no lump-sum risk. HOU INC can serve in either role.",
+    a: "A GC bids a lump-sum price and assumes financial risk. A PM works on behalf of the owner with full cost transparency and no lump-sum risk. Houston Enterprise can serve in either role.",
   },
   {
     q: 'When should I hire a project manager?',
     a: 'Ideally during pre-construction — before design is finalized and before a GC is selected. Early PM involvement allows budget validation, constructability review, and competitive procurement.',
   },
   {
-    q: "Can HOU INC serve as Owner's Representative?",
+    q: "Can Houston Enterprise serve as Owner's Representative?",
     a: "Yes — as a standalone engagement, representing your interests throughout design, bidding, and construction without self-performing any work.",
   },
   {
@@ -217,7 +217,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function ProjectManagementServices() {
   useEffect(() => {
-    document.title = 'Construction Project Management Services Houston TX | HOU INC';
+    document.title = 'Construction Project Management Services Houston TX | Houston Enterprise';
     const desc = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
     if (desc) desc.content = "Construction project management for residential and commercial projects across Greater Houston — pre-construction, budget control, scheduling, and Owner's Representation. Call (281) 915-9595.";
     const s = document.createElement('script');
@@ -252,7 +252,7 @@ export default function ProjectManagementServices() {
               Construction PM That<br />Protects Your Interests
             </h1>
             <p style={{ fontSize: 16, fontWeight: 300, lineHeight: 1.8, color: 'rgba(255,255,255,0.62)', maxWidth: 580, marginBottom: 36 }}>
-              At HOU INC, we understand that effective project management is the cornerstone of successful construction. We are committed to providing exceptional PM services for both commercial and residential projects — with a proven track record of on-time, on-budget delivery.
+              At Houston Enterprise, we understand that effective project management is the cornerstone of successful construction. We are committed to providing exceptional PM services for both commercial and residential projects — with a proven track record of on-time, on-budget delivery.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               <Link to="/contact"
@@ -354,7 +354,7 @@ export default function ProjectManagementServices() {
             <blockquote style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px,2.8vw,36px)', color: W, lineHeight: 1.45, marginBottom: 24 }}>
               "Client satisfaction is at the heart of our project management services. We build long-term relationships through exceptional results, transparent communication, and a commitment to exceeding expectations."
             </blockquote>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>HOU INC · Project Management · Houston, TX</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>Houston Enterprise · Project Management · Houston, TX</div>
             <div style={{ width: 40, height: 1, backgroundColor: AC, margin: '28px auto 0' }} />
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function ProjectManagementServices() {
                 Project Management Questions
               </h2>
               <p style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(0,0,0,0.50)', fontWeight: 300 }}>
-                Common questions about construction project management services with HOU INC in Greater Houston.
+                Common questions about construction project management services with Houston Enterprise in Greater Houston.
               </p>
               <div style={{ marginTop: 32 }}>
                 <a href="tel:+12819159595" style={{
@@ -397,7 +397,7 @@ export default function ProjectManagementServices() {
             Ready to Experience Expert Construction PM?
           </h2>
           <p style={{ fontSize: 15, fontWeight: 300, lineHeight: 1.8, color: 'rgba(0,0,0,0.52)', maxWidth: 520, margin: '0 auto 36px' }}>
-            Contact HOU INC to schedule a consultation with our project management team. We look forward to collaborating with you to bring your construction vision to life — on schedule and within budget.
+            Contact Houston Enterprise to schedule a consultation with our project management team. We look forward to collaborating with you to bring your construction vision to life — on schedule and within budget.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
             <Link to="/contact"

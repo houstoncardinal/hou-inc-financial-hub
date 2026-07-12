@@ -365,6 +365,93 @@ export type Database = {
           },
         ]
       }
+      contact_submissions: {
+        Row: {
+          id: string
+          created_at: string
+          name: string
+          email: string
+          phone: string | null
+          company: string | null
+          service_type: string | null
+          budget_range: string | null
+          message: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          name: string
+          email: string
+          phone?: string | null
+          company?: string | null
+          service_type?: string | null
+          budget_range?: string | null
+          message?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          name?: string
+          email?: string
+          phone?: string | null
+          company?: string | null
+          service_type?: string | null
+          budget_range?: string | null
+          message?: string | null
+        }
+        Relationships: []
+      }
+      start_project_submissions: {
+        Row: {
+          id: string
+          created_at: string
+          submitted_at: string
+          name: string | null
+          email: string | null
+          phone: string | null
+          type: string | null
+          scope: string | null
+          sqft: string | null
+          location: string | null
+          budget: string | null
+          start_timeline: string | null
+          priorities: string[] | null
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          submitted_at?: string
+          name?: string | null
+          email?: string | null
+          phone?: string | null
+          type?: string | null
+          scope?: string | null
+          sqft?: string | null
+          location?: string | null
+          budget?: string | null
+          start_timeline?: string | null
+          priorities?: string[] | null
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          submitted_at?: string
+          name?: string | null
+          email?: string | null
+          phone?: string | null
+          type?: string | null
+          scope?: string | null
+          sqft?: string | null
+          location?: string | null
+          budget?: string | null
+          start_timeline?: string | null
+          priorities?: string[] | null
+          description?: string | null
+        }
+        Relationships: []
+      }
       vendors: {
         Row: {
           address: string | null

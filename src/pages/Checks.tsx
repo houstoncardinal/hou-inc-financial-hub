@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import DigitalCheck from '@/components/DigitalCheck';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
-import { Trash2, Eye, Table2, FileText } from 'lucide-react';
+import { Trash2, Eye, Table2, FileText, AlertTriangle } from 'lucide-react';
 import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
 
@@ -87,9 +87,26 @@ export default function Checks() {
             <div key={c.id} className="border border-border p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">#{c.check_number}</span>
-                <span className="text-sm font-semibold font-mono-tab">{fmtUSD(c.amount)}</span>
+                <div className="flex items-center gap-2">
+                  {c.retainage_pct > 0 && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      {c.retainage_pct}% retained
+                    </span>
+                  )}
+                  <span className="text-sm font-semibold font-mono-tab">{fmtUSD(c.amount)}</span>
+                </div>
               </div>
-              <div className="text-sm">{c.payee_name}</div>
+              <div className="flex items-center gap-1.5 text-sm">
+                {c.lien_waiver_status === 'pending' && (
+                  <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                )}
+                <span>{c.payee_name}</span>
+                {c.lien_waiver_status === 'pending' && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-warning/10 text-warning border border-warning/20 ml-auto">
+                    Lien Waiver Pending
+                  </span>
+                )}
+              </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{c.projects?.name || '—'}</span>
                 <span>{fmtDate(c.issue_date)}</span>
@@ -120,7 +137,7 @@ export default function Checks() {
         {/* Desktop table */}
         <div className="hidden sm:block border border-border">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
-            <div className="col-span-1">Check #</div><div className="col-span-3">Payee</div><div className="col-span-2">Project</div><div className="col-span-2">Date</div><div className="col-span-2 text-right">Amount</div><div className="col-span-1">Status</div><div className="col-span-1 text-right">—</div>
+            <div className="col-span-1">Check #</div><div className="col-span-3">Payee</div><div className="col-span-2">Project</div><div className="col-span-1">Date</div><div className="col-span-1 text-center">Lien</div><div className="col-span-2 text-right">Amount</div><div className="col-span-1">Status</div><div className="col-span-1 text-right">—</div>
           </div>
           {filtered.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
@@ -129,8 +146,21 @@ export default function Checks() {
               <div className="col-span-1 font-semibold">{c.check_number}</div>
               <div className="col-span-3 truncate">{c.payee_name}</div>
               <div className="col-span-2 truncate text-muted-foreground">{c.projects?.name || '—'}</div>
-              <div className="col-span-2 text-muted-foreground">{fmtDate(c.issue_date)}</div>
-              <div className="col-span-2 text-right font-semibold">{fmtUSD(c.amount)}</div>
+              <div className="col-span-1 text-muted-foreground text-xs">{fmtDate(c.issue_date)}</div>
+              <div className="col-span-1 flex justify-center">
+                {c.lien_waiver_status === 'pending' && (
+                  <span title="Lien waiver pending"><AlertTriangle className="w-3.5 h-3.5 text-warning" /></span>
+                )}
+                {c.lien_waiver_status === 'received' && (
+                  <span className="text-[8px] font-bold text-positive">✓</span>
+                )}
+              </div>
+              <div className="col-span-2 text-right">
+                <div className="font-semibold">{fmtUSD(c.amount)}</div>
+                {c.retainage_pct > 0 && (
+                  <div className="text-[9px] text-muted-foreground">{c.retainage_pct}% retained</div>
+                )}
+              </div>
               <div className="col-span-1">
                 <Select value={c.status} onValueChange={v => updateStatus(c, v)}>
                   <SelectTrigger className="rounded-none h-7 text-[10px] uppercase tracking-wider px-2"><SelectValue /></SelectTrigger>

@@ -249,6 +249,8 @@ export function usePortal() {
     localStorage.getItem(SESSION_KEY)
   );
   const [client, setClient] = useState<PortalClient | null>(null);
+  // true once the initial session-restore fetch has resolved (or there was no session)
+  const [loaded, setLoaded] = useState(() => !localStorage.getItem(SESSION_KEY));
   const [brief, setBrief]   = useState<ProjectBrief | null>(null);
   const [messages, setMessages]   = useState<PortalMessage[]>([]);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
@@ -256,12 +258,13 @@ export function usePortal() {
 
   // Load client from Supabase when clientId changes
   useEffect(() => {
-    if (!clientId) { setClient(null); return; }
+    if (!clientId) { setClient(null); setLoaded(true); return; }
     (supabase as any).rpc('get_portal_client_by_id', { p_id: clientId })
       .then(({ data }: { data: any }) => {
         const row = Array.isArray(data) ? data[0] : data;
         if (row) setClient(mapClient(row));
         else { localStorage.removeItem(SESSION_KEY); setClientId(null); }
+        setLoaded(true);
       });
   }, [clientId]);
 
@@ -304,7 +307,7 @@ export function usePortal() {
 
     if (error) return { ok: false, error: error.message ?? 'Registration failed.' };
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { ok: false, error: 'Registration failed — please try again.' };
+    if (!row) return { ok: false, error: 'Registration failed — no data returned. Run portal-setup.sql first.' };
 
     const nc = mapClient(row);
     localStorage.setItem(SESSION_KEY, nc.id);
@@ -324,7 +327,7 @@ export function usePortal() {
       p_password: password,
     });
 
-    if (error) return { ok: false, error: 'Sign in failed — please try again.' };
+    if (error) return { ok: false, error: error.message ?? 'Sign in failed — please try again.' };
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return { ok: false, error: 'Incorrect email or password.' };
 
@@ -342,7 +345,7 @@ export function usePortal() {
     const { data, error } = await (supabase as any).rpc('get_portal_client_by_email', {
       p_email: 'cardinal.hunain@gmail.com',
     });
-    if (error) return { ok: false, error: 'Demo account lookup failed — run portal-setup.sql first.' };
+    if (error) return { ok: false, error: `${error.message} — run portal-setup.sql first.` };
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return { ok: false, error: 'Demo account not found — run portal-setup.sql to seed it.' };
     const c = mapClient(row);
@@ -350,6 +353,22 @@ export function usePortal() {
     setClientId(c.id);
     setClient(c);
     return { ok: true };
+  }, []);
+
+  const loginByEmail = useCallback(async (
+    email: string,
+  ): Promise<{ ok: boolean; status?: PortalClient['status']; error?: string }> => {
+    const { data, error } = await (supabase as any).rpc('get_portal_client_by_email', {
+      p_email: email.trim().toLowerCase(),
+    });
+    if (error) return { ok: false, error: 'Account lookup failed.' };
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { ok: false, error: 'No portal account found for this email address.' };
+    const c = mapClient(row);
+    localStorage.setItem(SESSION_KEY, c.id);
+    setClientId(c.id);
+    setClient(c);
+    return { ok: true, status: c.status };
   }, []);
 
   const logout = useCallback(() => {
@@ -573,9 +592,11 @@ export function usePortal() {
 
   return {
     client,
+    loaded,
     register,
     login,
     loginBypass,
+    loginByEmail,
     logout,
     getBrief,
     saveBrief,

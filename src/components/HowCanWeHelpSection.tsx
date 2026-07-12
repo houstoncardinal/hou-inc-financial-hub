@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
 
 /* ── Tokens ──────────────────────────────────────────────────────────── */
 const B    = '#0A0A0A';
@@ -407,8 +408,47 @@ function OptionBtn({ selected, onClick, children }: { selected: boolean; onClick
   );
 }
 
+function fmtPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 10);
+  if (d.length < 4) return d;
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+
+const FINPUT_STYLE = {
+  width: '100%', backgroundColor: '#F7F7F6', borderRadius: 0,
+  padding: '0.85rem 1rem', fontSize: 12, fontFamily: 'inherit', color: '#0A0A0A',
+  outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' as const,
+};
+
 function FInput({ label, value, onChange, placeholder, type = 'text', required }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; required?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(type === 'tel' ? fmtPhone(e.target.value) : e.target.value);
+  };
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 8, letterSpacing: '0.32em', textTransform: 'uppercase', fontWeight: 700, color: G500, marginBottom: 8 }}>
+        {label}{required && ' *'}
+      </label>
+      <div style={{ position: 'relative' }}>
+        <input type={type === 'tel' ? 'tel' : type} value={value} onChange={handleChange}
+          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+          placeholder={placeholder}
+          autoComplete={type === 'tel' ? 'tel' : type === 'email' ? 'email' : undefined}
+          inputMode={type === 'tel' ? 'tel' : undefined}
+          style={{ ...FINPUT_STYLE, border: `1px solid ${focused ? '#0A0A0A' : '#D9D9D9'}` }} />
+        <motion.div animate={{ scaleX: focused ? 1 : 0 }} transition={{ duration: 0.3 }}
+          style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: '#0A0A0A', transformOrigin: 'left' }} />
+      </div>
+    </div>
+  );
+}
+
+function FLocationInput({ label, value, onChange, placeholder, required }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; required?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -417,11 +457,19 @@ function FInput({ label, value, onChange, placeholder, type = 'text', required }
         {label}{required && ' *'}
       </label>
       <div style={{ position: 'relative' }}>
-        <input type={type} value={value} onChange={e => onChange(e.target.value)}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={placeholder}
-          style={{ width: '100%', backgroundColor: '#F7F7F6', border: `1px solid ${focused ? B : G200}`, borderRadius: 0, padding: '0.85rem 1rem', fontSize: 12, fontFamily: 'inherit', color: B, outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }} />
+        <LocationAutocomplete
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          showIcon={false}
+          inputStyle={{ ...FINPUT_STYLE, border: `1px solid ${focused ? '#0A0A0A' : '#D9D9D9'}` }}
+          onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#0A0A0A'; setFocused(true); }}
+          onBlur={e => { (e.target as HTMLInputElement).style.borderColor = '#D9D9D9'; setFocused(false); }}
+          focusBorderColor="#0A0A0A"
+          defaultBorderColor="#D9D9D9"
+        />
         <motion.div animate={{ scaleX: focused ? 1 : 0 }} transition={{ duration: 0.3 }}
-          style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: B, transformOrigin: 'left' }} />
+          style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: '#0A0A0A', transformOrigin: 'left', pointerEvents: 'none', zIndex: 1 }} />
       </div>
     </div>
   );
@@ -777,7 +825,7 @@ export default function HowCanWeHelpSection() {
                               </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ marginTop: 28 }}>
-                              <FInput label="Location / Area" value={data.location} onChange={set('location')} placeholder="Neighborhood, city, or zip code" />
+                              <FLocationInput label="Location / Area" value={data.location} onChange={set('location')} placeholder="Neighborhood, city, or zip code" />
                               <FTextarea label="Additional Notes" value={data.description} onChange={set('description')} placeholder="Any specific requirements or details…" />
                             </div>
                             <div style={{ marginTop: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

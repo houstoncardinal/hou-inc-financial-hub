@@ -29,7 +29,7 @@ const FOOTER_SERVICES = [
 ];
 
 const FOOTER_LINKS = [
-  { label: 'About HOU INC',    to: '/about'     },
+  { label: 'About Houston Enterprise', to: '/about'     },
   { label: 'Project Portfolio', to: '/portfolio' },
   { label: 'Our Services',      to: '/services'  },
   { label: 'Contact Us',        to: '/contact'   },
@@ -416,23 +416,19 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
            header box AND the overflowing mega panel beneath it */
         onMouseLeave={closeMega}
       >
-        <div className="w-full px-8 md:px-14 lg:px-24 flex items-center">
+        <div className="w-full px-4 sm:px-6 md:px-10 lg:px-16 xl:px-20 flex items-center">
 
           {/* Logo */}
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', flexShrink: 0 }}>
-            <motion.div
-              style={{ width: 36, height: 36, backgroundColor: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-              whileHover={{ scale: 0.9 }} transition={{ duration: 0.18 }}>
-              <span style={{ color: WHITE, fontSize: 15, fontFamily: SERIF, fontWeight: 700, fontStyle: 'italic', lineHeight: 1, userSelect: 'none' }}>H</span>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none', flexShrink: 0 }}>
+            <div style={{ width: 2, height: 26, background: `linear-gradient(to bottom, ${ACCENT}, rgba(157,126,63,0.15))`, flexShrink: 0 }} />
+            <motion.div whileHover={{ x: 1 }} transition={{ duration: 0.18 }}>
+              <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 800, letterSpacing: '0.24em', textTransform: 'uppercase', color: BLACK, lineHeight: 1.1 }}>
+                Houston
+              </div>
+              <div style={{ fontSize: 5.5, fontWeight: 700, letterSpacing: '0.52em', textTransform: 'uppercase', color: ACCENT, marginTop: 2, lineHeight: 1 }}>
+                Enterprise
+              </div>
             </motion.div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.32em', textTransform: 'uppercase', fontFamily: SERIF, lineHeight: 1.1, color: BLACK }}>
-                HOU INC
-              </div>
-              <div style={{ fontSize: 6.5, fontWeight: 600, letterSpacing: '0.38em', textTransform: 'uppercase', color: ACCENT, marginTop: 2 }}>
-                Construction · Houston
-              </div>
-            </div>
           </Link>
 
           {/* Desktop nav */}
@@ -517,13 +513,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               padding: '0 24px',
             }}>
               <Link to="/" onClick={() => setOpen(false)}
-                style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none' }}>
-                <div style={{ width: 34, height: 34, backgroundColor: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <span style={{ color: WHITE, fontSize: 14, fontFamily: SERIF, fontWeight: 700, fontStyle: 'italic', userSelect: 'none' }}>H</span>
-                </div>
+                style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
+                <div style={{ width: 2, height: 24, background: `linear-gradient(to bottom, ${ACCENT}, rgba(157,126,63,0.15))`, flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: '0.30em', textTransform: 'uppercase', fontFamily: SERIF, color: BLACK, lineHeight: 1.1 }}>HOU INC</div>
-                  <div style={{ fontSize: 6.5, fontWeight: 600, letterSpacing: '0.36em', textTransform: 'uppercase', color: ACCENT, marginTop: 2 }}>Construction · Houston</div>
+                  <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 800, letterSpacing: '0.24em', textTransform: 'uppercase', color: BLACK, lineHeight: 1.1 }}>Houston</div>
+                  <div style={{ fontSize: 5.5, fontWeight: 700, letterSpacing: '0.52em', textTransform: 'uppercase', color: ACCENT, marginTop: 2, lineHeight: 1 }}>Enterprise</div>
                 </div>
               </Link>
               <motion.button onClick={() => setOpen(false)} whileTap={{ scale: 0.85 }}
@@ -752,7 +746,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                     fontSize: 12, fontWeight: 500, letterSpacing: '0.02em',
                   }}>
                     <Mail size={12} strokeWidth={1.5} style={{ color: ACCENT }} />
-                    Info@Houinc.com
+                    Info@HouInc.com
                   </a>
                 </div>
               </div>
@@ -764,7 +758,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
                 <span style={{ fontSize: 7.5, fontWeight: 300, letterSpacing: '0.28em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.18)' }}>
-                  HOU INC Construction · Est. 1998
+                  Houston Enterprise · Est. 1998
                 </span>
                 <span style={{ fontSize: 7.5, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase' as const, color: 'rgba(157,126,63,0.45)' }}>
                   Houston, TX
@@ -806,7 +800,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               <div className="flex items-start gap-3 mb-5">
                 <div style={{ width: 2, height: 40, background: `linear-gradient(to bottom, ${ACCENT}, transparent)`, flexShrink: 0, marginTop: 2 }} />
                 <div>
-                  <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 22, color: BLACK, letterSpacing: '0.06em', textTransform: 'uppercase' as const, lineHeight: 1 }}>HOU INC</div>
+                  <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 22, color: BLACK, letterSpacing: '0.06em', textTransform: 'uppercase' as const, lineHeight: 1 }}>Houston Enterprise</div>
                   <div style={{ fontSize: 7, fontWeight: 600, letterSpacing: '0.44em', textTransform: 'uppercase' as const, color: ACCENT, marginTop: 5 }}>Construction · Houston</div>
                 </div>
               </div>
@@ -816,8 +810,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               <div className="space-y-2 mb-6">
                 {[
                   { Icon: Phone,  val: '(281) 915-9595',            href: 'tel:+12819159595'       },
-                  { Icon: Mail,   val: 'Info@Houinc.com',           href: 'mailto:info@houinc.com' },
-                  { Icon: MapPin, val: '2100 W Loop South · #1115', href: undefined                },
+                  { Icon: Mail,   val: 'Info@HouInc.com',           href: 'mailto:info@houinc.com' },
+                  { Icon: MapPin, val: '206 Brooks St · Sugar Land', href: undefined               },
                 ].map(({ Icon, val, href }) => (
                   <div key={val} className="flex items-center gap-2">
                     <Icon className="w-3 h-3 shrink-0" style={{ color: ACCENT }} strokeWidth={1.5} />
@@ -894,7 +888,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <div style={{ borderTop: `1px solid ${G200}` }}>
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
             <div style={{ fontSize: 9, textTransform: 'uppercase' as const, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.24)' }}>
-              © {new Date().getFullYear()} HOU INC Construction · All Rights Reserved · Houston, Texas
+              © {new Date().getFullYear()} Houston Enterprise · All Rights Reserved · Houston, Texas
             </div>
             <div className="flex items-center gap-5">
               {['Privacy Policy', 'Terms of Service', 'Accessibility'].map(l => (

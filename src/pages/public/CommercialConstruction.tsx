@@ -23,7 +23,7 @@ const SCHEMA = {
       name: 'Commercial Construction Services — Houston, TX',
       provider: {
         '@type': 'LocalBusiness',
-        name: 'HOU INC Construction',
+        name: 'Houston Enterprise Construction',
         telephone: '+12819159595',
         email: 'info@houinc.com',
         url: 'https://houinc.com',
@@ -49,7 +49,7 @@ const SCHEMA = {
       mainEntity: [
         {
           '@type': 'Question',
-          name: 'What types of commercial projects does HOU INC handle?',
+          name: 'What types of commercial projects does Houston Enterprise handle?',
           acceptedAnswer: {
             '@type': 'Answer',
             text: "We handle a broad range of commercial projects including office buildings, retail and mixed-use developments, restaurant and hospitality spaces, educational facilities, industrial and warehouse construction, and medical or healthcare facilities across Greater Houston.",
@@ -68,7 +68,7 @@ const SCHEMA = {
           name: "What's the difference between shell construction and tenant improvements?",
           acceptedAnswer: {
             '@type': 'Answer',
-            text: "Shell construction delivers a building envelope — foundation, structural framing, roof, and exterior skin — without interior build-out. Tenant improvements (TI) complete the interior to occupancy-ready condition for a specific tenant's use. HOU INC performs both.",
+            text: "Shell construction delivers a building envelope — foundation, structural framing, roof, and exterior skin — without interior build-out. Tenant improvements (TI) complete the interior to occupancy-ready condition for a specific tenant's use. Houston Enterprise performs both.",
           },
         },
         {
@@ -89,10 +89,10 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: "What is an Owner's Representative, and does HOU INC offer that service?",
+          name: "What is an Owner's Representative, and does Houston Enterprise offer that service?",
           acceptedAnswer: {
             '@type': 'Answer',
-            text: "An Owner's Representative (Owner's Rep) acts on behalf of the property owner to manage the construction process — overseeing the GC, managing the design team, and protecting the owner's interests. HOU INC offers Owner's Rep services as a standalone engagement for clients who want professional oversight without self-performing construction.",
+            text: "An Owner's Representative (Owner's Rep) acts on behalf of the property owner to manage the construction process — overseeing the GC, managing the design team, and protecting the owner's interests. Houston Enterprise offers Owner's Rep services as a standalone engagement for clients who want professional oversight without self-performing construction.",
           },
         },
       ],
@@ -157,7 +157,7 @@ const SERVICES = [
 
 const FAQS = [
   {
-    q: 'What types of commercial projects does HOU INC handle?',
+    q: 'What types of commercial projects does Houston Enterprise handle?',
     a: 'We handle office buildings, retail and mixed-use developments, restaurant and hospitality spaces, educational facilities, industrial and warehouse construction, and medical/healthcare facilities across Greater Houston.',
   },
   {
@@ -166,7 +166,7 @@ const FAQS = [
   },
   {
     q: "What's the difference between shell construction and tenant improvements?",
-    a: 'Shell construction delivers a building envelope without interior build-out. Tenant improvements (TI) complete the interior to occupancy-ready condition for a specific tenant. HOU INC performs both.',
+    a: 'Shell construction delivers a building envelope without interior build-out. Tenant improvements (TI) complete the interior to occupancy-ready condition for a specific tenant. Houston Enterprise performs both.',
   },
   {
     q: 'Do you comply with Texas Accessibility Standards (TAS)?',
@@ -178,7 +178,7 @@ const FAQS = [
   },
   {
     q: "What is an Owner's Rep and do you offer that service?",
-    a: "An Owner's Rep acts on behalf of the property owner to oversee the GC and design team. Yes — HOU INC offers Owner's Rep services as a standalone engagement.",
+    a: "An Owner's Rep acts on behalf of the property owner to oversee the GC and design team. Yes — Houston Enterprise offers Owner's Rep services as a standalone engagement.",
   },
 ];
 
@@ -218,7 +218,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function CommercialConstruction() {
   useEffect(() => {
-    document.title = 'Commercial Construction Services Houston TX | HOU INC';
+    document.title = 'Commercial Construction Services Houston TX | Houston Enterprise';
     const desc = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
     if (desc) desc.content = 'Office buildings, retail, hospitality, industrial, and healthcare construction across Greater Houston. 20+ years of commercial construction expertise. Call (281) 915-9595.';
     const s = document.createElement('script');
@@ -253,7 +253,7 @@ export default function CommercialConstruction() {
               Grade-A Commercial<br />Construction in Houston
             </h1>
             <p style={{ fontSize: 16, fontWeight: 300, lineHeight: 1.8, color: 'rgba(255,255,255,0.62)', maxWidth: 580, marginBottom: 36 }}>
-              At HOU INC, we deliver exceptional commercial construction services with precision and professionalism. Whether you are planning a new office building, renovating a retail space, or building a commercial complex, our team of experts is ready to deliver outstanding results.
+              At Houston Enterprise, we deliver exceptional commercial construction services with precision and professionalism. Whether you are planning a new office building, renovating a retail space, or building a commercial complex, our team of experts is ready to deliver outstanding results.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               <Link to="/contact"
@@ -290,9 +290,9 @@ export default function CommercialConstruction() {
       <section style={{ backgroundColor: CR, padding: '80px 0' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-14">
           <div style={{ marginBottom: 52 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: AC, marginBottom: 14 }}>Why Choose HOU INC</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: AC, marginBottom: 14 }}>Why Choose Houston Enterprise</div>
             <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,3.5vw,46px)', color: B, lineHeight: 1.1, maxWidth: 520 }}>
-              The HOU INC Difference in Commercial Construction
+              The Houston Enterprise Difference in Commercial Construction
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style={{ gap: 1, backgroundColor: G }}>
@@ -354,7 +354,7 @@ export default function CommercialConstruction() {
             <blockquote style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px,2.8vw,36px)', color: W, lineHeight: 1.45, marginBottom: 24 }}>
               "We take pride in delivering superior craftsmanship in every project — highly skilled professionals dedicated to exceptional results using the highest quality materials and construction techniques."
             </blockquote>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>HOU INC · Commercial Construction · Houston, TX</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>Houston Enterprise · Commercial Construction · Houston, TX</div>
             <div style={{ width: 40, height: 1, backgroundColor: AC, margin: '28px auto 0' }} />
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function CommercialConstruction() {
                 Commercial Construction Questions
               </h2>
               <p style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(0,0,0,0.50)', fontWeight: 300 }}>
-                Common questions about commercial construction in Greater Houston with HOU INC.
+                Common questions about commercial construction in Greater Houston with Houston Enterprise.
               </p>
               <div style={{ marginTop: 32 }}>
                 <a href="tel:+12819159595" style={{

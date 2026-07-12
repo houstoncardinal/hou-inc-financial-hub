@@ -23,7 +23,7 @@ const SCHEMA = {
       name: 'Residential Construction Services — Houston, TX',
       provider: {
         '@type': 'LocalBusiness',
-        name: 'HOU INC Construction',
+        name: 'Houston Enterprise Construction',
         telephone: '+12819159595',
         email: 'info@houinc.com',
         url: 'https://houinc.com',
@@ -49,7 +49,7 @@ const SCHEMA = {
       mainEntity: [
         {
           '@type': 'Question',
-          name: 'What areas does HOU INC serve for residential construction?',
+          name: 'What areas does Houston Enterprise serve for residential construction?',
           acceptedAnswer: {
             '@type': 'Answer',
             text: 'We serve the Greater Houston metropolitan area including Harris, Fort Bend, Montgomery, Brazoria, and Galveston counties — covering communities such as Sugar Land, The Woodlands, Katy, Pearland, League City, and Friendswood.',
@@ -57,7 +57,7 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: 'Do I need an architect before I contact HOU INC?',
+          name: 'Do I need an architect before I contact Houston Enterprise?',
           acceptedAnswer: {
             '@type': 'Answer',
             text: 'Not necessarily. We work closely with licensed architects and can facilitate introductions based on your project scope. Our team can advise on what design services are appropriate before construction begins.',
@@ -73,7 +73,7 @@ const SCHEMA = {
         },
         {
           '@type': 'Question',
-          name: 'Does HOU INC handle permits and inspections?',
+          name: 'Does Houston Enterprise handle permits and inspections?',
           acceptedAnswer: {
             '@type': 'Answer',
             text: 'Yes. We manage all permit applications through the City of Houston Permitting Center and coordinate required inspections throughout the construction process. Permit timelines vary by project type and jurisdiction.',
@@ -92,7 +92,7 @@ const SCHEMA = {
           name: 'What is the difference between a general contractor and a construction manager?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'A general contractor typically provides a lump-sum bid and manages subcontractors from their own roster. A construction manager (CM) works on behalf of the owner with full cost transparency — often in an at-risk or agency format. HOU INC can serve in either capacity depending on your project delivery preference.',
+            text: 'A general contractor typically provides a lump-sum bid and manages subcontractors from their own roster. A construction manager (CM) works on behalf of the owner with full cost transparency — often in an at-risk or agency format. Houston Enterprise can serve in either capacity depending on your project delivery preference.',
           },
         },
       ],
@@ -157,11 +157,11 @@ const SERVICES = [
 
 const FAQS = [
   {
-    q: 'What areas does HOU INC serve?',
+    q: 'What areas does Houston Enterprise serve?',
     a: 'We serve Greater Houston including Harris, Fort Bend, Montgomery, Brazoria, and Galveston counties — Sugar Land, The Woodlands, Katy, Pearland, League City, and surrounding communities.',
   },
   {
-    q: 'Do I need an architect before contacting HOU INC?',
+    q: 'Do I need an architect before contacting Houston Enterprise?',
     a: 'Not necessarily. We can advise on what design services are appropriate for your scope and facilitate introductions to licensed architects we work with regularly.',
   },
   {
@@ -178,7 +178,7 @@ const FAQS = [
   },
   {
     q: "What's the difference between a general contractor and construction manager?",
-    a: 'A GC provides a lump-sum contract and manages their own subcontractor roster. A CM works on your behalf with full cost transparency. HOU INC can operate in either delivery model.',
+    a: 'A GC provides a lump-sum contract and manages their own subcontractor roster. A CM works on your behalf with full cost transparency. Houston Enterprise can operate in either delivery model.',
   },
 ];
 
@@ -218,7 +218,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function ResidentialConstruction() {
   useEffect(() => {
-    document.title = 'Residential Construction Services Houston TX | HOU INC';
+    document.title = 'Residential Construction Services Houston TX | Houston Enterprise';
     const desc = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
     if (desc) desc.content = 'Custom home construction, renovations, additions, and remodeling across Greater Houston. Over 20 years of residential construction expertise. Call (281) 915-9595.';
     const s = document.createElement('script');
@@ -253,7 +253,7 @@ export default function ResidentialConstruction() {
               Custom Homes Built<br />for Houston Living
             </h1>
             <p style={{ fontSize: 16, fontWeight: 300, lineHeight: 1.8, color: 'rgba(255,255,255,0.62)', maxWidth: 580, marginBottom: 36 }}>
-              At HOU INC, we specialize in delivering top-quality residential construction services across Greater Houston. With our expert team of architects, engineers, and skilled craftsmen, we bring your vision of a dream home to life — whether you're building from scratch, renovating, or expanding.
+              At Houston Enterprise, we specialize in delivering top-quality residential construction services across Greater Houston. With our expert team of architects, engineers, and skilled craftsmen, we bring your vision of a dream home to life — whether you're building from scratch, renovating, or expanding.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               <Link to="/contact"
@@ -290,9 +290,9 @@ export default function ResidentialConstruction() {
       <section style={{ backgroundColor: CR, padding: '80px 0' }}>
         <div className="max-w-7xl mx-auto px-6 md:px-14">
           <div style={{ marginBottom: 52 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: AC, marginBottom: 14 }}>Why Choose HOU INC</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: AC, marginBottom: 14 }}>Why Choose Houston Enterprise</div>
             <h2 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px,3.5vw,46px)', color: B, lineHeight: 1.1, maxWidth: 520 }}>
-              The HOU INC Difference in Residential Construction
+              The Houston Enterprise Difference in Residential Construction
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style={{ gap: 1, backgroundColor: G }}>
@@ -354,7 +354,7 @@ export default function ResidentialConstruction() {
             <blockquote style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px,2.8vw,36px)', color: W, lineHeight: 1.45, marginBottom: 24 }}>
               "From the foundation to the finishing touches, we pay attention to detail and use high-quality materials to ensure longevity and beauty."
             </blockquote>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>HOU INC · Residential Construction · Houston, TX</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.40em', textTransform: 'uppercase', color: ACL }}>Houston Enterprise · Residential Construction · Houston, TX</div>
             <div style={{ width: 40, height: 1, backgroundColor: AC, margin: '28px auto 0' }} />
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function ResidentialConstruction() {
                 Residential Construction Questions
               </h2>
               <p style={{ fontSize: 13, lineHeight: 1.8, color: 'rgba(0,0,0,0.50)', fontWeight: 300 }}>
-                Common questions about working with HOU INC on residential projects across Greater Houston.
+                Common questions about working with Houston Enterprise on residential projects across Greater Houston.
               </p>
               <div style={{ marginTop: 32 }}>
                 <a href="tel:+12819159595" style={{
@@ -397,7 +397,7 @@ export default function ResidentialConstruction() {
             Ready to Build Your Dream Home?
           </h2>
           <p style={{ fontSize: 15, fontWeight: 300, lineHeight: 1.8, color: 'rgba(0,0,0,0.52)', maxWidth: 520, margin: '0 auto 36px' }}>
-            Contact HOU INC today to schedule a consultation. Our team will work closely with you to understand your vision, provide expert guidance, and deliver a residential construction experience that exceeds your expectations.
+            Contact Houston Enterprise today to schedule a consultation. Our team will work closely with you to understand your vision, provide expert guidance, and deliver a residential construction experience that exceeds your expectations.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
             <Link to="/contact"

@@ -1647,8 +1647,8 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
                   {[
                     { icon: Phone,  label: 'Call Us',   val: '(281) 915-9595',     href: 'tel:+12819159595' },
-                    { icon: Mail,   label: 'Email Us',  val: 'Info@Houinc.com',    href: 'mailto:info@houinc.com' },
-                    { icon: MapPin, label: 'Visit Us',  val: '2100 W Loop South\nSuite #1115, Houston TX', href: '#' },
+                    { icon: Mail,   label: 'Email Us',  val: 'Info@HouInc.com',    href: 'mailto:info@houinc.com' },
+                    { icon: MapPin, label: 'Visit Us',  val: '206 Brooks St\nSugar Land, TX 77478', href: '#' },
                   ].map(({ icon: Icon, label, val, href }) => (
                     <a key={label} href={href}
                       className="flex items-start gap-4 p-5 transition-all group"

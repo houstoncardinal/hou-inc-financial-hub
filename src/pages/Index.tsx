@@ -1,5 +1,5 @@
-import { useMemo, useState, useRef } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
@@ -151,6 +151,15 @@ function StatusBadge({ status }: { status: string | null }) {
 export default function Index() {
   const navigate = useNavigate();
   const { entity, ready } = useEntity();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Strip the ?entity= param from the address bar once EntityContext has consumed it.
+  useEffect(() => {
+    if (ready && searchParams.has('entity')) {
+      searchParams.delete('entity');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [ready]);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: checks = [] } = useChecks();

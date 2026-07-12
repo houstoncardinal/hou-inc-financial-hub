@@ -188,7 +188,7 @@ const CAPS = [
 
 const FAQS = [
   {
-    q: 'How do I begin working with HOU INC?',
+    q: 'How do I begin working with Houston Enterprise?',
     a: 'The process begins with a complimentary discovery consultation — we learn about your project, timeline, budget expectations, and goals. From there, we prepare a detailed scope and proposal within 5–7 business days.',
   },
   {
@@ -196,7 +196,7 @@ const FAQS = [
     a: 'We are a full-service construction firm with deep relationships with Houston’s top architectural and engineering firms. We can coordinate the full design-build process or deliver construction-only services — our team manages whichever scope works best for you.',
   },
   {
-    q: 'What types of contracts does HOU INC offer?',
+    q: 'What types of contracts does Houston Enterprise offer?',
     a: 'We offer Fixed-Price (lump sum) contracts for well-defined scopes, Guaranteed Maximum Price (GMP) for complex projects, and Cost-Plus arrangements for highly custom builds. We recommend the right structure for your project during preconstruction.',
   },
   {
@@ -490,7 +490,7 @@ export default function Services() {
 
             <Reveal direction="right" x={36} className="max-w-sm">
               <p className="text-[13px] leading-relaxed font-light mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                Three specialized service divisions — one unified standard of excellence. Every HOU INC project is delivered with uncompromising quality, complete transparency, and industry-leading schedule adherence.
+                Three specialized service divisions — one unified standard of excellence. Every Houston Enterprise project is delivered with uncompromising quality, complete transparency, and industry-leading schedule adherence.
               </p>
               <div className="flex flex-wrap gap-4">
                 <FillBtn to="/start-project" dark>Start a Project</FillBtn>

@@ -2,8 +2,8 @@ import { useState, ReactNode } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, MessageSquare, LogOut, Menu, X,
-  ArrowUpRight, FolderOpen, Calendar, PlusCircle, User,
-  ChevronRight, Bell, Layers, GitBranch, CreditCard,
+  ArrowUpRight, FolderOpen, Calendar, PlusCircle, Settings,
+  Bell, Layers, GitBranch, CreditCard, Camera,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
@@ -67,12 +67,19 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       items: [
         { to: '/portal/milestones',  label: 'Timeline',         Icon: GitBranch },
         { to: '/portal/meetings',    label: 'Meetings',         Icon: Calendar, badge: upcomingMeetings },
+        { to: '/portal/gallery',     label: 'Progress Photos',  Icon: Camera },
       ],
     },
     {
       label: 'Finance',
       items: [
         { to: '/portal/payments',    label: 'Payments',         Icon: CreditCard },
+      ],
+    },
+    {
+      label: 'Account',
+      items: [
+        { to: '/portal/settings',    label: 'Settings',         Icon: Settings },
       ],
     },
   ];

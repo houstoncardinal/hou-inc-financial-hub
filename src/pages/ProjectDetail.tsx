@@ -1,13 +1,23 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useProjects, useChecks, useTransactions } from '@/hooks/useFinance';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { generateProjectReport, savePDF, downloadCSV } from '@/lib/reports';
-import { ArrowLeft, Download, FileText, ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, Download, FileText, ArrowUpRight, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+
+const COST_TYPE_LABELS: Record<string, string> = {
+  labor: 'Labor', material: 'Materials', subcontract: 'Subcontract',
+  permit: 'Permits & Fees', equipment: 'Equipment', overhead: 'Overhead',
+};
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +26,44 @@ export default function ProjectDetail() {
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
+
+  const [draws, setDraws] = useState<any[]>([]);
+  const [drawOpen, setDrawOpen] = useState(false);
+  const [drawForm, setDrawForm] = useState({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '' });
+  const [drawSaving, setDrawSaving] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    (supabase as any).from('draw_schedules').select('*').eq('project_id', id).order('scheduled_date').then(({ data }: any) => {
+      setDraws(data ?? []);
+    });
+  }, [id]);
+
+  const saveDrawEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!drawForm.milestone_name || !drawForm.draw_amount) { toast.error('Milestone name and amount required'); return; }
+    setDrawSaving(true);
+    try {
+      const { data } = await (supabase as any).from('draw_schedules').insert({
+        project_id: id,
+        milestone_name: drawForm.milestone_name,
+        draw_amount: parseFloat(drawForm.draw_amount),
+        scheduled_date: drawForm.scheduled_date || null,
+        status: drawForm.status,
+        notes: drawForm.notes || null,
+      }).select().single();
+      setDraws(d => [...d, data]);
+      toast.success('Draw entry added');
+      setDrawOpen(false);
+      setDrawForm({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '' });
+    } catch { toast.error('Failed to save draw entry'); }
+    setDrawSaving(false);
+  };
+
+  const updateDrawStatus = async (drawId: string, status: string) => {
+    await (supabase as any).from('draw_schedules').update({ status }).eq('id', drawId);
+    setDraws(d => d.map(x => x.id === drawId ? { ...x, status } : x));
+  };
 
   const project = useMemo(() => projects.find((p: any) => p.id === id), [projects, id]);
 
@@ -59,7 +107,8 @@ export default function ProjectDetail() {
     if (!enriched) return [];
     const byCat: Record<string, { category: string; actual: number; count: number }> = {};
     enriched.expenseList.forEach((t: any) => {
-      const cat = t.category || 'Uncategorized';
+      // Prefer cost_type for construction job-costing; fall back to category
+      const cat = (t.cost_type ? COST_TYPE_LABELS[t.cost_type] : null) || t.category || 'Uncategorized';
       if (!byCat[cat]) byCat[cat] = { category: cat, actual: 0, count: 0 };
       byCat[cat].actual += Number(t.amount);
       byCat[cat].count++;
@@ -72,6 +121,11 @@ export default function ProjectDetail() {
       };
     }
     return Object.values(byCat).sort((a, b) => b.actual - a.actual);
+  }, [enriched]);
+
+  const retainageHeld = useMemo(() => {
+    if (!enriched) return 0;
+    return enriched.checksList.reduce((s: number, c: any) => s + (Number(c.retainage_held) || 0), 0);
   }, [enriched]);
 
   /* ── Export ── */
@@ -129,16 +183,17 @@ export default function ProjectDetail() {
 
       {/* Snapshot stats */}
       <div className="border-b border-border bg-secondary/30">
-        <div className="px-4 sm:px-8 py-5 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border">
+        <div className="px-4 sm:px-8 py-5 grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
           {[
             { label: 'Budget', value: fmtUSD(enriched.budget) },
             { label: 'Spent', value: fmtUSD(enriched.spent) },
             { label: 'Incoming', value: fmtUSD(enriched.incoming), c: 'text-positive' },
             { label: 'Outstanding', value: fmtUSD(enriched.outstanding) },
+            { label: 'Retainage Held', value: fmtUSD(retainageHeld), c: retainageHeld > 0 ? 'text-blue-400' : '' },
           ].map(s => (
             <div key={s.label} className="bg-background px-4 py-3">
               <div className="micro-label">{s.label}</div>
-              <div className={`stat-value text-lg sm:text-xl mt-1 ${s.c || ''}`}>{s.value}</div>
+              <div className={`stat-value text-lg sm:text-xl mt-1 ${(s as any).c || ''}`}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -230,6 +285,76 @@ export default function ProjectDetail() {
               </div>
             </div>
           )}
+
+          {/* Draw Schedule */}
+          <div className="border border-border">
+            <div className="px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium flex items-center justify-between">
+              <span>Draw Schedule</span>
+              <Dialog open={drawOpen} onOpenChange={setDrawOpen}>
+                <DialogTrigger asChild>
+                  <button className="flex items-center gap-1 text-[10px] text-accent hover:opacity-80 transition-opacity font-bold">
+                    <Plus className="w-3 h-3" /> Add Draw
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="rounded-none sm:max-w-md w-[calc(100%-2rem)]">
+                  <DialogHeader><DialogTitle>Add Draw Entry</DialogTitle></DialogHeader>
+                  <form onSubmit={saveDrawEntry} className="space-y-4">
+                    <div className="space-y-1.5"><Label className="micro-label">Milestone</Label><Input className="rounded-none h-10" required placeholder="e.g. Foundation Complete" value={drawForm.milestone_name} onChange={e => setDrawForm(f => ({ ...f, milestone_name: e.target.value }))} /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5"><Label className="micro-label">Draw Amount</Label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground z-10">$</span>
+                          <Input type="number" step="0.01" className="pl-7 rounded-none h-10 font-mono-tab text-right" required value={drawForm.draw_amount} onChange={e => setDrawForm(f => ({ ...f, draw_amount: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5"><Label className="micro-label">Scheduled Date</Label><Input type="date" className="rounded-none h-10" value={drawForm.scheduled_date} onChange={e => setDrawForm(f => ({ ...f, scheduled_date: e.target.value }))} /></div>
+                    </div>
+                    <div className="space-y-1.5"><Label className="micro-label">Status</Label>
+                      <Select value={drawForm.status} onValueChange={v => setDrawForm(f => ({ ...f, status: v }))}>
+                        <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="requested">Requested</SelectItem>
+                          <SelectItem value="funded">Funded</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit" disabled={drawSaving} className="rounded-none w-full h-10">Save Draw Entry</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            {draws.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">No draw entries — add milestones to track lender disbursements.</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-border bg-secondary/20 text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
+                  <div className="col-span-4">Milestone</div><div className="col-span-2">Date</div><div className="col-span-2 text-right">Amount</div><div className="col-span-2">Status</div><div className="col-span-2" />
+                </div>
+                {draws.map((d: any) => (
+                  <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border last:border-b-0 text-sm items-center hover:bg-secondary/10">
+                    <div className="col-span-4 font-medium truncate">{d.milestone_name}</div>
+                    <div className="col-span-2 text-xs text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : '—'}</div>
+                    <div className="col-span-2 text-right font-semibold font-mono-tab">{fmtUSD(d.draw_amount)}</div>
+                    <div className="col-span-4">
+                      <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
+                        <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="requested">Requested</SelectItem>
+                          <SelectItem value="funded">Funded</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+                <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
+                  <span className="text-muted-foreground font-medium">Total Draws</span>
+                  <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Recent Activity */}
           <div className="border border-border">

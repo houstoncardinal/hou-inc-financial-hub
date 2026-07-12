@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
+import EmailInput from '@/components/ui/smart/EmailInput';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +13,8 @@ import { useInvoices, invoiceSubtotal, invoiceTax, invoiceTotal, nextInvoiceNumb
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { generateInvoicePDF, savePDF } from '@/lib/invoicePDF';
 import { toast } from 'sonner';
-import { Plus, Trash2, Download, ExternalLink, Send, FileText, Copy, CheckCheck, Zap } from 'lucide-react';
+import { Plus, Trash2, Download, ExternalLink, Send, FileText, Copy, CheckCheck, Zap, Users } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const INTEGRATIONS_KEY = 'hou-integrations';
 function getStripeKey(): string {
@@ -54,6 +57,7 @@ function CurrencyInput({ value, onChange, placeholder = '0.00' }: { value: numbe
 export default function InvoiceNew() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { state: routeState } = useLocation();
   const { invoices, create, update } = useInvoices();
 
   const existing = id ? invoices.find(inv => inv.id === id) : undefined;
@@ -81,6 +85,36 @@ export default function InvoiceNew() {
   const [exporting, setExporting] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Portal client picker
+  const [portalClients, setPortalClients] = useState<Array<{ id: string; name: string; email: string; phone: string }>>([]);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('portal_clients')
+        .select('id, name, email, phone')
+        .eq('status', 'approved')
+        .order('name');
+      setPortalClients(data ?? []);
+    })();
+  }, []);
+
+  // Pre-fill from Admin "Create Invoice" deep-link (route state)
+  useEffect(() => {
+    if (!routeState) return;
+    const { clientName, clientEmail } = routeState as Record<string, string>;
+    if (clientName) setField('client_name', clientName);
+    if (clientEmail) setField('client_email', clientEmail);
+  }, []);
+
+  const applyPortalClient = (pc: typeof portalClients[0]) => {
+    setField('client_name', pc.name);
+    setField('client_email', pc.email);
+    setClientPickerOpen(false);
+    toast.success(`Client set to ${pc.name}`);
+  };
 
   const setField = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm(f => ({ ...f, [k]: v }));
 
@@ -259,7 +293,36 @@ export default function InvoiceNew() {
 
           {/* Client info */}
           <div className="border border-border p-4 space-y-4">
-            <div className="micro-label">Bill To</div>
+            <div className="flex items-center justify-between">
+              <div className="micro-label">Bill To</div>
+              {portalClients.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setClientPickerOpen(o => !o)}
+                    className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Users className="w-3 h-3" strokeWidth={1.5} />
+                    Select Portal Client
+                  </button>
+                  {clientPickerOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-background border border-border shadow-lg max-h-56 overflow-y-auto">
+                      {portalClients.map(pc => (
+                        <button
+                          key={pc.id}
+                          type="button"
+                          onClick={() => applyPortalClient(pc)}
+                          className="w-full flex flex-col items-start px-3 py-2.5 text-left hover:bg-secondary/50 transition-colors border-b border-border/50 last:border-b-0"
+                        >
+                          <span className="text-xs font-semibold">{pc.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{pc.email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="micro-label">Client Name *</Label>
@@ -273,11 +336,26 @@ export default function InvoiceNew() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="micro-label">Email</Label>
-                <Input type="email" value={form.client_email} onChange={e => setField('client_email', e.target.value)} placeholder="client@email.com" className="rounded-none h-10" />
+                <EmailInput
+                  value={form.client_email}
+                  onChange={v => setField('client_email', v)}
+                  placeholder="client@email.com"
+                  inputClassName="rounded-none h-10 w-full border border-input bg-background text-sm outline-none focus:ring-0"
+                  inputStyle={{ paddingRight: undefined }}
+                  focusBorderColor="hsl(var(--ring))"
+                  defaultBorderColor="hsl(var(--border))"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="micro-label">Address</Label>
-                <Input value={form.client_address} onChange={e => setField('client_address', e.target.value)} placeholder="123 Main St, City, ST 00000" className="rounded-none h-10" />
+                <LocationAutocomplete
+                  value={form.client_address}
+                  onChange={v => setField('client_address', v)}
+                  placeholder="123 Main St, City, ST 00000"
+                  inputClassName="rounded-none h-10 w-full border border-input bg-background text-sm outline-none"
+                  focusBorderColor="hsl(var(--ring))"
+                  defaultBorderColor="hsl(var(--border))"
+                />
               </div>
             </div>
           </div>

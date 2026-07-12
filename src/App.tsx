@@ -31,6 +31,8 @@ import PortalMeetings   from "./pages/portal/PortalMeetings";
 import PortalProjects   from "./pages/portal/PortalProjects";
 import PortalMilestones from "./pages/portal/PortalMilestones";
 import PortalPayments   from "./pages/portal/PortalPayments";
+import PortalSettings   from "./pages/portal/PortalSettings";
+import PortalGallery    from "./pages/portal/PortalGallery";
 
 // Admin
 import Admin from "./pages/Admin";
@@ -121,6 +123,8 @@ const App = () => (
                 <Route path="/portal/projects"   element={<PortalProjects />} />
                 <Route path="/portal/milestones" element={<PortalMilestones />} />
                 <Route path="/portal/payments"   element={<PortalPayments />} />
+                <Route path="/portal/settings"   element={<PortalSettings />} />
+                <Route path="/portal/gallery"    element={<PortalGallery />} />
 
                 {/* ── Admin ── */}
                 <Route path="/admin"             element={<Admin />} />

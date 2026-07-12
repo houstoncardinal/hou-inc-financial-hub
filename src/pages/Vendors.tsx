@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
+import PhoneInput from '@/components/ui/smart/PhoneInput';
+import EmailInput from '@/components/ui/smart/EmailInput';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -9,11 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useTransactions, useUpsert, useVendors } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
-import { Trash2, Download } from 'lucide-react';
+import { Trash2, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/reports';
 
-const blank = { name: '', contact_email: '', contact_phone: '', address: '', notes: '' };
+const blank = { name: '', contact_email: '', contact_phone: '', address: '', notes: '', ein: '', w9_on_file: false, requires_1099: false, lien_waiver_required: false };
 
 export default function Vendors() {
   const { data: vendors = [] } = useVendors();
@@ -37,10 +40,23 @@ export default function Vendors() {
     downloadCSV(
       enriched,
       `hou-vendors-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['Name', 'Email', 'Phone', 'Address', 'Total Paid', 'Transactions', 'Notes'],
-      (v: any) => [v.name, v.contact_email || '', v.contact_phone || '', v.address || '', v.totalPaid, v.txnCount, v.notes || '']
+      ['Name', 'EIN', 'Email', 'Phone', 'W9 On File', '1099 Required', 'Lien Waiver Req', 'Total Paid', 'Transactions', 'Notes'],
+      (v: any) => [v.name, v.ein || '', v.contact_email || '', v.contact_phone || '', v.w9_on_file ? 'Yes' : 'No', v.requires_1099 ? 'Yes' : 'No', v.lien_waiver_required ? 'Yes' : 'No', v.totalPaid, v.txnCount, v.notes || '']
     );
     toast.success('Vendors exported as CSV');
+  };
+
+  /* ── 1099 Summary Export ── */
+  const export1099 = () => {
+    const eligible = enriched.filter((v: any) => v.requires_1099);
+    if (!eligible.length) { toast.error('No 1099-eligible vendors found'); return; }
+    downloadCSV(
+      eligible,
+      `hou-1099-summary-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Vendor Name', 'EIN', 'Email', 'Phone', 'Total Paid (YTD)', 'W9 On File'],
+      (v: any) => [v.name, v.ein || 'MISSING', v.contact_email || '', v.contact_phone || '', v.totalPaid, v.w9_on_file ? 'Yes' : 'No — COLLECT W9']
+    );
+    toast.success(`1099 summary: ${eligible.length} vendors exported`);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -57,6 +73,7 @@ export default function Vendors() {
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
+              <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={export1099} title="Export 1099 Summary"><FileSpreadsheet className="w-4 h-4" /></Button>
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportCSV}><Download className="w-4 h-4" /></Button>
             </div>
             <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(blank); }}>
@@ -66,10 +83,57 @@ export default function Vendors() {
                 <form onSubmit={submit} className="space-y-4">
                   <div className="space-y-1.5"><Label className="micro-label">Legal Name</Label><Input className="rounded-none h-10" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5"><Label className="micro-label">Email</Label><Input type="email" className="rounded-none h-10" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} /></div>
-                    <div className="space-y-1.5"><Label className="micro-label">Phone</Label><Input className="rounded-none h-10" value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} /></div>
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Email</Label>
+                      <EmailInput
+                        value={form.contact_email}
+                        onChange={v => setForm({ ...form, contact_email: v })}
+                        inputClassName="rounded-none h-10 w-full border border-input bg-background text-sm outline-none"
+                        focusBorderColor="hsl(var(--ring))"
+                        defaultBorderColor="hsl(var(--border))"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Phone</Label>
+                      <PhoneInput
+                        value={form.contact_phone}
+                        onChange={v => setForm({ ...form, contact_phone: v })}
+                        inputClassName="rounded-none h-10 w-full border border-input bg-background text-sm outline-none"
+                        focusBorderColor="hsl(var(--ring))"
+                        defaultBorderColor="hsl(var(--border))"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1.5"><Label className="micro-label">Address</Label><Input className="rounded-none h-10" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+                  <div className="space-y-1.5">
+                    <Label className="micro-label">Address</Label>
+                    <LocationAutocomplete
+                      value={form.address}
+                      onChange={v => setForm({ ...form, address: v })}
+                      placeholder="Street, City, State ZIP"
+                      inputClassName="rounded-none h-10 w-full border border-input bg-background text-sm outline-none"
+                      focusBorderColor="hsl(var(--ring))"
+                      defaultBorderColor="hsl(var(--border))"
+                    />
+                  </div>
+                  <div className="space-y-1.5"><Label className="micro-label">EIN (Tax ID)</Label><Input className="rounded-none h-10 font-mono-tab" placeholder="XX-XXXXXXX" value={form.ein} onChange={e => setForm({ ...form, ein: e.target.value })} /></div>
+                  <div className="border border-border p-4 space-y-3">
+                    <div className="micro-label text-muted-foreground">IRS Compliance</div>
+                    {[
+                      { key: 'w9_on_file', label: 'W9 on file' },
+                      { key: 'requires_1099', label: 'Requires 1099-NEC' },
+                      { key: 'lien_waiver_required', label: 'Lien waiver required on payments' },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(form as any)[key]}
+                          onChange={e => setForm({ ...form, [key]: e.target.checked })}
+                          className="rounded-none accent-accent w-4 h-4"
+                        />
+                        <span className="text-sm">{label}</span>
+                      </label>
+                    ))}
+                  </div>
                   <div className="space-y-1.5"><Label className="micro-label">Notes</Label><Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
                   <Button type="submit" className="rounded-none w-full h-10">Save</Button>
                 </form>
@@ -106,7 +170,7 @@ export default function Vendors() {
                   <span>{v.address || '—'}</span>
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
-                  <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '' }); setOpen(true); }}>Edit</Button>
+                  <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '', ein: v.ein || '', w9_on_file: v.w9_on_file || false, requires_1099: v.requires_1099 || false, lien_waiver_required: v.lien_waiver_required || false }); setOpen(true); }}>Edit</Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="rounded-none h-7 w-7 text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                     <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
@@ -122,18 +186,29 @@ export default function Vendors() {
         {/* Desktop table */}
         <div className="hidden sm:block border border-border">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
-            <div className="col-span-3">Vendor</div><div className="col-span-3">Email</div><div className="col-span-2">Phone</div><div className="col-span-1 text-right">Txns</div><div className="col-span-2 text-right">Total Paid</div><div className="col-span-1 text-right">—</div>
+            <div className="col-span-3">Vendor</div><div className="col-span-2">Email</div><div className="col-span-1">Phone</div><div className="col-span-2">Compliance</div><div className="col-span-1 text-right">Txns</div><div className="col-span-2 text-right">Total Paid</div><div className="col-span-1 text-right">—</div>
           </div>
           {enriched.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
             enriched.map((v: any) => (
               <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center">
                 <div className="col-span-3 font-medium">{v.name}</div>
-                <div className="col-span-3 text-muted-foreground truncate">{v.contact_email || '—'}</div>
-                <div className="col-span-2 text-muted-foreground truncate">{v.contact_phone || '—'}</div>
+                <div className="col-span-2 text-muted-foreground truncate">{v.contact_email || '—'}</div>
+                <div className="col-span-1 text-muted-foreground truncate">{v.contact_phone || '—'}</div>
+                <div className="col-span-2 flex flex-wrap gap-1">
+                  {v.requires_1099 && (
+                    <span className="text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-accent/10 text-accent border border-accent/20">1099</span>
+                  )}
+                  {v.w9_on_file && (
+                    <span className="text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-positive/10 text-positive border border-positive/20">W9 ✓</span>
+                  )}
+                  {v.requires_1099 && !v.w9_on_file && (
+                    <span className="text-[7px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-warning/10 text-warning border border-warning/20">W9 !</span>
+                  )}
+                </div>
                 <div className="col-span-1 text-right text-muted-foreground">{v.txnCount}</div>
                 <div className="col-span-2 text-right font-semibold">{fmtUSD(v.totalPaid)}</div>
                 <div className="col-span-1 flex justify-end gap-1">
-                  <Button variant="ghost" size="sm" className="h-7 rounded-none text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '' }); setOpen(true); }}>Edit</Button>
+                  <Button variant="ghost" size="sm" className="h-7 rounded-none text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '', ein: v.ein || '', w9_on_file: v.w9_on_file || false, requires_1099: v.requires_1099 || false, lien_waiver_required: v.lien_waiver_required || false }); setOpen(true); }}>Edit</Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                     <AlertDialogContent className="rounded-none">

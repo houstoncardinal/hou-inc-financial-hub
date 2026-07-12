@@ -158,7 +158,7 @@ function JsonLd({ s }: { s: ServiceData }) {
     'description': s.metaDesc,
     'provider': {
       '@type': 'LocalBusiness',
-      'name': 'HOU INC Construction',
+      'name': 'Houston Enterprise Construction',
       'url': 'https://houinc.com',
       'telephone': '+12819159595',
       'address': {
@@ -529,14 +529,14 @@ export default function ServiceDetail() {
             <div className="flex items-center gap-3 mb-4">
               <div style={{ width: 32, height: 1, backgroundColor: AC }} />
               <span className="text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: AC }}>
-                Why HOU INC
+                Why Houston Enterprise
               </span>
             </div>
             <h2
               className="mb-12"
               style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px, 3vw, 42px)', color: W, lineHeight: 1.05 }}
             >
-              The HOU INC Difference
+              The Houston Enterprise Difference
             </h2>
           </Reveal>
           <div className="grid md:grid-cols-3 gap-0" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>

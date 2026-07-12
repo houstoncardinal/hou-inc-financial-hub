@@ -9,8 +9,8 @@ export interface Entity {
   tagline: string;
   description: string;
   category: string;
-  color: string;       // primary accent
-  colorMuted: string;  // soft bg tint
+  color: string;
+  colorMuted: string;
   since: number;
   type: 'construction' | 'energy' | 'holdings';
 }
@@ -58,13 +58,12 @@ export const ENTITIES: Entity[] = [
 ];
 
 /* ── Context ─────────────────────────────────────────────────────────── */
-const STORAGE_KEY = 'hou-finance-entity';
-const META_KEY    = 'preferred_entity';
+const META_KEY = 'preferred_entity';
 
 interface EntityContextValue {
   entity: Entity | null;
   setEntity: (e: Entity | null) => void;
-  ready: boolean; // true once DB preference has been resolved
+  ready: boolean;
 }
 
 const EntityContext = createContext<EntityContextValue>({
@@ -77,31 +76,32 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   const [entity, setEntityState] = useState<Entity | null>(null);
   const [ready,  setReady]       = useState(false);
 
-  // On mount: load preference from Supabase user_metadata, fall back to localStorage
   useEffect(() => {
     async function load() {
+      // URL param (e.g. from Admin deep-link) takes priority over stored preference.
+      const params = new URLSearchParams(window.location.search);
+      const paramId = params.get('entity');
+      if (paramId) {
+        const found = ENTITIES.find(e => e.id === paramId);
+        if (found) {
+          setEntityState(found);
+          // Persist this as the new preference so next visit remembers it.
+          supabase.auth.updateUser({ data: { [META_KEY]: found.id } }).catch(() => {});
+          setReady(true);
+          return;
+        }
+      }
+
+      // No URL param — restore from Supabase auth metadata.
       try {
         const { data } = await supabase.auth.getUser();
-        const fromDB = data.user?.user_metadata?.[META_KEY] as string | undefined;
-        const fromLS = localStorage.getItem(STORAGE_KEY);
-        const id = fromDB ?? fromLS ?? null;
+        const id = data.user?.user_metadata?.[META_KEY] as string | undefined;
         if (id) {
           const found = ENTITIES.find(e => e.id === id);
-          if (found) {
-            setEntityState(found);
-            // Back-sync localStorage if it was loaded from DB
-            localStorage.setItem(STORAGE_KEY, found.id);
-          }
+          if (found) setEntityState(found);
         }
       } catch {
-        // Auth not available — fall back to localStorage only
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved) {
-            const found = ENTITIES.find(e => e.id === saved);
-            if (found) setEntityState(found);
-          }
-        } catch {}
+        // Supabase auth unavailable — start with no selection.
       } finally {
         setReady(true);
       }
@@ -111,12 +111,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   const setEntity = (e: Entity | null) => {
     setEntityState(e);
-
-    // Sync to localStorage immediately (fast, synchronous)
-    if (e) localStorage.setItem(STORAGE_KEY, e.id);
-    else   localStorage.removeItem(STORAGE_KEY);
-
-    // Persist to Supabase user_metadata (durable, async — fire and forget)
+    // Persist to Supabase user metadata — durable across devices and sessions.
     supabase.auth.updateUser({ data: { [META_KEY]: e?.id ?? null } }).catch(() => {});
   };
 

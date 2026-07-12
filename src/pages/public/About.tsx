@@ -52,13 +52,13 @@ const VALUES = [
 ];
 
 const TIMELINE = [
-  { y: '1998', title: 'Founded in Houston',          body: 'HOU INC was founded with a singular vision: to deliver construction excellence that Houston had never seen. Our first project was a 4,200 SF River Oaks renovation.' },
+  { y: '1998', title: 'Founded in Houston',          body: 'Houston Enterprise was founded with a singular vision: to deliver construction excellence that Houston had never seen. Our first project was a 4,200 SF River Oaks renovation.' },
   { y: '2003', title: 'First Commercial Project',    body: 'Completed our first commercial office building — an 18,000 SF medical office in the Texas Medical Center district. On time and $40K under budget.' },
-  { y: '2008', title: 'Navigating the Downturn',     body: 'While competitors contracted, HOU INC diversified into renovation and industrial — emerging from the 2008 recession stronger, with 12 active projects.' },
+  { y: '2008', title: 'Navigating the Downturn',     body: 'While competitors contracted, Houston Enterprise diversified into renovation and industrial — emerging from the 2008 recession stronger, with 12 active projects.' },
   { y: '2013', title: 'BBB Accreditation — A+',      body: 'Awarded Better Business Bureau A+ accreditation after 15 years of zero unresolved client complaints. A recognition we have never lost.' },
   { y: '2018', title: 'LEED Gold Certification',     body: 'Achieved LEED Gold on our first commercial tower project — beginning our sustainable construction practice that has since earned three additional LEED certifications.' },
   { y: '2022', title: '#1 Luxury Contractor — HBJ',  body: 'Named Houston\'s #1 Luxury Residential Contractor by the Houston Business Journal for three consecutive years. A reflection of client trust built over two decades.' },
-  { y: '2024', title: '500+ Projects Delivered',     body: 'HOU INC surpassed 500 completed projects in our 26th year — with over $2 billion in total constructed value across the Greater Houston Metropolitan Area.' },
+  { y: '2024', title: '500+ Projects Delivered',     body: 'Houston Enterprise surpassed 500 completed projects in our 26th year — with over $2 billion in total constructed value across the Greater Houston Metropolitan Area.' },
 ];
 
 const TEAM = [
@@ -140,19 +140,19 @@ export default function About() {
             initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9 }}>
             <motion.div className="h-px" style={{ backgroundColor: AC }}
               initial={{ width: 0 }} animate={{ width: 40 }} transition={{ duration: 1.2, delay: 0.1, ease: [0.22, 1, 0.36, 1] }} />
-            <span className="text-[8px] uppercase tracking-[0.5em] font-semibold" style={{ color: 'rgba(255,255,255,0.25)' }}>About HOU INC</span>
+            <span className="text-[8px] uppercase tracking-[0.5em] font-semibold" style={{ color: 'rgba(255,255,255,0.25)' }}>About Houston Enterprise</span>
           </motion.div>
 
           <div className="grid lg:grid-cols-12 gap-12 items-end">
             <motion.div className="lg:col-span-7"
               initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
               <h1 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(52px, 9vw, 118px)', color: W, lineHeight: 0.9 }}>
-                About /&nbsp;<br /><span style={{ color: AC }}>HOU INC</span>
+                About /&nbsp;<br /><span style={{ color: AC }}>Houston Enterprise</span>
               </h1>
             </motion.div>
             <Reveal direction="right" x={36} className="lg:col-span-5 max-w-lg">
               <p className="text-[13px] leading-relaxed font-light mb-8" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                Founded in Houston in 1998, HOU INC is the city's premier construction firm — built on a 25-year foundation of excellence, integrity, and innovation. Our record speaks for itself.
+                Founded in Houston in 1998, Houston Enterprise is the city's premier construction firm — built on a 25-year foundation of excellence, integrity, and innovation. Our record speaks for itself.
               </p>
               <div className="grid grid-cols-2 gap-6">
                 {[['25+', 'Years in Houston'], ['500+', 'Projects Delivered'], ['$2B+', 'Built Value'], ['98%', 'On-Time Delivery']].map(([v, l]) => (
@@ -181,7 +181,7 @@ export default function About() {
               </blockquote>
               <div className="w-12 h-px mb-7" style={{ backgroundColor: G200 }} />
               <p className="text-[13px] leading-relaxed font-light mb-4" style={{ color: G500 }}>
-                HOU INC was founded on the belief that Houston deserved a construction firm that refused to compromise. Every project we take on — whether a $1M custom estate or a $200M commercial tower — receives the same unwavering commitment to quality, transparency, and schedule performance.
+                Houston Enterprise was founded on the belief that Houston deserved a construction firm that refused to compromise. Every project we take on — whether a $1M custom estate or a $200M commercial tower — receives the same unwavering commitment to quality, transparency, and schedule performance.
               </p>
               <p className="text-[13px] leading-relaxed font-light" style={{ color: G500 }}>
                 Our mission is simple: build the structures that define Houston's next chapter, and build them right.
@@ -231,7 +231,7 @@ export default function About() {
                 A Vision for Something Extraordinary
               </div>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.32)' }}>
-                HOU INC was founded in 1998 by Jeff Ali and David Alvares — two Houston construction veterans who refused to accept the industry's tolerance for compromise. Jeff brought 25 years of hands-on building expertise; David brought deep experience in commercial project management and client relations.
+                Houston Enterprise was founded in 1998 by Jeff Ali and David Alvares — two Houston construction veterans who refused to accept the industry's tolerance for compromise. Jeff brought 25 years of hands-on building expertise; David brought deep experience in commercial project management and client relations.
               </p>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
                 Together they launched with a 4-person team and a single River Oaks renovation project. The work was meticulous. The client referred three neighbors. Within 18 months, the firm had its first commercial contract.
@@ -245,7 +245,7 @@ export default function About() {
                 The Standard for Houston Construction
               </div>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.32)' }}>
-                Today, HOU INC employs 150+ craftsmen, engineers, and project managers across residential, commercial, retail, industrial, and renovation divisions. We have completed over 500 projects totaling more than $2 billion in constructed value across the Greater Houston Metropolitan Area.
+                Today, Houston Enterprise employs 150+ craftsmen, engineers, and project managers across residential, commercial, retail, industrial, and renovation divisions. We have completed over 500 projects totaling more than $2 billion in constructed value across the Greater Houston Metropolitan Area.
               </p>
               <p className="text-[12px] leading-relaxed font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
                 The firm remains privately held and founder-led. Jeff and David are in the office every day. The same standard that built our first project in 1998 defines every project we deliver today.

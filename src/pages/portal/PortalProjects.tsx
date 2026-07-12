@@ -46,22 +46,58 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   in_progress:             { bg: 'rgba(16,185,129,0.1)',    text: '#10b981' },
 };
 
-const UPCOMING_TASKS = [
-  'Review and sign project proposal',
-  'Upload proof of funds documentation',
-  'Schedule pre-construction site walkthrough',
-];
+function getUpcomingTasks(status: string): string[] {
+  switch (status) {
+    case 'draft':
+      return [
+        'Complete and submit your project brief',
+        'Upload identification documents',
+        'Upload proof of funds or financing letter',
+      ];
+    case 'submitted':
+      return [
+        'HOU INC is reviewing your project brief',
+        'Prepare proof of funds or construction loan documents',
+        'Upload any existing plans or site sketches',
+      ];
+    case 'reviewing':
+      return [
+        'Review project proposal once sent by your builder',
+        'Ensure all required documents are uploaded',
+        'Confirm availability for your consultation meeting',
+      ];
+    case 'consultation_scheduled':
+      return [
+        'Attend your upcoming consultation with Jeff Ali',
+        'Review and sign the project contract',
+        'Complete any outstanding required documents',
+      ];
+    case 'in_progress':
+      return [
+        'Monitor your build phases in the Timeline tab',
+        'Review pending invoices in the Payments tab',
+        'Reach out via Messages with any questions',
+      ];
+    default:
+      return [
+        'Check Messages for updates from your builder',
+        'Review your Documents for any required uploads',
+        'Schedule a meeting if you have questions',
+      ];
+  }
+}
 
 export default function PortalProjects() {
-  const { client, getBrief } = usePortal();
+  const { client, loaded, getBrief } = usePortal();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!client) navigate('/portal', { replace: true }); }, [client, navigate]);
+  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
   if (!client) return null;
 
-  const brief     = getBrief();
-  const stepIdx   = brief ? (STATUS_TO_STEP[brief.status] ?? 0) : -1;
-  const sc        = brief ? (STATUS_COLORS[brief.status] ?? STATUS_COLORS.submitted) : STATUS_COLORS.submitted;
+  const brief         = getBrief();
+  const stepIdx       = brief ? (STATUS_TO_STEP[brief.status] ?? 0) : -1;
+  const sc            = brief ? (STATUS_COLORS[brief.status] ?? STATUS_COLORS.submitted) : STATUS_COLORS.submitted;
+  const upcomingTasks = brief ? getUpcomingTasks(brief.status) : [];
 
   return (
     <PortalLayout>
@@ -247,14 +283,14 @@ export default function PortalProjects() {
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
               <div className="px-7 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}>
                 <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: GOLD }}>
-                  Upcoming Tasks
+                  Next Steps
                 </div>
               </div>
-              {UPCOMING_TASKS.map((task, i) => (
+              {upcomingTasks.map((task, i) => (
                 <div
                   key={task}
                   className="flex items-center gap-4 px-7 py-4"
-                  style={{ borderBottom: i < UPCOMING_TASKS.length - 1 ? `1px solid ${BORDER}` : 'none' }}
+                  style={{ borderBottom: i < upcomingTasks.length - 1 ? `1px solid ${BORDER}` : 'none' }}
                 >
                   <div className="w-4 h-4 shrink-0" style={{ border: `1.5px solid ${BORDER}` }} />
                   <span className="text-[13px] font-light" style={{ color: DARK }}>{task}</span>

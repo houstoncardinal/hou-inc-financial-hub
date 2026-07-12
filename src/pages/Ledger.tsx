@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useChecks, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { generateLedgerReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
-import { FileText, Table2, Plus, Trash2 } from 'lucide-react';
+import { FileText, Table2, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 
@@ -68,9 +68,10 @@ export default function Ledger() {
   const [project, setProject] = useState('all');
   const [type, setType] = useState('all');
   const [addOpen, setAddOpen] = useState<'income' | 'expense' | 'check' | null>(null);
+  const [reconcileMode, setReconcileMode] = useState(false);
 
   const blankIncome = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), source_name: '', project_id: '', category: '', notes: '' };
-  const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '' };
+  const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '', cost_type: '' };
   const blankCheck = { amount: '', issue_date: new Date().toISOString().slice(0, 10), payee_name: '', check_number: '', memo: '', project_id: '' };
 
   const [formIncome, setFormIncome] = useState(blankIncome);
@@ -119,8 +120,18 @@ export default function Ledger() {
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formExpense.amount) { toast.error('Amount required'); return; }
-    await txnUpsert.mutateAsync({ type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date, vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null, category: formExpense.category || null, notes: formExpense.notes || null, payment_method: formExpense.payment_method || null } as any);
+    await txnUpsert.mutateAsync({ type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date, vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null, category: formExpense.category || null, notes: formExpense.notes || null, payment_method: formExpense.payment_method || null, cost_type: formExpense.cost_type || null } as any);
     toast.success('Expense recorded'); setAddOpen(null); setFormExpense(blankExpense);
+  };
+
+  const toggleReconcile = async (r: any) => {
+    const now = new Date().toISOString();
+    const payload = { id: r.id, reconciled: !r.reconciled, reconciled_at: !r.reconciled ? now : null };
+    try {
+      if (r._kind === 'check') await checkUpsert.mutateAsync(payload as any);
+      else await txnUpsert.mutateAsync({ ...payload, type: r.type.toLowerCase() } as any);
+      toast.success(payload.reconciled ? 'Marked reconciled' : 'Unmarked');
+    } catch { toast.error('Failed to update'); }
   };
 
   const submitCheck = async (e: React.FormEvent) => {
@@ -145,6 +156,12 @@ export default function Ledger() {
             </div>
             <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportPDF}><FileText className="w-3.5 h-3.5" /></Button>
             <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportExcel}><Table2 className="w-3.5 h-3.5" /></Button>
+            <button
+              onClick={() => setReconcileMode(m => !m)}
+              className={`flex items-center gap-1.5 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] font-medium border transition-colors ${reconcileMode ? 'bg-positive/10 text-positive border-positive/30' : 'border-border text-muted-foreground hover:text-foreground'}`}
+            >
+              <CheckSquare className="w-3 h-3" /> Reconcile
+            </button>
           </div>
         } />
 
@@ -212,12 +229,17 @@ export default function Ledger() {
 
         {/* Desktop table */}
         <div className="hidden sm:block border border-border">
+          {reconcileMode && (
+            <div className="px-4 py-2 border-b border-border bg-positive/5 text-[10px] font-medium text-positive flex items-center gap-2">
+              <CheckSquare className="w-3 h-3" /> Reconcile mode — click the checkbox to mark entries as reconciled against your bank statement
+            </div>
+          )}
           <div className="grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium items-center">
             <div>Date</div><div>Type</div><div>Ref</div><div>Counterparty</div><div>Project</div><div className="text-right">Amount</div><div />
           </div>
           {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             rows.map(r => (
-              <div key={r.rowId} className="grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center group">
+              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center group ${(r as any).reconciled ? 'opacity-50' : ''}`}>
                 <div className="text-muted-foreground">{fmtDate(r.date)}</div>
                 <div><span className="text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{r.type}</span></div>
                 <div className="truncate text-muted-foreground">{r.ref}</div>
@@ -225,16 +247,24 @@ export default function Ledger() {
                 <div className="truncate text-muted-foreground">{r.project || '—'}</div>
                 <div className={`text-right font-semibold ${r.amount >= 0 ? 'text-positive' : ''}`}>{r.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(r.amount))}</div>
                 <div className="flex justify-end">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild><button className="text-muted-foreground/0 group-hover:text-muted-foreground hover:text-accent transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
-                    <AlertDialogContent className="rounded-none">
-                      <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="rounded-none bg-accent" onClick={async () => { try { if (r._kind === 'check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch (err: any) { toast.error(err.message); } }}>Confirm</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {reconcileMode ? (
+                    <button onClick={() => toggleReconcile(r)} className="text-muted-foreground hover:text-positive transition-colors">
+                      {(r as any).reconciled
+                        ? <CheckSquare className="w-3.5 h-3.5 text-positive" />
+                        : <Square className="w-3.5 h-3.5" />}
+                    </button>
+                  ) : (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild><button className="text-muted-foreground/0 group-hover:text-muted-foreground hover:text-accent transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-none">
+                        <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="rounded-none bg-accent" onClick={async () => { try { if (r._kind === 'check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch (err: any) { toast.error(err.message); } }}>Confirm</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </div>
             ))}
@@ -282,12 +312,27 @@ export default function Ledger() {
                   <SelectContent>{(is ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {isE && <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
-                <Select value={formExpense.payment_method} onValueChange={v => setFormExpense(f => ({ ...f, payment_method: v }))}>
-                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
-                  <SelectContent><SelectItem value="credit_card">Credit Card</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="net30">NET30</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="wire">Wire</SelectItem><SelectItem value="check">Check</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
-                </Select>
-              </div>}
+              {isE && <>
+                <div className="space-y-1.5"><Label className="micro-label">Cost Type</Label>
+                  <Select value={formExpense.cost_type} onValueChange={v => setFormExpense(f => ({ ...f, cost_type: v }))}>
+                    <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Labor / Material / …" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="labor">Labor</SelectItem>
+                      <SelectItem value="material">Materials</SelectItem>
+                      <SelectItem value="subcontract">Subcontract</SelectItem>
+                      <SelectItem value="permit">Permits & Fees</SelectItem>
+                      <SelectItem value="equipment">Equipment</SelectItem>
+                      <SelectItem value="overhead">Overhead</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
+                  <Select value={formExpense.payment_method} onValueChange={v => setFormExpense(f => ({ ...f, payment_method: v }))}>
+                    <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectContent><SelectItem value="credit_card">Credit Card</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="net30">NET30</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="wire">Wire</SelectItem><SelectItem value="check">Check</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </>}
               <div className="space-y-1.5"><Label className="micro-label">Project</Label>
                 <QuickCreateSelect value={is ? formIncome.project_id : formExpense.project_id} onValueChange={v => is ? setFormIncome(f => ({ ...f, project_id: v })) : setFormExpense(f => ({ ...f, project_id: v }))} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} />
               </div>

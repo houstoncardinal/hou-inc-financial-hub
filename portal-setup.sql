@@ -134,7 +134,7 @@ CREATE OR REPLACE FUNCTION public.create_portal_client(
 RETURNS SETOF public.portal_clients
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   IF EXISTS (SELECT 1 FROM public.portal_clients WHERE email = lower(p_email)) THEN
@@ -158,7 +158,7 @@ CREATE OR REPLACE FUNCTION public.verify_portal_password(
 RETURNS SETOF public.portal_clients
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   RETURN QUERY
@@ -174,7 +174,7 @@ CREATE OR REPLACE FUNCTION public.get_portal_client_by_id(p_id UUID)
 RETURNS SETOF public.portal_clients
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   RETURN QUERY SELECT * FROM public.portal_clients WHERE id = p_id;
@@ -189,7 +189,7 @@ CREATE OR REPLACE FUNCTION public.set_portal_password(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   UPDATE public.portal_clients
@@ -204,7 +204,7 @@ CREATE OR REPLACE FUNCTION public.approve_portal_client(p_email TEXT)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   UPDATE public.portal_clients
@@ -220,14 +220,14 @@ INSERT INTO public.portal_clients (name, email, password_hash, phone, project_ty
 VALUES (
   'Hunain Cardinal',
   'cardinal.hunain@gmail.com',
-  crypt('Samurai14@', gen_salt('bf')),
+  extensions.crypt('Samurai14@', extensions.gen_salt('bf')),
   '',
   'Custom Residential',
   'Luxury custom home build in the Houston area.',
   'approved'
 )
 ON CONFLICT (email) DO UPDATE SET
-  password_hash = crypt('Samurai14@', gen_salt('bf')),
+  password_hash = extensions.crypt('Samurai14@', extensions.gen_salt('bf')),
   status        = 'approved',
   updated_at    = now();
 
@@ -281,12 +281,23 @@ CREATE OR REPLACE FUNCTION public.get_portal_client_by_email(p_email TEXT)
 RETURNS SETOF public.portal_clients
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   RETURN QUERY SELECT * FROM public.portal_clients WHERE email = lower(p_email);
 END;
 $$;
+
+-- 9. Grant execute on all portal RPCs to anon + authenticated ─
+-- Required in newer Supabase projects where EXECUTE is NOT granted to PUBLIC by default.
+-- Without this, anonymous (unauthenticated) callers cannot invoke these functions.
+
+GRANT EXECUTE ON FUNCTION public.create_portal_client(text, text, text, text, text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_portal_password(text, text)                       TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_portal_client_by_id(uuid)                            TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.set_portal_password(uuid, text)                          TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.approve_portal_client(text)                              TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_portal_client_by_email(text)                         TO anon, authenticated;
 
 -- Done! ✓
 -- Tables, RLS, RPCs, storage bucket, and seed account are all set.

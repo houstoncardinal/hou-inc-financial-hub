@@ -50,37 +50,42 @@ function FormatIcon({ format }: { format: PortalMeeting['format'] }) {
 }
 
 export default function PortalMeetings() {
-  const { client, getMeetings, requestMeeting, cancelMeeting } = usePortal();
+  const { client, loaded, getMeetings, requestMeeting, cancelMeeting } = usePortal();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!client) navigate('/portal', { replace: true }); }, [client, navigate]);
-  if (!client) return null;
-
-  const [meetings, setMeetings]     = useState<PortalMeeting[]>(() => getMeetings());
+  // All hooks before any early return
+  const [meetings, setMeetings]     = useState<PortalMeeting[]>([]);
   const [showModal, setShowModal]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess]       = useState(false);
-
-  /* Form state */
   const [type,   setType]   = useState(MEETING_TYPES[0]);
   const [date,   setDate]   = useState('');
   const [time,   setTime]   = useState(MEETING_TIMES[2]);
   const [format, setFormat] = useState<PortalMeeting['format']>('Video Call');
   const [notes,  setNotes]  = useState('');
 
+  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
+
+  // Sync meetings from hook after Supabase load
+  useEffect(() => {
+    const current = getMeetings();
+    if (current.length > 0) setMeetings(current);
+  }, [getMeetings]);
+
+  if (!loaded || !client) return null;
+
   const refresh = () => setMeetings(getMeetings());
 
   const upcomingMeetings = meetings.filter(m => m.status === 'confirmed' || m.status === 'requested');
   const pastMeetings     = meetings.filter(m => m.status === 'completed' || m.status === 'cancelled');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) return;
     setSubmitting(true);
-    setTimeout(() => {
-      requestMeeting({ type, date, time, format, notes });
+    try {
+      await requestMeeting({ type, date, time, format, notes });
       refresh();
-      setSubmitting(false);
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -88,7 +93,14 @@ export default function PortalMeetings() {
         setDate('');
         setNotes('');
       }, 1800);
-    }, 700);
+    } catch {
+      // meeting persist failed — still show success since local state was updated
+      refresh();
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); setShowModal(false); setDate(''); setNotes(''); }, 1800);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCancel = (id: string) => {

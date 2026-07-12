@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useProjects, useTransactions, useUpsert } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
-import { Trash2, Table2, FileText, ArrowUpRight } from 'lucide-react';
+import { Trash2, Table2, FileText, ArrowUpRight, BarChart2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateProjectReport, savePDF, downloadProjectExcel } from '@/lib/reports';
 
@@ -27,6 +27,7 @@ export default function Projects() {
   const del = useDelete('projects', [['projects']]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(blank);
+  const [showWIP, setShowWIP] = useState(false);
 
   const enriched = useMemo(() => projects.map((p: any) => {
     const pChecks = checks.filter((c: any) => c.project_id === p.id);
@@ -65,6 +66,12 @@ export default function Projects() {
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
+              <button
+                onClick={() => setShowWIP(w => !w)}
+                className={`flex items-center gap-1.5 px-3 h-9 text-[10px] uppercase tracking-[0.1em] font-medium border transition-colors ${showWIP ? 'bg-accent/10 text-accent border-accent/30' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                <BarChart2 className="w-3.5 h-3.5" /> WIP Report
+              </button>
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportExcel}><Table2 className="w-4 h-4" /></Button>
             </div>
@@ -99,6 +106,71 @@ export default function Projects() {
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}><Table2 className="w-3.5 h-3.5 mr-1.5" />Excel</Button>
       </div>
+
+      {showWIP && enriched.length > 0 && (
+        <div className="px-4 sm:px-8 py-6">
+          <div className="border border-border">
+            <div className="px-4 py-3 border-b border-border bg-secondary/40 flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium flex items-center gap-2">
+                <BarChart2 className="w-3.5 h-3.5" /> WIP Schedule — Work in Progress Report
+              </div>
+              <div className="text-[9px] text-muted-foreground">As of {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    {['Project', 'Contract Value', 'Costs Incurred', '% Complete', 'Revenue Earned', 'Billed to Date', 'Over / Under'].map(h => (
+                      <th key={h} className="px-4 py-2.5 text-left text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {enriched.map((p: any) => {
+                    const pctComplete = p.budget > 0 ? Math.min(100, (p.spent / p.budget) * 100) : 0;
+                    const revenueEarned = p.budget > 0 ? p.incoming * (pctComplete / 100) : p.incoming;
+                    const billedToDate = p.incoming;
+                    const overUnder = billedToDate - revenueEarned;
+                    return (
+                      <tr key={p.id} className="border-b border-border last:border-b-0 hover:bg-secondary/20">
+                        <td className="px-4 py-3">
+                          <button onClick={() => navigate(`/projects/${p.id}`)} className="font-medium hover:text-accent transition-colors text-left">{p.name}</button>
+                          <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">{p.code || p.status}</div>
+                        </td>
+                        <td className="px-4 py-3 font-mono-tab font-semibold">{fmtUSD(p.budget)}</td>
+                        <td className="px-4 py-3 font-mono-tab">{fmtUSD(p.spent)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-secondary"><div className="h-full bg-foreground" style={{ width: `${pctComplete}%` }} /></div>
+                            <span className="font-mono-tab text-xs font-semibold">{pctComplete.toFixed(1)}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-mono-tab text-positive">{fmtUSD(revenueEarned)}</td>
+                        <td className="px-4 py-3 font-mono-tab">{fmtUSD(billedToDate)}</td>
+                        <td className={`px-4 py-3 font-mono-tab font-semibold ${overUnder > 0 ? 'text-positive' : overUnder < 0 ? 'text-accent' : ''}`}>
+                          {overUnder > 0 ? '+' : ''}{fmtUSD(overUnder)}
+                          <div className="text-[8px] font-normal text-muted-foreground">{overUnder > 0 ? 'Overbilled' : overUnder < 0 ? 'Underbilled' : 'On track'}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border bg-secondary/40">
+                    <td className="px-4 py-3 font-bold text-[10px] uppercase tracking-wider">Totals</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(enriched.reduce((s: number, p: any) => s + Number(p.budget), 0))}</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(enriched.reduce((s: number, p: any) => s + p.spent, 0))}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">—</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab text-positive">{fmtUSD(enriched.reduce((s: number, p: any) => s + p.incoming, 0))}</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(enriched.reduce((s: number, p: any) => s + p.incoming, 0))}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 sm:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-border border border-border">
         {enriched.length === 0 ? <div className="bg-background col-span-full p-16 text-center text-sm text-muted-foreground">No projects defined.</div> :

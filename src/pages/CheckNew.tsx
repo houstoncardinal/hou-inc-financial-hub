@@ -29,6 +29,7 @@ export default function CheckNew() {
   const [form, setForm] = useState({
     check_number: nextNumber, payee_vendor_id: '', payee_name: '', amount: '',
     issue_date: new Date().toISOString().slice(0, 10), memo: '', project_id: '', status: 'pending' as const,
+    retainage_pct: '', lien_waiver_status: 'not_required',
   });
 
   // sync default check # once async checks data loads
@@ -41,6 +42,10 @@ export default function CheckNew() {
       await upsert.mutateAsync({
         ...form,
         amount: parseFloat(form.amount),
+        retainage_pct: form.retainage_pct ? parseFloat(form.retainage_pct) : 0,
+        retainage_held: form.retainage_pct && form.amount
+          ? parseFloat(form.amount) * (parseFloat(form.retainage_pct) / 100)
+          : 0,
         payee_vendor_id: form.payee_vendor_id || null,
         project_id: form.project_id || null,
       } as any);
@@ -85,7 +90,7 @@ export default function CheckNew() {
           <div className="space-y-1.5"><Label className="micro-label">Payee Name</Label>
             <Input className="rounded-none h-10" value={form.payee_name} onChange={e => setForm({ ...form, payee_name: e.target.value })} required /></div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label className="micro-label">Amount</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
@@ -104,10 +109,31 @@ export default function CheckNew() {
                 />
               </div>
             </div>
+            <div className="space-y-1.5"><Label className="micro-label">Retainage %</Label>
+              <Input
+                type="number" min="0" max="20" step="0.5"
+                placeholder="0" className="rounded-none h-10 font-mono-tab text-right"
+                value={form.retainage_pct}
+                onChange={e => setForm({ ...form, retainage_pct: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label className="micro-label">Status</Label>
               <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
                 <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label className="micro-label">Lien Waiver</Label>
+              <Select value={form.lien_waiver_status} onValueChange={v => setForm({ ...form, lien_waiver_status: v })}>
+                <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="not_required">Not Required</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="received">Received</SelectItem>
+                </SelectContent>
               </Select>
             </div>
           </div>

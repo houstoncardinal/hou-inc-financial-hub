@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Clock } from 'lucide-react';
+import { CheckCircle, Clock, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
 import { usePortal } from '@/hooks/usePortal';
+import { supabase } from '@/integrations/supabase/client';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const DARK   = '#1A1410';
@@ -14,82 +15,91 @@ const BORDER = '#E5E0D9';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 const WHITE  = '#FFFFFF';
 
-/* ── Phase data ──────────────────────────────────────────────────────── */
+/* ── Phase definitions ───────────────────────────────────────────────── */
 type PhaseStatus = 'complete' | 'in-progress' | 'pending';
 
 interface Phase {
   id: number;
   name: string;
-  status: PhaseStatus;
-  date: string;
   description: string;
 }
 
-const PHASES: Phase[] = [
-  {
-    id: 1, name: 'Pre-Construction Planning',
-    status: 'complete', date: 'Oct 2024',
-    description: 'Site analysis, design finalization, and project schedule build-out.',
-  },
-  {
-    id: 2, name: 'Permits & Approvals',
-    status: 'complete', date: 'Dec 2024',
-    description: 'City permit submission and formal approval from HSPD.',
-  },
-  {
-    id: 3, name: 'Site Preparation',
-    status: 'in-progress', date: 'Jan 2025',
-    description: 'Land clearing, grading, and utility rough-in preparation.',
-  },
-  {
-    id: 4, name: 'Foundation Work',
-    status: 'pending', date: 'Mar 2025',
-    description: 'Excavation, formwork, reinforcement, and concrete slab pour.',
-  },
-  {
-    id: 5, name: 'Framing & Structure',
-    status: 'pending', date: 'May 2025',
-    description: 'Structural framing, roof trusses, and exterior sheathing.',
-  },
-  {
-    id: 6, name: 'MEP Rough-In (Mechanical, Electrical, Plumbing)',
-    status: 'pending', date: 'Jul 2025',
-    description: 'All mechanical, electrical, and plumbing rough-in installations.',
-  },
-  {
-    id: 7, name: 'Insulation & Drywall',
-    status: 'pending', date: 'Sep 2025',
-    description: 'Insulation installation followed by drywall hanging and taping.',
-  },
-  {
-    id: 8, name: 'Interior Finishes',
-    status: 'pending', date: 'Nov 2025',
-    description: 'Flooring, cabinetry, millwork, tile, and paint throughout.',
-  },
-  {
-    id: 9, name: 'Fixtures & Final Details',
-    status: 'pending', date: 'Jan 2026',
-    description: 'Fixture installations, hardware, and cosmetic touch-ups.',
-  },
-  {
-    id: 10, name: 'Final Inspection & Handover',
-    status: 'pending', date: 'Mar 2026',
-    description: 'City final inspection, punch list completion, and key handover.',
-  },
+const PHASE_DEFS: Phase[] = [
+  { id: 1,  name: 'Pre-Construction Planning',             description: 'Site analysis, design finalization, and project schedule build-out.' },
+  { id: 2,  name: 'Permits & Approvals',                   description: 'City permit submission and formal approval from HSPD.' },
+  { id: 3,  name: 'Site Preparation',                      description: 'Land clearing, grading, and utility rough-in preparation.' },
+  { id: 4,  name: 'Foundation Work',                       description: 'Excavation, formwork, reinforcement, and concrete slab pour.' },
+  { id: 5,  name: 'Framing & Structure',                   description: 'Structural framing, roof trusses, and exterior sheathing.' },
+  { id: 6,  name: 'MEP Rough-In',                          description: 'All mechanical, electrical, and plumbing rough-in installations.' },
+  { id: 7,  name: 'Insulation & Drywall',                  description: 'Insulation installation followed by drywall hanging and taping.' },
+  { id: 8,  name: 'Interior Finishes',                     description: 'Flooring, cabinetry, millwork, tile, and paint throughout.' },
+  { id: 9,  name: 'Fixtures & Final Details',              description: 'Fixture installations, hardware, and cosmetic touch-ups.' },
+  { id: 10, name: 'Final Inspection & Handover',           description: 'City final inspection, punch list completion, and key handover.' },
 ];
 
-// Phases that are complete OR in-progress count toward "engaged" total shown in UI
-const ENGAGED = PHASES.filter(p => p.status !== 'pending').length;
-const TOTAL   = PHASES.length;
+// How many phases are complete/in-progress per brief status
+const STATUS_PHASE_IDX: Record<string, number> = {
+  draft:                   -1,  // nothing started
+  submitted:                0,  // pre-construction planning begins
+  reviewing:                0,  // still in planning
+  consultation_scheduled:   1,  // permits underway
+  in_progress:              3,  // through permits + site prep, foundation next
+};
+
+function buildPhases(briefStatus: string | undefined): Array<Phase & { status: PhaseStatus }> {
+  const activeIdx = briefStatus ? (STATUS_PHASE_IDX[briefStatus] ?? -1) : -1;
+  return PHASE_DEFS.map((p, i) => {
+    let status: PhaseStatus = 'pending';
+    if (i < activeIdx) status = 'complete';
+    else if (i === activeIdx) status = 'in-progress';
+    return { ...p, status };
+  });
+}
+
+interface MilestoneDate {
+  phase_index: number;
+  target_date?: string;
+  completed_date?: string;
+}
+
+function fmtDate(d: string) {
+  try {
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return d; }
+}
 
 export default function PortalMilestones() {
-  const { client, getBrief } = usePortal();
+  const { client, loaded, getBrief } = usePortal();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!client) navigate('/portal', { replace: true }); }, [client, navigate]);
+  useEffect(() => { if (!loaded) return; if (!client) navigate("/portal", { replace: true }); }, [client, loaded, navigate]);
+
+  const [milestoneDates, setMilestoneDates] = useState<Record<number, MilestoneDate>>({});
+
+  useEffect(() => {
+    if (!client) return;
+    (async () => {
+      try {
+        const { data } = await (supabase as any)
+          .from('project_milestones')
+          .select('phase_index, target_date, completed_date')
+          .eq('client_id', client.id);
+        if (data && data.length > 0) {
+          const map: Record<number, MilestoneDate> = {};
+          (data as MilestoneDate[]).forEach(row => { map[row.phase_index] = row; });
+          setMilestoneDates(map);
+        }
+      } catch { /* table not yet created — fallback to indicative text */ }
+    })();
+  }, [client?.id]);
+
   if (!client) return null;
 
-  const brief = getBrief();
+  const brief  = getBrief();
+  const phases = buildPhases(brief?.status);
+  const engaged = phases.filter(p => p.status !== 'pending').length;
+  const total   = phases.length;
+  const pct     = Math.round((engaged / total) * 100);
 
   return (
     <PortalLayout>
@@ -122,6 +132,18 @@ export default function PortalMilestones() {
           </div>
         )}
 
+        {/* ── Indicative notice ── */}
+        <div
+          className="mb-8 p-4 flex items-start gap-3"
+          style={{ backgroundColor: 'rgba(26,20,16,0.025)', border: `1px solid ${BORDER}` }}
+        >
+          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: MUTED }} strokeWidth={1.5} />
+          <p className="text-[11px] font-light leading-relaxed" style={{ color: MUTED }}>
+            <span style={{ color: DARK, fontWeight: 600 }}>Indicative timeline.</span>{' '}
+            This schedule reflects the standard HOU INC build sequence. Your confirmed project dates will be set after the consultation and contract signing.
+          </p>
+        </div>
+
         {/* ── Progress summary card ── */}
         <div className="mb-8 p-7" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
           <div className="flex items-center justify-between mb-5">
@@ -130,11 +152,11 @@ export default function PortalMilestones() {
                 Overall Progress
               </div>
               <div className="text-[13px] font-light" style={{ color: MUTED }}>
-                {ENGAGED} of {TOTAL} phases complete
+                {engaged} of {total} phases {engaged === 0 ? 'started' : 'underway'}
               </div>
             </div>
             <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 700, color: DARK }}>
-              {Math.round((ENGAGED / TOTAL) * 100)}%
+              {pct}%
             </div>
           </div>
           <div className="h-1.5 overflow-hidden" style={{ backgroundColor: 'rgba(26,20,16,0.06)' }}>
@@ -142,7 +164,7 @@ export default function PortalMilestones() {
               className="h-full"
               style={{ backgroundColor: GOLD }}
               initial={{ width: 0 }}
-              animate={{ width: `${(ENGAGED / TOTAL) * 100}%` }}
+              animate={{ width: `${pct}%` }}
               transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
             />
           </div>
@@ -158,9 +180,9 @@ export default function PortalMilestones() {
 
           <div className="px-7 py-8">
             <div className="space-y-0">
-              {PHASES.map((phase, i) => {
-                const { id, name, status, date, description } = phase;
-                const isLast   = i === PHASES.length - 1;
+              {phases.map((phase, i) => {
+                const { id, name, status, description } = phase;
+                const isLast   = i === phases.length - 1;
                 const lineGold = status === 'complete' || status === 'in-progress';
                 const dimmed   = status === 'pending';
 
@@ -168,11 +190,7 @@ export default function PortalMilestones() {
                   <div key={id} className="flex gap-5">
                     {/* Left: node + connecting line */}
                     <div className="flex flex-col items-center" style={{ width: 12 }}>
-                      {/* Square node */}
-                      <div
-                        className="shrink-0 z-10 flex items-center justify-center"
-                        style={{ width: 12, height: 12, marginTop: 2 }}
-                      >
+                      <div className="shrink-0 z-10 flex items-center justify-center" style={{ width: 12, height: 12, marginTop: 2 }}>
                         {status === 'complete' ? (
                           <motion.div
                             className="w-3 h-3 flex items-center justify-center"
@@ -186,31 +204,19 @@ export default function PortalMilestones() {
                         ) : status === 'in-progress' ? (
                           <motion.div
                             className="w-3 h-3"
-                            style={{
-                              backgroundColor: WHITE,
-                              border: `2px solid ${GOLD}`,
-                              outline: `3px solid rgba(157,126,63,0.14)`,
-                            }}
+                            style={{ backgroundColor: WHITE, border: `2px solid ${GOLD}`, outline: `3px solid rgba(157,126,63,0.14)` }}
                             initial={{ scale: 0.5, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ type: 'spring', stiffness: 380, damping: 18, delay: i * 0.04 }}
                           />
                         ) : (
-                          <div
-                            className="w-3 h-3"
-                            style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}` }}
-                          />
+                          <div className="w-3 h-3" style={{ backgroundColor: WHITE, border: `1.5px solid ${BORDER}` }} />
                         )}
                       </div>
-                      {/* Connecting line */}
                       {!isLast && (
                         <div
                           className="flex-1 mt-1"
-                          style={{
-                            width: 2,
-                            minHeight: 32,
-                            backgroundColor: lineGold ? GOLD : BORDER,
-                          }}
+                          style={{ width: 2, minHeight: 32, backgroundColor: lineGold ? GOLD : BORDER }}
                         />
                       )}
                     </div>
@@ -249,15 +255,19 @@ export default function PortalMilestones() {
                       </div>
                       <div
                         className="text-[9px] uppercase tracking-[0.18em] font-semibold"
-                        style={{
-                          color: dimmed
-                            ? 'rgba(26,20,16,0.18)'
-                            : status === 'in-progress'
-                            ? GOLD
-                            : 'rgba(16,185,129,0.75)',
-                        }}
+                        style={{ color: dimmed ? 'rgba(26,20,16,0.18)' : status === 'in-progress' ? GOLD : 'rgba(16,185,129,0.75)' }}
                       >
-                        Est. {date}
+                        {status === 'pending'
+                          ? (milestoneDates[i]?.target_date
+                              ? `Target: ${fmtDate(milestoneDates[i].target_date!)}`
+                              : 'Scheduled after consultation')
+                          : status === 'in-progress'
+                          ? (milestoneDates[i]?.target_date
+                              ? `Currently Active — Target: ${fmtDate(milestoneDates[i].target_date!)}`
+                              : 'Currently Active')
+                          : (milestoneDates[i]?.completed_date
+                              ? `Completed ${fmtDate(milestoneDates[i].completed_date!)}`
+                              : 'Completed')}
                       </div>
                     </div>
                   </div>
