@@ -5,7 +5,7 @@ import {
   HardHat,
   Star, Compass, Ruler, Hammer, ClipboardCheck,
   Trophy, Users, Quote, CheckCircle2, ShieldCheck,
-  CalendarCheck, ChevronRight, ChevronLeft,
+  CalendarCheck, ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform, LayoutGroup } from 'framer-motion';
 import PublicLayout from '@/components/PublicLayout';
@@ -695,12 +695,6 @@ export default function Home() {
   const fade  = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const textY = useTransform(scrollYProgress, [0, 1], [0, 48]);
 
-  const [slide, setSlide] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setSlide(s => (s + 1) % PORTFOLIO.length), 5500);
-    return () => clearInterval(t);
-  }, []);
-
   // Portfolio showcase (crane section)
   const [pgSlide, setPgSlide] = useState(0);
   const [pgDir, setPgDir]   = useState(1);
@@ -1358,157 +1352,6 @@ export default function Home() {
           </div>
 
         </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          PORTFOLIO CAROUSEL — cinematic project showcase
-      ══════════════════════════════════════════════ */}
-      <section className="relative overflow-hidden" style={{ height: '88vh', minHeight: 520, backgroundColor: B }}>
-
-        {/* Crossfading background images */}
-        <AnimatePresence mode="sync">
-          <motion.div
-            key={slide}
-            className="absolute inset-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.4, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <motion.div
-              className="absolute inset-0"
-              initial={{ scale: 1.06 }}
-              animate={{ scale: 1.0 }}
-              transition={{ duration: 7, ease: 'linear' }}
-              style={{
-                backgroundImage: `url(${PORTFOLIO[slide].img})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            />
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Cinematic gradient stack */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(5,4,3,0.96) 0%, rgba(5,4,3,0.55) 35%, rgba(5,4,3,0.08) 68%, transparent 100%)' }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(5,4,3,0.52) 0%, transparent 28%)' }} />
-        <div className="absolute inset-0 pointer-events-none" style={GRID} />
-
-        {/* Top bar: eyebrow + portfolio link */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-8 md:px-14 lg:px-24 pt-8 md:pt-10">
-          <div className="flex items-center gap-3">
-            <div className="h-px w-7 shrink-0" style={{ backgroundColor: ACL }} />
-            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.48em', textTransform: 'uppercase' as const, color: ACL }}>
-              Selected Work
-            </span>
-          </div>
-          <Link
-            to="/portfolio"
-            className="flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] font-bold transition-colors"
-            style={{ color: 'rgba(255,255,255,0.50)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.50)'; }}
-          >
-            Full Portfolio <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-          </Link>
-        </div>
-
-        {/* Prev arrow */}
-        <button
-          onClick={() => setSlide(s => (s - 1 + PORTFOLIO.length) % PORTFOLIO.length)}
-          className="absolute left-4 md:left-8 lg:left-14 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border flex items-center justify-center transition-all duration-200"
-          style={{ borderColor: 'rgba(255,255,255,0.18)', opacity: 0.45 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.55)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.45'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'; }}
-          aria-label="Previous project"
-        >
-          <ChevronLeft className="w-4 h-4" style={{ color: W }} strokeWidth={1.5} />
-        </button>
-
-        {/* Next arrow */}
-        <button
-          onClick={() => setSlide(s => (s + 1) % PORTFOLIO.length)}
-          className="absolute right-4 md:right-8 lg:right-14 top-1/2 -translate-y-1/2 z-20 w-10 h-10 border flex items-center justify-center transition-all duration-200"
-          style={{ borderColor: 'rgba(255,255,255,0.18)', opacity: 0.45 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.55)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.45'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'; }}
-          aria-label="Next project"
-        >
-          <ChevronRight className="w-4 h-4" style={{ color: W }} strokeWidth={1.5} />
-        </button>
-
-        {/* Bottom content */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 px-8 md:px-14 lg:px-24 pb-10 md:pb-14">
-          <div className="flex items-end justify-between gap-8">
-
-            {/* Project info — slides with each change */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={slide + '-info'}
-                initial={{ opacity: 0, y: 22 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-px w-6 shrink-0" style={{ backgroundColor: ACL }} />
-                  <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: '0.38em', textTransform: 'uppercase' as const, color: ACL }}>
-                    {PORTFOLIO[slide].tag}
-                  </span>
-                </div>
-                <h2 style={{
-                  fontFamily: SF, fontStyle: 'normal', fontWeight: 600,
-                  fontSize: 'clamp(28px, 4.5vw, 64px)', color: W,
-                  lineHeight: 1.0, letterSpacing: '-0.022em', marginBottom: 10,
-                }}>
-                  {PORTFOLIO[slide].title}
-                </h2>
-                <div className="flex items-center gap-3">
-                  <span style={{ fontSize: 11, fontWeight: 300, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.08em' }}>{PORTFOLIO[slide].sf}</span>
-                  <span style={{ color: 'rgba(255,255,255,0.20)' }}>·</span>
-                  <span style={{ fontSize: 11, fontWeight: 300, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.08em' }}>{PORTFOLIO[slide].yr}</span>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* Right: counter + dot nav */}
-            <div className="flex flex-col items-end gap-4 shrink-0">
-              <span style={{
-                fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
-                fontSize: 13, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em',
-              }}>
-                {String(slide + 1).padStart(2, '0')} / {String(PORTFOLIO.length).padStart(2, '0')}
-              </span>
-              <div className="flex items-center gap-2">
-                {PORTFOLIO.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSlide(i)}
-                    aria-label={`Go to slide ${i + 1}`}
-                    className="transition-all duration-300"
-                    style={{
-                      height: 3,
-                      width: i === slide ? 24 : 4,
-                      backgroundColor: i === slide ? ACL : 'rgba(255,255,255,0.28)',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 z-30" style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}>
-          <motion.div
-            key={slide + '-bar'}
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ duration: 5.5, ease: 'linear' }}
-            style={{ height: '100%', backgroundColor: ACL, transformOrigin: 'left', opacity: 0.55 }}
-          />
-        </div>
-
       </section>
 
       {/* ══════════════════════════════════════════════

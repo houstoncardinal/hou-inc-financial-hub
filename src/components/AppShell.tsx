@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useRole } from '@/hooks/useAuth';
+import { useAuth, useRole, ROLE_LABELS } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useEntity, ENTITIES } from '@/contexts/EntityContext';
@@ -245,9 +245,9 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5">
               <span className="truncate text-foreground text-[11px]">{displayName || 'User'}</span>
-              {role === 'viewer' && (
+              {role !== 'admin' && (
                 <span className="shrink-0 text-[7px] uppercase tracking-[0.16em] px-1 py-0.5 font-bold bg-accent/10 text-accent border border-accent/30">
-                  Viewer
+                  {ROLE_LABELS[role]}
                 </span>
               )}
             </div>

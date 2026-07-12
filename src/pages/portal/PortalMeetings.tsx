@@ -351,7 +351,7 @@ export default function PortalMeetings() {
                         </div>
                         {format === 'In-Person' && (
                           <div className="mt-2 text-[10px] font-light" style={{ color: MUTED }}>
-                            2100 W Loop South, Suite #1115, Houston, TX 77027
+                            206 Brooks St, Sugar Land, TX 77478
                           </div>
                         )}
                       </div>

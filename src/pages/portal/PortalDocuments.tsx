@@ -80,12 +80,20 @@ export default function PortalDocuments() {
   const [progress, setProgress]   = useState(0);
   const [busy, setBusy]           = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [bucketMissing, setBucketMissing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!loaded) return;
     if (!client) navigate('/portal', { replace: true });
   }, [client, loaded, navigate]);
+
+  // Check that the storage bucket exists; if not, surface a clear setup warning.
+  useEffect(() => {
+    supabase.storage.from(STORAGE_BUCKET).list('', { limit: 1 }).then(({ error }) => {
+      if (error) setBucketMissing(true);
+    });
+  }, []);
 
   // Sync docs from hook whenever hook documents update (after Supabase load)
   useEffect(() => {
@@ -226,6 +234,23 @@ export default function PortalDocuments() {
             Upload
           </button>
         </motion.div>
+
+        {/* ── Storage setup warning ── */}
+        {bucketMissing && (
+          <div className="mb-5 flex items-start gap-3 px-4 py-3.5"
+            style={{ backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.22)' }}>
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#ef4444' }} strokeWidth={2} />
+            <div>
+              <div className="text-[11px] font-bold mb-0.5" style={{ color: '#b91c1c' }}>
+                Storage not configured — file uploads will fail
+              </div>
+              <div className="text-[10px] font-light leading-relaxed" style={{ color: '#7f1d1d' }}>
+                The <code className="px-1 py-0.5 rounded text-[9px]" style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}>portal-documents</code> bucket
+                does not exist in Supabase. Ask your admin to run <strong>portal-setup.sql</strong> in the Supabase dashboard SQL editor.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Tabs ── */}
         <motion.div

@@ -365,6 +365,282 @@ export type Database = {
           },
         ]
       }
+      portal_clients: {
+        Row: {
+          id: string
+          name: string
+          email: string
+          phone: string
+          password_hash: string | null
+          project_type: string
+          project_interest: string | null
+          status: string
+          created_at: string
+          updated_at: string
+          approved_at: string | null
+          rejected_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          email: string
+          phone?: string
+          password_hash?: string | null
+          project_type?: string
+          project_interest?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          approved_at?: string | null
+          rejected_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          email?: string
+          phone?: string
+          password_hash?: string | null
+          project_type?: string
+          project_interest?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+          approved_at?: string | null
+          rejected_at?: string | null
+        }
+        Relationships: []
+      }
+      portal_briefs: {
+        Row: {
+          id: string
+          client_id: string
+          type: string | null
+          location: string | null
+          sqft: string | null
+          bedrooms: string | null
+          bathrooms: string | null
+          floors: string | null
+          style: string[] | null
+          budget: string | null
+          timeline: string | null
+          description: string | null
+          status: string
+          submitted_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          type?: string | null
+          location?: string | null
+          sqft?: string | null
+          bedrooms?: string | null
+          bathrooms?: string | null
+          floors?: string | null
+          style?: string[] | null
+          budget?: string | null
+          timeline?: string | null
+          description?: string | null
+          status?: string
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          type?: string | null
+          location?: string | null
+          sqft?: string | null
+          bedrooms?: string | null
+          bathrooms?: string | null
+          floors?: string | null
+          style?: string[] | null
+          budget?: string | null
+          timeline?: string | null
+          description?: string | null
+          status?: string
+          submitted_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portal_messages: {
+        Row: {
+          id: string
+          client_id: string
+          sender: string
+          sender_name: string
+          body: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          sender: string
+          sender_name: string
+          body: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          sender?: string
+          sender_name?: string
+          body?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      portal_documents: {
+        Row: {
+          id: string
+          client_id: string
+          name: string
+          file_type: string
+          file_size: string | null
+          category: string
+          status: string
+          requested_by: string | null
+          description: string | null
+          uploaded_at: string | null
+          created_at: string
+          storage_path: string | null
+          file_url: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          name: string
+          file_type?: string
+          file_size?: string | null
+          category?: string
+          status?: string
+          requested_by?: string | null
+          description?: string | null
+          uploaded_at?: string | null
+          created_at?: string
+          storage_path?: string | null
+          file_url?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          name?: string
+          file_type?: string
+          file_size?: string | null
+          category?: string
+          status?: string
+          requested_by?: string | null
+          description?: string | null
+          uploaded_at?: string | null
+          created_at?: string
+          storage_path?: string | null
+          file_url?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: []
+      }
+      portal_meetings: {
+        Row: {
+          id: string
+          client_id: string
+          type: string
+          date: string
+          time: string
+          format: string
+          notes: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          type: string
+          date: string
+          time: string
+          format?: string
+          notes?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          type?: string
+          date?: string
+          time?: string
+          format?: string
+          notes?: string | null
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      portal_admin_notes: {
+        Row: {
+          id: string
+          client_id: string
+          body: string
+          author: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          body: string
+          author?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          body?: string
+          author?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      change_orders: {
+        Row: {
+          id: string
+          client_id: string
+          number: string | null
+          description: string
+          amount: number
+          status: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          number?: string | null
+          description: string
+          amount: number
+          status?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          number?: string | null
+          description?: string
+          amount?: number
+          status?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       contact_submissions: {
         Row: {
           id: string
@@ -417,6 +693,15 @@ export type Database = {
           start_timeline: string | null
           priorities: string[] | null
           description: string | null
+          status: string | null
+          admin_notes: string | null
+          assigned_to: string | null
+          updated_at: string | null
+          last_contacted_at: string | null
+          next_follow_up_at: string | null
+          estimated_value: number | null
+          converted_to_client_id: string | null
+          tags: string[] | null
         }
         Insert: {
           id?: string
@@ -433,6 +718,15 @@ export type Database = {
           start_timeline?: string | null
           priorities?: string[] | null
           description?: string | null
+          status?: string | null
+          admin_notes?: string | null
+          assigned_to?: string | null
+          updated_at?: string | null
+          last_contacted_at?: string | null
+          next_follow_up_at?: string | null
+          estimated_value?: number | null
+          converted_to_client_id?: string | null
+          tags?: string[] | null
         }
         Update: {
           id?: string
@@ -449,6 +743,15 @@ export type Database = {
           start_timeline?: string | null
           priorities?: string[] | null
           description?: string | null
+          status?: string | null
+          admin_notes?: string | null
+          assigned_to?: string | null
+          updated_at?: string | null
+          last_contacted_at?: string | null
+          next_follow_up_at?: string | null
+          estimated_value?: number | null
+          converted_to_client_id?: string | null
+          tags?: string[] | null
         }
         Relationships: []
       }

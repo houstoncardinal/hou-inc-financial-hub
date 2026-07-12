@@ -20,10 +20,11 @@ const stripJoinedRelations = <T extends Record<string, unknown>>(row: T) => {
 // ── Query hooks ───────────────────────────────────────────────────────────────
 
 export const useVendors = () => {
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
   return useQuery({
     queryKey: ['vendors', entityId],
+    enabled: ready,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('vendors')
@@ -38,10 +39,11 @@ export const useVendors = () => {
 };
 
 export const useProjects = () => {
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
   return useQuery({
     queryKey: ['projects', entityId],
+    enabled: ready,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
@@ -56,10 +58,11 @@ export const useProjects = () => {
 };
 
 export const useChecks = () => {
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
   return useQuery({
     queryKey: ['checks', entityId],
+    enabled: ready,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('checks')
@@ -74,10 +77,11 @@ export const useChecks = () => {
 };
 
 export const useTransactions = (type?: 'income' | 'expense') => {
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
   return useQuery({
     queryKey: ['transactions', type, entityId],
+    enabled: ready,
     queryFn: async () => {
       let query = supabase
         .from('transactions')
@@ -101,11 +105,12 @@ export const useUpsert = <T extends { id?: string }>(
 ) => {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
 
   return useMutation({
     mutationFn: async (row: T) => {
+      if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
       const payload = stripJoinedRelations(row as Record<string, unknown>);
       if (row.id) {
         const { error } = await supabase.from(table).update(payload).eq('id', row.id);
@@ -145,11 +150,12 @@ export const useDelete = (table: TableName, invalidate: string[][]) => {
 export const useQuickCreate = (table: 'vendors' | 'projects') => {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
 
   return useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
+      if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
       const { data: created, error } = await supabase
         .from(table)
         .insert({ ...data, user_id: user!.id, entity_id: entityId })

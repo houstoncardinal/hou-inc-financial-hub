@@ -9,6 +9,11 @@ import {
 } from 'recharts';
 import TimeFilter, { getDateRange } from '@/components/TimeFilter';
 
+const parseLocalDate = (d: string): Date => {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day);
+};
+
 /* ─── Constants ─── */
 const PIE_COLORS_LIGHT = [
   '#121212', '#a4221e', '#555555', '#888888', '#2d2d2d',
@@ -350,14 +355,15 @@ function CheckInsightChart({ cleared, pending, voided, volumeData }: {
 function DataSummaryCards({ income, expenses, checks, projects, vendors }: {
   income: any[]; expenses: any[]; checks: any[]; projects: any[]; vendors: any[];
 }) {
+  const totalIncome   = income.reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const totalExpenses = expenses.reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const clearedChecks = checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+  const netPosition   = totalIncome - totalExpenses - clearedChecks;
+
   const summaryItems = [
-    { label: 'Total Income', value: fmtUSD(income.reduce((s: number, t: any) => s + Number(t.amount), 0)), color: 'var(--positive)' },
-    { label: 'Total Expenses', value: fmtUSD(expenses.reduce((s: number, t: any) => s + Number(t.amount), 0)), color: 'var(--accent)' },
-    { label: 'Net Position', value: fmtUSD(
-        income.reduce((s: number, t: any) => s + Number(t.amount), 0) -
-        expenses.reduce((s: number, t: any) => s + Number(t.amount), 0)
-      ),
-      color: 'var(--foreground)' },
+    { label: 'Total Income', value: fmtUSD(totalIncome), color: 'var(--positive)' },
+    { label: 'Total Expenses', value: fmtUSD(totalExpenses), color: 'var(--accent)' },
+    { label: 'Net Position', value: fmtUSD(netPosition), color: netPosition >= 0 ? 'var(--positive)' : 'var(--accent)' },
     { label: 'Checks Issued', value: String(checks.length), color: 'var(--warning)' },
     { label: 'Active Projects', value: String(projects.filter((p: any) => p.status === 'active').length), color: 'var(--chart-3)' },
     { label: 'Vendors', value: String(vendors.length), color: 'var(--chart-4)' },
@@ -395,7 +401,7 @@ export default function Charts() {
 
   const { start, end } = useMemo(() => {
     if (timePeriod === 'custom' && customStart && customEnd) {
-      return { start: new Date(customStart), end: new Date(customEnd) };
+      return { start: parseLocalDate(customStart), end: parseLocalDate(customEnd) };
     }
     return getDateRange(timePeriod);
   }, [timePeriod, customStart, customEnd]);
@@ -403,21 +409,21 @@ export default function Charts() {
   /* ── Filtered data ── */
   const filteredIncome = useMemo(() => {
     return income.filter((t: any) => {
-      const dt = new Date(t.transaction_date);
+      const dt = parseLocalDate(t.transaction_date);
       return dt >= start && dt <= end;
     });
   }, [income, start, end]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((t: any) => {
-      const dt = new Date(t.transaction_date);
+      const dt = parseLocalDate(t.transaction_date);
       return dt >= start && dt <= end;
     });
   }, [expenses, start, end]);
 
   const filteredChecks = useMemo(() => {
     return checks.filter((c: any) => {
-      const dt = new Date(c.issue_date);
+      const dt = parseLocalDate(c.issue_date);
       return dt >= start && dt <= end;
     });
   }, [checks, start, end]);
@@ -430,7 +436,7 @@ export default function Charts() {
       d.setMonth(d.getMonth() - i);
       const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
       const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= mStart && d2 < mEnd; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= mStart && d2 < mEnd; };
       const inflow = filteredIncome.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const exp = filteredExpenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk = filteredChecks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -493,7 +499,7 @@ export default function Charts() {
       d.setMonth(d.getMonth() - i);
       const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
       const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= mStart && d2 < mEnd; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= mStart && d2 < mEnd; };
       months.push({ label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), count: filteredChecks.filter((c: any) => inR(c.issue_date)).length });
     }
     return months;

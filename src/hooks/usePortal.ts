@@ -74,7 +74,7 @@ export const COMPANY = {
   founded: 1998,
   phone: '(281) 915-9595',
   email: 'Info@Houinc.com',
-  address: '2100 W Loop South, Suite #1115, Houston, TX 77027',
+  address: '206 Brooks St, Sugar Land, TX 77478',
 };
 
 const SESSION_KEY = 'hou-portal-session';

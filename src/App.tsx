@@ -1,13 +1,34 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
+import RoleGuard from "@/components/RoleGuard";
 import { EntityProvider } from "@/contexts/EntityContext";
+
+function GlobalShortcuts() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    let buffer = '';
+    let timer: ReturnType<typeof setTimeout>;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
+      buffer += e.key.toLowerCase();
+      clearTimeout(timer);
+      timer = setTimeout(() => { buffer = ''; }, 1000);
+      if (buffer.endsWith('ops')) { navigate('/ops'); buffer = ''; }
+    };
+    window.addEventListener('keydown', handler);
+    return () => { window.removeEventListener('keydown', handler); clearTimeout(timer); };
+  }, [navigate]);
+  return null;
+}
 
 // Public website
 import Home          from "./pages/public/Home";
@@ -58,34 +79,39 @@ import Invoices      from "./pages/Invoices";
 import InvoiceNew    from "./pages/InvoiceNew";
 import Glossary      from "./pages/Glossary";
 import Documents     from "./pages/Documents";
+import OpsCenter     from "./pages/OpsCenter";
 import NotFound      from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const FINANCE_ROLES = ['admin', 'finance', 'viewer'] as const;
+const ADMIN_ROLES   = ['admin'] as const;
 
 // All finance routes share ONE EntityProvider so entity state is never stale
 function FinanceRoutes() {
   return (
     <EntityProvider>
       <Routes>
-        <Route path="/finance"            element={<Protected><EntitySelect /></Protected>} />
-        <Route path="/finance/select"     element={<Protected><EntitySelect /></Protected>} />
-        <Route path="/finance/dashboard"  element={<Protected><Index /></Protected>} />
-        <Route path="/checks"             element={<Protected><Checks /></Protected>} />
-        <Route path="/checks/new"     element={<Protected><CheckNew /></Protected>} />
-        <Route path="/income"         element={<Protected><TxnPage kind="income" /></Protected>} />
-        <Route path="/expenses"       element={<Protected><TxnPage kind="expense" /></Protected>} />
-        <Route path="/ledger"         element={<Protected><Ledger /></Protected>} />
-        <Route path="/projects"       element={<Protected><Projects /></Protected>} />
-        <Route path="/projects/:id"   element={<Protected><ProjectDetail /></Protected>} />
-        <Route path="/vendors"        element={<Protected><Vendors /></Protected>} />
-        <Route path="/concierge"      element={<Protected><Concierge /></Protected>} />
-        <Route path="/charts"         element={<Protected><Charts /></Protected>} />
-        <Route path="/invoices"       element={<Protected><Invoices /></Protected>} />
-        <Route path="/invoices/new"   element={<Protected><InvoiceNew /></Protected>} />
-        <Route path="/invoices/:id"   element={<Protected><InvoiceNew /></Protected>} />
-        <Route path="/settings"       element={<Protected><Settings /></Protected>} />
-        <Route path="/glossary"       element={<Protected><Glossary /></Protected>} />
-        <Route path="/documents"      element={<Protected><Documents /></Protected>} />
+        <Route path="/finance"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
+        <Route path="/finance/select"     element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
+        <Route path="/finance/dashboard"  element={<RoleGuard allowed={[...FINANCE_ROLES]}><Index /></RoleGuard>} />
+        <Route path="/checks"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Checks /></RoleGuard>} />
+        <Route path="/checks/new"         element={<RoleGuard allowed={[...FINANCE_ROLES]}><CheckNew /></RoleGuard>} />
+        <Route path="/income"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="income" /></RoleGuard>} />
+        <Route path="/expenses"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="expense" /></RoleGuard>} />
+        <Route path="/ledger"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Ledger /></RoleGuard>} />
+        <Route path="/projects"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Projects /></RoleGuard>} />
+        <Route path="/projects/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><ProjectDetail /></RoleGuard>} />
+        <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
+        <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Concierge /></RoleGuard>} />
+        <Route path="/charts"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Charts /></RoleGuard>} />
+        <Route path="/invoices"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Invoices /></RoleGuard>} />
+        <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
+        <Route path="/invoices/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
+        <Route path="/settings"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Settings /></RoleGuard>} />
+        <Route path="/glossary"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Glossary /></RoleGuard>} />
+        <Route path="/documents"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Documents /></RoleGuard>} />
+        <Route path="/ops"                element={<RoleGuard allowed={[...ADMIN_ROLES]}><OpsCenter /></RoleGuard>} />
       </Routes>
     </EntityProvider>
   );
@@ -100,6 +126,7 @@ const App = () => (
         <BrowserRouter>
           <ThemeProvider>
             <AuthProvider>
+              <GlobalShortcuts />
               <Routes>
                 {/* ── Public website ── */}
                 <Route path="/"          element={<Home />} />
@@ -126,11 +153,11 @@ const App = () => (
                 <Route path="/portal/settings"   element={<PortalSettings />} />
                 <Route path="/portal/gallery"    element={<PortalGallery />} />
 
-                {/* ── Admin ── */}
-                <Route path="/admin"             element={<Admin />} />
+                {/* ── Admin (admin-role only) ── */}
+                <Route path="/admin"             element={<RoleGuard allowed={['admin']}><Admin /></RoleGuard>} />
 
                 {/* ── Tools ── */}
-                <Route path="/scraper"           element={<WebScraper />} />
+                <Route path="/scraper"           element={<RoleGuard allowed={['admin']}><WebScraper /></RoleGuard>} />
 
                 {/* ── Finance sector (single shared EntityProvider) ── */}
                 <Route path="/auth"             element={<Auth />} />

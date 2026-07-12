@@ -56,10 +56,13 @@ function buildPhases(briefStatus: string | undefined): Array<Phase & { status: P
   });
 }
 
-interface MilestoneDate {
+interface MilestoneRow {
   phase_index: number;
   target_date?: string;
   completed_date?: string;
+  is_active?: boolean;
+  phase_name?: string;
+  phase_description?: string;
 }
 
 function fmtDate(d: string) {
@@ -74,7 +77,8 @@ export default function PortalMilestones() {
 
   useEffect(() => { if (!loaded) return; if (!client) navigate("/portal", { replace: true }); }, [client, loaded, navigate]);
 
-  const [milestoneDates, setMilestoneDates] = useState<Record<number, MilestoneDate>>({});
+  const [milestonesMap, setMilestonesMap] = useState<Record<number, MilestoneRow>>({});
+  const [tableLoaded, setTableLoaded] = useState(false);
 
   useEffect(() => {
     if (!client) return;
@@ -82,21 +86,37 @@ export default function PortalMilestones() {
       try {
         const { data } = await (supabase as any)
           .from('project_milestones')
-          .select('phase_index, target_date, completed_date')
+          .select('phase_index, target_date, completed_date, is_active, phase_name, phase_description')
           .eq('client_id', client.id);
         if (data && data.length > 0) {
-          const map: Record<number, MilestoneDate> = {};
-          (data as MilestoneDate[]).forEach(row => { map[row.phase_index] = row; });
-          setMilestoneDates(map);
+          const map: Record<number, MilestoneRow> = {};
+          (data as MilestoneRow[]).forEach(row => { map[row.phase_index] = row; });
+          setMilestonesMap(map);
         }
-      } catch { /* table not yet created — fallback to indicative text */ }
+        setTableLoaded(true);
+      } catch { setTableLoaded(false); }
     })();
   }, [client?.id]);
 
   if (!client) return null;
 
-  const brief  = getBrief();
-  const phases = buildPhases(brief?.status);
+  const brief = getBrief();
+
+  // Use table-driven status if any row has is_active or completed_date set; otherwise fall back to brief.status
+  const hasTableData = tableLoaded && Object.keys(milestonesMap).length > 0;
+  const hasAdminControl = hasTableData && Object.values(milestonesMap).some(r => r.is_active || r.completed_date);
+
+  const phases: Array<Phase & { status: PhaseStatus }> = PHASE_DEFS.map((p, i) => {
+    if (hasAdminControl) {
+      const row = milestonesMap[i];
+      let status: PhaseStatus = 'pending';
+      if (row?.completed_date) status = 'complete';
+      else if (row?.is_active) status = 'in-progress';
+      return { ...p, name: row?.phase_name || p.name, description: row?.phase_description || p.description, status };
+    }
+    return buildPhases(brief?.status)[i];
+  });
+
   const engaged = phases.filter(p => p.status !== 'pending').length;
   const total   = phases.length;
   const pct     = Math.round((engaged / total) * 100);
@@ -258,15 +278,15 @@ export default function PortalMilestones() {
                         style={{ color: dimmed ? 'rgba(26,20,16,0.18)' : status === 'in-progress' ? GOLD : 'rgba(16,185,129,0.75)' }}
                       >
                         {status === 'pending'
-                          ? (milestoneDates[i]?.target_date
-                              ? `Target: ${fmtDate(milestoneDates[i].target_date!)}`
+                          ? (milestonesMap[i]?.target_date
+                              ? `Target: ${fmtDate(milestonesMap[i].target_date!)}`
                               : 'Scheduled after consultation')
                           : status === 'in-progress'
-                          ? (milestoneDates[i]?.target_date
-                              ? `Currently Active — Target: ${fmtDate(milestoneDates[i].target_date!)}`
+                          ? (milestonesMap[i]?.target_date
+                              ? `Currently Active — Target: ${fmtDate(milestonesMap[i].target_date!)}`
                               : 'Currently Active')
-                          : (milestoneDates[i]?.completed_date
-                              ? `Completed ${fmtDate(milestoneDates[i].completed_date!)}`
+                          : (milestonesMap[i]?.completed_date
+                              ? `Completed ${fmtDate(milestonesMap[i].completed_date!)}`
                               : 'Completed')}
                       </div>
                     </div>

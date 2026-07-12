@@ -27,7 +27,8 @@ export default function Auth() {
   const { user, signIn } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
-  const from      = (location.state as any)?.from || '/finance/select';
+  const defaultDest = user?.role === 'client' ? '/portal/dashboard' : '/finance/select';
+  const from = (location.state as any)?.from || defaultDest;
 
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
@@ -40,8 +41,13 @@ export default function Auth() {
   const [otpValue,   setOtpValue]   = useState('');
   const [otpError,   setOtpError]   = useState('');
 
-  /* Only redirect when not waiting on OTP */
-  useEffect(() => { if (user && !pendingOtp) navigate(from, { replace: true }); }, [user, pendingOtp, navigate, from]);
+  /* Only redirect when not waiting on OTP — clients always go to portal */
+  useEffect(() => {
+    if (user && !pendingOtp) {
+      const dest = user.role === 'client' ? '/portal/dashboard' : from;
+      navigate(dest, { replace: true });
+    }
+  }, [user, pendingOtp, navigate, from]);
 
   const generateCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
@@ -61,7 +67,8 @@ export default function Auth() {
     if (otpValue.length < 6) return;
     if (otpValue === otpCode) {
       setPendingOtp(false);
-      navigate(from, { replace: true });
+      const dest = user?.role === 'client' ? '/portal/dashboard' : from;
+      navigate(dest, { replace: true });
     } else {
       setOtpError('Incorrect code. Please try again.');
       setOtpValue('');

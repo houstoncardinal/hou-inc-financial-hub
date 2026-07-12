@@ -2,12 +2,26 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
 
+export type AppRole = 'admin' | 'finance' | 'client' | 'viewer';
+
 export interface AppUser {
   id: string;
   email: string;
-  role: 'admin' | 'viewer';
+  role: AppRole;
   user_metadata: { full_name?: string };
 }
+
+// Role capability helpers
+export const canAccessAdmin   = (r: AppRole) => r === 'admin';
+export const canAccessFinance = (r: AppRole) => r === 'admin' || r === 'finance' || r === 'viewer';
+export const isClientOnly     = (r: AppRole) => r === 'client';
+
+export const ROLE_LABELS: Record<AppRole, string> = {
+  admin:   'Admin',
+  finance: 'Finance',
+  client:  'Client',
+  viewer:  'Viewer',
+};
 
 // Kept for import compat — no longer used for auth logic
 export const DEFAULT_EMAIL = 'admin@houinc.com';
@@ -15,11 +29,15 @@ export const DEFAULT_PASS  = '';
 export const VIEWER_EMAIL  = '';
 export const VIEWER_PASS   = '';
 
+const VALID_ROLES: AppRole[] = ['admin', 'finance', 'client', 'viewer'];
+
 function toAppUser(user: User): AppUser {
+  const raw = user.user_metadata?.role;
+  const role: AppRole = VALID_ROLES.includes(raw) ? raw : 'admin';
   return {
     id: user.id,
     email: user.email ?? '',
-    role: (user.user_metadata?.role as 'admin' | 'viewer') ?? 'admin',
+    role,
     user_metadata: { full_name: user.user_metadata?.full_name },
   };
 }
@@ -77,4 +95,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => useContext(AuthCtx);
-export const useRole = () => useContext(AuthCtx).user?.role ?? 'admin';
+export const useRole = (): AppRole => useContext(AuthCtx).user?.role ?? 'viewer';

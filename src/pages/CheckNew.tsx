@@ -32,8 +32,8 @@ export default function CheckNew() {
     retainage_pct: '', lien_waiver_status: 'not_required',
   });
 
-  // sync default check # once async checks data loads
-  useEffect(() => { if (form.check_number === '1001' || !form.check_number) setForm(f => ({ ...f, check_number: nextNumber })); }, [nextNumber]);
+  // sync default check # once async checks data loads — use functional updater to read live form state
+  useEffect(() => { setForm(f => (f.check_number === nextNumber || (f.check_number && f.check_number !== '1001')) ? f : { ...f, check_number: nextNumber }); }, [nextNumber]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -95,7 +95,7 @@ function applyAutoOverdue(invoices: Invoice[]): Invoice[] {
 
 export function useInvoices() {
   const { user } = useAuth();
-  const { entity } = useEntity();
+  const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
   const qc = useQueryClient();
 
@@ -104,7 +104,7 @@ export function useInvoices() {
   // ── Read ──
   const { data: rawInvoices = [] } = useQuery({
     queryKey: QUERY_KEY,
-    enabled: !!user,
+    enabled: !!user && ready,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('invoices')
@@ -121,6 +121,7 @@ export function useInvoices() {
   // ── Create ──
   const createMutation = useMutation({
     mutationFn: async (data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => {
+      if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
       const { data: created, error } = await supabase
         .from('invoices')
         .insert({

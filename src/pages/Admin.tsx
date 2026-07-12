@@ -12,11 +12,13 @@ import {
   ArrowLeft, ClipboardList, User, UserCheck, UserX, ShieldCheck,
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus, FileUp,
+  Filter, MoreVertical, Copy, Archive, RotateCcw,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortfolioManager from '@/components/admin/PortfolioManager';
+import { toast } from '@/hooks/use-toast';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const B     = '#0A0A0A';
@@ -26,6 +28,20 @@ const G200  = '#E8E4DE';
 const G500  = '#8A8580';
 const AC    = '#9D7E3F';
 const SERIF = "'Cormorant Garamond', Georgia, serif";
+
+/* ── Phase definitions (mirrors PortalMilestones) ───────────────────── */
+const ADMIN_PHASES = [
+  { id: 0, name: 'Pre-Construction Planning',   description: 'Site analysis, design finalization, and project schedule build-out.' },
+  { id: 1, name: 'Permits & Approvals',         description: 'City permit submission and formal approval from HSPD.' },
+  { id: 2, name: 'Site Preparation',            description: 'Land clearing, grading, and utility rough-in preparation.' },
+  { id: 3, name: 'Foundation Work',             description: 'Excavation, formwork, reinforcement, and concrete slab pour.' },
+  { id: 4, name: 'Framing & Structure',         description: 'Structural framing, roof trusses, and exterior sheathing.' },
+  { id: 5, name: 'MEP Rough-In',                description: 'All mechanical, electrical, and plumbing rough-in installations.' },
+  { id: 6, name: 'Insulation & Drywall',        description: 'Insulation installation followed by drywall hanging and taping.' },
+  { id: 7, name: 'Interior Finishes',           description: 'Flooring, cabinetry, millwork, tile, and paint throughout.' },
+  { id: 8, name: 'Fixtures & Final Details',    description: 'Fixture installations, hardware, and cosmetic touch-ups.' },
+  { id: 9, name: 'Final Inspection & Handover', description: 'City final inspection, punch list completion, and key handover.' },
+];
 
 /* ── Supabase data loaders ───────────────────────────────────────────── */
 async function loadPortalData() {
@@ -120,6 +136,20 @@ async function adminUpdateMeetingStatus(clientId: string, meetingId: string, sta
   await supabase.from('portal_meetings').update({ status }).eq('id', meetingId);
 }
 
+/* Check if the portal-documents storage bucket exists, then open the URL.
+   Shows a clear toast if the bucket hasn't been created yet. */
+async function viewDocument(url: string, showToast: (opts: { title: string; description?: string }) => void) {
+  const { error } = await supabase.storage.from('portal-documents').list('', { limit: 1 });
+  if (error) {
+    showToast({
+      title: 'Storage bucket not configured',
+      description: "Run portal-setup.sql in the Supabase dashboard to create the 'portal-documents' bucket.",
+    });
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 async function adminApproveClient(clientId: string, clientName: string) {
   await supabase.from('portal_clients').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', clientId);
 
@@ -197,6 +227,25 @@ function exportCSV(filename: string, headers: string[], rows: (string | number |
 const ADMIN_PIN = '011491';
 const ADMIN_KEY = 'hou-admin-unlocked';
 
+/* ── Glass card helpers ──────────────────────────────────────────────── */
+const ADMIN_CSS = `
+  .agl{background:rgba(255,255,255,0.80)!important;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,0.90)!important;box-shadow:0 2px 20px rgba(10,10,10,0.055),inset 0 1px 0 rgba(255,255,255,0.98)!important;}
+  .agl-h{transition:box-shadow .32s cubic-bezier(.22,1,.36,1),transform .32s cubic-bezier(.22,1,.36,1)!important;}
+  .agl-h:hover{box-shadow:0 14px 52px rgba(10,10,10,0.11),0 4px 14px rgba(10,10,10,0.055),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-3px);}
+  .agl-stat{background:rgba(255,255,255,0.82)!important;backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);border:1px solid rgba(255,255,255,0.92)!important;box-shadow:0 3px 18px rgba(10,10,10,0.05),inset 0 1px 0 rgba(255,255,255,1)!important;transition:box-shadow .35s cubic-bezier(.22,1,.36,1),transform .35s cubic-bezier(.22,1,.36,1),border-color .35s ease!important;}
+  .agl-stat:hover{box-shadow:0 22px 68px rgba(10,10,10,0.13),0 6px 20px rgba(10,10,10,0.07),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-5px);border-color:rgba(157,126,63,0.28)!important;}
+  .agl-urg{background:rgba(245,158,11,0.06)!important;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(245,158,11,0.38)!important;box-shadow:0 3px 20px rgba(245,158,11,0.07),inset 0 1px 0 rgba(255,255,255,0.9)!important;transition:box-shadow .35s cubic-bezier(.22,1,.36,1),transform .35s cubic-bezier(.22,1,.36,1)!important;}
+  .agl-urg:hover{box-shadow:0 20px 60px rgba(245,158,11,0.14),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-4px);}
+  .agl-tbl tr:hover td{background-color:rgba(157,126,63,0.032)!important;transition:background-color .18s ease;}
+  .agl-tbl thead tr:hover th,.agl-tbl thead tr:hover td{background-color:rgba(245,244,242,0.7)!important;}
+  .agl-row:hover{background-color:rgba(157,126,63,0.04)!important;transition:background-color .18s ease;}
+  .snav-item{position:relative;transition:color .22s ease,background-color .22s ease!important;}
+  .snav-item::after{content:'';position:absolute;inset:0;opacity:0;background:linear-gradient(90deg,rgba(157,126,63,0.14) 0%,transparent 80%);transition:opacity .25s ease;pointer-events:none;}
+  .snav-item:hover::after{opacity:1;}
+  .snav-active::after{opacity:1;background:linear-gradient(90deg,rgba(157,126,63,0.20) 0%,transparent 80%)!important;}
+  .status-pill{border-radius:9999px!important;padding:2px 10px!important;font-size:8px!important;letter-spacing:.18em!important;font-weight:700!important;}
+`;
+
 /* ── Status helpers ──────────────────────────────────────────────────── */
 const BRIEF_STATUSES = ['submitted', 'reviewing', 'consultation_scheduled', 'in_progress'] as const;
 function briefStatusColor(s: string) {
@@ -220,8 +269,8 @@ function meetStatusColor(s: string) {
 }
 function StatusBadge({ label, style }: { label: string; style: { bg: string; color: string } }) {
   return (
-    <span className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 whitespace-nowrap"
-      style={{ backgroundColor: style.bg, color: style.color }}>
+    <span className="status-pill whitespace-nowrap"
+      style={{ backgroundColor: style.bg, color: style.color, display: 'inline-block' }}>
       {label.replace(/_/g, ' ')}
     </span>
   );
@@ -281,7 +330,7 @@ export default function Admin() {
 
   /* ── Client detail state ── */
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings' | 'notes'>('brief');
+  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings' | 'notes' | 'milestones'>('brief');
   const [replyDraft, setReplyDraft] = useState('');
 
   /* ── #9 Admin notes ── */
@@ -301,6 +350,13 @@ export default function Admin() {
 
   /* ── #12 Meetings view ── */
   const [meetingsView, setMeetingsView] = useState<'list' | 'calendar'>('list');
+
+  /* ── Milestones ── */
+  const [milestones, setMilestones]             = useState<any[]>([]);
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
+  const [expandedPhase, setExpandedPhase]       = useState<number | null>(null);
+  const [phaseEdits, setPhaseEdits]             = useState<Record<number, any>>({});
+  const [phaseSaving, setPhaseSaving]           = useState<number | null>(null);
 
   /* ── #15 Change Orders ── */
   const [coOpen, setCoOpen] = useState(false);
@@ -357,6 +413,114 @@ export default function Admin() {
     loadAdminNotes(selectedClientId).then(setAdminNotes);
   }, [selectedClientId]);
 
+  /* ── Load milestones when client changes ── */
+  const loadMilestones = useCallback(async (clientId: string) => {
+    setMilestonesLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('project_milestones')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('phase_index', { ascending: true });
+      setMilestones(data ?? []);
+      // Seed edit state from loaded data
+      const edits: Record<number, any> = {};
+      (data ?? []).forEach((row: any) => {
+        edits[row.phase_index] = {
+          phase_name: row.phase_name ?? '',
+          phase_description: row.phase_description ?? '',
+          target_date: row.target_date ?? '',
+          completed_date: row.completed_date ?? '',
+          is_active: row.is_active ?? false,
+        };
+      });
+      setPhaseEdits(edits);
+    } catch { setMilestones([]); }
+    setMilestonesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedClientId) { setMilestones([]); setPhaseEdits({}); setExpandedPhase(null); return; }
+    loadMilestones(selectedClientId);
+  }, [selectedClientId, loadMilestones]);
+
+  /* ── Save a single phase row ── */
+  const handleSavePhase = async (phaseIdx: number) => {
+    if (!selectedClientId) return;
+    setPhaseSaving(phaseIdx);
+    const edits = phaseEdits[phaseIdx] ?? {};
+    try {
+      await (supabase as any).from('project_milestones').upsert({
+        client_id: selectedClientId,
+        phase_index: phaseIdx,
+        is_active: edits.is_active ?? false,
+        target_date: edits.target_date || null,
+        completed_date: edits.completed_date || null,
+        phase_name: edits.phase_name || null,
+        phase_description: edits.phase_description || null,
+      }, { onConflict: 'client_id,phase_index' });
+      await loadMilestones(selectedClientId);
+    } catch {}
+    setPhaseSaving(null);
+  };
+
+  /* ── Set a phase as the active/in-progress one ── */
+  const handleSetActivePhase = async (phaseIdx: number) => {
+    if (!selectedClientId) return;
+    setPhaseSaving(phaseIdx);
+    try {
+      // Clear is_active on all existing rows for this client
+      await (supabase as any)
+        .from('project_milestones')
+        .update({ is_active: false })
+        .eq('client_id', selectedClientId);
+      // Upsert the target phase as active (not complete)
+      await (supabase as any).from('project_milestones').upsert({
+        client_id: selectedClientId,
+        phase_index: phaseIdx,
+        is_active: true,
+        completed_date: null,
+      }, { onConflict: 'client_id,phase_index' });
+      await loadMilestones(selectedClientId);
+      // Expand this phase
+      setExpandedPhase(phaseIdx);
+    } catch {}
+    setPhaseSaving(null);
+  };
+
+  /* ── Mark a phase as complete ── */
+  const handleMarkComplete = async (phaseIdx: number) => {
+    if (!selectedClientId) return;
+    setPhaseSaving(phaseIdx);
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      await (supabase as any).from('project_milestones').upsert({
+        client_id: selectedClientId,
+        phase_index: phaseIdx,
+        is_active: false,
+        completed_date: (phaseEdits[phaseIdx]?.completed_date) || today,
+      }, { onConflict: 'client_id,phase_index' });
+      await loadMilestones(selectedClientId);
+    } catch {}
+    setPhaseSaving(null);
+  };
+
+  /* ── Mark a phase as pending (clear active + complete) ── */
+  const handleMarkPending = async (phaseIdx: number) => {
+    if (!selectedClientId) return;
+    setPhaseSaving(phaseIdx);
+    try {
+      await (supabase as any).from('project_milestones').upsert({
+        client_id: selectedClientId,
+        phase_index: phaseIdx,
+        is_active: false,
+        completed_date: null,
+      }, { onConflict: 'client_id,phase_index' });
+      await loadMilestones(selectedClientId);
+    } catch {}
+    setPhaseSaving(null);
+  };
+
   /* ── Client detail actions ── */
   const handleSendReply = async () => {
     if (!selectedClientId || !replyDraft.trim()) return;
@@ -394,9 +558,9 @@ export default function Admin() {
       });
       await logAdminAction('change_order_created', selectedClientId, coDesc.trim().slice(0, 80));
       await adminSendMessage(selectedClientId, `A change order has been issued: "${coDesc.trim()}" for $${parseFloat(coAmount).toLocaleString()}. Please review in your payments portal. — Jeff Ali`);
-      toast.success('Change order created and client notified');
+      toast({ title: 'Change order created and client notified' });
       setCoDesc(''); setCoNumber(''); setCoAmount(''); setCoOpen(false);
-    } catch { toast.error('Failed to create change order'); }
+    } catch { toast({ title: 'Failed to create change order', description: 'Please try again.' }); }
     setCoSaving(false);
   };
 
@@ -506,7 +670,8 @@ export default function Admin() {
 
   /* ════════ DASHBOARD ════════ */
   return (
-    <div className="flex" style={{ backgroundColor: G50, height: '100vh', overflow: 'hidden' }}>
+    <div className="flex" style={{ background: 'linear-gradient(160deg,#FAF9F7 0%,#EDE9E2 52%,#F5F4F1 100%)', height: '100vh', overflow: 'hidden' }}>
+      <style>{ADMIN_CSS}</style>
 
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 w-[240px]"
@@ -527,11 +692,16 @@ export default function Admin() {
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           {NAV_ITEMS.map(({ key, label, icon: Icon, badge, urgent }) => (
             <button key={key} onClick={() => { setTab(key); setSelectedClientId(null); }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 mb-0.5 text-left transition-all"
-              style={{ color: tab === key ? AC : urgent ? 'rgba(255,200,100,0.75)' : 'rgba(255,255,255,0.45)', backgroundColor: tab === key ? 'rgba(157,126,63,0.1)' : 'transparent', borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent' }}>
+              className={`w-full flex items-center gap-3 px-3 py-2.5 mb-0.5 text-left snav-item${tab === key ? ' snav-active' : ''}`}
+              style={{ color: tab === key ? AC : urgent ? 'rgba(255,200,100,0.8)' : 'rgba(255,255,255,0.48)', backgroundColor: 'transparent', borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent', outline: 'none' }}>
               <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
               <span className="text-[11px] font-semibold flex-1">{label}</span>
-              {badge ? <span className="text-[8px] font-black px-1.5 py-0.5" style={{ backgroundColor: urgent ? 'rgba(245,158,11,0.25)' : 'rgba(157,126,63,0.2)', color: urgent ? '#f59e0b' : AC }}>{badge}</span> : null}
+              {badge ? (
+                <span className="text-[7.5px] font-black px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: urgent ? 'rgba(245,158,11,0.28)' : 'rgba(157,126,63,0.22)', color: urgent ? '#f59e0b' : AC, letterSpacing: '0.06em' }}>
+                  {badge}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -575,11 +745,11 @@ export default function Admin() {
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
               {NAV_ITEMS.map(({ key, label, icon: Icon, badge, urgent }) => (
                 <button key={key} onClick={() => { setTab(key); setSelectedClientId(null); setMobileNavOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 mb-0.5 text-left transition-all"
-                  style={{ color: tab === key ? AC : urgent ? 'rgba(255,200,100,0.75)' : 'rgba(255,255,255,0.45)', backgroundColor: tab === key ? 'rgba(157,126,63,0.1)' : 'transparent', borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent' }}>
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 mb-0.5 text-left snav-item${tab === key ? ' snav-active' : ''}`}
+                  style={{ color: tab === key ? AC : urgent ? 'rgba(255,200,100,0.8)' : 'rgba(255,255,255,0.48)', backgroundColor: 'transparent', borderLeft: tab === key ? `2px solid ${AC}` : '2px solid transparent', outline: 'none' }}>
                   <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
                   <span className="text-[11px] font-semibold flex-1">{label}</span>
-                  {badge ? <span className="text-[8px] font-black px-1.5 py-0.5" style={{ backgroundColor: urgent ? 'rgba(245,158,11,0.25)' : 'rgba(157,126,63,0.2)', color: urgent ? '#f59e0b' : AC }}>{badge}</span> : null}
+                  {badge ? <span className="text-[7.5px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: urgent ? 'rgba(245,158,11,0.28)' : 'rgba(157,126,63,0.22)', color: urgent ? '#f59e0b' : AC }}>{badge}</span> : null}
                 </button>
               ))}
             </nav>
@@ -599,7 +769,7 @@ export default function Admin() {
       <main className="flex-1 md:ml-[240px] flex flex-col overflow-y-auto">
         {/* Top bar */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 md:px-6 py-4"
-          style={{ backgroundColor: W, borderBottom: `1px solid ${G200}`, boxShadow: '0 1px 12px rgba(0,0,0,0.04)' }}>
+          style={{ backgroundColor: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(26px)', WebkitBackdropFilter: 'blur(26px)', borderBottom: '1px solid rgba(232,228,222,0.65)', boxShadow: '0 1px 20px rgba(10,10,10,0.07), inset 0 -1px 0 rgba(255,255,255,0.75)' }}>
           <div className="flex items-center gap-3">
             <button className="md:hidden flex items-center justify-center w-8 h-8 shrink-0"
               style={{ border: `1px solid ${G200}`, color: G500 }}
@@ -654,15 +824,20 @@ export default function Admin() {
                 {OVERVIEW_STATS.map(s => {
                   const Icon = s.icon;
                   return (
-                    <div key={s.label} className="p-5 cursor-pointer transition-all"
-                      style={{ backgroundColor: s.urgent && s.value > 0 ? 'rgba(245,158,11,0.03)' : W, border: s.urgent && s.value > 0 ? '1px solid rgba(245,158,11,0.35)' : `1px solid ${G200}` }}
+                    <div key={s.label} className={`p-5 cursor-pointer ${s.urgent && s.value > 0 ? 'agl-urg' : 'agl-stat'}`}
                       onClick={() => setTab(s.navKey)}>
-                      <div className="w-8 h-8 flex items-center justify-center mb-3" style={{ backgroundColor: `${s.color}14` }}>
-                        <Icon className="w-4 h-4" style={{ color: s.color }} strokeWidth={1.5} />
+                      <div className="w-9 h-9 flex items-center justify-center mb-4 rounded-lg" style={{ backgroundColor: `${s.color}14`, boxShadow: `0 2px 8px ${s.color}22` }}>
+                        <Icon className="w-4.5 h-4.5" style={{ color: s.color }} strokeWidth={1.5} />
                       </div>
-                      <div className="text-[26px] font-black mb-0.5" style={{ color: s.urgent && s.value > 0 ? '#f59e0b' : B, fontFamily: SERIF }}>{s.value}</div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.14em] mb-0.5" style={{ color: B }}>{s.label}</div>
+                      <div className="text-[28px] font-black mb-0.5 leading-none" style={{ color: s.urgent && s.value > 0 ? '#f59e0b' : B, fontFamily: SERIF }}>{s.value}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.16em] mb-0.5 mt-1.5" style={{ color: B }}>{s.label}</div>
                       <div className="text-[10px] font-light" style={{ color: G500 }}>{s.sub}</div>
+                      {s.urgent && s.value > 0 && (
+                        <div className="mt-3 flex items-center gap-1.5">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#f59e0b' }} />
+                          <span className="text-[8px] uppercase tracking-[0.2em] font-bold" style={{ color: '#f59e0b' }}>Action Required</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -670,7 +845,7 @@ export default function Admin() {
 
               {/* Pending approvals alert */}
               {pendingApprovals.length > 0 && (
-                <div className="mb-5 p-5 flex items-center gap-5" style={{ backgroundColor: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.28)' }}>
+                <div className="mb-5 p-5 flex items-center gap-5 agl-urg" style={{ borderRadius: 0 }}>
                   <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(245,158,11,0.1)' }}>
                     <ShieldCheck className="w-4.5 h-4.5" style={{ color: '#f59e0b' }} strokeWidth={1.5} />
                   </div>
@@ -692,7 +867,7 @@ export default function Admin() {
 
               {/* Pending actions */}
               {(pendingDocs.length > 0 || pendingMeets.length > 0) && (
-                <div className="mb-7" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="mb-7 agl">
                   <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
                     <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Needs Your Attention</div>
                   </div>
@@ -732,17 +907,15 @@ export default function Admin() {
               )}
 
               {/* Recent approved clients */}
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              <div className="agl agl-h">
                 <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
                   <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Active Clients</div>
                   <button onClick={() => setTab('clients')} className="text-[9px] uppercase tracking-[0.2em] font-semibold" style={{ color: G500 }}>View All →</button>
                 </div>
                 {approvedClients.slice(-5).reverse().map((c: any, i: number) => (
-                  <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 cursor-pointer transition-colors"
-                    style={{ borderBottom: i < Math.min(approvedClients.length, 5) - 1 ? `1px solid ${G200}` : 'none' }}
-                    onClick={() => { setTab('clients'); setSelectedClientId(c.id); setClientSubTab('brief'); }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                  <div key={c.id} className="flex items-center gap-4 px-5 py-3.5 cursor-pointer agl-row"
+                    style={{ borderBottom: i < Math.min(approvedClients.length, 5) - 1 ? '1px solid rgba(232,228,222,0.5)' : 'none' }}
+                    onClick={() => { setTab('clients'); setSelectedClientId(c.id); setClientSubTab('brief'); }}>
                     <div className="w-8 h-8 flex items-center justify-center text-[10px] font-black shrink-0"
                       style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
                       {c.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
@@ -771,15 +944,15 @@ export default function Admin() {
                   { label: 'Approved',         value: clients.filter((c: any) => c.status === 'approved').length,     color: '#10b981' },
                   { label: 'Not Approved',     value: clients.filter((c: any) => c.status === 'rejected').length,     color: '#ef4444' },
                 ].map(s => (
-                  <div key={s.label} className="p-4" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                    <div className="text-[22px] font-black" style={{ color: s.color, fontFamily: SERIF }}>{s.value}</div>
-                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold mt-1" style={{ color: B }}>{s.label}</div>
+                  <div key={s.label} className="p-4 agl-stat">
+                    <div className="text-[24px] font-black leading-none" style={{ color: s.color, fontFamily: SERIF }}>{s.value}</div>
+                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold mt-2" style={{ color: B }}>{s.label}</div>
                   </div>
                 ))}
               </div>
 
               {/* Pending applications */}
-              <div className="mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              <div className="mb-6 agl">
                 <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}`, backgroundColor: 'rgba(245,158,11,0.03)' }}>
                   <div>
                     <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: '#f59e0b' }}>Pending Review</div>
@@ -872,8 +1045,8 @@ export default function Admin() {
               </div>
 
               {/* All clients with status */}
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+              <div className="agl agl-tbl">
+                <div className="px-5 py-3.5" style={{ borderBottom: '1px solid rgba(232,228,222,0.6)' }}>
                   <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>All Applications ({clients.length})</div>
                 </div>
                 <div className="overflow-x-auto">
@@ -952,8 +1125,8 @@ export default function Admin() {
             });
             return (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="flex flex-wrap items-center gap-3 px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+              <div className="agl agl-tbl">
+                <div className="flex flex-wrap items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(232,228,222,0.6)' }}>
                   <div className="text-[9px] uppercase tracking-[0.3em] font-bold flex-1" style={{ color: AC }}>
                     Active Portal Clients ({filteredClients.length}{filteredClients.length !== approvedClients.length ? ` of ${approvedClients.length}` : ''})
                   </div>
@@ -1007,11 +1180,9 @@ export default function Admin() {
                         const msgs = (allMsgs[c.id] ?? []).length;
                         const docs = (allDocs[c.id] ?? []).length;
                         return (
-                          <tr key={c.id} className="cursor-pointer transition-colors"
-                            style={{ borderBottom: i < approvedClients.length - 1 ? `1px solid ${G200}` : 'none' }}
-                            onClick={() => { setSelectedClientId(c.id); setClientSubTab('brief'); }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}>
+                          <tr key={c.id} className="cursor-pointer agl-row"
+                            style={{ borderBottom: i < approvedClients.length - 1 ? '1px solid rgba(232,228,222,0.5)' : 'none' }}
+                            onClick={() => { setSelectedClientId(c.id); setClientSubTab('brief'); }}>
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-3">
                                 <div className="w-7 h-7 flex items-center justify-center text-[9px] font-black shrink-0"
@@ -1063,7 +1234,7 @@ export default function Admin() {
             return (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Client header */}
-                <div className="flex items-center gap-5 p-5 mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="flex items-center gap-5 p-5 mb-5 agl">
                   <div className="w-14 h-14 flex items-center justify-center text-[16px] font-black shrink-0"
                     style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
                     {client.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
@@ -1106,7 +1277,7 @@ export default function Admin() {
                 {/* #15 Change Order dialog */}
                 {coOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-                    <div className="w-full max-w-md mx-4 p-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                    <div className="w-full max-w-md mx-4 p-6 agl" style={{ boxShadow: '0 24px 80px rgba(10,10,10,0.22)!important' }}>
                       <div className="flex items-center justify-between mb-5">
                         <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: B }}>Create Change Order</div>
                         <button onClick={() => setCoOpen(false)} className="text-xs" style={{ color: G500 }}>✕</button>
@@ -1155,10 +1326,16 @@ export default function Admin() {
 
                 {/* Sub-tab pills */}
                 <div className="flex flex-wrap gap-1 mb-5">
-                  {([['brief', 'Brief'], ['messages', 'Messages'], ['docs', 'Documents'], ['meetings', 'Meetings'], ['notes', 'Notes']] as const).map(([k, l]) => (
+                  {([['brief', 'Brief'], ['messages', 'Messages'], ['docs', 'Documents'], ['meetings', 'Meetings'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setClientSubTab(k)}
                       className="text-[9px] uppercase tracking-[0.22em] font-bold px-4 py-2 transition-all"
-                      style={{ backgroundColor: clientSubTab === k ? B : W, color: clientSubTab === k ? W : G500, border: `1px solid ${clientSubTab === k ? B : G200}` }}>
+                      style={{
+                        backgroundColor: clientSubTab === k ? B : 'rgba(255,255,255,0.7)',
+                        color: clientSubTab === k ? W : G500,
+                        border: clientSubTab === k ? `1px solid ${B}` : '1px solid rgba(232,228,222,0.7)',
+                        backdropFilter: clientSubTab === k ? 'none' : 'blur(10px)',
+                        boxShadow: clientSubTab === k ? '0 2px 8px rgba(10,10,10,0.15)' : '0 1px 4px rgba(10,10,10,0.04)',
+                      }}>
                       {l}{k === 'notes' && adminNotes.length > 0 ? ` (${adminNotes.length})` : ''}
                     </button>
                   ))}
@@ -1166,7 +1343,7 @@ export default function Admin() {
 
                 {/* Brief sub-tab */}
                 {clientSubTab === 'brief' && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     {brief ? (
                       <div>
                         {/* Dossier header */}
@@ -1294,7 +1471,7 @@ export default function Admin() {
 
                 {/* Messages sub-tab */}
                 {clientSubTab === 'messages' && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     <div className="max-h-[400px] overflow-y-auto p-5 space-y-3">
                       {messages.map((m: any) => (
                         <div key={m.id} className={`flex gap-3 ${m.sender === 'builder' ? 'flex-row-reverse' : ''}`}>
@@ -1339,7 +1516,7 @@ export default function Admin() {
 
                 {/* Documents sub-tab */}
                 {clientSubTab === 'docs' && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     {/* #10 Request Document header */}
                     <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${G200}` }}>
                       <span className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
@@ -1386,11 +1563,11 @@ export default function Admin() {
                         <StatusBadge label={d.status} style={docStatusColor(d.status)} />
                         <div className="flex gap-2 ml-2 flex-wrap">
                           {d.file_url && (
-                            <a href={d.file_url} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-opacity hover:opacity-75"
-                              style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)`, textDecoration: 'none' }}>
+                            <button onClick={() => viewDocument(d.file_url, toast)}
+                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-opacity hover:opacity-75 cursor-pointer"
+                              style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)` }}>
                               <Download className="w-3 h-3" strokeWidth={2} /> View
-                            </a>
+                            </button>
                           )}
                           {d.status === 'uploaded' && (
                             <>
@@ -1415,7 +1592,7 @@ export default function Admin() {
 
                 {/* Meetings sub-tab */}
                 {clientSubTab === 'meetings' && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     {meets.map((m: any, i: number) => {
                       const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
                       return (
@@ -1449,9 +1626,231 @@ export default function Admin() {
                   </div>
                 )}
 
+                {/* Milestones sub-tab */}
+                {clientSubTab === 'milestones' && (() => {
+                  const msMap: Record<number, any> = {};
+                  milestones.forEach((m: any) => { msMap[m.phase_index] = m; });
+                  const completedCount = milestones.filter((m: any) => m.completed_date).length;
+                  const pct = Math.round((completedCount / ADMIN_PHASES.length) * 100);
+                  const activeRow = milestones.find((m: any) => m.is_active);
+
+                  return (
+                    <div className="agl">
+                      {/* Header + progress */}
+                      <div className="px-6 py-5" style={{ borderBottom: `1px solid ${G200}` }}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <div className="text-[7px] uppercase tracking-[0.34em] font-bold mb-1" style={{ color: G500 }}>
+                              Build Schedule
+                            </div>
+                            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '1.1rem', color: B }}>
+                              Project Milestones
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[22px] font-bold" style={{ fontFamily: SERIF, color: B }}>{pct}%</div>
+                            <div className="text-[9px] font-light" style={{ color: G500 }}>{completedCount}/{ADMIN_PHASES.length} complete</div>
+                          </div>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="h-1 overflow-hidden" style={{ backgroundColor: G200 }}>
+                          <div className="h-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: AC }} />
+                        </div>
+                        {activeRow && (
+                          <div className="mt-3 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: AC }} />
+                            <span className="text-[10px] font-semibold" style={{ color: AC }}>
+                              Currently active: Phase {activeRow.phase_index + 1} — {(activeRow.phase_name) || ADMIN_PHASES[activeRow.phase_index]?.name}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Phase list */}
+                      {milestonesLoading ? (
+                        <div className="px-6 py-10 text-center text-[11px] font-light" style={{ color: G500 }}>Loading milestones…</div>
+                      ) : (
+                        <div>
+                          {ADMIN_PHASES.map((phase) => {
+                            const row = msMap[phase.id];
+                            const isComplete  = !!(row?.completed_date);
+                            const isActive    = !!(row?.is_active);
+                            const isPending   = !isComplete && !isActive;
+                            const isExpanded  = expandedPhase === phase.id;
+                            const isSaving    = phaseSaving === phase.id;
+                            const edits       = phaseEdits[phase.id] ?? {};
+
+                            const statusColor = isComplete ? '#10b981' : isActive ? AC : G500;
+                            const statusLabel = isComplete ? 'Complete' : isActive ? 'In Progress' : 'Pending';
+
+                            return (
+                              <div key={phase.id} style={{ borderBottom: `1px solid ${G200}` }}>
+                                {/* Phase row */}
+                                <div
+                                  className="flex items-center gap-4 px-6 py-3.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                                  onClick={() => setExpandedPhase(isExpanded ? null : phase.id)}
+                                >
+                                  {/* Status dot */}
+                                  <div className="shrink-0">
+                                    {isComplete ? (
+                                      <div className="w-2.5 h-2.5 flex items-center justify-center rounded-full" style={{ backgroundColor: '#10b981' }}>
+                                        <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
+                                          <path d="M1 3l1.5 1.5L5 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                      </div>
+                                    ) : isActive ? (
+                                      <div className="w-2.5 h-2.5 rounded-full border-2 animate-pulse" style={{ borderColor: AC, backgroundColor: 'rgba(157,126,63,0.15)' }} />
+                                    ) : (
+                                      <div className="w-2.5 h-2.5 rounded-full border" style={{ borderColor: G200 }} />
+                                    )}
+                                  </div>
+
+                                  {/* Phase number */}
+                                  <span className="text-[9px] font-bold tabular-nums shrink-0" style={{ color: G500, width: 20 }}>
+                                    {String(phase.id + 1).padStart(2, '0')}
+                                  </span>
+
+                                  {/* Phase name */}
+                                  <span className="text-[12px] font-semibold flex-1 min-w-0 truncate" style={{ color: B }}>
+                                    {(row?.phase_name) || phase.name}
+                                  </span>
+
+                                  {/* Status chip */}
+                                  <span
+                                    className="text-[7px] uppercase tracking-[0.2em] font-bold px-2 py-0.5 shrink-0"
+                                    style={{ backgroundColor: `${statusColor}14`, color: statusColor }}
+                                  >
+                                    {statusLabel}
+                                  </span>
+
+                                  {/* Date preview */}
+                                  {isComplete && row?.completed_date && (
+                                    <span className="text-[9px] font-light shrink-0 hidden md:block" style={{ color: G500 }}>
+                                      {new Date(row.completed_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  )}
+                                  {!isComplete && row?.target_date && (
+                                    <span className="text-[9px] font-light shrink-0 hidden md:block" style={{ color: G500 }}>
+                                      Target: {new Date(row.target_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  )}
+
+                                  {/* Expand chevron */}
+                                  <ChevronDown
+                                    className="w-3 h-3 shrink-0 transition-transform"
+                                    style={{ color: G500, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                                  />
+                                </div>
+
+                                {/* Expanded edit panel */}
+                                {isExpanded && (
+                                  <div className="px-6 pb-5 pt-1" style={{ backgroundColor: G50 }}>
+                                    {/* Status quick actions */}
+                                    <div className="mb-4">
+                                      <div className="text-[7px] uppercase tracking-[0.28em] font-bold mb-2" style={{ color: G500 }}>Phase Status</div>
+                                      <div className="flex gap-1.5 flex-wrap">
+                                        <button
+                                          onClick={() => handleMarkPending(phase.id)}
+                                          disabled={isSaving || isPending}
+                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
+                                          style={{ backgroundColor: isPending ? G500 : W, color: isPending ? W : G500, border: `1px solid ${G200}` }}
+                                        >
+                                          Pending
+                                        </button>
+                                        <button
+                                          onClick={() => handleSetActivePhase(phase.id)}
+                                          disabled={isSaving || isActive}
+                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
+                                          style={{ backgroundColor: isActive ? AC : W, color: isActive ? W : AC, border: `1px solid ${isActive ? AC : G200}` }}
+                                        >
+                                          Set as Active
+                                        </button>
+                                        <button
+                                          onClick={() => handleMarkComplete(phase.id)}
+                                          disabled={isSaving || isComplete}
+                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
+                                          style={{ backgroundColor: isComplete ? '#10b981' : W, color: isComplete ? W : '#10b981', border: `1px solid ${isComplete ? '#10b981' : G200}` }}
+                                        >
+                                          Mark Complete
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Date fields */}
+                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                      <div>
+                                        <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Target Date</label>
+                                        <input
+                                          type="date"
+                                          value={edits.target_date ?? row?.target_date ?? ''}
+                                          onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), target_date: e.target.value } }))}
+                                          className="w-full text-[11px] font-light outline-none"
+                                          style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Completion Date</label>
+                                        <input
+                                          type="date"
+                                          value={edits.completed_date ?? row?.completed_date ?? ''}
+                                          onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), completed_date: e.target.value } }))}
+                                          className="w-full text-[11px] font-light outline-none"
+                                          style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* Custom name override */}
+                                    <div className="mb-3">
+                                      <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Phase Name Override <span className="normal-case tracking-normal font-light">(leave blank to use default)</span></label>
+                                      <input
+                                        type="text"
+                                        placeholder={phase.name}
+                                        value={edits.phase_name ?? row?.phase_name ?? ''}
+                                        onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), phase_name: e.target.value } }))}
+                                        className="w-full text-[11px] font-light outline-none"
+                                        style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
+                                      />
+                                    </div>
+
+                                    {/* Custom description override */}
+                                    <div className="mb-4">
+                                      <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Description Override <span className="normal-case tracking-normal font-light">(optional, shown in client portal)</span></label>
+                                      <textarea
+                                        rows={2}
+                                        placeholder={phase.description}
+                                        value={edits.phase_description ?? row?.phase_description ?? ''}
+                                        onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), phase_description: e.target.value } }))}
+                                        className="w-full text-[11px] font-light outline-none resize-none"
+                                        style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
+                                      />
+                                    </div>
+
+                                    {/* Save button */}
+                                    <div className="flex justify-end">
+                                      <button
+                                        onClick={() => handleSavePhase(phase.id)}
+                                        disabled={isSaving}
+                                        className="text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2 transition-opacity disabled:opacity-40"
+                                        style={{ backgroundColor: B, color: W }}
+                                      >
+                                        {isSaving ? 'Saving…' : 'Save Dates & Notes'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Notes sub-tab (#9) */}
                 {clientSubTab === 'notes' && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     <div className="px-5 py-4" style={{ borderBottom: `1px solid ${G200}` }}>
                       <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: G500 }}>Internal note — visible to admin only</div>
                       <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
@@ -1499,7 +1898,13 @@ export default function Admin() {
                 {([['startproject', `Start Project (${startBriefs.length})`], ['contact', `Contact Forms (${contactForms.length})`]] as const).map(([k, l]) => (
                   <button key={k} onClick={() => { setLeadsSubTab(k); setExpandedLeadId(null); }}
                     className="text-[9px] uppercase tracking-[0.22em] font-bold px-4 py-2.5 transition-all"
-                    style={{ backgroundColor: leadsSubTab === k ? B : W, color: leadsSubTab === k ? W : G500, border: `1px solid ${leadsSubTab === k ? B : G200}` }}>
+                    style={{
+                      backgroundColor: leadsSubTab === k ? B : 'rgba(255,255,255,0.75)',
+                      color: leadsSubTab === k ? W : G500,
+                      border: leadsSubTab === k ? `1px solid ${B}` : '1px solid rgba(232,228,222,0.7)',
+                      backdropFilter: leadsSubTab === k ? 'none' : 'blur(10px)',
+                      boxShadow: leadsSubTab === k ? '0 2px 8px rgba(10,10,10,0.15)' : '0 1px 4px rgba(10,10,10,0.04)',
+                    }}>
                     {l}
                   </button>
                 ))}
@@ -1548,7 +1953,7 @@ export default function Admin() {
                   d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
                 return (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl">
                     {startBriefs.length === 0 ? (
                       <div className="px-6 py-16 text-center">
                         <Inbox className="w-9 h-9 mx-auto mb-4" style={{ color: G200 }} strokeWidth={1} />
@@ -1569,11 +1974,9 @@ export default function Admin() {
 
                           {/* ── Collapsed row ── */}
                           <div
-                            className="cursor-pointer"
+                            className={`cursor-pointer agl-row`}
                             onClick={() => setExpandedLeadId(isExpanded ? null : s.id)}
-                            onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.backgroundColor = G50; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = isExpanded ? G50 : 'transparent'; }}
-                            style={{ padding: '14px 20px', transition: 'background-color 0.15s ease', backgroundColor: isExpanded ? G50 : 'transparent' }}>
+                            style={{ padding: '14px 20px', backgroundColor: isExpanded ? 'rgba(157,126,63,0.03)' : 'transparent' }}>
 
                             <div className="flex items-center gap-3">
                               {/* Avatar */}
@@ -1744,7 +2147,7 @@ export default function Admin() {
               })()}
 
               {leadsSubTab === 'contact' && (
-                <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="agl">
                   {contactForms.length === 0 ? (
                     <div className="px-5 py-14 text-center">
                       <MessageSquare className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
@@ -1780,7 +2183,7 @@ export default function Admin() {
           {/* ══════ DOCUMENTS ══════ */}
           {tab === 'documents' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              <div className="agl agl-tbl">
                 <div className="px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
                   <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>
                     All Portal Documents — {Object.values(allDocs).flatMap(d => d ?? []).length} total · {pendingDocs.length} pending review
@@ -1825,11 +2228,11 @@ export default function Admin() {
                             <td className="px-5 py-3.5">
                               <div className="flex gap-1.5 flex-wrap">
                                 {d.file_url && (
-                                  <a href={d.file_url} target="_blank" rel="noopener noreferrer"
-                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1 flex items-center gap-1 transition-opacity hover:opacity-75"
-                                    style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)`, textDecoration: 'none' }}>
+                                  <button onClick={() => viewDocument(d.file_url, toast)}
+                                    className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-1 flex items-center gap-1 transition-opacity hover:opacity-75 cursor-pointer"
+                                    style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)` }}>
                                     <Download className="w-2.5 h-2.5" strokeWidth={2} /> View
-                                  </a>
+                                  </button>
                                 )}
                                 {d.status === 'uploaded' && (
                                   <>
@@ -1878,8 +2281,8 @@ export default function Admin() {
             }
             return (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
-                <div className="flex flex-wrap items-center gap-3 px-5 py-3.5" style={{ borderBottom: `1px solid ${G200}` }}>
+              <div className="agl agl-tbl">
+                <div className="flex flex-wrap items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1px solid rgba(232,228,222,0.6)' }}>
                   <div className="text-[9px] uppercase tracking-[0.3em] font-bold flex-1" style={{ color: AC }}>
                     All Scheduled Meetings — {pendingMeets.length} awaiting confirmation
                   </div>
@@ -2038,7 +2441,7 @@ export default function Admin() {
             return (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Finance Hub link + quick-access row */}
-                <div className="flex flex-wrap items-center gap-3 p-4 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                <div className="flex flex-wrap items-center gap-3 p-4 mb-6 agl">
                   <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.1)' }}>
                     <DollarSign className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
                   </div>
@@ -2086,8 +2489,8 @@ export default function Admin() {
                     const checks  = entityChecks(e.id).length;
                     const projects = entityProjects(e.id).length;
                     return (
-                      <div key={e.id} style={{ backgroundColor: W, border: `1px solid ${G200}`, borderTop: `3px solid ${e.color}` }}>
-                        <div className="px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${G200}` }}>
+                      <div key={e.id} className="agl-stat" style={{ borderTop: `3px solid ${e.color}` }}>
+                        <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(232,228,222,0.5)' }}>
                           <div className="text-[8px] font-black uppercase tracking-[0.38em] mb-1" style={{ color: e.color }}>{e.short}</div>
                           <div className="text-[13px] font-semibold" style={{ color: B }}>{e.name}</div>
                         </div>
@@ -2139,7 +2542,7 @@ export default function Admin() {
                   ].map(s => {
                     const Icon = s.icon;
                     return (
-                      <div key={s.label} className="flex items-center gap-3 p-4" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                      <div key={s.label} className="flex items-center gap-3 p-4 agl-stat">
                         <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}12` }}>
                           <Icon className="w-3.5 h-3.5" style={{ color: s.color }} strokeWidth={1.5} />
                         </div>
@@ -2154,7 +2557,7 @@ export default function Admin() {
 
                 {/* Projects table */}
                 {filteredProjects.length > 0 && (
-                  <div className="mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="mb-5 agl agl-tbl">
                     <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
                       <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Projects</div>
                       <Link to="/projects" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
@@ -2191,7 +2594,7 @@ export default function Admin() {
 
                 {/* Checks table */}
                 {filteredChecks.length > 0 && (
-                  <div className="mb-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="mb-5 agl agl-tbl">
                     <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
                       <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Checks</div>
                       <Link to="/checks" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
@@ -2229,7 +2632,7 @@ export default function Admin() {
 
                 {/* Recent transactions */}
                 {filteredTxns.length > 0 && (
-                  <div style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="agl agl-tbl">
                     <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
                       <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Transactions</div>
                       <Link to="/ledger" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
@@ -2272,7 +2675,7 @@ export default function Admin() {
                 )}
 
                 {filteredProjects.length === 0 && filteredChecks.length === 0 && filteredTxns.length === 0 && (
-                  <div className="text-center py-16" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div className="text-center py-16 agl">
                     <DollarSign className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
                     <div className="text-[12px] font-light mb-1" style={{ color: G500 }}>No financial data yet for this entity.</div>
                     <Link to="/finance" className="text-[9px] uppercase tracking-[0.24em] font-black" style={{ color: AC }}>Open Finance Hub →</Link>
@@ -2294,7 +2697,7 @@ export default function Admin() {
                   { label: 'Portfolio Projects',     value: portfolioCount,                              trend: 'Active',   color: '#8b5cf6' },
                   { label: 'Avg Messages / Client',  value: clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0, trend: 'Avg', color: '#ec4899' },
                 ].map(s => (
-                  <div key={s.label} className="p-5" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div key={s.label} className="p-5 agl-stat">
                     <div className="text-[30px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
                     <div className="text-[11px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
                     <div className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 inline-block" style={{ backgroundColor: `${s.color}12`, color: s.color }}>{s.trend}</div>
@@ -2302,7 +2705,7 @@ export default function Admin() {
                 ))}
               </div>
 
-              <div className="p-7 mb-6" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              <div className="p-7 mb-6 agl">
                 <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Portal Conversion Funnel</div>
                 <div className="space-y-4">
                   {[
@@ -2327,7 +2730,7 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="p-7" style={{ backgroundColor: W, border: `1px solid ${G200}` }}>
+              <div className="p-7 agl">
                 <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Lead Sources</div>
                 <div className="flex gap-6">
                   {[

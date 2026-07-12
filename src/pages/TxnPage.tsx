@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useDelete, useProjects, useTransactions, useUpsert, useVendors, useQuickCreate } from '@/hooks/useFinance';
+import { useEntity } from '@/contexts/EntityContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
@@ -174,6 +175,7 @@ function ReceiptScanner({ preview, scanning, scanned, scanError, onCamera, onUpl
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
+  const { entity } = useEntity();
   const { data: txns = [] } = useTransactions(kind);
   const { data: projects = [] } = useProjects();
   const { data: vendors = [] } = useVendors();
@@ -378,6 +380,12 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="text-lg">{isIncome ? 'Log Income' : 'Record Expense'}</DialogTitle>
+                  {entity && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="w-2 h-2 rounded-full" style={{ background: entity.color }} />
+                      <span className="text-[11px] text-muted-foreground">{entity.shortName} · {entity.name}</span>
+                    </div>
+                  )}
                 </DialogHeader>
 
                 <form onSubmit={submit} className="space-y-4">

@@ -20,6 +20,14 @@ import { CashFlowChart } from '@/components/FinancialChartPanel';
 import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from '@/components/StatChartPanel';
 import { AnimatePresence, motion } from 'framer-motion';
 
+// ISO date-only strings ("2026-07-12") parse as UTC midnight by spec, which is the previous
+// evening in US time zones — causing off-by-one errors when comparing to local-time boundaries.
+// This parses them as local midnight instead.
+const parseLocalDate = (d: string): Date => {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day);
+};
+
 /* ── Mobile Finance Menu ──────────────────────────────────────────────────── */
 const FINANCE_SECTIONS = [
   {
@@ -161,6 +169,7 @@ export default function Index() {
     }
   }, [ready]);
 
+
   // All hooks must be called unconditionally (Rules of Hooks)
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
@@ -175,7 +184,7 @@ export default function Index() {
 
   const filtered = useMemo(() => {
     const { start, end } = getDateRange(timePeriod);
-    const inRange = (d: string) => { const dt = new Date(d); return dt >= start && dt <= end; };
+    const inRange = (d: string) => { const dt = parseLocalDate(d); return dt >= start && dt <= end; };
     return {
       checks: checks.filter((c: any) => inRange(c.issue_date)),
       income: income.filter((t: any) => inRange(t.transaction_date)),
@@ -183,18 +192,40 @@ export default function Index() {
     };
   }, [checks, income, expenses, timePeriod]);
 
+  // Stat cards use fixed reference points — not affected by the time filter picker.
+  // MTD = calendar month-to-date (1st of current month to today).
+  // Balance = all-time net position.
   const stats = useMemo(() => {
-    const inflowMTD = filtered.income.reduce((s, i) => s + Number(i.amount), 0);
-    const expenseMTD = filtered.expenses.reduce((s, i) => s + Number(i.amount), 0);
-    const checksMTD = filtered.checks.filter(c => c.status === 'cleared').reduce((s, c) => s + Number(c.amount), 0);
-    const outflowMTD = expenseMTD + checksMTD;
-    const totalIn = filtered.income.reduce((s, i) => s + Number(i.amount), 0);
-    const totalOut = filtered.expenses.reduce((s, i) => s + Number(i.amount), 0) + filtered.checks.filter(c => c.status === 'cleared').reduce((s, c) => s + Number(c.amount), 0);
+    const now = new Date();
+    const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const inMTD = (d: string) => parseLocalDate(d) >= mtdStart;
+
+    const inflowMTD = income.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const expMTD = expenses.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const chkMTD = checks.filter((c: any) => inMTD(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+    const outflowMTD = expMTD + chkMTD;
+
+    const totalIn = income.reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const totalOut = expenses.reduce((s: number, t: any) => s + Number(t.amount), 0)
+      + checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const balance = totalIn - totalOut;
-    const pending = filtered.checks.filter(c => c.status === 'pending');
-    const pendingValue = pending.reduce((s, c) => s + Number(c.amount), 0);
+
+    // Pending checks are a current state, not time-period filtered
+    const pending = checks.filter((c: any) => c.status === 'pending');
+    const pendingValue = pending.reduce((s: number, c: any) => s + Number(c.amount), 0);
+
     return { balance, inflowMTD, outflowMTD, pendingCount: pending.length, pendingValue };
-  }, [filtered]);
+  }, [income, expenses, checks]);
+
+  // Period stats — time-filter responsive, shown in the period summary bar
+  const periodStats = useMemo(() => {
+    const { start, end, label } = getDateRange(timePeriod);
+    const inRange = (d: string) => { const dt = parseLocalDate(d); return dt >= start && dt <= end; };
+    const pIncome = income.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const pExp = expenses.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const pChk = checks.filter((c: any) => inRange(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+    return { income: pIncome, outflow: pExp + pChk, net: pIncome - pExp - pChk, label };
+  }, [income, expenses, checks, timePeriod]);
 
   const cashFlowData = useMemo(() => {
     const months: { label: string; inflow: number; outflow: number; net: number }[] = [];
@@ -202,7 +233,7 @@ export default function Index() {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= start && d2 < end; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const inflow = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const exp = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -234,7 +265,7 @@ export default function Index() {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= start && d2 < end; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const inflow = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const exp = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -250,7 +281,7 @@ export default function Index() {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= start && d2 < end; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       data.push({ month: months[d.getMonth()] || '', inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) });
     }
     return data;
@@ -275,10 +306,10 @@ export default function Index() {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       const start = new Date(d.getFullYear(), d.getMonth(), 1);
       const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const inR = (dt: string) => { const d2 = new Date(dt); return d2 >= start && d2 < end; };
+      const inR = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const exp = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
-      data.push({ month: months[(d.getMonth() + i) % 12] || '', outflow: exp + chk });
+      data.push({ month: months[d.getMonth()] || '', outflow: exp + chk });
     }
     return data;
   }, [expenses, checks]);
@@ -297,7 +328,8 @@ export default function Index() {
 
   const pendingAgingData = useMemo(() => {
     const now = new Date();
-    const pending = filtered.checks.filter((c: any) => c.status === 'pending');
+    // Pending checks are a current state — show all, regardless of time filter
+    const pending = checks.filter((c: any) => c.status === 'pending');
     const buckets = [
       { label: '0-7d', min: 0, max: 7, color: '#f59e0b' },
       { label: '8-14d', min: 8, max: 14, color: '#d97706' },
@@ -306,12 +338,37 @@ export default function Index() {
     ];
     return buckets.map(b => {
       const items = pending.filter((c: any) => {
-        const days = Math.floor((now.getTime() - new Date(c.issue_date).getTime()) / (1000 * 60 * 60 * 24));
+        const days = Math.floor((now.getTime() - parseLocalDate(c.issue_date).getTime()) / (1000 * 60 * 60 * 24));
         return days >= b.min && days < b.max;
       });
       return { ...b, count: items.length, value: items.reduce((s: number, c: any) => s + Number(c.amount), 0) };
     });
-  }, [filtered.checks]);
+  }, [checks]);
+
+  const constructionKPIs = useMemo(() => {
+    const now = new Date();
+    const ytdStart = new Date(now.getFullYear(), 0, 1);
+    const inYTD = (d: string) => parseLocalDate(d) >= ytdStart;
+
+    const ytdIncome = income.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const ytdExp = expenses.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const ytdChk = checks.filter((c: any) => inYTD(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+    const ytdOutflow = ytdExp + ytdChk;
+    const grossMarginPct = ytdIncome > 0 ? ((ytdIncome - ytdOutflow) / ytdIncome) * 100 : 0;
+
+    const retainageHeld = checks
+      .filter((c: any) => c.status !== 'voided')
+      .reduce((s: number, c: any) => s + (Number(c.retainage_held) || 0), 0);
+
+    const receivables = invoices
+      .filter((i: any) => i.status === 'sent' || i.status === 'overdue')
+      .reduce((s: number, i: any) => s + invoiceTotal(i), 0);
+
+    const activeProjects = projects.filter((p: any) => p.status === 'active' || !p.status);
+    const totalBudget = activeProjects.reduce((s: number, p: any) => s + Number(p.budget || 0), 0);
+
+    return { grossMarginPct, ytdIncome, ytdOutflow, retainageHeld, receivables, activeProjectCount: activeProjects.length, totalBudget };
+  }, [income, expenses, checks, invoices, projects]);
 
   /* ── Invoice alert data ── */
   const invoiceAlerts = useMemo(() => {
@@ -549,6 +606,33 @@ export default function Index() {
         </div>
       </div>
 
+      {/* ── Period Summary Bar (visible when a non-default time filter is active) ── */}
+      {timePeriod !== 'all' && (
+        <div className="px-4 sm:px-8 py-2 border-b border-border bg-secondary/30 flex items-center gap-4 flex-wrap">
+          <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground shrink-0">
+            {periodStats.label}
+          </div>
+          <div className="flex items-center gap-3 font-mono-tab flex-wrap">
+            <span className="text-[11px] flex items-center gap-1.5">
+              <span className="text-[8px] text-muted-foreground uppercase tracking-wider">Inflow</span>
+              <span className="text-positive font-semibold">{fmtUSD(periodStats.income)}</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-[11px] flex items-center gap-1.5">
+              <span className="text-[8px] text-muted-foreground uppercase tracking-wider">Outflow</span>
+              <span className="font-semibold">{fmtUSD(periodStats.outflow)}</span>
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-[11px] flex items-center gap-1.5">
+              <span className="text-[8px] text-muted-foreground uppercase tracking-wider">Net</span>
+              <span className={`font-semibold ${periodStats.net >= 0 ? 'text-positive' : 'text-accent'}`}>
+                {periodStats.net >= 0 ? '+' : ''}{fmtUSD(periodStats.net)}
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Mobile time filter + export */}
       <div className="sm:hidden px-4 py-2 border-b border-border flex items-center justify-between">
         <TimeFilter value={timePeriod} onChange={setTimePeriod} />
@@ -557,6 +641,57 @@ export default function Index() {
           <Button variant="outline" size="sm" className="rounded-none h-7 text-[10px]" onClick={exportPDF}>
             <Download className="w-3 h-3 mr-1" />PDF
           </Button>
+        </div>
+      </div>
+
+      {/* ── Construction Intelligence ── */}
+      <div className="px-4 sm:px-8 py-3 border-b border-border">
+        <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground mb-2.5">
+          Construction Intelligence · YTD
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border border border-border">
+          {([
+            {
+              label: 'Gross Margin',
+              value: `${constructionKPIs.grossMarginPct.toFixed(1)}%`,
+              sub: constructionKPIs.ytdIncome > 0 ? `on ${fmtUSD(constructionKPIs.ytdIncome)} revenue` : 'No revenue yet',
+              color: constructionKPIs.grossMarginPct >= 20
+                ? 'text-positive'
+                : constructionKPIs.grossMarginPct >= 0
+                ? 'text-warning'
+                : 'text-accent',
+            },
+            {
+              label: 'YTD Revenue',
+              value: fmtUSD(constructionKPIs.ytdIncome),
+              sub: `Jan 1 – ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+              color: 'text-foreground',
+            },
+            {
+              label: 'Receivables',
+              value: fmtUSD(constructionKPIs.receivables),
+              sub: constructionKPIs.receivables > 0 ? 'Sent + overdue invoices' : 'All invoices collected',
+              color: constructionKPIs.receivables > 0 ? 'text-warning' : 'text-positive',
+            },
+            {
+              label: 'Retainage Held',
+              value: fmtUSD(constructionKPIs.retainageHeld),
+              sub: constructionKPIs.retainageHeld > 0 ? 'Withheld from disbursements' : 'None on record',
+              color: constructionKPIs.retainageHeld > 0 ? 'text-accent' : 'text-muted-foreground',
+            },
+            {
+              label: `${constructionKPIs.activeProjectCount} Active Job${constructionKPIs.activeProjectCount !== 1 ? 's' : ''}`,
+              value: constructionKPIs.totalBudget > 0 ? fmtUSD(constructionKPIs.totalBudget) : '—',
+              sub: constructionKPIs.totalBudget > 0 ? 'Combined contract value' : 'No budgets set',
+              color: 'text-foreground',
+            },
+          ] as const).map(kpi => (
+            <div key={kpi.label} className="bg-background px-3.5 py-3">
+              <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1.5 leading-tight">{kpi.label}</div>
+              <div className={`text-sm font-bold font-mono-tab leading-tight ${kpi.color}`}>{kpi.value}</div>
+              <div className="text-[9px] text-muted-foreground mt-1 leading-tight">{kpi.sub}</div>
+            </div>
+          ))}
         </div>
       </div>
 

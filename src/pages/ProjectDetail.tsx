@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useProjects, useChecks, useTransactions } from '@/hooks/useFinance';
+import { useRole } from '@/hooks/useAuth';
+import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { generateProjectReport, savePDF, downloadCSV } from '@/lib/reports';
-import { ArrowLeft, Download, FileText, ArrowUpRight, Plus } from 'lucide-react';
+import { ArrowLeft, Download, FileText, ArrowUpRight, Plus, ExternalLink, Users, LayoutDashboard } from 'lucide-react';
+
+const STATUS_META_DETAIL = {
+  active:    { label: 'Active',    color: 'var(--positive)', cls: 'bg-positive/10 text-positive border-positive/30' },
+  on_hold:   { label: 'On Hold',   color: 'var(--warning)',  cls: 'bg-warning/10 text-warning border-warning/30'   },
+  completed: { label: 'Completed', color: '#3b82f6',         cls: 'bg-blue-500/10 text-blue-500 border-blue-500/30' },
+  archived:  { label: 'Archived',  color: 'var(--border)',   cls: 'bg-muted/50 text-muted-foreground border-border' },
+} as const;
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -20,11 +29,15 @@ const COST_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ProjectDetail() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { id }    = useParams<{ id: string }>();
+  const navigate  = useNavigate();
+  const role      = useRole();
+  const isAdmin   = role === 'admin';
+  const { entity } = useEntity();
+
   const { data: projects = [] } = useProjects();
-  const { data: checks = [] } = useChecks();
-  const { data: income = [] } = useTransactions('income');
+  const { data: checks = [] }   = useChecks();
+  const { data: income = [] }   = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
 
   const [draws, setDraws] = useState<any[]>([]);
@@ -157,18 +170,34 @@ export default function ProjectDetail() {
 
   if (!enriched) return null;
 
+  const statusMeta = STATUS_META_DETAIL[enriched.status as keyof typeof STATUS_META_DETAIL] ?? STATUS_META_DETAIL.archived;
+
   return (
     <AppShell>
       <PageHeader
         eyebrow={
           <button onClick={() => navigate('/projects')} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-3 h-3" /> Back to Projects
+            <ArrowLeft className="w-3 h-3" /> Projects
           </button>
         }
         title={enriched.name}
-        description={`${enriched.code || '—'} · ${enriched.status}`}
+        description={
+          <span className="flex items-center gap-2 flex-wrap">
+            {enriched.code && <span className="font-mono-tab text-[10px] font-bold bg-secondary px-1.5 py-0.5">{enriched.code}</span>}
+            <span className={`text-[8px] uppercase tracking-[0.22em] font-bold px-1.5 py-0.5 border ${statusMeta.cls}`}>{statusMeta.label}</span>
+            {entity && <span className="text-[9px] text-muted-foreground">{entity.name}</span>}
+          </span>
+        }
         actions={
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-[9px] uppercase tracking-[0.18em] font-bold border border-border text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all"
+              >
+                <LayoutDashboard className="w-3 h-3" /> Admin
+              </button>
+            )}
             <Button variant="outline" size="icon" className="rounded-none h-9 w-9 hidden sm:flex" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
             <Button variant="outline" size="icon" className="rounded-none h-9 w-9 hidden sm:flex" onClick={exportCSV}><Download className="w-4 h-4" /></Button>
           </div>
@@ -182,18 +211,20 @@ export default function ProjectDetail() {
       </div>
 
       {/* Snapshot stats */}
-      <div className="border-b border-border bg-secondary/30">
-        <div className="px-4 sm:px-8 py-5 grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
+      <div className="border-b border-border">
+        {/* Status accent bar */}
+        <div className="h-[3px]" style={{ backgroundColor: statusMeta.color }} />
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
           {[
-            { label: 'Budget', value: fmtUSD(enriched.budget) },
-            { label: 'Spent', value: fmtUSD(enriched.spent) },
-            { label: 'Incoming', value: fmtUSD(enriched.incoming), c: 'text-positive' },
-            { label: 'Outstanding', value: fmtUSD(enriched.outstanding) },
-            { label: 'Retainage Held', value: fmtUSD(retainageHeld), c: retainageHeld > 0 ? 'text-blue-400' : '' },
+            { label: 'Contract Budget',    value: fmtUSD(enriched.budget),   c: '' },
+            { label: 'Deployed',           value: fmtUSD(enriched.spent),    c: '' },
+            { label: 'Revenue',            value: fmtUSD(enriched.incoming), c: 'text-positive' },
+            { label: 'Pending Checks',     value: fmtUSD(enriched.outstanding), c: enriched.outstanding > 0 ? 'text-warning' : '' },
+            { label: 'Retainage Held',     value: fmtUSD(retainageHeld),     c: retainageHeld > 0 ? 'text-blue-400' : 'text-muted-foreground' },
           ].map(s => (
-            <div key={s.label} className="bg-background px-4 py-3">
-              <div className="micro-label">{s.label}</div>
-              <div className={`stat-value text-lg sm:text-xl mt-1 ${(s as any).c || ''}`}>{s.value}</div>
+            <div key={s.label} className="bg-background px-4 sm:px-5 py-3.5">
+              <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1 leading-tight">{s.label}</div>
+              <div className={`text-base sm:text-[17px] font-bold font-mono-tab leading-tight ${s.c}`}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -392,15 +423,54 @@ export default function ProjectDetail() {
           {/* Quick links */}
           <div className="border border-border p-5">
             <div className="micro-label mb-3">Quick Links</div>
-            <div className="space-y-2">
-              <button onClick={() => navigate('/checks/new')} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border">
-                <FileText className="w-3.5 h-3.5" /> Create Check <ArrowUpRight className="w-3 h-3 ml-auto" />
+            <div className="space-y-1.5">
+              <button onClick={() => navigate('/checks/new')}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 text-left">Issue New Check</span>
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
-              <button onClick={() => navigate('/expenses')} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border">
-                <Download className="w-3.5 h-3.5" /> Record Expense <ArrowUpRight className="w-3 h-3 ml-auto" />
+              <button onClick={() => navigate('/income')}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 text-left">Log Income</span>
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              <button onClick={() => navigate('/expenses')}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 text-left">Record Expense</span>
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              <button onClick={() => navigate('/invoices')}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 text-left">Create Invoice</span>
+                <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             </div>
           </div>
+
+          {/* Admin cross-links */}
+          {isAdmin && (
+            <div className="border border-border p-5">
+              <div className="micro-label mb-3">Admin Dashboard</div>
+              <div className="space-y-1.5">
+                <button onClick={() => navigate('/admin')}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                  <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
+                  <span className="flex-1 text-left">Admin Panel</span>
+                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+                <button onClick={() => navigate('/admin')}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span className="flex-1 text-left">Client Portal</span>
+                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>
