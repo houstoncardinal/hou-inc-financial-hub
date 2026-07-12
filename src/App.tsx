@@ -112,6 +112,7 @@ function FinanceRoutes() {
         <Route path="/glossary"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Glossary /></RoleGuard>} />
         <Route path="/documents"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Documents /></RoleGuard>} />
         <Route path="/ops"                element={<RoleGuard allowed={[...ADMIN_ROLES]}><OpsCenter /></RoleGuard>} />
+        <Route path="*"                   element={<NotFound />} />
       </Routes>
     </EntityProvider>
   );
@@ -162,8 +163,6 @@ const App = () => (
                 {/* ── Finance sector (single shared EntityProvider) ── */}
                 <Route path="/auth"             element={<Auth />} />
                 <Route path="/*"               element={<FinanceRoutes />} />
-
-                <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
           </ThemeProvider>

@@ -723,7 +723,7 @@ export default function Home() {
       ══════════════════════════════════════════════ */}
       <section
         ref={heroRef}
-        className="relative overflow-hidden flex flex-col min-h-[100svh] md:h-[90svh]"
+        className="relative overflow-hidden flex flex-col min-h-[88svh] md:h-[88svh]"
         style={{ backgroundColor: B }}
       >
 
@@ -764,7 +764,7 @@ export default function Home() {
         ════════════════════════════════════════ */}
         <motion.div
           className="relative z-10 flex-1 flex items-end px-8 md:px-14 lg:px-24"
-          style={{ paddingBottom: 'clamp(72px, 12svh, 160px)', opacity: fade, y: textY }}
+          style={{ paddingBottom: 'clamp(108px, 16svh, 200px)', opacity: fade, y: textY }}
         >
           <div>
 

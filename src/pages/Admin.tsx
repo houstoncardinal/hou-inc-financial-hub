@@ -8,7 +8,7 @@ import {
   RefreshCw,
   ChevronRight, ChevronDown, Send, CheckCircle2, XCircle,
   Video, Phone, MapPin, FileCheck, Package,
-  Layers, CreditCard, Inbox, DollarSign,
+  CreditCard, Inbox, DollarSign,
   ArrowLeft, ClipboardList, User, UserCheck, UserX, ShieldCheck,
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus, FileUp,
@@ -18,7 +18,7 @@ import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortfolioManager from '@/components/admin/PortfolioManager';
-import BlueprintStudio from '@/components/admin/BlueprintStudio';
+import MilestoneManager from '@/components/admin/MilestoneManager';
 import { toast } from '@/hooks/use-toast';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
@@ -29,20 +29,6 @@ const G200  = '#E8E4DE';
 const G500  = '#8A8580';
 const AC    = '#9D7E3F';
 const SERIF = "'Cormorant Garamond', Georgia, serif";
-
-/* ── Phase definitions (mirrors PortalMilestones) ───────────────────── */
-const ADMIN_PHASES = [
-  { id: 0, name: 'Pre-Construction Planning',   description: 'Site analysis, design finalization, and project schedule build-out.' },
-  { id: 1, name: 'Permits & Approvals',         description: 'City permit submission and formal approval from HSPD.' },
-  { id: 2, name: 'Site Preparation',            description: 'Land clearing, grading, and utility rough-in preparation.' },
-  { id: 3, name: 'Foundation Work',             description: 'Excavation, formwork, reinforcement, and concrete slab pour.' },
-  { id: 4, name: 'Framing & Structure',         description: 'Structural framing, roof trusses, and exterior sheathing.' },
-  { id: 5, name: 'MEP Rough-In',                description: 'All mechanical, electrical, and plumbing rough-in installations.' },
-  { id: 6, name: 'Insulation & Drywall',        description: 'Insulation installation followed by drywall hanging and taping.' },
-  { id: 7, name: 'Interior Finishes',           description: 'Flooring, cabinetry, millwork, tile, and paint throughout.' },
-  { id: 8, name: 'Fixtures & Final Details',    description: 'Fixture installations, hardware, and cosmetic touch-ups.' },
-  { id: 9, name: 'Final Inspection & Handover', description: 'City final inspection, punch list completion, and key handover.' },
-];
 
 /* ── Supabase data loaders ───────────────────────────────────────────── */
 async function loadPortalData() {
@@ -277,7 +263,7 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'blueprint';
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics';
 
 export default function Admin() {
   /* ── Auth ── */
@@ -352,13 +338,6 @@ export default function Admin() {
   /* ── #12 Meetings view ── */
   const [meetingsView, setMeetingsView] = useState<'list' | 'calendar'>('list');
 
-  /* ── Milestones ── */
-  const [milestones, setMilestones]             = useState<any[]>([]);
-  const [milestonesLoading, setMilestonesLoading] = useState(false);
-  const [expandedPhase, setExpandedPhase]       = useState<number | null>(null);
-  const [phaseEdits, setPhaseEdits]             = useState<Record<number, any>>({});
-  const [phaseSaving, setPhaseSaving]           = useState<number | null>(null);
-
   /* ── #15 Change Orders ── */
   const [coOpen, setCoOpen] = useState(false);
   const [coNumber, setCoNumber] = useState('');
@@ -413,114 +392,6 @@ export default function Admin() {
     if (!selectedClientId) { setAdminNotes([]); return; }
     loadAdminNotes(selectedClientId).then(setAdminNotes);
   }, [selectedClientId]);
-
-  /* ── Load milestones when client changes ── */
-  const loadMilestones = useCallback(async (clientId: string) => {
-    setMilestonesLoading(true);
-    try {
-      const { data } = await (supabase as any)
-        .from('project_milestones')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('phase_index', { ascending: true });
-      setMilestones(data ?? []);
-      // Seed edit state from loaded data
-      const edits: Record<number, any> = {};
-      (data ?? []).forEach((row: any) => {
-        edits[row.phase_index] = {
-          phase_name: row.phase_name ?? '',
-          phase_description: row.phase_description ?? '',
-          target_date: row.target_date ?? '',
-          completed_date: row.completed_date ?? '',
-          is_active: row.is_active ?? false,
-        };
-      });
-      setPhaseEdits(edits);
-    } catch { setMilestones([]); }
-    setMilestonesLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedClientId) { setMilestones([]); setPhaseEdits({}); setExpandedPhase(null); return; }
-    loadMilestones(selectedClientId);
-  }, [selectedClientId, loadMilestones]);
-
-  /* ── Save a single phase row ── */
-  const handleSavePhase = async (phaseIdx: number) => {
-    if (!selectedClientId) return;
-    setPhaseSaving(phaseIdx);
-    const edits = phaseEdits[phaseIdx] ?? {};
-    try {
-      await (supabase as any).from('project_milestones').upsert({
-        client_id: selectedClientId,
-        phase_index: phaseIdx,
-        is_active: edits.is_active ?? false,
-        target_date: edits.target_date || null,
-        completed_date: edits.completed_date || null,
-        phase_name: edits.phase_name || null,
-        phase_description: edits.phase_description || null,
-      }, { onConflict: 'client_id,phase_index' });
-      await loadMilestones(selectedClientId);
-    } catch {}
-    setPhaseSaving(null);
-  };
-
-  /* ── Set a phase as the active/in-progress one ── */
-  const handleSetActivePhase = async (phaseIdx: number) => {
-    if (!selectedClientId) return;
-    setPhaseSaving(phaseIdx);
-    try {
-      // Clear is_active on all existing rows for this client
-      await (supabase as any)
-        .from('project_milestones')
-        .update({ is_active: false })
-        .eq('client_id', selectedClientId);
-      // Upsert the target phase as active (not complete)
-      await (supabase as any).from('project_milestones').upsert({
-        client_id: selectedClientId,
-        phase_index: phaseIdx,
-        is_active: true,
-        completed_date: null,
-      }, { onConflict: 'client_id,phase_index' });
-      await loadMilestones(selectedClientId);
-      // Expand this phase
-      setExpandedPhase(phaseIdx);
-    } catch {}
-    setPhaseSaving(null);
-  };
-
-  /* ── Mark a phase as complete ── */
-  const handleMarkComplete = async (phaseIdx: number) => {
-    if (!selectedClientId) return;
-    setPhaseSaving(phaseIdx);
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      await (supabase as any).from('project_milestones').upsert({
-        client_id: selectedClientId,
-        phase_index: phaseIdx,
-        is_active: false,
-        completed_date: (phaseEdits[phaseIdx]?.completed_date) || today,
-      }, { onConflict: 'client_id,phase_index' });
-      await loadMilestones(selectedClientId);
-    } catch {}
-    setPhaseSaving(null);
-  };
-
-  /* ── Mark a phase as pending (clear active + complete) ── */
-  const handleMarkPending = async (phaseIdx: number) => {
-    if (!selectedClientId) return;
-    setPhaseSaving(phaseIdx);
-    try {
-      await (supabase as any).from('project_milestones').upsert({
-        client_id: selectedClientId,
-        phase_index: phaseIdx,
-        is_active: false,
-        completed_date: null,
-      }, { onConflict: 'client_id,phase_index' });
-      await loadMilestones(selectedClientId);
-    } catch {}
-    setPhaseSaving(null);
-  };
 
   /* ── Client detail actions ── */
   const handleSendReply = async () => {
@@ -615,7 +486,6 @@ export default function Admin() {
     { key: 'map',        label: 'Client Map',         icon: Map },
     { key: 'finance',    label: 'Finance Data',       icon: DollarSign },
     { key: 'analytics',  label: 'Analytics',          icon: TrendingUp },
-    { key: 'blueprint',  label: 'Blueprint Studio',   icon: Layers },
   ];
 
   /* ════════ LOCK SCREEN ════════ */
@@ -797,16 +667,24 @@ export default function Admin() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={refreshData} className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-semibold px-3 py-2 transition-all"
+          <div className="flex items-center gap-2">
+            <button onClick={refreshData} className="hidden sm:flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-semibold px-3 py-2 transition-all"
               style={{ border: `1px solid ${G200}`, color: G500 }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = AC; (e.currentTarget as HTMLElement).style.color = AC; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = G200; (e.currentTarget as HTMLElement).style.color = G500; }}>
               <RefreshCw className="w-3 h-3" strokeWidth={2} /> Refresh
             </button>
-            <Link to="/finance" className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2 transition-opacity hover:opacity-85"
+            <button onClick={refreshData} className="sm:hidden flex items-center justify-center w-8 h-8 shrink-0 transition-all"
+              style={{ border: `1px solid ${G200}`, color: G500 }}>
+              <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
+            <Link to="/finance" className="hidden sm:flex items-center gap-1.5 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2 transition-opacity hover:opacity-85"
               style={{ backgroundColor: AC, color: W }}>
               Finance <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+            </Link>
+            <Link to="/finance" className="sm:hidden flex items-center justify-center w-8 h-8 shrink-0 transition-opacity hover:opacity-85"
+              style={{ backgroundColor: AC, color: W }}>
+              <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
             </Link>
           </div>
         </div>
@@ -817,13 +695,7 @@ export default function Admin() {
           </div>
         )}
 
-        {tab === 'blueprint' && (
-          <div className="flex-1" style={{ overflow: 'hidden' }}>
-            <BlueprintStudio />
-          </div>
-        )}
-
-        {tab !== 'map' && tab !== 'blueprint' && <div className="px-6 py-7">
+        {tab !== 'map' && <div className="px-4 md:px-6 py-5 md:py-7">
 
           {/* ══════ OVERVIEW ══════ */}
           {tab === 'overview' && (
@@ -1242,40 +1114,39 @@ export default function Admin() {
             return (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Client header */}
-                <div className="flex items-center gap-5 p-5 mb-5 agl">
-                  <div className="w-14 h-14 flex items-center justify-center text-[16px] font-black shrink-0"
-                    style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
-                    {client.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[18px] font-bold mb-0.5" style={{ color: B }}>{client.name}</div>
-                    <div className="flex flex-wrap gap-4 text-[11px] font-light" style={{ color: G500 }}>
-                      <span>{client.email}</span>
-                      {client.phone && <span>· {client.phone}</span>}
-                      <span>· Joined {new Date(client.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 p-4 sm:p-5 mb-5 agl">
+                  <div className="flex items-center gap-3 sm:contents">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center text-[14px] sm:text-[16px] font-black shrink-0"
+                      style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, fontFamily: SERIF }}>
+                      {client.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="flex-1 sm:flex-1">
+                      <div className="text-[16px] sm:text-[18px] font-bold mb-0.5" style={{ color: B }}>{client.name}</div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] sm:text-[11px] font-light" style={{ color: G500 }}>
+                        <span>{client.email}</span>
+                        {client.phone && <span>{client.phone}</span>}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>
+                  <div className="flex flex-wrap gap-2 items-center sm:shrink-0">
+                    <span className="text-[9px] px-2 py-1 font-bold uppercase tracking-[0.14em]" style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>
                       {messages.length} msgs
                     </span>
-                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(139,92,246,0.08)', color: '#8b5cf6' }}>
+                    <span className="text-[9px] px-2 py-1 font-bold uppercase tracking-[0.14em]" style={{ backgroundColor: 'rgba(139,92,246,0.08)', color: '#8b5cf6' }}>
                       {docs.length} docs
                     </span>
-                    <span className="text-[9px] px-2.5 py-1.5 font-bold uppercase tracking-[0.18em]" style={{ backgroundColor: 'rgba(245,158,11,0.08)', color: '#f59e0b' }}>
-                      {meets.length} meetings
+                    <span className="text-[9px] px-2 py-1 font-bold uppercase tracking-[0.14em]" style={{ backgroundColor: 'rgba(245,158,11,0.08)', color: '#f59e0b' }}>
+                      {meets.length} meets
                     </span>
-                    {/* #6 Create Invoice */}
                     <button
                       onClick={() => navigate('/invoices/new', { state: { clientName: client.name, clientEmail: client.email } })}
-                      className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-opacity hover:opacity-75"
+                      className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] font-bold px-3 py-2 transition-opacity hover:opacity-75"
                       style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, border: `1px solid rgba(157,126,63,0.3)` }}>
-                      <Receipt className="w-3 h-3" strokeWidth={2} /> Create Invoice
+                      <Receipt className="w-3 h-3" strokeWidth={2} /> Invoice
                     </button>
-                    {/* #15 Create Change Order */}
                     <button
                       onClick={() => setCoOpen(true)}
-                      className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-opacity hover:opacity-75"
+                      className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] font-bold px-3 py-2 transition-opacity hover:opacity-75"
                       style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>
                       <FilePlus className="w-3 h-3" strokeWidth={2} /> Change Order
                     </button>
@@ -1333,10 +1204,10 @@ export default function Admin() {
                 )}
 
                 {/* Sub-tab pills */}
-                <div className="flex flex-wrap gap-1 mb-5">
-                  {([['brief', 'Brief'], ['messages', 'Messages'], ['docs', 'Documents'], ['meetings', 'Meetings'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
+                <div className="flex gap-1 mb-5 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap scrollbar-none">
+                  {([['brief', 'Brief'], ['messages', 'Msgs'], ['docs', 'Docs'], ['meetings', 'Meets'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setClientSubTab(k)}
-                      className="text-[9px] uppercase tracking-[0.22em] font-bold px-4 py-2 transition-all"
+                      className="text-[9px] uppercase tracking-[0.22em] font-bold px-3 md:px-4 py-2 transition-all shrink-0"
                       style={{
                         backgroundColor: clientSubTab === k ? B : 'rgba(255,255,255,0.7)',
                         color: clientSubTab === k ? W : G500,
@@ -1635,226 +1506,9 @@ export default function Admin() {
                 )}
 
                 {/* Milestones sub-tab */}
-                {clientSubTab === 'milestones' && (() => {
-                  const msMap: Record<number, any> = {};
-                  milestones.forEach((m: any) => { msMap[m.phase_index] = m; });
-                  const completedCount = milestones.filter((m: any) => m.completed_date).length;
-                  const pct = Math.round((completedCount / ADMIN_PHASES.length) * 100);
-                  const activeRow = milestones.find((m: any) => m.is_active);
-
-                  return (
-                    <div className="agl">
-                      {/* Header + progress */}
-                      <div className="px-6 py-5" style={{ borderBottom: `1px solid ${G200}` }}>
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <div className="text-[7px] uppercase tracking-[0.34em] font-bold mb-1" style={{ color: G500 }}>
-                              Build Schedule
-                            </div>
-                            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '1.1rem', color: B }}>
-                              Project Milestones
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-[22px] font-bold" style={{ fontFamily: SERIF, color: B }}>{pct}%</div>
-                            <div className="text-[9px] font-light" style={{ color: G500 }}>{completedCount}/{ADMIN_PHASES.length} complete</div>
-                          </div>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="h-1 overflow-hidden" style={{ backgroundColor: G200 }}>
-                          <div className="h-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: AC }} />
-                        </div>
-                        {activeRow && (
-                          <div className="mt-3 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: AC }} />
-                            <span className="text-[10px] font-semibold" style={{ color: AC }}>
-                              Currently active: Phase {activeRow.phase_index + 1} — {(activeRow.phase_name) || ADMIN_PHASES[activeRow.phase_index]?.name}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Phase list */}
-                      {milestonesLoading ? (
-                        <div className="px-6 py-10 text-center text-[11px] font-light" style={{ color: G500 }}>Loading milestones…</div>
-                      ) : (
-                        <div>
-                          {ADMIN_PHASES.map((phase) => {
-                            const row = msMap[phase.id];
-                            const isComplete  = !!(row?.completed_date);
-                            const isActive    = !!(row?.is_active);
-                            const isPending   = !isComplete && !isActive;
-                            const isExpanded  = expandedPhase === phase.id;
-                            const isSaving    = phaseSaving === phase.id;
-                            const edits       = phaseEdits[phase.id] ?? {};
-
-                            const statusColor = isComplete ? '#10b981' : isActive ? AC : G500;
-                            const statusLabel = isComplete ? 'Complete' : isActive ? 'In Progress' : 'Pending';
-
-                            return (
-                              <div key={phase.id} style={{ borderBottom: `1px solid ${G200}` }}>
-                                {/* Phase row */}
-                                <div
-                                  className="flex items-center gap-4 px-6 py-3.5 cursor-pointer hover:bg-gray-50 transition-colors"
-                                  onClick={() => setExpandedPhase(isExpanded ? null : phase.id)}
-                                >
-                                  {/* Status dot */}
-                                  <div className="shrink-0">
-                                    {isComplete ? (
-                                      <div className="w-2.5 h-2.5 flex items-center justify-center rounded-full" style={{ backgroundColor: '#10b981' }}>
-                                        <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
-                                          <path d="M1 3l1.5 1.5L5 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                      </div>
-                                    ) : isActive ? (
-                                      <div className="w-2.5 h-2.5 rounded-full border-2 animate-pulse" style={{ borderColor: AC, backgroundColor: 'rgba(157,126,63,0.15)' }} />
-                                    ) : (
-                                      <div className="w-2.5 h-2.5 rounded-full border" style={{ borderColor: G200 }} />
-                                    )}
-                                  </div>
-
-                                  {/* Phase number */}
-                                  <span className="text-[9px] font-bold tabular-nums shrink-0" style={{ color: G500, width: 20 }}>
-                                    {String(phase.id + 1).padStart(2, '0')}
-                                  </span>
-
-                                  {/* Phase name */}
-                                  <span className="text-[12px] font-semibold flex-1 min-w-0 truncate" style={{ color: B }}>
-                                    {(row?.phase_name) || phase.name}
-                                  </span>
-
-                                  {/* Status chip */}
-                                  <span
-                                    className="text-[7px] uppercase tracking-[0.2em] font-bold px-2 py-0.5 shrink-0"
-                                    style={{ backgroundColor: `${statusColor}14`, color: statusColor }}
-                                  >
-                                    {statusLabel}
-                                  </span>
-
-                                  {/* Date preview */}
-                                  {isComplete && row?.completed_date && (
-                                    <span className="text-[9px] font-light shrink-0 hidden md:block" style={{ color: G500 }}>
-                                      {new Date(row.completed_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </span>
-                                  )}
-                                  {!isComplete && row?.target_date && (
-                                    <span className="text-[9px] font-light shrink-0 hidden md:block" style={{ color: G500 }}>
-                                      Target: {new Date(row.target_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </span>
-                                  )}
-
-                                  {/* Expand chevron */}
-                                  <ChevronDown
-                                    className="w-3 h-3 shrink-0 transition-transform"
-                                    style={{ color: G500, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                                  />
-                                </div>
-
-                                {/* Expanded edit panel */}
-                                {isExpanded && (
-                                  <div className="px-6 pb-5 pt-1" style={{ backgroundColor: G50 }}>
-                                    {/* Status quick actions */}
-                                    <div className="mb-4">
-                                      <div className="text-[7px] uppercase tracking-[0.28em] font-bold mb-2" style={{ color: G500 }}>Phase Status</div>
-                                      <div className="flex gap-1.5 flex-wrap">
-                                        <button
-                                          onClick={() => handleMarkPending(phase.id)}
-                                          disabled={isSaving || isPending}
-                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
-                                          style={{ backgroundColor: isPending ? G500 : W, color: isPending ? W : G500, border: `1px solid ${G200}` }}
-                                        >
-                                          Pending
-                                        </button>
-                                        <button
-                                          onClick={() => handleSetActivePhase(phase.id)}
-                                          disabled={isSaving || isActive}
-                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
-                                          style={{ backgroundColor: isActive ? AC : W, color: isActive ? W : AC, border: `1px solid ${isActive ? AC : G200}` }}
-                                        >
-                                          Set as Active
-                                        </button>
-                                        <button
-                                          onClick={() => handleMarkComplete(phase.id)}
-                                          disabled={isSaving || isComplete}
-                                          className="text-[8px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 transition-all disabled:opacity-40"
-                                          style={{ backgroundColor: isComplete ? '#10b981' : W, color: isComplete ? W : '#10b981', border: `1px solid ${isComplete ? '#10b981' : G200}` }}
-                                        >
-                                          Mark Complete
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Date fields */}
-                                    <div className="grid grid-cols-2 gap-3 mb-4">
-                                      <div>
-                                        <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Target Date</label>
-                                        <input
-                                          type="date"
-                                          value={edits.target_date ?? row?.target_date ?? ''}
-                                          onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), target_date: e.target.value } }))}
-                                          className="w-full text-[11px] font-light outline-none"
-                                          style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Completion Date</label>
-                                        <input
-                                          type="date"
-                                          value={edits.completed_date ?? row?.completed_date ?? ''}
-                                          onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), completed_date: e.target.value } }))}
-                                          className="w-full text-[11px] font-light outline-none"
-                                          style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
-                                        />
-                                      </div>
-                                    </div>
-
-                                    {/* Custom name override */}
-                                    <div className="mb-3">
-                                      <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Phase Name Override <span className="normal-case tracking-normal font-light">(leave blank to use default)</span></label>
-                                      <input
-                                        type="text"
-                                        placeholder={phase.name}
-                                        value={edits.phase_name ?? row?.phase_name ?? ''}
-                                        onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), phase_name: e.target.value } }))}
-                                        className="w-full text-[11px] font-light outline-none"
-                                        style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
-                                      />
-                                    </div>
-
-                                    {/* Custom description override */}
-                                    <div className="mb-4">
-                                      <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1" style={{ color: G500 }}>Description Override <span className="normal-case tracking-normal font-light">(optional, shown in client portal)</span></label>
-                                      <textarea
-                                        rows={2}
-                                        placeholder={phase.description}
-                                        value={edits.phase_description ?? row?.phase_description ?? ''}
-                                        onChange={e => setPhaseEdits(prev => ({ ...prev, [phase.id]: { ...(prev[phase.id] ?? {}), phase_description: e.target.value } }))}
-                                        className="w-full text-[11px] font-light outline-none resize-none"
-                                        style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
-                                      />
-                                    </div>
-
-                                    {/* Save button */}
-                                    <div className="flex justify-end">
-                                      <button
-                                        onClick={() => handleSavePhase(phase.id)}
-                                        disabled={isSaving}
-                                        className="text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2 transition-opacity disabled:opacity-40"
-                                        style={{ backgroundColor: B, color: W }}
-                                      >
-                                        {isSaving ? 'Saving…' : 'Save Dates & Notes'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {clientSubTab === 'milestones' && (
+                  <MilestoneManager clientId={selectedClientId} />
+                )}
 
                 {/* Notes sub-tab (#9) */}
                 {clientSubTab === 'notes' && (
@@ -2543,7 +2197,7 @@ export default function Admin() {
                 {/* Aggregate stats row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                   {[
-                    { label: 'Projects',      value: filteredProjects.length, icon: Layers,    color: '#3b82f6' },
+                    { label: 'Projects',      value: filteredProjects.length, icon: ClipboardList,    color: '#3b82f6' },
                     { label: 'Checks',        value: filteredChecks.length,   icon: CreditCard, color: AC },
                     { label: 'Transactions',  value: filteredTxns.length,     icon: FileText,  color: '#8b5cf6' },
                     { label: 'Vendors', value: finEntityTab === 'all' ? finVendors.length : finVendors.filter((v: any) => v.entity_id === finEntityTab).length, icon: Package, color: '#10b981' },

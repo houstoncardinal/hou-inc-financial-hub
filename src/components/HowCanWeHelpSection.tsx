@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import {
   Home, Building2, ClipboardList,
-  ArrowRight, ChevronRight, ChevronLeft, ChevronDown,
+  ArrowRight, ChevronRight, ChevronLeft,
   Check, Loader2, CheckCircle2, Sparkles,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
 
@@ -512,27 +512,49 @@ const TYPE_CARDS: {
   { key: 'project_management', Icon: ClipboardList, title: 'Project Management', num: '03', tagline: 'Full PM · Oversight · Consulting · Recovery' },
 ];
 
+/* ── Service panel images & copy ─────────────────────────────────────── */
+const SVC_IMAGES: Record<ProjectType, string> = {
+  residential:
+    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1800&q=90',
+  commercial:
+    'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1800&q=90',
+  project_management:
+    'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=1800&q=90',
+};
+
+const SVC_PANEL: Record<ProjectType, {
+  headline: string; sub: string; features: string[]; cta: string; ctaTo: string;
+}> = {
+  residential: {
+    headline: "Crafting Houston's finest residences.",
+    sub: 'From River Oaks estates to timeless renovations — 26 years of residential craft, zero shortcuts.',
+    features: ['Custom Home Construction', 'Full Home Renovations', 'Kitchen & Bath Upgrades', 'Additions & Expansions', 'Pool Houses & Outdoor Living'],
+    cta: 'Start My Home Project',
+    ctaTo: '/services/residential-construction',
+  },
+  commercial: {
+    headline: 'Grade-A commercial spaces built to define.',
+    sub: 'Office towers, retail centers, hospitality venues — delivered on time, on budget, to exacting spec.',
+    features: ['Class A Office & Mixed-Use', 'Retail & Hospitality', 'Industrial / Warehouse', 'Ground-Up Development', 'Tenant Improvements'],
+    cta: 'Request a Commercial Proposal',
+    ctaTo: '/services/commercial-construction',
+  },
+  project_management: {
+    headline: 'Your project, delivered with precision.',
+    sub: 'End-to-end oversight, expert coordination, and unwavering accountability on every build.',
+    features: ['Pre-Construction Planning', 'Budget & Cost Control', 'Subcontractor Coordination', 'Quality Assurance', 'Crisis & Recovery PM'],
+    cta: 'Get a PM Assessment',
+    ctaTo: '/services/project-management',
+  },
+};
+
 /* ── Main export ─────────────────────────────────────────────────────── */
 export default function HowCanWeHelpSection() {
-  const navigate = useNavigate();
   const [step, setStep]               = useState<0 | 1 | 2 | 3>(0);
   const [hoveredType, setHoveredType] = useState<ProjectType | null>(null);
-  const [mobileOpen, setMobileOpen]   = useState<ProjectType | null>(null);
-  const [isTouch, setIsTouch]         = useState(false);
   const [submitting, setSubmitting]   = useState(false);
   const [success, setSuccess]         = useState(false);
   const [error, setError]             = useState('');
-  const leaveTimers = useRef<Record<ProjectType, ReturnType<typeof setTimeout> | null>>({
-    residential: null, commercial: null, project_management: null,
-  });
-
-  useEffect(() => {
-    /* Detect touch device: use touch capability + narrow viewport */
-    const checkTouch = () => setIsTouch(window.innerWidth < 768 || navigator.maxTouchPoints > 0);
-    checkTouch();
-    window.addEventListener('resize', checkTouch);
-    return () => window.removeEventListener('resize', checkTouch);
-  }, []);
 
   const [data, setData] = useState<StepData>({
     type: null, scope: '', stage: '', sqft: '', pmHelp: '',
@@ -542,34 +564,13 @@ export default function HowCanWeHelpSection() {
 
   const set = (k: keyof StepData) => (v: string) => setData(d => ({ ...d, [k]: v }));
 
-  const clearTimer = (t: ProjectType) => {
-    if (leaveTimers.current[t]) { clearTimeout(leaveTimers.current[t]!); leaveTimers.current[t] = null; }
-  };
-  const onCardEnter   = useCallback((t: ProjectType) => { clearTimer(t); setHoveredType(t); }, []);
-  const onCardLeave   = useCallback((t: ProjectType) => { leaveTimers.current[t] = setTimeout(() => setHoveredType(prev => prev === t ? null : prev), 150); }, []);
-  const onDdEnter     = useCallback((t: ProjectType) => { clearTimer(t); }, []);
-  const onDdLeave     = useCallback((t: ProjectType) => { leaveTimers.current[t] = setTimeout(() => setHoveredType(prev => prev === t ? null : prev), 150); }, []);
-
   const selectType = (t: ProjectType) => {
-    setHoveredType(null); setMobileOpen(null);
+    setHoveredType(null);
     setData(d => ({ ...d, type: t, scope: '', stage: '', sqft: '', pmHelp: '' }));
     setStep(1);
   };
 
-  const CATEGORY_TO: Record<ProjectType, string> = {
-    residential:        '/services/residential-construction',
-    commercial:         '/services/commercial-construction',
-    project_management: '/services/project-management',
-  };
-
-  /* On touch: tap card → toggle mobile dropdown; desktop click → navigate to category page */
-  const handleCardClick = (key: ProjectType) => {
-    if (isTouch) {
-      setMobileOpen(prev => prev === key ? null : key);
-    } else {
-      navigate(CATEGORY_TO[key]);
-    }
-  };
+  const handleCardClick = (key: ProjectType) => selectType(key);
 
   const canStep1  = () => !data.type ? false : data.type === 'project_management' ? !!data.scope && !!data.pmHelp : !!data.scope;
   const canStep2  = () => !!data.budget && !!data.timeline;
@@ -671,103 +672,222 @@ export default function HowCanWeHelpSection() {
           {!success && (
             <motion.div key="main" variants={stepVar} initial="enter" animate="center" exit="exit">
 
-              {/* ─── Cards ─────────────────────────────────────── */}
-              <div className="grid grid-cols-1 md:grid-cols-3" style={{ border: `1px solid ${G200}` }}>
-                {TYPE_CARDS.map(({ key, Icon, title, tagline, num }, ci) => {
-                  const isSelected  = data.type === key;
-                  const isDimmed    = inForm && !isSelected;
-                  const isHovered   = hoveredType === key && !inForm;
-                  const isMobileExp = mobileOpen === key && !inForm;
-                  const showDd      = isTouch ? isMobileExp : isHovered;
-
-                  return (
-                    <div key={key} style={{ position: 'relative', borderRight: ci < 2 ? `1px solid ${G200}` : 'none', borderBottom: `1px solid ${G200}` }}>
-
-                      {/* Card */}
+              {/* ─── Service showcase: cards + luxury panel takeover ──── */}
+              <div
+                style={{ position: 'relative', border: `1px solid ${G200}`, minHeight: 'clamp(300px, 34vw, 430px)' }}
+                onMouseLeave={() => !inForm && setHoveredType(null)}
+              >
+                {/* 3 selector cards — fade out when panel is active */}
+                <motion.div
+                  className="grid grid-cols-1 md:grid-cols-3"
+                  style={{ height: '100%' }}
+                  animate={{ opacity: (hoveredType && !inForm) ? 0 : 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {TYPE_CARDS.map(({ key, Icon, title, tagline, num }, ci) => {
+                    const isSelected = data.type === key;
+                    const isDimmed   = inForm && !isSelected;
+                    return (
                       <motion.button
+                        key={key}
                         type="button"
                         onClick={() => handleCardClick(key)}
-                        onMouseEnter={() => !isTouch && onCardEnter(key)}
-                        onMouseLeave={() => !isTouch && onCardLeave(key)}
+                        onMouseEnter={() => !inForm && setHoveredType(key)}
                         animate={{ opacity: isDimmed ? 0.35 : 1 }}
                         transition={{ duration: 0.22 }}
                         style={{
-                          width: '100%', padding: '36px 32px 32px',
-                          backgroundColor: isSelected ? B : (isHovered || isMobileExp) ? '#EAE5DC' : CR,
+                          width: '100%', height: '100%', padding: '36px 32px 32px',
+                          backgroundColor: isSelected ? B : CR,
                           cursor: 'pointer', textAlign: 'left', border: 'none',
+                          borderRight: ci < 2 ? `1px solid ${G200}` : 'none',
                           position: 'relative', overflow: 'hidden',
-                          transition: 'background-color 0.28s',
+                          display: 'flex', flexDirection: 'column',
+                          transition: 'background-color 0.25s',
                         }}
                       >
-                        {/* Gold top sweep */}
                         <motion.div
-                          animate={{ scaleX: (isHovered || isMobileExp || isSelected) ? 1 : 0 }}
+                          animate={{ scaleX: isSelected ? 1 : 0 }}
                           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                           style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: AC, transformOrigin: 'left', zIndex: 2 }}
                         />
-                        <motion.div
-                          animate={{ opacity: (isHovered || isMobileExp) ? 1 : 0 }}
-                          transition={{ duration: 0.3 }} aria-hidden
-                          style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 80% 20%, rgba(157,126,63,0.07) 0%, transparent 65%)', pointerEvents: 'none' }}
-                        />
-
-                        <div style={{ fontSize: 9, letterSpacing: '0.38em', fontWeight: 700, color: isSelected ? ACL : (isHovered || isMobileExp) ? AC : G400, marginBottom: 22, textTransform: 'uppercase', transition: 'color 0.25s' }}>
+                        <div style={{ fontSize: 9, letterSpacing: '0.38em', fontWeight: 700, color: isSelected ? ACL : G400, marginBottom: 22, textTransform: 'uppercase' as const }}>
                           {num}
                         </div>
-
-                        <motion.div animate={{ y: (isHovered || isMobileExp) ? -4 : 0, scale: (isHovered || isMobileExp) ? 1.1 : 1 }} transition={{ duration: 0.28 }} style={{ marginBottom: 18 }}>
-                          <Icon style={{ width: 24, height: 24, color: isSelected ? ACL : (isHovered || isMobileExp) ? AC : G500, transition: 'color 0.25s' }} strokeWidth={1.5} />
-                        </motion.div>
-
-                        <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: isSelected ? W : B, lineHeight: 1.1, marginBottom: 8, transition: 'color 0.25s' }}>
+                        <div style={{ marginBottom: 18 }}>
+                          <Icon style={{ width: 24, height: 24, color: isSelected ? ACL : G500 }} strokeWidth={1.5} />
+                        </div>
+                        <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: isSelected ? W : B, lineHeight: 1.1, marginBottom: 8 }}>
                           {title}
                         </div>
-                        <p style={{ fontSize: 11, fontWeight: 300, color: isSelected ? 'rgba(255,255,255,0.4)' : G400, lineHeight: 1.7, margin: 0, letterSpacing: '0.02em', transition: 'color 0.25s' }}>
+                        <p style={{ fontSize: 11, fontWeight: 300, color: isSelected ? 'rgba(255,255,255,0.4)' : G400, lineHeight: 1.7, margin: '0 0 auto', letterSpacing: '0.02em' }}>
                           {tagline}
                         </p>
-
-                        {/* Desktop: "Explore Options →" hint */}
-                        {!isTouch && (
-                          <motion.div animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 5 }} transition={{ duration: 0.22 }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 18, fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', fontWeight: 700, color: AC }}>
-                            Explore Options <ChevronRight style={{ width: 11, height: 11 }} strokeWidth={2.5} />
-                          </motion.div>
-                        )}
-
-                        {/* Mobile: chevron expand indicator */}
-                        {isTouch && !inForm && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 18, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700, color: isMobileExp ? ACL : G500 }}>
-                            {isMobileExp ? 'Close' : 'Explore Options'}
-                            <motion.div animate={{ rotate: isMobileExp ? 180 : 0 }} transition={{ duration: 0.25 }}>
-                              <ChevronDown style={{ width: 13, height: 13 }} strokeWidth={2.5} />
-                            </motion.div>
-                          </div>
-                        )}
-
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 22, fontSize: 8, letterSpacing: '0.32em', textTransform: 'uppercase' as const, fontWeight: 700, color: isSelected ? ACL : G400 }}>
+                          <div style={{ width: 16, height: 1, backgroundColor: 'currentColor' }} />
+                          Hover to explore
+                        </div>
                         {isSelected && (
-                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                            style={{ position: 'absolute', top: 16, right: 16, width: 22, height: 22, borderRadius: '50%', backgroundColor: AC, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <motion.div
+                            initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                            style={{ position: 'absolute', top: 16, right: 16, width: 22, height: 22, borderRadius: '50%', backgroundColor: AC, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
                             <Check style={{ width: 11, height: 11, color: W }} strokeWidth={3} />
                           </motion.div>
                         )}
                       </motion.button>
+                    );
+                  })}
+                </motion.div>
 
-                      {/* Dropdown */}
-                      <AnimatePresence>
-                        {showDd && (
-                          <CardDropdown
-                            key={`dd-${key}`}
-                            type={key}
-                            onSelect={selectType}
-                            onMouseEnter={() => onDdEnter(key)}
-                            onMouseLeave={() => onDdLeave(key)}
-                            isStatic={isTouch}
+                {/* ── Luxury full-panel takeover (desktop hover) ── */}
+                <AnimatePresence>
+                  {hoveredType && !inForm && (
+                    <motion.div
+                      key="svc-panel"
+                      style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 10, background: '#0C0B09' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      {/* Crossfading background image */}
+                      <AnimatePresence mode="sync">
+                        <motion.div
+                          key={hoveredType + '-img'}
+                          style={{ position: 'absolute', inset: 0 }}
+                          initial={{ opacity: 0, scale: 1.06 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <img
+                            src={SVC_IMAGES[hoveredType]}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center right' }}
+                            alt=""
+                            draggable={false}
                           />
-                        )}
+                        </motion.div>
                       </AnimatePresence>
-                    </div>
-                  );
-                })}
+
+                      {/* Left-to-right gradient — dark content zone fades into image */}
+                      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, #0C0B09 0%, #0C0B09 34%, rgba(12,11,9,0.92) 48%, rgba(12,11,9,0.18) 76%, rgba(12,11,9,0) 94%)' }} />
+                      {/* Bottom vignette */}
+                      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(12,11,9,0.6) 0%, transparent 28%)' }} />
+
+                      {/* Left content panel */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 54, width: '52%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '36px 44px 36px 40px' }}>
+                        {/* Gold left accent bar */}
+                        <div aria-hidden style={{ position: 'absolute', left: 0, top: '16%', bottom: '16%', width: 3, background: `linear-gradient(to bottom, transparent, ${AC} 28%, ${ACL} 72%, transparent)` }} />
+
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={hoveredType + '-content'}
+                            initial={{ opacity: 0, x: -16 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                          >
+                            {/* Eyebrow */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                              <div style={{ width: 20, height: 1, backgroundColor: ACL, flexShrink: 0 }} />
+                              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.48em', textTransform: 'uppercase' as const, color: ACL }}>
+                                {TYPE_CARDS.find(c => c.key === hoveredType)?.num} · {TYPE_CARDS.find(c => c.key === hoveredType)?.title}
+                              </span>
+                            </div>
+
+                            {/* Headline */}
+                            <h3 style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 2.6vw, 38px)', color: W, lineHeight: 1.06, marginBottom: 14, letterSpacing: '-0.01em', maxWidth: '22ch' }}>
+                              {SVC_PANEL[hoveredType].headline}
+                            </h3>
+
+                            {/* Sub */}
+                            <p style={{ fontSize: 12.5, fontWeight: 300, color: 'rgba(255,255,255,0.5)', lineHeight: 1.72, marginBottom: 22, maxWidth: '40ch' }}>
+                              {SVC_PANEL[hoveredType].sub}
+                            </p>
+
+                            {/* Feature list */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 28 }}>
+                              {SVC_PANEL[hoveredType].features.map((feat, fi) => (
+                                <motion.div
+                                  key={feat}
+                                  initial={{ opacity: 0, x: -8 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: 0.05 + fi * 0.04, duration: 0.24 }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                                >
+                                  <div style={{ width: 3, height: 3, background: ACL, flexShrink: 0, transform: 'rotate(45deg)' }} />
+                                  <span style={{ fontSize: 12, fontWeight: 300, color: 'rgba(255,255,255,0.68)', letterSpacing: '0.018em' }}>{feat}</span>
+                                </motion.div>
+                              ))}
+                            </div>
+
+                            {/* CTAs */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                              <button
+                                onClick={() => selectType(hoveredType!)}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: AC, color: W, border: 'none', cursor: 'pointer', fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase' as const, fontWeight: 800, transition: 'background 0.18s', flexShrink: 0 }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = ACL; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = AC; }}
+                              >
+                                Start My Project <ArrowRight style={{ width: 12, height: 12 }} strokeWidth={2.5} />
+                              </button>
+                              <Link
+                                to={SVC_PANEL[hoveredType].ctaTo}
+                                onClick={e => e.stopPropagation()}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' as const, fontWeight: 600, color: 'rgba(255,255,255,0.36)', textDecoration: 'none', transition: 'color 0.18s' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = ACL; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.36)'; }}
+                              >
+                                Learn More <ChevronRight style={{ width: 11, height: 11 }} strokeWidth={2.5} />
+                              </Link>
+                            </div>
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Bottom service tab switcher */}
+                      <LayoutGroup>
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 54, display: 'flex', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                          {TYPE_CARDS.map(({ key, num, title }, ti) => {
+                            const isTab = hoveredType === key;
+                            return (
+                              <div
+                                key={key}
+                                onMouseEnter={() => setHoveredType(key)}
+                                style={{
+                                  flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+                                  padding: '0 20px', cursor: 'pointer', position: 'relative',
+                                  backgroundColor: isTab ? 'rgba(157,126,63,0.09)' : 'transparent',
+                                  borderRight: ti < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                                  transition: 'background-color 0.18s',
+                                }}
+                              >
+                                {isTab && (
+                                  <motion.div
+                                    layoutId="svc-tab-bar"
+                                    style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(to right, ${AC}, ${ACL})` }}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                                  />
+                                )}
+                                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.32em', color: isTab ? ACL : 'rgba(255,255,255,0.22)', transition: 'color 0.18s', flexShrink: 0 }}>{num}</span>
+                                <span style={{ fontSize: 11, fontWeight: isTab ? 500 : 300, color: isTab ? W : 'rgba(255,255,255,0.32)', transition: 'color 0.18s', whiteSpace: 'nowrap' as const }}>{title}</span>
+                                {isTab && (
+                                  <motion.div
+                                    animate={{ x: [0, 4, 0] }}
+                                    transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                                    style={{ marginLeft: 'auto' }}
+                                  >
+                                    <ArrowRight style={{ width: 11, height: 11, color: ACL, flexShrink: 0 }} strokeWidth={2} />
+                                  </motion.div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </LayoutGroup>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* ─── Guided form panel ──────────────────────────── */}
