@@ -37,6 +37,11 @@ const getMeta = (status: string) => S[status as StatusKey] ?? S.archived;
 
 const blank = { name: '', code: '', budget: '', status: 'active' as StatusKey, notes: '' };
 
+const PROJ_CSS = `
+.proj-row:hover td{background-color:rgba(157,126,63,0.032)!important;}
+.proj-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+`;
+
 export default function Projects() {
   const navigate  = useNavigate();
   const role      = useRole();
@@ -124,6 +129,7 @@ export default function Projects() {
 
   return (
     <AppShell>
+      <style>{PROJ_CSS}</style>
       {/* ── Project Form Modal ── */}
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setForm(blank); }}>
         <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
@@ -484,7 +490,7 @@ export default function Projects() {
                   {displayed.map((p: any) => {
                     const meta = getMeta(p.status);
                     return (
-                      <tr key={p.id} className="border-b border-border last:border-b-0 hover:bg-secondary/20 group">
+                      <tr key={p.id} className="border-b border-border last:border-b-0 proj-row group">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="w-0.5 h-8 flex-shrink-0" style={{ backgroundColor: meta.color }} />
@@ -602,7 +608,7 @@ export default function Projects() {
                     const billed      = p.incoming;
                     const delta       = billed - revEarned;
                     return (
-                      <tr key={p.id} className="border-b border-border last:border-b-0 hover:bg-secondary/20">
+                      <tr key={p.id} className="border-b border-border last:border-b-0 proj-row">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="w-0.5 h-7" style={{ backgroundColor: meta.color }} />

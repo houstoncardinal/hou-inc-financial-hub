@@ -16,11 +16,6 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Download, ExternalLink, Send, FileText, Copy, CheckCheck, Zap, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-const INTEGRATIONS_KEY = 'hou-integrations';
-function getStripeKey(): string {
-  try { return JSON.parse(localStorage.getItem(INTEGRATIONS_KEY) || '{}').stripe_secret_key || ''; }
-  catch { return ''; }
-}
 
 function newLineItem(): LineItem {
   return { id: crypto.randomUUID(), description: '', qty: 1, rate: 0 };
@@ -139,13 +134,15 @@ export default function InvoiceNew() {
     setSaving(true);
     try {
       if (existing) {
-        update(existing.id, form);
+        await update(existing.id, form);
         toast.success('Invoice updated');
       } else {
-        create(form);
+        await create(form);
         toast.success('Invoice saved');
         navigate('/invoices');
       }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save invoice');
     } finally { setSaving(false); }
   };
 
@@ -187,48 +184,23 @@ export default function InvoiceNew() {
   };
 
   const handleStripe = async () => {
-    const key = getStripeKey();
-    if (!key) {
-      toast.error('Add your Stripe secret key in Settings → Integrations first');
-      return;
-    }
     if (total <= 0) { toast.error('Invoice total must be greater than $0'); return; }
     setStripeLoading(true);
     try {
-      const amountCents = Math.round(total * 100);
-      const body = new URLSearchParams();
-      body.append('name', form.invoice_number);
-      body.append('description', `Invoice to ${form.client_name}`);
-      const prodRes = await fetch('https://api.stripe.com/v1/products', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body,
+      const { data, error } = await supabase.functions.invoke('stripe-payment-link', {
+        body: {
+          amount_cents: Math.round(total * 100),
+          invoice_number: form.invoice_number,
+          client_name: form.client_name,
+        },
       });
-      const prod = await prodRes.json();
-      if (!prodRes.ok) throw new Error(prod.error?.message || 'Failed to create Stripe product');
-
-      const priceBody = new URLSearchParams();
-      priceBody.append('product', prod.id);
-      priceBody.append('unit_amount', String(amountCents));
-      priceBody.append('currency', 'usd');
-      const priceRes = await fetch('https://api.stripe.com/v1/prices', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: priceBody,
-      });
-      const price = await priceRes.json();
-      if (!priceRes.ok) throw new Error(price.error?.message || 'Failed to create Stripe price');
-
-      const linkBody = new URLSearchParams();
-      linkBody.append('line_items[0][price]', price.id);
-      linkBody.append('line_items[0][quantity]', '1');
-      const linkRes = await fetch('https://api.stripe.com/v1/payment_links', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: linkBody,
-      });
-      const link = await linkRes.json();
-      if (!linkRes.ok) throw new Error(link.error?.message || 'Failed to create payment link');
-
-      setField('stripe_payment_link', link.url);
-      if (existing) update(existing.id, { stripe_payment_link: link.url });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setField('stripe_payment_link', data.url);
+      if (existing) await update(existing.id, { stripe_payment_link: data.url });
       toast.success('Stripe payment link created!');
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Failed to create payment link — deploy the edge function first');
     } finally { setStripeLoading(false); }
   };
 

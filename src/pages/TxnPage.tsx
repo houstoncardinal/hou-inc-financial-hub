@@ -174,6 +174,11 @@ function ReceiptScanner({ preview, scanning, scanned, scanError, onCamera, onUpl
 
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
+const TXN_CSS = `
+.txn-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+.txn-stat{background:rgba(255,255,255,0.86)!important;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
+`;
+
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const { entity } = useEntity();
   const { data: txns = [] } = useTransactions(kind);
@@ -335,6 +340,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
   return (
     <AppShell>
+      <style>{TXN_CSS}</style>
       {/* Hidden inputs for quick-scan (page-level) */}
       <input ref={quickCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFileInput(e, 'quick')} />
       <input ref={quickUploadRef} type="file" accept="image/*"                       className="hidden" onChange={e => handleFileInput(e, 'quick')} />
@@ -526,7 +532,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         </button>
       </div>
 
-      <div className="px-4 sm:px-8 py-5 border-b border-border flex items-center gap-6 overflow-x-auto">
+      <div className="px-4 sm:px-8 py-5 border-b border-border flex items-center gap-6 overflow-x-auto txn-stat">
         <div className="shrink-0"><div className="micro-label">Total</div><div className="stat-value mt-1 text-lg sm:text-2xl">{fmtUSD(total)}</div></div>
         <div className="shrink-0"><div className="micro-label">Records</div><div className="stat-value mt-1 text-lg sm:text-2xl">{txns.length}</div></div>
       </div>
@@ -580,7 +586,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           {txns.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No records.</div>
           ) : txns.map((t: any) => (
-            <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center">
+            <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center">
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
               <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
               <div className="col-span-3 truncate text-muted-foreground">{t.projects?.name || '—'}</div>

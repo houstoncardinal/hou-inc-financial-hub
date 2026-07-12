@@ -28,6 +28,10 @@ const COST_TYPE_LABELS: Record<string, string> = {
   permit: 'Permits & Fees', equipment: 'Equipment', overhead: 'Overhead',
 };
 
+const PD_CSS = `
+.pd-row:hover td,.pd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+`;
+
 export default function ProjectDetail() {
   const { id }    = useParams<{ id: string }>();
   const navigate  = useNavigate();
@@ -74,8 +78,13 @@ export default function ProjectDetail() {
   };
 
   const updateDrawStatus = async (drawId: string, status: string) => {
-    await (supabase as any).from('draw_schedules').update({ status }).eq('id', drawId);
-    setDraws(d => d.map(x => x.id === drawId ? { ...x, status } : x));
+    try {
+      const { error } = await (supabase as any).from('draw_schedules').update({ status }).eq('id', drawId);
+      if (error) throw error;
+      setDraws(d => d.map(x => x.id === drawId ? { ...x, status } : x));
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update draw status');
+    }
   };
 
   const project = useMemo(() => projects.find((p: any) => p.id === id), [projects, id]);
@@ -174,6 +183,7 @@ export default function ProjectDetail() {
 
   return (
     <AppShell>
+      <style>{PD_CSS}</style>
       <PageHeader
         eyebrow={
           <button onClick={() => navigate('/projects')} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
@@ -290,7 +300,7 @@ export default function ProjectDetail() {
                   </thead>
                   <tbody>
                     {costBreakdown.map((row) => (
-                      <tr key={row.category} className="border-b border-border last:border-b-0 hover:bg-secondary/20">
+                      <tr key={row.category} className="border-b border-border last:border-b-0 pd-row">
                         <td className="px-4 py-3 font-medium">{row.category}</td>
                         <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">{row.count}</td>
                         <td className="px-4 py-3 text-right font-semibold font-mono-tab">{fmtUSD(row.actual)}</td>
@@ -396,7 +406,7 @@ export default function ProjectDetail() {
               <div className="px-4 py-12 text-center text-sm text-muted-foreground">No activity recorded for this project.</div>
             ) : (
               sortedActivity.map((a: any) => (
-                <div key={a.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center">
+                <div key={a.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab pd-row items-center">
                   <div className="col-span-3 text-muted-foreground">{fmtDate(a.date)}</div>
                   <div className="col-span-2"><span className="text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{a.type}</span></div>
                   <div className="col-span-5 truncate">{a.ref}</div>
@@ -442,7 +452,7 @@ export default function ProjectDetail() {
                 <span className="flex-1 text-left">Record Expense</span>
                 <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
-              <button onClick={() => navigate('/invoices')}
+              <button onClick={() => navigate('/invoices/new')}
                 className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
                 <FileText className="w-3.5 h-3.5 shrink-0" />
                 <span className="flex-1 text-left">Create Invoice</span>

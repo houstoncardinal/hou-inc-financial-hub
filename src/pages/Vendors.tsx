@@ -18,6 +18,10 @@ import { downloadCSV } from '@/lib/reports';
 
 const blank = { name: '', contact_email: '', contact_phone: '', address: '', notes: '', ein: '', w9_on_file: false, requires_1099: false, lien_waiver_required: false };
 
+const VND_CSS = `
+.vnd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+`;
+
 export default function Vendors() {
   const { data: vendors = [] } = useVendors();
   const { data: checks = [] } = useChecks();
@@ -69,6 +73,7 @@ export default function Vendors() {
 
   return (
     <AppShell>
+      <style>{VND_CSS}</style>
       <PageHeader eyebrow="Counterparties" title="Vendors" description="Structured registry of payees with linked transaction history and total disbursement."
         actions={
           <div className="flex items-center gap-2">
@@ -190,7 +195,7 @@ export default function Vendors() {
           </div>
           {enriched.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
             enriched.map((v: any) => (
-              <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center">
+              <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab vnd-row items-center">
                 <div className="col-span-3 font-medium">{v.name}</div>
                 <div className="col-span-2 text-muted-foreground truncate">{v.contact_email || '—'}</div>
                 <div className="col-span-1 text-muted-foreground truncate">{v.contact_phone || '—'}</div>

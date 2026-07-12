@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate } from '@/hooks/useFinance';
+import { useUploadDocument } from '@/hooks/useDocuments';
 import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
@@ -170,6 +171,7 @@ export default function Concierge() {
   const checkUpsert = useUpsert('checks', [['checks']]);
   const vendorCreate = useQuickCreate('vendors');
   const projectCreate = useQuickCreate('projects');
+  const uploadDocument = useUploadDocument();
 
   const { data: vendors = [] } = useVendors();
   const { data: projects = [] } = useProjects();
@@ -303,9 +305,15 @@ export default function Concierge() {
         case 'income':
           await incomeUpsert.mutateAsync({ type: 'income', amount: parseFloat(getVal('amount')), transaction_date: getVal('date'), source_name: getVal('source_name') || null, vendor_id: null, project_id: getVal('project_id') || null, category: getVal('category') || null, notes: getVal('notes') || null } as any);
           break;
-        case 'expense':
-          await expenseUpsert.mutateAsync({ type: 'expense', amount: parseFloat(getVal('amount')), transaction_date: getVal('date'), vendor_id: getVal('vendor_id') || null, project_id: getVal('project_id') || null, category: getVal('category') || null, notes: getVal('notes') || null, payment_method: getVal('payment_method') || null } as any);
+        case 'expense': {
+          const txnId = crypto.randomUUID();
+          await expenseUpsert.mutateAsync({ id: txnId, type: 'expense', amount: parseFloat(getVal('amount')), transaction_date: getVal('date'), vendor_id: getVal('vendor_id') || null, project_id: getVal('project_id') || null, category: getVal('category') || null, notes: getVal('notes') || null, payment_method: getVal('payment_method') || null } as any);
+          if (receiptFile) {
+            uploadDocument.mutateAsync({ file: receiptFile, docType: 'receipt', runOcr: true, linked_transaction_id: txnId })
+              .catch(() => toast.error('Expense saved — receipt upload failed'));
+          }
           break;
+        }
         case 'check':
           await checkUpsert.mutateAsync({ amount: parseFloat(getVal('amount')), payee_name: getVal('payee_name'), issue_date: getVal('date'), check_number: getVal('check_number') || null, memo: getVal('memo') || null, project_id: getVal('project_id') || null, status: 'pending' } as any);
           break;

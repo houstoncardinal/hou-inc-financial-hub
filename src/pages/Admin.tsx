@@ -18,6 +18,7 @@ import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortfolioManager from '@/components/admin/PortfolioManager';
+import BlueprintStudio from '@/components/admin/BlueprintStudio';
 import { toast } from '@/hooks/use-toast';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
@@ -276,7 +277,7 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics';
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'blueprint';
 
 export default function Admin() {
   /* ── Auth ── */
@@ -614,6 +615,7 @@ export default function Admin() {
     { key: 'map',        label: 'Client Map',         icon: Map },
     { key: 'finance',    label: 'Finance Data',       icon: DollarSign },
     { key: 'analytics',  label: 'Analytics',          icon: TrendingUp },
+    { key: 'blueprint',  label: 'Blueprint Studio',   icon: Layers },
   ];
 
   /* ════════ LOCK SCREEN ════════ */
@@ -815,7 +817,13 @@ export default function Admin() {
           </div>
         )}
 
-        {tab !== 'map' && <div className="px-6 py-7">
+        {tab === 'blueprint' && (
+          <div className="flex-1" style={{ overflow: 'hidden' }}>
+            <BlueprintStudio />
+          </div>
+        )}
+
+        {tab !== 'map' && tab !== 'blueprint' && <div className="px-6 py-7">
 
           {/* ══════ OVERVIEW ══════ */}
           {tab === 'overview' && (
@@ -2759,3 +2767,4 @@ export default function Admin() {
     </div>
   );
 }
+

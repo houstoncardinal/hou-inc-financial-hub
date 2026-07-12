@@ -44,6 +44,9 @@ export interface UploadDocumentPayload {
   title?: string;
   tags?: string[];
   runOcr?: boolean;
+  linked_transaction_id?: string;
+  linked_check_id?: string;
+  linked_invoice_id?: string;
 }
 
 const BUCKET = 'documents';
@@ -104,10 +107,9 @@ export function useUploadDocument() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, docType, title, tags = [], runOcr = true }: UploadDocumentPayload) => {
+    mutationFn: async ({ file, docType, title, tags = [], runOcr = true, linked_transaction_id, linked_check_id, linked_invoice_id }: UploadDocumentPayload) => {
       if (!entity || !user) throw new Error('Not authenticated');
 
-      const ext = file.name.split('.').pop() ?? 'bin';
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${user.id}/${entity.id}/${Date.now()}-${safeName}`;
 
@@ -134,6 +136,9 @@ export function useUploadDocument() {
           title: title ?? null,
           tags,
           ocr_status: willOcr ? 'processing' : 'skipped',
+          ...(linked_transaction_id ? { linked_transaction_id } : {}),
+          ...(linked_check_id ? { linked_check_id } : {}),
+          ...(linked_invoice_id ? { linked_invoice_id } : {}),
         })
         .select()
         .single();

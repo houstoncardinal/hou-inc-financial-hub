@@ -50,6 +50,16 @@ function CurrencyInput({ value, onChange, className = '', ...rest }: { value: st
   );
 }
 
+const LDG_CSS = `
+.ldg-stat{background:rgba(255,255,255,0.86)!important;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background 0.22s,box-shadow 0.22s;}
+.ldg-stat:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 22px rgba(10,10,10,0.08);}
+.ldg-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+.ldg-badge{border-radius:9999px!important;padding:2px 9px!important;font-weight:700!important;letter-spacing:.18em!important;}
+.ldg-type-check{background:rgba(157,126,63,0.07)!important;border-color:rgba(157,126,63,0.28)!important;color:#9D7E3F!important;}
+.ldg-type-income{background:rgba(34,197,94,0.07)!important;border-color:rgba(34,197,94,0.28)!important;color:rgb(21,128,61)!important;}
+.ldg-type-expense{background:rgba(239,68,68,0.07)!important;border-color:rgba(239,68,68,0.28)!important;color:rgb(185,28,28)!important;}
+`;
+
 export default function Ledger() {
   const navigate = useNavigate();
   const { data: checks = [] } = useChecks();
@@ -146,6 +156,7 @@ export default function Ledger() {
 
   return (
     <AppShell>
+      <style>{LDG_CSS}</style>
       <PageHeader eyebrow="Unified Ledger" title="Transaction Ledger" description="Complete chronological record of all capital movement."
         actions={
           <div className="hidden sm:flex items-center gap-2">
@@ -175,9 +186,9 @@ export default function Ledger() {
         <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportExcel}><Table2 className="w-3 h-3 mr-1" />Excel</Button>
       </div>
 
-      <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px bg-border">
+      <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px" style={{ background: 'rgba(220,214,204,0.45)' }}>
         {[{ l: 'Inflow', v: fmtUSD(totals.inflow), c: 'text-positive' }, { l: 'Outflow', v: fmtUSD(totals.outflow), c: '' }, { l: 'Net Position', v: fmtUSD(totals.net), c: totals.net >= 0 ? 'text-positive' : 'text-accent' }].map(s => (
-          <div key={s.l} className="bg-background px-4 sm:px-5 py-3"><div className="micro-label">{s.l}</div><div className={`text-base sm:text-xl font-semibold font-mono-tab mt-1 ${s.c}`}>{s.v}</div></div>
+          <div key={s.l} className="ldg-stat px-4 sm:px-5 py-3"><div className="micro-label">{s.l}</div><div className={`text-base sm:text-xl font-semibold font-mono-tab mt-1 ${s.c}`}>{s.v}</div></div>
         ))}
       </div>
 
@@ -202,7 +213,7 @@ export default function Ledger() {
           ) : rows.map(r => (
             <div key={r.rowId} className="border border-border p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{r.type}</span>
+                <span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type === 'Check' ? 'ldg-type-check' : r.type === 'Income' ? 'ldg-type-income' : 'ldg-type-expense'}`}>{r.type}</span>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-semibold font-mono-tab ${r.amount >= 0 ? 'text-positive' : ''}`}>{r.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(r.amount))}</span>
                   <AlertDialog>
@@ -239,9 +250,9 @@ export default function Ledger() {
           </div>
           {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             rows.map(r => (
-              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center group ${(r as any).reconciled ? 'opacity-50' : ''}`}>
+              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row ${(r as any).reconciled ? 'opacity-50' : ''}`}>
                 <div className="text-muted-foreground">{fmtDate(r.date)}</div>
-                <div><span className="text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{r.type}</span></div>
+                <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type === 'Check' ? 'ldg-type-check' : r.type === 'Income' ? 'ldg-type-income' : 'ldg-type-expense'}`}>{r.type}</span></div>
                 <div className="truncate text-muted-foreground">{r.ref}</div>
                 <div className="truncate">{r.party}</div>
                 <div className="truncate text-muted-foreground">{r.project || '—'}</div>

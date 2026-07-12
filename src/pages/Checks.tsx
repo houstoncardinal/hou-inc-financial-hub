@@ -4,16 +4,21 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useChecks, useDelete, useUpsert } from '@/hooks/useFinance';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import DigitalCheck from '@/components/DigitalCheck';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
-import { Trash2, Eye, Table2, FileText, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog';
+import { Trash2, Eye, Pencil, Table2, FileText, AlertTriangle } from 'lucide-react';
 import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
+
+const CHK_CSS = `
+.chk-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+`;
 
 export default function Checks() {
   const { data: checks = [] } = useChecks();
@@ -29,6 +34,22 @@ export default function Checks() {
     }
   };
   const [q, setQ] = useState(''); const [statusFilter, setStatusFilter] = useState('all');
+  const [editCheck, setEditCheck] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({});
+
+  const openEdit = (c: any) => {
+    setEditCheck(c);
+    setEditForm({ amount: c.amount, payee_name: c.payee_name, memo: c.memo || '', retainage_pct: c.retainage_pct ?? 0, lien_waiver_status: c.lien_waiver_status || 'not_required' });
+  };
+
+  const saveEdit = async () => {
+    if (!editCheck) return;
+    try {
+      await upsert.mutateAsync({ ...editCheck, ...editForm, amount: parseFloat(editForm.amount) || 0, retainage_pct: parseFloat(editForm.retainage_pct) || 0 });
+      toast.success(`Check #${editCheck.check_number} updated`);
+      setEditCheck(null);
+    } catch (e: any) { toast.error(e?.message || 'Failed to save'); }
+  };
 
   const filtered = useMemo(() => checks.filter((c: any) => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
@@ -52,6 +73,7 @@ export default function Checks() {
 
   return (
     <AppShell>
+      <style>{CHK_CSS}</style>
       <PageHeader eyebrow="Instruments" title="Check Ledger" description="Issued instruments, payee assignment, and clearance state."
         actions={
           <div className="flex items-center gap-2">
@@ -122,6 +144,7 @@ export default function Checks() {
                     <DigitalCheck checkNumber={c.check_number} payee={c.payee_name} amount={Number(c.amount)} date={c.issue_date} memo={c.memo} status={c.status} />
                   </DialogContent>
                 </Dialog>
+                <Button variant="ghost" size="sm" className="rounded-none h-7 w-7" onClick={() => openEdit(c)}><Pencil className="w-3.5 h-3.5" /></Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="rounded-none h-7 w-7 text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                   <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
@@ -142,7 +165,7 @@ export default function Checks() {
           {filtered.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
           ) : filtered.map((c: any) => (
-            <div key={c.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center">
+            <div key={c.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab chk-row items-center">
               <div className="col-span-1 font-semibold">{c.check_number}</div>
               <div className="col-span-3 truncate">{c.payee_name}</div>
               <div className="col-span-2 truncate text-muted-foreground">{c.projects?.name || '—'}</div>
@@ -174,6 +197,7 @@ export default function Checks() {
                     <DigitalCheck checkNumber={c.check_number} payee={c.payee_name} amount={Number(c.amount)} date={c.issue_date} memo={c.memo} status={c.status} />
                   </DialogContent>
                 </Dialog>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none" onClick={() => openEdit(c)}><Pencil className="w-3.5 h-3.5" /></Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                   <AlertDialogContent className="rounded-none">
@@ -186,6 +210,54 @@ export default function Checks() {
           ))}
         </div>
       </div>
+
+      {/* Edit check dialog */}
+      <Dialog open={!!editCheck} onOpenChange={open => { if (!open) setEditCheck(null); }}>
+        <DialogContent className="rounded-none max-w-lg w-[calc(100%-2rem)]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold tracking-wide">Edit Check #{editCheck?.check_number}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="micro-label">Payee Name</Label>
+                <Input value={editForm.payee_name || ''} onChange={e => setEditForm((f: any) => ({ ...f, payee_name: e.target.value }))} className="rounded-none h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="micro-label">Amount</Label>
+                <Input type="number" step="0.01" value={editForm.amount || ''} onChange={e => setEditForm((f: any) => ({ ...f, amount: e.target.value }))} className="rounded-none h-9 text-sm font-mono-tab" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="micro-label">Memo</Label>
+              <Input value={editForm.memo || ''} onChange={e => setEditForm((f: any) => ({ ...f, memo: e.target.value }))} className="rounded-none h-9 text-sm" placeholder="Optional memo" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="micro-label">Retainage %</Label>
+                <Input type="number" step="0.5" min="0" max="100" value={editForm.retainage_pct || ''} onChange={e => setEditForm((f: any) => ({ ...f, retainage_pct: e.target.value }))} className="rounded-none h-9 text-sm font-mono-tab" placeholder="0" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="micro-label">Lien Waiver Status</Label>
+                <Select value={editForm.lien_waiver_status || 'not_required'} onValueChange={v => setEditForm((f: any) => ({ ...f, lien_waiver_status: v }))}>
+                  <SelectTrigger className="rounded-none h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_required">Not Required</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="received">Received</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild><Button variant="outline" className="rounded-none h-9 text-xs">Cancel</Button></DialogClose>
+            <Button onClick={saveEdit} disabled={upsert.isPending} className="rounded-none h-9 text-xs bg-foreground text-background hover:opacity-90">
+              {upsert.isPending ? 'Saving…' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

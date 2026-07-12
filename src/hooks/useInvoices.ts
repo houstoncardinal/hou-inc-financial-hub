@@ -159,14 +159,11 @@ export function useInvoices() {
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   });
 
-  // Expose same API shape as the old hook so no pages need to change
-  const create = (data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => {
-    createMutation.mutate(data);
-  };
+  const create = (data: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) =>
+    createMutation.mutateAsync(data);
 
-  const update = (id: string, updates: Partial<Invoice>) => {
-    updateMutation.mutate({ id, updates });
-  };
+  const update = (id: string, updates: Partial<Invoice>) =>
+    updateMutation.mutateAsync({ id, updates });
 
   const remove = (id: string) => {
     removeMutation.mutate(id);

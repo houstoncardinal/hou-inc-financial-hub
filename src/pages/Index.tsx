@@ -8,7 +8,7 @@ import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
-  FileText, ArrowDownToLine, ArrowUpFromLine, Download, Plus, Zap,
+  FileText, ArrowDownToLine, ArrowUpFromLine, Download, Zap,
   ConciergeBell, BarChart3, FolderKanban, Users, Receipt, AlertTriangle,
   X, RefreshCw, Camera, BookOpen, Grid3X3, BookMarked, FolderOpen,
   Upload, ChevronRight, Layers,
@@ -155,6 +155,18 @@ function StatusBadge({ status }: { status: string | null }) {
     </span>
   );
 }
+
+const IDX_CSS = `
+.stat-card{border:1px solid rgba(255,255,255,0.70)!important;box-shadow:0 1px 6px rgba(10,10,10,0.04),inset 0 1px 0 rgba(255,255,255,0.95)!important;}
+.stat-card:hover{box-shadow:0 10px 36px rgba(10,10,10,0.10),inset 0 1px 0 rgba(255,255,255,0.98)!important;}
+.idx-kpi{background:rgba(255,255,255,0.82)!important;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:background 0.22s,box-shadow 0.22s;}
+.idx-kpi:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 18px rgba(10,10,10,0.08);}
+.idx-qa{background:rgba(255,255,255,0.76)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:background 0.22s,box-shadow 0.22s;}
+.idx-qa:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 18px rgba(10,10,10,0.09)!important;}
+.idx-widget{background:rgba(255,255,255,0.80)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:background 0.2s,box-shadow 0.2s,border-color 0.2s;}
+.idx-widget:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 20px rgba(10,10,10,0.08);}
+.idx-row:hover{background-color:rgba(157,126,63,0.025)!important;}
+`;
 
 export default function Index() {
   const navigate = useNavigate();
@@ -462,6 +474,7 @@ export default function Index() {
 
   return (
     <AppShell>
+      <style>{IDX_CSS}</style>
       {/* Hidden camera input — triggers native camera on mobile */}
       <input
         ref={cameraRef}
@@ -590,10 +603,10 @@ export default function Index() {
             ))}
           </div>
           {/* Action tiles below */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px bg-border border border-border">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px border border-border" style={{ background: 'rgba(220,214,204,0.45)' }}>
             {quickActions.map(a => (
               <button key={a.label} onClick={a.onClick}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 bg-background hover:bg-secondary/30 active:bg-secondary transition-all duration-200 group ${a.accent ? 'ring-1 ring-inset ring-foreground/10 bg-foreground/[0.02]' : ''}`}
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 idx-qa active:bg-secondary transition-all duration-200 group ${a.accent ? 'ring-1 ring-inset ring-foreground/10' : ''}`}
               >
                 <div className={`w-9 h-9 flex items-center justify-center transition-all duration-200 group-hover:scale-110 ${a.accent ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground group-hover:text-foreground'}`}>
                   <a.icon className="w-4 h-4" strokeWidth={1.5} />
@@ -649,7 +662,7 @@ export default function Index() {
         <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground mb-2.5">
           Construction Intelligence · YTD
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border border border-border">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px border border-border" style={{ background: 'rgba(220,214,204,0.45)' }}>
           {([
             {
               label: 'Gross Margin',
@@ -686,7 +699,7 @@ export default function Index() {
               color: 'text-foreground',
             },
           ] as const).map(kpi => (
-            <div key={kpi.label} className="bg-background px-3.5 py-3">
+            <div key={kpi.label} className="idx-kpi px-3.5 py-3">
               <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1.5 leading-tight">{kpi.label}</div>
               <div className={`text-sm font-bold font-mono-tab leading-tight ${kpi.color}`}>{kpi.value}</div>
               <div className="text-[9px] text-muted-foreground mt-1 leading-tight">{kpi.sub}</div>
@@ -699,7 +712,7 @@ export default function Index() {
       <div className="px-4 sm:px-8 py-3 border-b border-border">
         <div className="flex items-center gap-3 overflow-x-auto pb-1">
           <button onClick={() => navigate('/projects')}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border hover:border-foreground/20 hover:bg-secondary/20 transition-all shrink-0">
+            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border idx-widget transition-all shrink-0">
             <div className="w-7 h-7 flex items-center justify-center bg-amber-600/10 text-amber-600">
               <FolderKanban className="w-3.5 h-3.5" strokeWidth={1.5} />
             </div>
@@ -709,7 +722,7 @@ export default function Index() {
             </div>
           </button>
           <button onClick={() => navigate('/vendors')}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border hover:border-foreground/20 hover:bg-secondary/20 transition-all shrink-0">
+            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border idx-widget transition-all shrink-0">
             <div className="w-7 h-7 flex items-center justify-center bg-blue-600/10 text-blue-600">
               <Users className="w-3.5 h-3.5" strokeWidth={1.5} />
             </div>
@@ -719,7 +732,7 @@ export default function Index() {
             </div>
           </button>
           <button onClick={() => navigate('/invoices')}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border hover:border-foreground/20 hover:bg-secondary/20 transition-all shrink-0">
+            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border idx-widget transition-all shrink-0">
             <div className={`w-7 h-7 flex items-center justify-center ${invoiceAlerts.overdueCount > 0 ? 'bg-accent/10 text-accent' : 'bg-violet-600/10 text-violet-600'}`}>
               <Receipt className="w-3.5 h-3.5" strokeWidth={1.5} />
             </div>
@@ -782,7 +795,7 @@ export default function Index() {
               ) : (
                 <div className="divide-y divide-border max-h-[340px] overflow-y-auto">
                   {recent.map(r => (
-                    <div key={r.kind + r.id} className="grid grid-cols-7 gap-2 px-3 py-2 text-xs font-mono-tab hover:bg-secondary/20 items-center">
+                    <div key={r.kind + r.id} className="grid grid-cols-7 gap-2 px-3 py-2 text-xs font-mono-tab idx-row items-center">
                       <div className="col-span-2 text-muted-foreground">{fmtDate(r.date)}</div>
                       <div className="col-span-2 flex items-center gap-1.5 truncate">
                         <span className="text-[8px] uppercase tracking-[0.14em] px-1 py-0.5 border border-border shrink-0">{r.kind}</span>
@@ -792,11 +805,12 @@ export default function Index() {
                         {r.amount >= 0 ? '+' : ''}{fmtUSD(Math.abs(r.amount))}
                       </div>
                       <div className="col-span-1 flex justify-end">
-                        {r.kind === 'Check' ? (
-                          <button onClick={() => navigate('/checks')} className="text-[8px] uppercase tracking-wider text-muted-foreground hover:text-foreground">View</button>
-                        ) : (
-                          <button onClick={() => navigate(r.kind === 'Expense' ? '/expenses' : '/income')} className="text-[8px] uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5"><Plus className="w-2 h-2" /> Log</button>
-                        )}
+                        <button
+                          onClick={() => navigate(r.kind === 'Check' ? '/checks' : r.kind === 'Expense' ? '/expenses' : '/income')}
+                          className="text-[8px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                        >
+                          View
+                        </button>
                       </div>
                     </div>
                   ))}

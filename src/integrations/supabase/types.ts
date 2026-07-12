@@ -151,12 +151,18 @@ export type Database = {
           check_number: string
           created_at: string
           deleted_at: string | null
+          entity_id: string
           id: string
           issue_date: string
+          lien_waiver_status: string
           memo: string | null
           payee_name: string
           payee_vendor_id: string | null
           project_id: string | null
+          reconciled: boolean
+          reconciled_at: string | null
+          retainage_held: number
+          retainage_pct: number
           status: Database["public"]["Enums"]["check_status"]
           updated_at: string
           user_id: string
@@ -166,12 +172,18 @@ export type Database = {
           check_number: string
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           issue_date?: string
+          lien_waiver_status?: string
           memo?: string | null
           payee_name: string
           payee_vendor_id?: string | null
           project_id?: string | null
+          reconciled?: boolean
+          reconciled_at?: string | null
+          retainage_held?: number
+          retainage_pct?: number
           status?: Database["public"]["Enums"]["check_status"]
           updated_at?: string
           user_id: string
@@ -181,12 +193,18 @@ export type Database = {
           check_number?: string
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           issue_date?: string
+          lien_waiver_status?: string
           memo?: string | null
           payee_name?: string
           payee_vendor_id?: string | null
           project_id?: string | null
+          reconciled?: boolean
+          reconciled_at?: string | null
+          retainage_held?: number
+          retainage_pct?: number
           status?: Database["public"]["Enums"]["check_status"]
           updated_at?: string
           user_id?: string
@@ -255,9 +273,11 @@ export type Database = {
           code: string | null
           created_at: string
           deleted_at: string | null
+          entity_id: string
           id: string
           name: string
           notes: string | null
+          portal_brief_id: string | null
           status: Database["public"]["Enums"]["project_status"]
           updated_at: string
           user_id: string
@@ -267,9 +287,11 @@ export type Database = {
           code?: string | null
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           name: string
           notes?: string | null
+          portal_brief_id?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
           user_id: string
@@ -279,9 +301,11 @@ export type Database = {
           code?: string | null
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           name?: string
           notes?: string | null
+          portal_brief_id?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
           user_id?: string
@@ -292,11 +316,16 @@ export type Database = {
         Row: {
           amount: number
           category: string | null
+          cost_type: string | null
           created_at: string
           deleted_at: string | null
+          entity_id: string
           id: string
           notes: string | null
+          payment_method: string | null
           project_id: string | null
+          reconciled: boolean
+          reconciled_at: string | null
           source_name: string | null
           transaction_date: string
           type: Database["public"]["Enums"]["txn_type"]
@@ -307,11 +336,16 @@ export type Database = {
         Insert: {
           amount: number
           category?: string | null
+          cost_type?: string | null
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           notes?: string | null
+          payment_method?: string | null
           project_id?: string | null
+          reconciled?: boolean
+          reconciled_at?: string | null
           source_name?: string | null
           transaction_date?: string
           type: Database["public"]["Enums"]["txn_type"]
@@ -322,11 +356,16 @@ export type Database = {
         Update: {
           amount?: number
           category?: string | null
+          cost_type?: string | null
           created_at?: string
           deleted_at?: string | null
+          entity_id?: string
           id?: string
           notes?: string | null
+          payment_method?: string | null
           project_id?: string | null
+          reconciled?: boolean
+          reconciled_at?: string | null
           source_name?: string | null
           transaction_date?: string
           type?: Database["public"]["Enums"]["txn_type"]
@@ -762,11 +801,16 @@ export type Database = {
           contact_phone: string | null
           created_at: string
           deleted_at: string | null
+          ein: string | null
+          entity_id: string
           id: string
+          lien_waiver_required: boolean
           name: string
           notes: string | null
+          requires_1099: boolean
           updated_at: string
           user_id: string
+          w9_on_file: boolean
         }
         Insert: {
           address?: string | null
@@ -774,11 +818,16 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           deleted_at?: string | null
+          ein?: string | null
+          entity_id?: string
           id?: string
+          lien_waiver_required?: boolean
           name: string
           notes?: string | null
+          requires_1099?: boolean
           updated_at?: string
           user_id: string
+          w9_on_file?: boolean
         }
         Update: {
           address?: string | null
@@ -786,13 +835,227 @@ export type Database = {
           contact_phone?: string | null
           created_at?: string
           deleted_at?: string | null
+          ein?: string | null
+          entity_id?: string
           id?: string
+          lien_waiver_required?: boolean
           name?: string
           notes?: string | null
+          requires_1099?: boolean
+          updated_at?: string
+          user_id?: string
+          w9_on_file?: boolean
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          client_address: string
+          client_company: string
+          client_email: string
+          client_name: string
+          created_at: string
+          due_date: string
+          entity_id: string
+          id: string
+          issue_date: string
+          line_items: Json
+          notes: string
+          portal_client_id: string | null
+          status: string
+          stripe_payment_link: string | null
+          tax_rate: number
+          terms: string
+          invoice_number: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_address?: string
+          client_company?: string
+          client_email?: string
+          client_name?: string
+          created_at?: string
+          due_date?: string
+          entity_id?: string
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string
+          portal_client_id?: string | null
+          status?: string
+          stripe_payment_link?: string | null
+          tax_rate?: number
+          terms?: string
+          invoice_number: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_address?: string
+          client_company?: string
+          client_email?: string
+          client_name?: string
+          created_at?: string
+          due_date?: string
+          entity_id?: string
+          id?: string
+          issue_date?: string
+          line_items?: Json
+          notes?: string
+          portal_client_id?: string | null
+          status?: string
+          stripe_payment_link?: string | null
+          tax_rate?: number
+          terms?: string
+          invoice_number?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invoices_portal_client_id_fkey"
+            columns: ["portal_client_id"]
+            isOneToOne: false
+            referencedRelation: "portal_clients"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      documents: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          doc_type: string
+          entity_id: string
+          extracted_data: Json
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          linked_check_id: string | null
+          linked_invoice_id: string | null
+          linked_transaction_id: string | null
+          ocr_error: string | null
+          ocr_status: string
+          tags: string[]
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          doc_type?: string
+          entity_id?: string
+          extracted_data?: Json
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          linked_check_id?: string | null
+          linked_invoice_id?: string | null
+          linked_transaction_id?: string | null
+          ocr_error?: string | null
+          ocr_status?: string
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          doc_type?: string
+          entity_id?: string
+          extracted_data?: Json
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          linked_check_id?: string | null
+          linked_invoice_id?: string | null
+          linked_transaction_id?: string | null
+          ocr_error?: string | null
+          ocr_status?: string
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_linked_transaction_id_fkey"
+            columns: ["linked_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_linked_check_id_fkey"
+            columns: ["linked_check_id"]
+            isOneToOne: false
+            referencedRelation: "checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_linked_invoice_id_fkey"
+            columns: ["linked_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      draw_schedules: {
+        Row: {
+          created_at: string
+          draw_amount: number
+          id: string
+          milestone_name: string
+          notes: string | null
+          project_id: string
+          scheduled_date: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          draw_amount?: number
+          id?: string
+          milestone_name: string
+          notes?: string | null
+          project_id: string
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          draw_amount?: number
+          id?: string
+          milestone_name?: string
+          notes?: string | null
+          project_id?: string
+          scheduled_date?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draw_schedules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

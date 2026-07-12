@@ -19,6 +19,10 @@ const STATUS_STYLES: Record<string, string> = {
   overdue: 'bg-accent/10 text-accent border-accent/30',
 };
 
+const INV_CSS = `
+.inv-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+`;
+
 export default function Invoices() {
   const navigate = useNavigate();
   const { invoices, remove, update } = useInvoices();
@@ -74,6 +78,7 @@ export default function Invoices() {
 
   return (
     <AppShell>
+      <style>{INV_CSS}</style>
       <PageHeader
         eyebrow="Billing"
         title="Invoices"
@@ -165,7 +170,7 @@ export default function Invoices() {
               </Button>
             </div>
           ) : filtered.map(inv => (
-            <div key={inv.id} className="grid grid-cols-[1.2fr_2fr_1.5fr_1fr_1.5fr_1fr_auto] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab hover:bg-secondary/20 items-center group">
+            <div key={inv.id} className="grid grid-cols-[1.2fr_2fr_1.5fr_1fr_1.5fr_1fr_auto] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab inv-row items-center group">
               <div className="font-semibold text-foreground">{inv.invoice_number}</div>
               <div>
                 <div className="font-medium truncate">{inv.client_name}</div>
