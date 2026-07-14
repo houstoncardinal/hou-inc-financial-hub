@@ -3,7 +3,7 @@
 -- Run this SINGLE file — it supersedes migrations 000002, 000003, 000004.
 -- Safe to re-run (all statements use IF NOT EXISTS / OR REPLACE / DROP IF EXISTS)
 --
--- Paste at: https://supabase.com/dashboard/project/gvvvlivbsnfkjpwxgbla/sql/new
+-- Run in the Supabase SQL editor.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 

@@ -6,7 +6,7 @@
 -- Also includes the bidirectional sync triggers from migration 20260714000003
 -- in case that migration has not been run yet (all statements use IF NOT EXISTS / OR REPLACE).
 --
--- Run at: https://supabase.com/dashboard/project/gvvvlivbsnfkjpwxgbla/sql/new
+-- Run in the Supabase SQL editor.
 
 -- 1. Custom fields column
 ALTER TABLE admin_projects

@@ -7,7 +7,7 @@
 --
 -- Also adds zip_code TEXT to admin_projects.
 --
--- Paste at: https://supabase.com/dashboard/project/gvvvlivbsnfkjpwxgbla/sql/new
+-- Run in the Supabase SQL editor.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. Add zip_code column ───────────────────────────────────────────────────

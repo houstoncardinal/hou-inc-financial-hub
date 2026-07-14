@@ -6,7 +6,7 @@
 -- When a project is deleted from `projects` (houston-enterprise), also remove the admin mirror.
 -- Update sync is intentionally NOT done — admin projects have richer fields; let them drift.
 --
--- Run at: https://supabase.com/dashboard/project/gvvvlivbsnfkjpwxgbla/sql/new
+-- Run in the Supabase SQL editor.
 
 -- ── Helper: get or look up the first admin user id ───────────────────────────────────────────
 -- We store the admin_user_id as the user who owns the finance project (its user_id column).

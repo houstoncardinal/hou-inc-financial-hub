@@ -4,7 +4,7 @@
 -- Clients submit help requests from the portal project view.
 -- Admins receive and resolve them in the /admin Notifications tab.
 --
--- Paste at: https://supabase.com/dashboard/project/gvvvlivbsnfkjpwxgbla/sql/new
+-- Run in the Supabase SQL editor.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. Help requests table ───────────────────────────────────────────────────
