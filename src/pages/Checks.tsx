@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Trash2, Eye, Pencil, Table2, FileText, AlertTriangle } from 'lucide-react';
 import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
+import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
 
 const CHK_CSS = `
 .chk-row:hover{background-color:rgba(157,126,63,0.032)!important;}
@@ -34,6 +35,7 @@ export default function Checks() {
     }
   };
   const [q, setQ] = useState(''); const [statusFilter, setStatusFilter] = useState('all');
+  const [detailRow, setDetailRow] = useState<any>(null);
   const [editCheck, setEditCheck] = useState<any>(null);
   const [editForm, setEditForm] = useState<any>({});
 
@@ -106,7 +108,7 @@ export default function Checks() {
           {filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
           ) : filtered.map((c: any) => (
-            <div key={c.id} className="border border-border p-4 space-y-2">
+            <div key={c.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(c)}>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">#{c.check_number}</span>
                 <div className="flex items-center gap-2">
@@ -133,7 +135,7 @@ export default function Checks() {
                 <span>{c.projects?.name || '—'}</span>
                 <span>{fmtDate(c.issue_date)}</span>
               </div>
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-2 pt-1" onClick={e => e.stopPropagation()}>
                 <Select value={c.status} onValueChange={v => updateStatus(c, v)}>
                   <SelectTrigger className="rounded-none h-7 text-[10px] uppercase tracking-wider px-2 flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
@@ -165,7 +167,7 @@ export default function Checks() {
           {filtered.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
           ) : filtered.map((c: any) => (
-            <div key={c.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab chk-row items-center">
+            <div key={c.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab chk-row items-center cursor-pointer" onClick={() => setDetailRow(c)}>
               <div className="col-span-1 font-semibold">{c.check_number}</div>
               <div className="col-span-3 truncate">{c.payee_name}</div>
               <div className="col-span-2 truncate text-muted-foreground">{c.projects?.name || '—'}</div>
@@ -184,13 +186,13 @@ export default function Checks() {
                   <div className="text-[9px] text-muted-foreground">{c.retainage_pct}% retained</div>
                 )}
               </div>
-              <div className="col-span-1">
+              <div className="col-span-1" onClick={e => e.stopPropagation()}>
                 <Select value={c.status} onValueChange={v => updateStatus(c, v)}>
                   <SelectTrigger className="rounded-none h-7 text-[10px] uppercase tracking-wider px-2"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div className="col-span-1 flex justify-end gap-1">
+              <div className="col-span-1 flex justify-end gap-1" onClick={e => e.stopPropagation()}>
                 <Dialog>
                   <DialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none"><Eye className="w-3.5 h-3.5" /></Button></DialogTrigger>
                   <DialogContent className="max-w-2xl rounded-none p-0 border-border">
@@ -210,6 +212,8 @@ export default function Checks() {
           ))}
         </div>
       </div>
+
+      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind="check" data={detailRow} />
 
       {/* Edit check dialog */}
       <Dialog open={!!editCheck} onOpenChange={open => { if (!open) setEditCheck(null); }}>

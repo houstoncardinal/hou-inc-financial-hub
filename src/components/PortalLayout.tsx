@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, MessageSquare, LogOut, Menu, X,
@@ -39,6 +39,8 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior }); }, [location.pathname]);
 
   const handleLogout = () => { logout(); navigate('/portal'); };
   const initials  = client?.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? '?';
@@ -126,7 +128,19 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <div className="text-[12px] font-bold truncate" style={{ color: 'rgba(255,255,255,0.88)' }}>{client?.name ?? 'Guest'}</div>
             <div className="text-[9px] truncate font-light" style={{ color: 'rgba(255,255,255,0.28)' }}>{client?.email ?? ''}</div>
           </div>
-          <Bell className="w-3.5 h-3.5 shrink-0" style={{ color: 'rgba(255,255,255,0.16)' }} strokeWidth={1.5} />
+          <button
+            onClick={() => navigate('/portal/messages')}
+            className="relative shrink-0 p-0.5 transition-opacity hover:opacity-80"
+            title="Messages"
+          >
+            <Bell className="w-3.5 h-3.5" style={{ color: msgCount > 0 ? GOLDF : 'rgba(255,255,255,0.22)' }} strokeWidth={1.5} />
+            {msgCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 flex items-center justify-center text-[7px] font-black rounded-full"
+                style={{ backgroundColor: GOLD, color: '#fff' }}>
+                {msgCount > 9 ? '9+' : msgCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -298,17 +312,14 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       {/* ── Main content ── */}
       <main className="flex-1 md:ml-[260px] pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen"
         style={{ backgroundColor: '#F5F2EE' }}>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            style={{ minHeight: '100%' }}>
-            {children}
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.14, ease: 'easeOut' }}
+          style={{ minHeight: '100%' }}>
+          {children}
+        </motion.div>
       </main>
     </div>
   );

@@ -16,9 +16,9 @@ const WHITE  = '#FFFFFF';
 
 interface ProjectPhoto {
   id: string;
-  file_url: string;
+  url: string;
   caption?: string;
-  phase?: string;
+  phase_label?: string;
   taken_at?: string;
 }
 
@@ -39,7 +39,7 @@ export default function PortalGallery() {
       try {
         const { data } = await (supabase as any)
           .from('project_photos')
-          .select('id, file_url, caption, phase, taken_at')
+          .select('id, url, caption, phase_label, taken_at')
           .eq('client_id', client.id)
           .order('taken_at', { ascending: false });
         setPhotos(data ?? []);
@@ -50,8 +50,8 @@ export default function PortalGallery() {
 
   if (!client) return null;
 
-  const phases = Array.from(new Set(photos.map(p => p.phase ?? 'General')));
-  const byPhase = (phase: string) => photos.filter(p => (p.phase ?? 'General') === phase);
+  const phases = Array.from(new Set(photos.map(p => p.phase_label ?? 'General')));
+  const byPhase = (phase: string) => photos.filter(p => (p.phase_label ?? 'General') === phase);
 
   return (
     <PortalLayout>
@@ -114,7 +114,7 @@ export default function PortalGallery() {
                       style={{ border: `1px solid ${BORDER}` }}
                     >
                       <img
-                        src={photo.file_url}
+                        src={photo.url}
                         alt={photo.caption ?? phase}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
@@ -150,14 +150,14 @@ export default function PortalGallery() {
             onClick={e => e.stopPropagation()}
           >
             <img
-              src={preview.file_url}
+              src={preview.url}
               alt={preview.caption ?? ''}
               className="w-full h-auto max-h-[82vh] object-contain"
             />
-            {(preview.caption || preview.phase) && (
+            {(preview.caption || preview.phase_label) && (
               <div className="mt-3 text-center space-y-1">
                 {preview.caption && <p className="text-[13px] font-light text-white">{preview.caption}</p>}
-                {preview.phase  && <p className="text-[9px] uppercase tracking-[0.22em] font-bold" style={{ color: GOLDF }}>{preview.phase}</p>}
+                {preview.phase_label  && <p className="text-[9px] uppercase tracking-[0.22em] font-bold" style={{ color: GOLDF }}>{preview.phase_label}</p>}
               </div>
             )}
             <button

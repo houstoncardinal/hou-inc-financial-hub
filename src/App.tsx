@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
-import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +10,12 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
 import RoleGuard from "@/components/RoleGuard";
 import { EntityProvider } from "@/contexts/EntityContext";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior }); }, [pathname]);
+  return null;
+}
 
 function GlobalShortcuts() {
   const navigate = useNavigate();
@@ -54,12 +60,10 @@ import PortalMilestones from "./pages/portal/PortalMilestones";
 import PortalPayments   from "./pages/portal/PortalPayments";
 import PortalSettings   from "./pages/portal/PortalSettings";
 import PortalGallery    from "./pages/portal/PortalGallery";
+import PortalInvite     from "./pages/portal/PortalInvite";
 
 // Admin
 import Admin from "./pages/Admin";
-
-// Tools
-import WebScraper from "./pages/WebScraper";
 
 // Finance dashboard
 import EntitySelect  from "./pages/EntitySelect";
@@ -127,6 +131,7 @@ const App = () => (
         <BrowserRouter>
           <ThemeProvider>
             <AuthProvider>
+              <ScrollToTop />
               <GlobalShortcuts />
               <Routes>
                 {/* ── Public website ── */}
@@ -153,12 +158,10 @@ const App = () => (
                 <Route path="/portal/payments"   element={<PortalPayments />} />
                 <Route path="/portal/settings"   element={<PortalSettings />} />
                 <Route path="/portal/gallery"    element={<PortalGallery />} />
+                <Route path="/portal/invite"    element={<PortalInvite />} />
 
                 {/* ── Admin (admin-role only) ── */}
                 <Route path="/admin"             element={<RoleGuard allowed={['admin']}><Admin /></RoleGuard>} />
-
-                {/* ── Tools ── */}
-                <Route path="/scraper"           element={<RoleGuard allowed={['admin']}><WebScraper /></RoleGuard>} />
 
                 {/* ── Finance sector (single shared EntityProvider) ── */}
                 <Route path="/auth"             element={<Auth />} />

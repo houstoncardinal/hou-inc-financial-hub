@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 /* ── Design tokens ── */
@@ -172,7 +172,7 @@ export function generateTransactionReport(
     { content: fmtUSD(t.amount), styles: { halign: 'right', fontStyle: 'bold' } },
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     ...tblCfg(ty),
     head: [['Date', isIncome ? 'Source' : 'Vendor', 'Project', isIncome ? 'Notes' : 'Category', 'Amount']],
     body: rows,
@@ -223,7 +223,7 @@ export function generateCheckRegisterReport(checks: any[], _filter?: string) {
     { content: fmtUSD(c.amount), styles: { halign: 'right', fontStyle: 'bold' } },
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     ...tblCfg(ty),
     head: [['Check #', 'Payee', 'Issue Date', 'Status', 'Project', 'Memo', 'Amount']],
     body: rows,
@@ -293,7 +293,7 @@ export function generateLedgerReport(
     },
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     ...tblCfg(ty),
     head: [['Date', 'Type', 'Reference', 'Counterparty', 'Project', 'Amount']],
     body: rows,
@@ -342,7 +342,7 @@ export function generateProjectReport(projects: any[]) {
     { content: `${(p.used || 0).toFixed(1)}%`, styles: { halign: 'right' } },
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     ...tblCfg(ty),
     head: [['Project', 'Code', 'Status', 'Budget', 'Spent', 'Incoming', 'Utilization']],
     body: rows,
@@ -414,7 +414,7 @@ export function generateInvoicesReport(invoices: InvoiceSummary[]) {
     { content: fmtUSD(inv.total), styles: { halign: 'right', fontStyle: 'bold' } },
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     ...tblCfg(ty),
     head: [['Invoice #', 'Client', 'Company', 'Issued', 'Due', 'Status', 'Total']],
     body: rows,
@@ -685,7 +685,7 @@ export function generateGlossaryPDF(terms: GlossaryTerm[]) {
       t.definition,
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: cy,
       margin: { left: M, right: M, top: 14, bottom: 20 },
       head: [['Term', 'Definition']],

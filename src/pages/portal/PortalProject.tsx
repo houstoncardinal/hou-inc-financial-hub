@@ -5,7 +5,6 @@ import {
   Building2, Home, Users, Briefcase, Wrench, TrendingUp,
 } from 'lucide-react';
 import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
-import PhoneInput from '@/components/ui/smart/PhoneInput';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
 import { usePortal, ProjectBrief } from '@/hooks/usePortal';

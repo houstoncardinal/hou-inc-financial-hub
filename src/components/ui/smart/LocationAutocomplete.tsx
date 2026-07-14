@@ -73,10 +73,12 @@ export default function LocationAutocomplete({
     abortRef.current = new AbortController();
     setLoading(true);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=us&addressdetails=1&limit=7`,
-        { headers: { 'Accept-Language': 'en-US,en' }, signal: abortRef.current.signal }
-      );
+      // viewbox=W,N,E,S for Texas — bounded=0 prefers but does not restrict to this area
+      const url =
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=7` +
+        `&countrycodes=us&viewbox=-107.0,36.5,-93.5,25.5&bounded=0` +
+        `&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en-US,en' }, signal: abortRef.current.signal });
       const data: NominatimResult[] = await res.json();
       setResults(data);
       setOpen(data.length > 0);

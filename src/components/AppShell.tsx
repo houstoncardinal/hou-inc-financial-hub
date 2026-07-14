@@ -8,12 +8,13 @@ import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, Menu, ConciergeBell, BarChart3,
   Settings, Sun, Moon, Receipt, BookMarked, Globe,
-  Building2, Zap, Landmark, Layers, FolderOpen,
+  Building2, Zap, Landmark, Layers, FolderOpen, Plus, X,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const navGroups = [
   {
@@ -60,8 +61,158 @@ const mobileNav = [
   { to: '/finance/dashboard', label: 'Overview', icon: LayoutGrid, end: true },
   { to: '/checks', label: 'Checks', icon: FileText },
   { to: '/income', label: 'Income', icon: ArrowDownToLine },
-  { to: '/documents', label: 'Docs', icon: FolderOpen },
+  // 5th slot is the Add Entry button — rendered separately in AppShell
 ];
+
+/* ── Add Entry Sheet ─────────────────────────────────────────────────────── */
+function AddEntrySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { entity } = useEntity();
+  const navigate   = useNavigate();
+  const accentColor = entity?.color ?? '#9D7E3F';
+
+  const ENTRY_OPTIONS = [
+    {
+      label:       'Income',
+      description: 'Log revenue or a payment received',
+      icon:        ArrowDownToLine,
+      route:       '/income',
+      color:       '#10b981',
+      bg:          'rgba(16,185,129,0.08)',
+      border:      'rgba(16,185,129,0.22)',
+    },
+    {
+      label:       'Expense',
+      description: 'Record an outgoing payment or cost',
+      icon:        ArrowUpFromLine,
+      route:       '/expenses',
+      color:       '#ef4444',
+      bg:          'rgba(239,68,68,0.07)',
+      border:      'rgba(239,68,68,0.2)',
+    },
+    {
+      label:       'Check',
+      description: 'Issue a new check to a payee',
+      icon:        FileText,
+      route:       '/checks/new',
+      color:       '#f59e0b',
+      bg:          'rgba(245,158,11,0.08)',
+      border:      'rgba(245,158,11,0.22)',
+    },
+    {
+      label:       'Concierge',
+      description: 'Guided walkthrough for any entry',
+      icon:        ConciergeBell,
+      route:       '/concierge',
+      color:       accentColor,
+      bg:          `${accentColor}12`,
+      border:      `${accentColor}35`,
+    },
+  ] as const;
+
+  const go = (route: string) => {
+    sounds.tap();
+    onClose();
+    navigate(route);
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => { sounds.close(); onClose(); }}
+          />
+
+          {/* Sheet */}
+          <motion.div
+            className="fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border"
+            style={{ borderRadius: '16px 16px 0 0', paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)' }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 420, damping: 40 }}
+          >
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-9 h-1 rounded-full bg-border" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pt-2 pb-4 flex items-center justify-between">
+              <div>
+                <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-0.5" style={{ color: accentColor }}>
+                  {entity ? entity.name : 'Finance Hub'}
+                </div>
+                <div className="text-[18px] font-bold tracking-tight">Add Entry</div>
+              </div>
+              <button
+                onClick={() => { sounds.close(); onClose(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Entity indicator strip */}
+            {entity && (
+              <div className="mx-5 mb-4 flex items-center gap-2.5 px-3 py-2.5 border"
+                style={{ borderColor: `${accentColor}30`, backgroundColor: `${accentColor}08` }}>
+                <div className="w-1.5 h-4 rounded-full" style={{ backgroundColor: accentColor }} />
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-[0.18em]" style={{ color: accentColor }}>
+                    {entity.shortName}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground">{entity.category}</div>
+                </div>
+                <div className="ml-auto text-[9px] text-muted-foreground">Entry will be saved to this entity</div>
+              </div>
+            )}
+
+            {/* 2×2 options grid */}
+            <div className="px-5 grid grid-cols-2 gap-3">
+              {ENTRY_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <motion.button
+                    key={opt.label}
+                    onClick={() => go(opt.route)}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex flex-col items-start gap-2.5 p-4 border text-left transition-colors active:opacity-80"
+                    style={{ backgroundColor: opt.bg, borderColor: opt.border }}
+                  >
+                    <div className="w-9 h-9 flex items-center justify-center"
+                      style={{ backgroundColor: `${opt.color}18`, border: `1px solid ${opt.border}` }}>
+                      <Icon className="w-4 h-4" style={{ color: opt.color }} strokeWidth={1.75} />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-bold leading-tight" style={{ color: opt.color }}>
+                        {opt.label}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                        {opt.description}
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Footer note */}
+            <div className="px-5 pt-4 text-[9px] text-muted-foreground text-center">
+              All entries sync to your database in real time
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 const ENTITY_ICONS: Record<string, React.ComponentType<any>> = {
   'houston-enterprise':           Building2,
@@ -278,7 +429,10 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
   const { toggle, isDark } = useTheme();
+  const { entity } = useEntity();
+  const accentColor = entity?.color ?? '#9D7E3F';
 
   return (
     <div className="min-h-screen bg-background">
@@ -351,7 +505,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
             )}
           </NavLink>
         ))}
+
+        {/* 5th slot — Add Entry */}
+        <button
+          onClick={() => { sounds.open(); setAddSheetOpen(true); }}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors text-background relative"
+          aria-label="Add Entry"
+        >
+          <div
+            className="w-9 h-9 flex items-center justify-center rounded-full shadow-md transition-transform active:scale-95"
+            style={{ backgroundColor: accentColor }}
+          >
+            <Plus className="w-4.5 h-4.5" strokeWidth={2.5} style={{ color: '#fff' }} />
+          </div>
+          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold" style={{ color: accentColor }}>
+            Add
+          </span>
+        </button>
       </nav>
+
+      {/* Add Entry sheet — entity-aware */}
+      <AddEntrySheet open={addSheetOpen} onClose={() => setAddSheetOpen(false)} />
     </div>
   );
 }

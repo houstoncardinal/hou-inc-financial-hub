@@ -58,11 +58,12 @@ export default function PortalMeetings() {
   const [showModal, setShowModal]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess]       = useState(false);
-  const [type,   setType]   = useState(MEETING_TYPES[0]);
-  const [date,   setDate]   = useState('');
-  const [time,   setTime]   = useState(MEETING_TIMES[2]);
-  const [format, setFormat] = useState<PortalMeeting['format']>('Video Call');
-  const [notes,  setNotes]  = useState('');
+  const [type,      setType]      = useState(MEETING_TYPES[0]);
+  const [date,      setDate]      = useState('');
+  const [time,      setTime]      = useState(MEETING_TIMES[2]);
+  const [format,    setFormat]    = useState<PortalMeeting['format']>('Video Call');
+  const [notes,     setNotes]     = useState('');
+  const [submitErr, setSubmitErr] = useState('');
 
   useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
 
@@ -83,6 +84,7 @@ export default function PortalMeetings() {
     e.preventDefault();
     if (!date) return;
     setSubmitting(true);
+    setSubmitErr('');
     try {
       await requestMeeting({ type, date, time, format, notes });
       refresh();
@@ -93,11 +95,8 @@ export default function PortalMeetings() {
         setDate('');
         setNotes('');
       }, 1800);
-    } catch {
-      // meeting persist failed — still show success since local state was updated
-      refresh();
-      setSuccess(true);
-      setTimeout(() => { setSuccess(false); setShowModal(false); setDate(''); setNotes(''); }, 1800);
+    } catch (err: any) {
+      setSubmitErr(err?.message ?? 'Failed to schedule meeting. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -364,6 +363,12 @@ export default function PortalMeetings() {
                           className="w-full text-[12px] font-light outline-none resize-none"
                           style={{ padding: '12px 14px', border: `1px solid ${BORDER}`, backgroundColor: '#FAFAF9', color: DARK, lineHeight: 1.6, fontFamily: 'inherit', borderRadius: 0 }} />
                       </div>
+
+                      {submitErr && (
+                        <div className="text-[10px] font-medium px-3 py-2 mb-2" style={{ background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', color: '#dc2626' }}>
+                          {submitErr}
+                        </div>
+                      )}
 
                       <div className="flex gap-3 pt-2">
                         <button type="submit" disabled={!date || submitting}

@@ -97,7 +97,7 @@ function PwFld({
 
 /* ════════════════════════════════════════════════════════════════ */
 export default function PortalAuth() {
-  const { client, register, login, loginBypass, loginByEmail } = usePortal();
+  const { client, register, login, loginByEmail } = usePortal();
   const navigate = useNavigate();
 
   /* ── UI state ── */
@@ -217,14 +217,6 @@ export default function PortalAuth() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    if (lPw.trim() === '011491') {
-      const { ok, error: err } = await loginBypass('011491');
-      setLoading(false);
-      if (!ok) { setError(err ?? 'Bypass failed — run portal-setup.sql first.'); return; }
-      navigate('/portal/dashboard');
-      return;
-    }
 
     const { ok, status, error: err } = await login(lEmail.trim(), lPw);
     setLoading(false);

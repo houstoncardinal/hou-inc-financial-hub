@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { Invoice, invoiceSubtotal, invoiceTax, invoiceTotal } from '@/hooks/useInvoices';
 
 const C = {
@@ -126,7 +126,7 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
     fmtUSD(item.qty * item.rate),
   ]);
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: y,
     margin: { left: M, right: M },
     head: [['Description', 'Qty', 'Rate', 'Amount']],

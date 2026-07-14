@@ -4,7 +4,7 @@ import { User, Lock, CheckCircle, AlertCircle, Save } from 'lucide-react';
 import PhoneInput from '@/components/ui/smart/PhoneInput';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
-import { usePortal } from '@/hooks/usePortal';
+import { usePortal, BUILDER } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
 const DARK   = '#1A1410';
@@ -43,8 +43,16 @@ export default function PortalSettings() {
 
   useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
 
-  const [name, setName]   = useState(client?.name ?? '');
-  const [phone, setPhone] = useState(client?.phone ?? '');
+  const [name, setName]   = useState('');
+  const [phone, setPhone] = useState('');
+
+  // Sync state once client data has loaded asynchronously
+  useEffect(() => {
+    if (client) {
+      setName(prev => prev || (client.name ?? ''));
+      setPhone(prev => prev || (client.phone ?? ''));
+    }
+  }, [client?.name, client?.phone]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -96,13 +104,13 @@ export default function PortalSettings() {
       setPwdMsg({ ok: false, text: 'Current password is incorrect.' }); return;
     }
 
-    const { error: updateErr } = await (supabase as any).rpc('update_portal_password', {
-      p_client_id:    client.id,
-      p_new_password: newPwd,
+    const { error: updateErr } = await (supabase as any).rpc('set_portal_password', {
+      p_id:       client.id,
+      p_password: newPwd,
     });
     setPwdSaving(false);
     if (updateErr) {
-      setPwdMsg({ ok: false, text: 'Password update unavailable — contact Jeff Ali at jeff@houinc.com to reset.' });
+      setPwdMsg({ ok: false, text: `Password update unavailable — contact ${BUILDER.name} at ${BUILDER.email} to reset.` });
     } else {
       setCurPwd(''); setNewPwd(''); setConfPwd('');
       setPwdMsg({ ok: true, text: 'Password changed successfully.' });

@@ -33,6 +33,7 @@ export interface Document {
   linked_transaction_id: string | null;
   linked_check_id: string | null;
   linked_invoice_id: string | null;
+  linked_project_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -47,6 +48,7 @@ export interface UploadDocumentPayload {
   linked_transaction_id?: string;
   linked_check_id?: string;
   linked_invoice_id?: string;
+  linked_project_id?: string;
 }
 
 const BUCKET = 'documents';
@@ -107,7 +109,7 @@ export function useUploadDocument() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, docType, title, tags = [], runOcr = true, linked_transaction_id, linked_check_id, linked_invoice_id }: UploadDocumentPayload) => {
+    mutationFn: async ({ file, docType, title, tags = [], runOcr = true, linked_transaction_id, linked_check_id, linked_invoice_id, linked_project_id }: UploadDocumentPayload) => {
       if (!entity || !user) throw new Error('Not authenticated');
 
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -139,6 +141,7 @@ export function useUploadDocument() {
           ...(linked_transaction_id ? { linked_transaction_id } : {}),
           ...(linked_check_id ? { linked_check_id } : {}),
           ...(linked_invoice_id ? { linked_invoice_id } : {}),
+          ...(linked_project_id ? { linked_project_id } : {}),
         })
         .select()
         .single();
@@ -248,3 +251,42 @@ export const DOC_TYPE_COLORS: Record<DocType, string> = {
   photo:          '#ec4899',
   other:          '#78716c',
 };
+
+/** Fetch all documents linked to a specific project (by linked_project_id). */
+export function useProjectDocuments(projectId: string | undefined) {
+  const { entity } = useEntity();
+  const entityId = entity?.id ?? null;
+
+  return useQuery({
+    queryKey: ['project-documents', projectId, entityId],
+    queryFn: async () => {
+      if (!projectId || !entityId) return [];
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('entity_id', entityId)
+        .eq('linked_project_id', projectId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(toDocument);
+    },
+    enabled: !!projectId && !!entityId,
+  });
+}
+
+/** Generate a short-lived (1 hr) signed URL for any document file path. */
+export function useDocumentSignedUrl(filePath: string | null | undefined) {
+  return useQuery({
+    queryKey: ['doc-signed-url', filePath],
+    queryFn: async () => {
+      if (!filePath) return null;
+      const { data } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(filePath, 3600);
+      return data?.signedUrl ?? null;
+    },
+    enabled: !!filePath,
+    staleTime: 50 * 60 * 1000,
+  });
+}

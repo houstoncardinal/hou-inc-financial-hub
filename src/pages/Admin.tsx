@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -13,12 +17,15 @@ import {
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus, FileUp,
   Filter, MoreVertical, Copy, Archive, RotateCcw,
+  Building2, Zap, Landmark, FolderKanban, Bell, CheckSquare,
+  History, FileDown,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
-import { APPROVAL_DOCS } from '@/hooks/usePortal';
+import { APPROVAL_DOCS, BUILDER } from '@/hooks/usePortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import PortfolioManager from '@/components/admin/PortfolioManager';
 import MilestoneManager from '@/components/admin/MilestoneManager';
+import ProjectManager from '@/components/admin/ProjectManager';
 import { toast } from '@/hooks/use-toast';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
@@ -110,13 +117,13 @@ async function adminSendMessage(clientId: string, text: string) {
   await supabase.from('portal_messages').insert({
     client_id:   clientId,
     sender:      'builder',
-    sender_name: 'Jeff Ali',
+    sender_name: BUILDER.name,
     body:        text,
   });
 }
 
 async function adminUpdateDocStatus(clientId: string, docId: string, status: 'approved' | 'rejected') {
-  await supabase.from('portal_documents').update({ status, reviewed_at: new Date().toISOString(), reviewed_by: 'Jeff Ali' }).eq('id', docId);
+  await supabase.from('portal_documents').update({ status, reviewed_at: new Date().toISOString(), reviewed_by: BUILDER.name }).eq('id', docId);
 }
 
 async function adminUpdateMeetingStatus(clientId: string, meetingId: string, status: 'confirmed' | 'cancelled') {
@@ -143,8 +150,8 @@ async function adminApproveClient(clientId: string, clientName: string) {
   await supabase.from('portal_messages').insert({
     client_id:   clientId,
     sender:      'builder',
-    sender_name: 'Jeff Ali',
-    body:        `Welcome to the HOU INC Client Portal, ${clientName}. I'm Jeff Ali, Co-Founder and your dedicated project lead. Your account has been approved and I'm looking forward to learning about your vision. Please complete your Project Brief when you're ready — it gives me the context I need for our first consultation. You'll also find your required documents in the Documents tab. Feel free to message me anytime.`,
+    sender_name: BUILDER.name,
+    body:        `Welcome to the Houston Enterprise Client Portal, ${clientName}. I'm ${BUILDER.name}, Co-Founder and your dedicated project lead. Your account has been approved and I'm looking forward to learning about your vision. Please complete your Project Brief when you're ready — it gives me the context I need for our first consultation. You'll also find your required documents in the Documents tab. Feel free to message me anytime.`,
   });
 
   await supabase.from('portal_documents').insert(
@@ -159,17 +166,39 @@ async function adminApproveClient(clientId: string, clientName: string) {
       description:  d.description,
     }))
   );
+  await logChangelog('approved', 'client_account', 'admin', clientId, clientName, BUILDER.name, {});
 }
 
 async function adminRejectClient(clientId: string) {
   await supabase.from('portal_clients').update({ status: 'rejected', rejected_at: new Date().toISOString() }).eq('id', clientId);
+  await logChangelog('rejected', 'client_account', 'admin', clientId, null, BUILDER.name, {});
 }
 
 /* ── #14 Audit log ─────────────────────────────────────────────────── */
 async function logAdminAction(action: string, clientId: string, details: string) {
   try {
     await (supabase as any).from('portal_admin_log').insert({
-      action, client_id: clientId, actor: 'Jeff Ali', details,
+      action, client_id: clientId, actor: BUILDER.name, details,
+    });
+  } catch { /* table may not exist yet */ }
+}
+
+async function logChangelog(
+  action: string,
+  entity: string,
+  dashboard: string,
+  entityId: string | null,
+  entityLabel: string | null,
+  changedBy: string,
+  details: Record<string, any> = {}
+) {
+  try {
+    await supabase.from('admin_changelog' as any).insert({
+      action, entity, dashboard,
+      entity_id: entityId,
+      entity_label: entityLabel,
+      changed_by: changedBy,
+      details,
     });
   } catch { /* table may not exist yet */ }
 }
@@ -188,7 +217,7 @@ async function loadAdminNotes(clientId: string): Promise<any[]> {
 
 async function adminSaveNote(clientId: string, body: string) {
   await (supabase as any).from('portal_admin_notes').insert({
-    client_id: clientId, body, author: 'Jeff Ali',
+    client_id: clientId, body, author: BUILDER.name,
   });
 }
 
@@ -197,7 +226,7 @@ async function adminRequestDocument(clientId: string, name: string, description:
   await (supabase as any).from('portal_documents').insert({
     client_id: clientId, name, description,
     file_type: 'PDF', category: 'required',
-    status: 'pending', requested_by: 'Jeff Ali',
+    status: 'pending', requested_by: BUILDER.name,
   });
 }
 
@@ -263,7 +292,7 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics';
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'projects' | 'notifications' | 'changelog';
 
 export default function Admin() {
   /* ── Auth ── */
@@ -291,10 +320,12 @@ export default function Admin() {
   const [finVendors,   setFinVendors]   = useState<any[]>([]);
 
   const refreshData = useCallback(async () => {
-    const [portal, leads, finance] = await Promise.all([
+    const [portal, leads, finance, helpRes, clRes] = await Promise.all([
       loadPortalData(),
       loadLeadsData(),
       loadFinanceData(),
+      supabase.from('portal_help_requests').select('*, portal_clients(name, email)').order('created_at', { ascending: false }),
+      (supabase as any).from('admin_changelog').select('*').order('created_at', { ascending: false }).limit(500),
     ]);
     setClients(portal.clients);
     setBriefs(portal.briefs);
@@ -308,6 +339,8 @@ export default function Admin() {
     setFinTxns(finance.finTxns);
     setFinVendors(finance.finVendors);
     setPortfolioCount(finance.portfolioCount);
+    setHelpRequests(helpRes.data ?? []);
+    setChangelogEntries(clRes.data ?? []);
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
@@ -317,8 +350,16 @@ export default function Admin() {
 
   /* ── Client detail state ── */
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings' | 'notes' | 'milestones'>('brief');
+  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings' | 'notes' | 'milestones' | 'profile'>('brief');
   const [replyDraft, setReplyDraft] = useState('');
+
+  /* ── Client profile editing ── */
+  const [editName,        setEditName]        = useState('');
+  const [editPhone,       setEditPhone]       = useState('');
+  const [editProjectType, setEditProjectType] = useState('');
+  const [editStatus,      setEditStatus]      = useState('');
+  const [profileSaving,   setProfileSaving]   = useState(false);
+  const [profileMsg,      setProfileMsg]      = useState<{ok: boolean; text: string} | null>(null);
 
   /* ── #9 Admin notes ── */
   const [adminNotes, setAdminNotes] = useState<any[]>([]);
@@ -349,12 +390,24 @@ export default function Admin() {
   const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
+  /* ── Help requests ── */
+  const [helpRequests, setHelpRequests] = useState<any[]>([]);
+
+  /* ── Changelog ── */
+  const [changelogEntries,   setChangelogEntries]   = useState<any[]>([]);
+  const [clSearch,           setClSearch]           = useState('');
+  const [clDashFilter,       setClDashFilter]       = useState('all');
+  const [clEntityFilter,     setClEntityFilter]     = useState('all');
+
   /* ── Finance entity filter ── */
   const [finEntityTab, setFinEntityTab] = useState<string>('all');
+  const [finHovId,     setFinHovId]     = useState<string | null>(null);
 
   /* ── Mobile nav ── */
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  /* ── Scroll to top whenever tab changes ── */
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior }); }, [tab]);
 
   /* ── Computed ── */
   const totalMsgs       = Object.values(allMsgs).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
@@ -367,6 +420,7 @@ export default function Admin() {
   const approvedClients  = clients.filter((c: any) => c.status === 'approved' || !c.status);
 
   const clientName = (id: string) => clients.find((c: any) => c.id === id)?.name ?? '—';
+  const openHelpCount = helpRequests.filter((r: any) => r.status !== 'resolved').length;
 
   /* ── PIN handlers ── */
   const handlePinDigit = (idx: number, val: string) => {
@@ -393,12 +447,53 @@ export default function Admin() {
     loadAdminNotes(selectedClientId).then(setAdminNotes);
   }, [selectedClientId]);
 
+  /* ── Sync edit fields when selected client changes ── */
+  useEffect(() => {
+    const c = clients.find((c: any) => c.id === selectedClientId);
+    if (c) {
+      setEditName(c.name ?? '');
+      setEditPhone(c.phone ?? '');
+      setEditProjectType(c.projectType ?? c.project_type ?? '');
+      setEditStatus(c.status ?? 'pending_approval');
+      setProfileMsg(null);
+    }
+  }, [selectedClientId, clients]);
+
   /* ── Client detail actions ── */
   const handleSendReply = async () => {
     if (!selectedClientId || !replyDraft.trim()) return;
     await adminSendMessage(selectedClientId, replyDraft.trim());
     await logAdminAction('message_sent', selectedClientId, replyDraft.trim().slice(0, 80));
+    await logChangelog('message_sent', 'message', 'admin', selectedClientId, clientName(selectedClientId), BUILDER.name, { preview: replyDraft.trim().slice(0, 120) });
     setReplyDraft('');
+    await refreshData();
+  };
+
+  /* ── Client profile update ── */
+  const handleUpdateClientProfile = async () => {
+    if (!selectedClientId || !editName.trim()) return;
+    setProfileSaving(true);
+    setProfileMsg(null);
+    const { error } = await supabase
+      .from('portal_clients' as any)
+      .update({
+        name:         editName.trim(),
+        phone:        editPhone.trim() || null,
+        project_type: editProjectType.trim() || null,
+        status:       editStatus,
+        ...(editStatus === 'approved' ? { approved_at: new Date().toISOString(), rejected_at: null } : {}),
+        ...(editStatus === 'rejected' ? { rejected_at: new Date().toISOString(), approved_at: null } : {}),
+      })
+      .eq('id', selectedClientId);
+    if (!error) {
+      await logAdminAction('profile_updated', selectedClientId, `name=${editName.trim()}, status=${editStatus}`);
+      await logChangelog('updated', 'client_profile', 'admin', selectedClientId, editName.trim(), BUILDER.name, { status: editStatus });
+    }
+    setProfileMsg(error
+      ? { ok: false, text: error.message ?? 'Update failed.' }
+      : { ok: true,  text: 'Profile updated successfully.' }
+    );
+    setProfileSaving(false);
     await refreshData();
   };
 
@@ -422,14 +517,15 @@ export default function Admin() {
     try {
       await (supabase as any).from('change_orders').insert({
         client_id: selectedClientId,
-        number: coNumber.trim() || null,
+        title: coNumber.trim() || null,
         description: coDesc.trim(),
         amount: parseFloat(coAmount),
         status: 'pending',
-        created_by: 'Jeff Ali',
+        created_by: BUILDER.name,
       });
       await logAdminAction('change_order_created', selectedClientId, coDesc.trim().slice(0, 80));
-      await adminSendMessage(selectedClientId, `A change order has been issued: "${coDesc.trim()}" for $${parseFloat(coAmount).toLocaleString()}. Please review in your payments portal. — Jeff Ali`);
+      await logChangelog('created', 'change_order', 'admin', selectedClientId, clientName(selectedClientId), BUILDER.name, { description: coDesc.trim(), amount: parseFloat(coAmount) });
+      await adminSendMessage(selectedClientId, `A change order has been issued: "${coDesc.trim()}" for $${parseFloat(coAmount).toLocaleString()}. Please review in your payments portal. — ${BUILDER.name}`);
       toast({ title: 'Change order created and client notified' });
       setCoDesc(''); setCoNumber(''); setCoAmount(''); setCoOpen(false);
     } catch { toast({ title: 'Failed to create change order', description: 'Please try again.' }); }
@@ -442,6 +538,7 @@ export default function Admin() {
     setReqDocSaving(true);
     await adminRequestDocument(selectedClientId, reqDocName.trim(), reqDocDesc.trim());
     await logAdminAction('doc_requested', selectedClientId, reqDocName.trim());
+    await logChangelog('created', 'document_request', 'admin', selectedClientId, reqDocName.trim(), BUILDER.name, { client: clientName(selectedClientId) });
     setReqDocName(''); setReqDocDesc(''); setReqDocOpen(false);
     setReqDocSaving(false);
     await refreshData();
@@ -450,27 +547,31 @@ export default function Admin() {
   /* ── #13 Doc actions with auto-message ── */
   const handleDocApprove = async (clientId: string, docId: string, docName: string) => {
     await adminUpdateDocStatus(clientId, docId, 'approved');
-    await adminSendMessage(clientId, `Your document "${docName}" has been reviewed and approved. — Jeff Ali`);
+    await adminSendMessage(clientId, `Your document "${docName}" has been reviewed and approved. — ${BUILDER.name}`);
     await logAdminAction('doc_approved', clientId, docName);
+    await logChangelog('approved', 'document', 'admin', docId, docName, BUILDER.name, { client: clientName(clientId) });
     await refreshData();
   };
   const handleDocReject = async (clientId: string, docId: string, docName: string) => {
     await adminUpdateDocStatus(clientId, docId, 'rejected');
-    await adminSendMessage(clientId, `Your document "${docName}" requires revision. Please re-upload with the requested changes. — Jeff Ali`);
+    await adminSendMessage(clientId, `Your document "${docName}" requires revision. Please re-upload with the requested changes. — ${BUILDER.name}`);
     await logAdminAction('doc_rejected', clientId, docName);
+    await logChangelog('rejected', 'document', 'admin', docId, docName, BUILDER.name, { client: clientName(clientId) });
     await refreshData();
   };
 
   /* ── #13 Meeting actions with auto-message ── */
   const handleMeetingConfirm = async (clientId: string, meetId: string, meetType: string, date: string, time: string) => {
     await adminUpdateMeetingStatus(clientId, meetId, 'confirmed');
-    await adminSendMessage(clientId, `Your ${meetType} on ${date} at ${time} has been confirmed. Looking forward to it! — Jeff Ali`);
+    await adminSendMessage(clientId, `Your ${meetType} on ${date} at ${time} has been confirmed. Looking forward to it! — ${BUILDER.name}`);
     await logAdminAction('meeting_confirmed', clientId, `${meetType} on ${date}`);
+    await logChangelog('confirmed', 'meeting', 'admin', meetId, `${meetType} on ${date}`, BUILDER.name, { client: clientName(clientId) });
     await refreshData();
   };
   const handleMeetingCancel = async (clientId: string, meetId: string, meetType: string) => {
     await adminUpdateMeetingStatus(clientId, meetId, 'cancelled');
     await logAdminAction('meeting_cancelled', clientId, meetType);
+    await logChangelog('cancelled', 'meeting', 'admin', meetId, meetType, BUILDER.name, { client: clientName(clientId) });
     await refreshData();
   };
 
@@ -482,10 +583,13 @@ export default function Admin() {
     { key: 'leads',      label: 'Inbound Leads',      icon: Inbox,       badge: allLeads },
     { key: 'documents',  label: 'Documents',          icon: FileCheck,   badge: pendingDocs.length || undefined },
     { key: 'meetings',   label: 'Meetings',           icon: Calendar,    badge: pendingMeets.length || undefined },
-    { key: 'portfolio',  label: 'Portfolio',          icon: Image },
-    { key: 'map',        label: 'Client Map',         icon: Map },
-    { key: 'finance',    label: 'Finance Data',       icon: DollarSign },
-    { key: 'analytics',  label: 'Analytics',          icon: TrendingUp },
+    { key: 'projects',      label: 'Projects',           icon: FolderKanban },
+    { key: 'portfolio',     label: 'Portfolio',          icon: Image },
+    { key: 'map',           label: 'Client Map',         icon: Map },
+    { key: 'finance',       label: 'Finance Data',       icon: DollarSign },
+    { key: 'analytics',     label: 'Analytics',          icon: TrendingUp },
+    { key: 'notifications', label: 'Notifications',      icon: Bell, badge: openHelpCount || undefined, urgent: openHelpCount > 0 },
+    { key: 'changelog',     label: 'Changelog',           icon: History },
   ];
 
   /* ════════ LOCK SCREEN ════════ */
@@ -500,7 +604,7 @@ export default function Admin() {
             <div className="flex items-center gap-3 mb-9">
               <div className="w-px h-8" style={{ backgroundColor: AC }} />
               <div>
-                <div className="text-[11px] font-black tracking-[0.34em] uppercase" style={{ color: B, fontFamily: SERIF }}>HOU INC</div>
+                <div className="text-[9px] font-black tracking-[0.18em] uppercase" style={{ color: B, fontFamily: SERIF }}>Houston Enterprise</div>
                 <div className="text-[7px] uppercase tracking-[0.42em]" style={{ color: AC }}>Admin Dashboard · Secure Access</div>
               </div>
             </div>
@@ -552,7 +656,7 @@ export default function Admin() {
           <div className="flex items-center gap-2.5 mb-2">
             <div className="w-px h-6" style={{ backgroundColor: AC }} />
             <div>
-              <div className="text-[11px] font-black tracking-[0.3em] uppercase" style={{ color: W, fontFamily: SERIF }}>HOU INC</div>
+              <div className="text-[9px] font-black tracking-[0.16em] uppercase" style={{ color: W, fontFamily: SERIF }}>Houston Enterprise</div>
               <div className="text-[7px] uppercase tracking-[0.38em]" style={{ color: AC }}>Admin Dashboard</div>
             </div>
           </div>
@@ -606,7 +710,7 @@ export default function Admin() {
               <div className="flex items-center gap-2.5">
                 <div className="w-px h-6" style={{ backgroundColor: AC }} />
                 <div>
-                  <div className="text-[11px] font-black tracking-[0.3em] uppercase" style={{ color: W, fontFamily: SERIF }}>HOU INC</div>
+                  <div className="text-[9px] font-black tracking-[0.16em] uppercase" style={{ color: W, fontFamily: SERIF }}>Houston Enterprise</div>
                   <div className="text-[7px] uppercase tracking-[0.38em]" style={{ color: AC }}>Admin Dashboard</div>
                 </div>
               </div>
@@ -661,7 +765,7 @@ export default function Admin() {
               </button>
             )}
             <div>
-              <div className="text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: AC }}>HOU INC · Admin</div>
+              <div className="text-[8px] uppercase tracking-[0.4em] font-bold" style={{ color: AC }}>Houston Enterprise · Admin</div>
               <div className="text-[16px] font-bold" style={{ color: B }}>
                 {selectedClientId && tab === 'clients' ? clients.find((c: any) => c.id === selectedClientId)?.name : NAV_ITEMS.find(n => n.key === tab)?.label}
               </div>
@@ -1205,7 +1309,7 @@ export default function Admin() {
 
                 {/* Sub-tab pills */}
                 <div className="flex gap-1 mb-5 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap scrollbar-none">
-                  {([['brief', 'Brief'], ['messages', 'Msgs'], ['docs', 'Docs'], ['meetings', 'Meets'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
+                  {([['profile', 'Profile'], ['brief', 'Brief'], ['messages', 'Msgs'], ['docs', 'Docs'], ['meetings', 'Meets'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setClientSubTab(k)}
                       className="text-[9px] uppercase tracking-[0.22em] font-bold px-3 md:px-4 py-2 transition-all shrink-0"
                       style={{
@@ -1219,6 +1323,90 @@ export default function Admin() {
                     </button>
                   ))}
                 </div>
+
+                {/* Profile sub-tab */}
+                {clientSubTab === 'profile' && (() => {
+                  const PROJECT_TYPES = ['New Home Construction', 'Major Renovation', 'Home Addition', 'Kitchen & Bath Remodel', 'Outdoor & Landscaping', 'Commercial Build-Out', 'Other'];
+                  const CLIENT_STATUSES = ['pending_approval', 'approved', 'rejected'];
+                  const inputCls = "w-full text-[12px] font-light outline-none";
+                  const inputSty = { padding: '9px 12px', border: `1px solid ${G200}`, color: B, backgroundColor: W };
+                  const focusSty = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => { e.target.style.borderColor = AC; };
+                  const blurSty  = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => { e.target.style.borderColor = G200; };
+                  return (
+                    <div className="agl">
+                      <div className="px-6 py-4 flex items-center gap-2" style={{ borderBottom: `1px solid ${G200}` }}>
+                        <Edit3 className="w-3.5 h-3.5" style={{ color: AC }} strokeWidth={1.5} />
+                        <span className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Edit Client Profile</span>
+                      </div>
+                      <div className="p-6 grid sm:grid-cols-2 gap-5">
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Full Name *</div>
+                          <input value={editName} onChange={e => setEditName(e.target.value)}
+                            className={inputCls} style={inputSty} onFocus={focusSty} onBlur={blurSty} />
+                        </div>
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Phone</div>
+                          <input value={editPhone} onChange={e => setEditPhone(e.target.value)}
+                            className={inputCls} style={inputSty} onFocus={focusSty} onBlur={blurSty} />
+                        </div>
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Project Type</div>
+                          <select value={editProjectType} onChange={e => setEditProjectType(e.target.value)}
+                            className={inputCls} style={{ ...inputSty, cursor: 'pointer' }} onFocus={focusSty} onBlur={blurSty}>
+                            <option value="">— Select —</option>
+                            {PROJECT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Account Status</div>
+                          <select value={editStatus} onChange={e => setEditStatus(e.target.value)}
+                            className={inputCls} style={{ ...inputSty, cursor: 'pointer' }} onFocus={focusSty} onBlur={blurSty}>
+                            {CLIENT_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1.5" style={{ color: G500 }}>Email (read-only)</div>
+                          <input value={client.email} readOnly className={inputCls}
+                            style={{ ...inputSty, backgroundColor: G50, color: G500, cursor: 'default' }} />
+                        </div>
+                      </div>
+                      <div className="px-6 pb-6 flex items-center gap-4">
+                        <button onClick={handleUpdateClientProfile} disabled={profileSaving || !editName.trim()}
+                          className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-black px-5 py-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
+                          style={{ backgroundColor: AC, color: W }}>
+                          {profileSaving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                        {profileMsg && (
+                          <span className="text-[10px] font-light" style={{ color: profileMsg.ok ? '#10b981' : '#ef4444' }}>
+                            {profileMsg.text}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quick client info summary */}
+                      <div className="px-6 pt-4 pb-6" style={{ borderTop: `1px solid ${G200}` }}>
+                        <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-4" style={{ color: G500 }}>Registered Information</div>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {[
+                            ['Joined', new Date(client.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })],
+                            ['Status', client.status?.replace(/_/g, ' ') ?? '—'],
+                            ['Email', client.email],
+                            ['Phone', client.phone ?? '—'],
+                            ['Project Type', client.projectType ?? '—'],
+                            ['Messages', `${(allMsgs[selectedClientId!] ?? []).length} total`],
+                            ['Documents', `${(allDocs[selectedClientId!] ?? []).length} total`],
+                            ['Meetings', `${(allMeetings[selectedClientId!] ?? []).length} total`],
+                          ].map(([label, value]) => (
+                            <div key={label}>
+                              <div className="text-[7px] uppercase tracking-[0.24em] font-bold mb-0.5" style={{ color: G500 }}>{label}</div>
+                              <div className="text-[12px] font-semibold" style={{ color: B }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Brief sub-tab */}
                 {clientSubTab === 'brief' && (
@@ -1377,7 +1565,7 @@ export default function Admin() {
                         <textarea
                           value={replyDraft}
                           onChange={e => setReplyDraft(e.target.value)}
-                          placeholder="Reply as Jeff Ali…"
+                          placeholder={`Reply as ${BUILDER.name}…`}
                           rows={2}
                           className="flex-1 text-[12px] font-light outline-none resize-none"
                           style={{ padding: '10px 13px', border: `1px solid ${G200}`, color: B }}
@@ -1431,37 +1619,43 @@ export default function Admin() {
                       </div>
                     )}
                     {docs.map((d: any, i: number) => (
-                      <div key={d.id} className="flex items-center gap-4 px-5 py-4"
+                      <div key={d.id} className="px-5 py-4"
                         style={{ borderBottom: i < docs.length - 1 ? `1px solid ${G200}` : 'none' }}>
-                        <FileText className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12px] font-semibold" style={{ color: B }}>{d.name}</div>
-                          <div className="text-[10px] font-light" style={{ color: G500 }}>{d.fileType} · {d.category} {d.uploadedAt ? `· Uploaded ${new Date(d.uploadedAt).toLocaleDateString()}` : ''}</div>
-                          {d.description && <div className="text-[10px] font-light mt-0.5 italic" style={{ color: G500 }}>{d.description}</div>}
-                        </div>
-                        <StatusBadge label={d.status} style={docStatusColor(d.status)} />
-                        <div className="flex gap-2 ml-2 flex-wrap">
-                          {d.file_url && (
-                            <button onClick={() => viewDocument(d.file_url, toast)}
-                              className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-opacity hover:opacity-75 cursor-pointer"
-                              style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)` }}>
-                              <Download className="w-3 h-3" strokeWidth={2} /> View
-                            </button>
-                          )}
-                          {d.status === 'uploaded' && (
-                            <>
-                              <button onClick={() => handleDocApprove(selectedClientId!, d.id, d.name)}
-                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                                style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Approve
-                              </button>
-                              <button onClick={() => handleDocReject(selectedClientId!, d.id, d.name)}
-                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                                style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                <XCircle className="w-3 h-3" strokeWidth={2} /> Reject
-                              </button>
-                            </>
-                          )}
+                        <div className="flex items-start gap-3">
+                          <FileText className="w-4 h-4 shrink-0 mt-0.5" style={{ color: AC }} strokeWidth={1.5} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-0.5">
+                              <div className="text-[12px] font-semibold" style={{ color: B }}>{d.name}</div>
+                              <StatusBadge label={d.status} style={docStatusColor(d.status)} />
+                            </div>
+                            <div className="text-[10px] font-light" style={{ color: G500 }}>{d.fileType} · {d.category} {d.uploadedAt ? `· Uploaded ${new Date(d.uploadedAt).toLocaleDateString()}` : ''}</div>
+                            {d.description && <div className="text-[10px] font-light mt-0.5 italic" style={{ color: G500 }}>{d.description}</div>}
+                            {(d.file_url || d.status === 'uploaded') && (
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                {d.file_url && (
+                                  <button onClick={() => viewDocument(d.file_url, toast)}
+                                    className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5 transition-opacity hover:opacity-75 cursor-pointer"
+                                    style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC, border: `1px solid rgba(157,126,63,0.2)` }}>
+                                    <Download className="w-3 h-3" strokeWidth={2} /> View
+                                  </button>
+                                )}
+                                {d.status === 'uploaded' && (
+                                  <>
+                                    <button onClick={() => handleDocApprove(selectedClientId!, d.id, d.name)}
+                                      className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                      style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                      <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Approve
+                                    </button>
+                                    <button onClick={() => handleDocReject(selectedClientId!, d.id, d.name)}
+                                      className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                      style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                      <XCircle className="w-3 h-3" strokeWidth={2} /> Reject
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1475,29 +1669,33 @@ export default function Admin() {
                     {meets.map((m: any, i: number) => {
                       const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
                       return (
-                        <div key={m.id} className="flex items-center gap-4 px-5 py-4"
+                        <div key={m.id} className="px-5 py-4"
                           style={{ borderBottom: i < meets.length - 1 ? `1px solid ${G200}` : 'none' }}>
-                          <FmtIcon className="w-4 h-4 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[12px] font-semibold" style={{ color: B }}>{m.type}</div>
-                            <div className="text-[10px] font-light" style={{ color: G500 }}>{m.date} at {m.time} · {m.format}</div>
-                            {m.notes && <div className="text-[10px] font-light mt-0.5" style={{ color: G500 }}>{m.notes}</div>}
-                          </div>
-                          <StatusBadge label={m.status} style={meetStatusColor(m.status)} />
-                          {m.status === 'requested' && (
-                            <div className="flex gap-2 ml-2">
-                              <button onClick={() => handleMeetingConfirm(selectedClientId!, m.id, m.type, m.date, m.time)}
-                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                                style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
-                                <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Confirm
-                              </button>
-                              <button onClick={() => handleMeetingCancel(selectedClientId!, m.id, m.type)}
-                                className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
-                                style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                <XCircle className="w-3 h-3" strokeWidth={2} /> Cancel
-                              </button>
+                          <div className="flex items-start gap-3">
+                            <FmtIcon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: AC }} strokeWidth={1.5} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2 mb-0.5">
+                                <div className="text-[12px] font-semibold" style={{ color: B }}>{m.type}</div>
+                                <StatusBadge label={m.status} style={meetStatusColor(m.status)} />
+                              </div>
+                              <div className="text-[10px] font-light" style={{ color: G500 }}>{m.date} at {m.time} · {m.format}</div>
+                              {m.notes && <div className="text-[10px] font-light mt-0.5" style={{ color: G500 }}>{m.notes}</div>}
+                              {m.status === 'requested' && (
+                                <div className="flex gap-2 mt-2">
+                                  <button onClick={() => handleMeetingConfirm(selectedClientId!, m.id, m.type, m.date, m.time)}
+                                    className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                    style={{ backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                                    <CheckCircle2 className="w-3 h-3" strokeWidth={2} /> Confirm
+                                  </button>
+                                  <button onClick={() => handleMeetingCancel(selectedClientId!, m.id, m.type)}
+                                    className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] font-bold px-2.5 py-1.5"
+                                    style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                    <XCircle className="w-3 h-3" strokeWidth={2} /> Cancel
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1537,7 +1735,7 @@ export default function Admin() {
                         <div key={n.id} className="px-5 py-4" style={{ borderBottom: `1px solid ${G200}` }}>
                           <div className="flex items-center gap-3 mb-1.5">
                             <StickyNote className="w-3 h-3 shrink-0" style={{ color: AC }} strokeWidth={1.5} />
-                            <span className="text-[9px] font-bold" style={{ color: AC }}>{n.author ?? 'Jeff Ali'}</span>
+                            <span className="text-[9px] font-bold" style={{ color: AC }}>{n.author ?? BUILDER.name}</span>
                             <span className="text-[9px] font-light" style={{ color: G500 }}>
                               {new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </span>
@@ -1777,11 +1975,11 @@ export default function Admin() {
                                   <div style={{ padding: '12px 20px', backgroundColor: G50, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     {s.email && (
                                       <>
-                                        <a href={`mailto:${s.email}?subject=${encodeURIComponent('Your HOU INC Project Brief — Next Steps')}&body=${encodeURIComponent(`Hi ${s.name?.split(' ')[0] || 'there'},\n\nThank you for submitting your project brief to HOU INC. We've reviewed your details and would love to schedule a complimentary consultation.\n\nPlease feel free to reply to this email or call us at (281) 915-9595.\n\nBest,\nJeff Ali\nHOU INC · (281) 915-9595`)}`}
+                                        <a href={`mailto:${s.email}?subject=${encodeURIComponent('Your Houston Enterprise Project Brief — Next Steps')}&body=${encodeURIComponent(`Hi ${s.name?.split(' ')[0] || 'there'},\n\nThank you for submitting your project brief to Houston Enterprise. We've reviewed your details and would love to schedule a complimentary consultation.\n\nPlease feel free to reply to this email or call us at (281) 915-9595.\n\nBest,\n${BUILDER.name}\nHouston Enterprise · (281) 915-9595`)}`}
                                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase' as const, textDecoration: 'none', backgroundColor: B, color: '#FFF' }}>
                                           <Mail className="w-3 h-3" strokeWidth={2} /> Reply to Brief
                                         </a>
-                                        <a href={`mailto:${s.email}?subject=${encodeURIComponent('Your HOU INC Client Portal Invitation')}&body=${encodeURIComponent(`Hi ${s.name?.split(' ')[0] || 'there'},\n\nThank you for your interest in HOU INC. I've set up a private client portal for you where you can track your project, share documents, and communicate directly with our team.\n\nPlease register at: ${window.location.origin}/portal\n\nYour account will be reviewed and approved within 1 business day.\n\nLooking forward to working with you.\n\nBest,\nJeff Ali\nHOU INC · (281) 915-9595`)}`}
+                                        <a href={`mailto:${s.email}?subject=${encodeURIComponent('Your Houston Enterprise Client Portal Invitation')}&body=${encodeURIComponent(`Hi ${s.name?.split(' ')[0] || 'there'},\n\nThank you for your interest in Houston Enterprise. I've set up a private client portal for you where you can track your project, share documents, and communicate directly with our team.\n\nPlease register at: ${window.location.origin}/portal\n\nYour account will be reviewed and approved within 1 business day.\n\nLooking forward to working with you.\n\nBest,\n${BUILDER.name}\nHouston Enterprise · (281) 915-9595`)}`}
                                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase' as const, textDecoration: 'none', backgroundColor: 'rgba(157,126,63,0.1)', color: AC, border: `1px solid rgba(157,126,63,0.28)` }}>
                                           <Mail className="w-3 h-3" strokeWidth={2} /> Invite to Portal
                                         </a>
@@ -1829,7 +2027,7 @@ export default function Admin() {
                       </div>
                       {/* #7 Invite to Portal */}
                       {f.email && (
-                        <a href={`mailto:${f.email}?subject=${encodeURIComponent('Your HOU INC Client Portal Invitation')}&body=${encodeURIComponent(`Hi ${f.name || 'there'},\n\nThank you for reaching out to HOU INC. We'd love to move forward with your project.\n\nI've set up a dedicated client portal where you can submit your project brief, track milestones, share documents, and communicate with our team directly.\n\nPlease register at: ${window.location.origin}/portal\n\nYour account will be reviewed and approved within 1 business day.\n\nBest,\nJeff Ali\nHOU INC · (281) 915-9595`)}`}
+                        <a href={`mailto:${f.email}?subject=${encodeURIComponent('Your Houston Enterprise Client Portal Invitation')}&body=${encodeURIComponent(`Hi ${f.name || 'there'},\n\nThank you for reaching out to Houston Enterprise. We'd love to move forward with your project.\n\nI've set up a dedicated client portal where you can submit your project brief, track milestones, share documents, and communicate with our team directly.\n\nPlease register at: ${window.location.origin}/portal\n\nYour account will be reviewed and approved within 1 business day.\n\nBest,\n${BUILDER.name}\nHouston Enterprise · (281) 915-9595`)}`}
                           className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] font-bold px-3 py-2 transition-opacity hover:opacity-75"
                           style={{ backgroundColor: 'rgba(157,126,63,0.1)', color: AC, border: `1px solid rgba(157,126,63,0.3)`, textDecoration: 'none' }}>
                           <Mail className="w-3 h-3" strokeWidth={2} /> Invite to Portal
@@ -2072,6 +2270,13 @@ export default function Admin() {
             );
           })()}
 
+          {/* ══════ PROJECTS ══════ */}
+          {tab === 'projects' && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ height: 'calc(100vh - 200px)', minHeight: 500 }}>
+              <ProjectManager />
+            </motion.div>
+          )}
+
           {/* ══════ PORTFOLIO ══════ */}
           {tab === 'portfolio' && (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
@@ -2081,340 +2286,835 @@ export default function Admin() {
 
           {/* ══════ FINANCE DATA ══════ */}
           {tab === 'finance' && (() => {
-            const ENTITY_DEFS: { id: string; name: string; short: string; color: string }[] = [
-              { id: 'houston-enterprise',          name: 'Houston Enterprise',          short: 'HE',  color: '#9D7E3F' },
-              { id: 'houston-generator-pros',      name: 'Houston Generator Pros',      short: 'HGP', color: '#1B72B5' },
-              { id: 'houston-enterprise-holdings', name: 'Houston Enterprise Holdings', short: 'HEH', color: '#2C5F8A' },
+            const ENTITY_DEFS = [
+              {
+                id: 'houston-enterprise', name: 'Houston Enterprise', short: 'HE',
+                color: '#9D7E3F', colorMuted: 'rgba(157,126,63,0.10)',
+                Icon: Building2, tagline: 'General Contractor · Est. 1998',
+                category: 'Construction', since: 1998,
+                desc: 'Full-service construction company delivering luxury residential, commercial, and industrial projects across the Greater Houston Metropolitan Area.',
+              },
+              {
+                id: 'houston-generator-pros', name: 'Houston Generator Pros', short: 'HGP',
+                color: '#1B72B5', colorMuted: 'rgba(27,114,181,0.10)',
+                Icon: Zap, tagline: 'Power Solutions · Est. 2015',
+                category: 'Energy Services', since: 2015,
+                desc: 'Commercial and residential generator installation, preventive maintenance, 24/7 emergency repair services, and load-bank testing across Houston.',
+              },
+              {
+                id: 'houston-enterprise-holdings', name: 'Houston Enterprise Holdings', short: 'HEH',
+                color: '#2C5F8A', colorMuted: 'rgba(44,95,138,0.10)',
+                Icon: Landmark, tagline: 'Development & Capital · Est. 2010',
+                category: 'Holdings & Development', since: 2010,
+                desc: 'Real estate development, asset management, construction lending, bank loan administration, interest income, and cross-entity capital allocation.',
+              },
+            ] as const;
+
+            const activeId  = (finEntityTab === 'all' || !ENTITY_DEFS.find(e => e.id === finEntityTab))
+              ? 'houston-enterprise' : finEntityTab;
+            const activeEnt = ENTITY_DEFS.find(e => e.id === activeId)!;
+
+            const income    = finTxns.filter((t: any) => t.entity_id === activeId && t.type === 'income').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+            const expense   = finTxns.filter((t: any) => t.entity_id === activeId && t.type === 'expense').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+            const net       = income - expense;
+            const projCount = finProjects.filter((p: any) => p.entity_id === activeId).length;
+            const chkCount  = finChecks.filter((c: any) => c.entity_id === activeId).length;
+            const txnCount  = finTxns.filter((t: any) => t.entity_id === activeId).length;
+
+            const recentTxns = [...finTxns]
+              .filter((t: any) => t.entity_id === activeId)
+              .sort((a: any, b: any) => new Date(b.transaction_date || b.created_at || 0).getTime() - new Date(a.transaction_date || a.created_at || 0).getTime())
+              .slice(0, 8);
+
+            const NUMFONT = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif';
+            const MU2 = '#B0AAA4';
+            const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+            /* Quick-access section links — use the actual route paths, not ?section= */
+            const SECTION_LINKS = [
+              { label: 'Ledger',   to: `/ledger?entity=${activeId}`,   Icon: FileText },
+              { label: 'Projects', to: `/projects?entity=${activeId}`, Icon: ClipboardList },
+              { label: 'Checks',   to: `/checks?entity=${activeId}`,   Icon: CreditCard },
+              { label: 'Vendors',  to: `/vendors?entity=${activeId}`,  Icon: Package },
+              { label: 'Income',   to: `/income?entity=${activeId}`,   Icon: TrendingUp },
+            ] as const;
+
+            return (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+
+                {/* ── Section header ── */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase', color: AC, marginBottom: 5 }}>Finance Intelligence Hub</div>
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(20px,2.2vw,28px)', color: B, lineHeight: 1 }}>Portfolio Overview</div>
+                  </div>
+                  <Link to="/finance"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 22px', backgroundColor: B, color: W, fontSize: '8.5px', letterSpacing: '0.26em', textTransform: 'uppercase', fontWeight: 800, textDecoration: 'none', flexShrink: 0, transition: 'background 0.2s' }}
+                    onMouseEnter={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = AC; }}
+                    onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = B; }}
+                  >
+                    Finance Hub <ArrowUpRight style={{ width: 12, height: 12 }} strokeWidth={2.5} />
+                  </Link>
+                </div>
+
+                {/* ── Entity selector cards — styled to match /finance EntitySelect ── */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4" style={{ alignItems: 'stretch' }}>
+                  {ENTITY_DEFS.map((e, idx) => {
+                    const isActive = activeId === e.id;
+                    const isHov    = finHovId === e.id;
+                    const lit      = isActive || isHov;
+                    const EIcon    = e.Icon;
+                    const eTxns    = finTxns.filter((t: any) => t.entity_id === e.id);
+                    const eInc     = eTxns.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+                    const eExp     = eTxns.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+                    const eNet     = eInc - eExp;
+                    const eProjCt  = finProjects.filter((p: any) => p.entity_id === e.id).length;
+                    const eChkCt   = finChecks.filter((c: any) => c.entity_id === e.id).length;
+                    const eTxnCt   = eTxns.length;
+                    return (
+                      <motion.button
+                        key={e.id}
+                        onClick={() => setFinEntityTab(e.id)}
+                        onMouseEnter={() => setFinHovId(e.id)}
+                        onMouseLeave={() => setFinHovId(null)}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.44, delay: 0.05 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                        whileHover={{ y: -2 }}
+                        whileTap={{ scale: 0.99 }}
+                        className="relative w-full text-left flex flex-col overflow-hidden"
+                        style={{
+                          background: isActive
+                            ? `linear-gradient(160deg, #fff 55%, ${e.colorMuted} 130%)`
+                            : isHov ? 'rgba(255,255,255,0.97)' : 'rgba(255,255,255,0.9)',
+                          border: `1px solid ${lit ? e.color : 'rgba(0,0,0,0.07)'}`,
+                          boxShadow: isActive
+                            ? `0 12px 40px ${e.color}28, 0 3px 10px rgba(0,0,0,0.07)`
+                            : isHov ? '0 6px 28px rgba(0,0,0,0.09)' : '0 1px 4px rgba(0,0,0,0.04)',
+                          backdropFilter: 'blur(12px)',
+                          WebkitBackdropFilter: 'blur(12px)',
+                          cursor: 'pointer',
+                          transition: 'border-color 0.22s, box-shadow 0.28s, background 0.28s',
+                        }}
+                      >
+                        {/* 3px top accent bar */}
+                        <div style={{ height: 3, backgroundColor: e.color, opacity: lit ? 1 : 0.38, transition: 'opacity 0.2s', flexShrink: 0 }} />
+
+                        {/* Shimmer sweep */}
+                        <motion.div
+                          style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `linear-gradient(105deg, transparent 38%, ${e.colorMuted} 50%, transparent 62%)`, zIndex: 0 }}
+                          initial={{ x: '-110%', opacity: 0 }}
+                          animate={isHov ? { x: '110%', opacity: 1 } : { x: '-110%', opacity: 0 }}
+                          transition={{ duration: 0.55, ease: 'easeOut' }}
+                        />
+
+                        {/* Card body */}
+                        <div style={{ padding: '20px 22px', position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+                          {/* Icon + category pill */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <div style={{ width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid', flexShrink: 0, backgroundColor: lit ? e.colorMuted : 'rgba(0,0,0,0.03)', borderColor: lit ? e.color : 'rgba(0,0,0,0.09)', transition: 'all 0.2s' }}>
+                              <EIcon style={{ width: 18, height: 18, color: lit ? e.color : G500, strokeWidth: 1.5, transition: 'color 0.2s' }} />
+                            </div>
+                            <div style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.36em', textTransform: 'uppercase', color: lit ? e.color : MU2, backgroundColor: lit ? e.colorMuted : 'rgba(0,0,0,0.03)', padding: '3px 8px', transition: 'all 0.2s' }}>
+                              {e.category}
+                            </div>
+                          </div>
+
+                          {/* Entity name */}
+                          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(20px,2.2vw,28px)', color: lit ? B : '#2C2825', lineHeight: 1.05, letterSpacing: '-0.01em', marginBottom: 5, transition: 'color 0.2s' }}>
+                            {e.name}
+                          </div>
+
+                          {/* Tagline */}
+                          <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: lit ? e.color : MU2, marginBottom: 10, transition: 'color 0.2s' }}>
+                            {e.tagline}
+                          </div>
+
+                          {/* Description */}
+                          <div style={{ fontSize: 12, color: G500, lineHeight: 1.6, fontWeight: 300, marginBottom: 16, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>
+                            {e.desc}
+                          </div>
+
+                          {/* ── Finance data preview ── */}
+                          <div style={{ borderTop: `1px solid ${lit ? e.color + '28' : 'rgba(0,0,0,0.07)'}`, paddingTop: 14, marginBottom: 14, transition: 'border-color 0.2s' }}>
+                            {/* P&L row */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, marginBottom: 12 }}>
+                              <div style={{ paddingRight: 14, borderRight: `1px solid rgba(0,0,0,0.07)` }}>
+                                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: MU2, marginBottom: 4 }}>Income</div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: B, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>{fmt(eInc)}</div>
+                              </div>
+                              <div style={{ paddingLeft: 14, paddingRight: 14, borderRight: `1px solid rgba(0,0,0,0.07)` }}>
+                                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: MU2, marginBottom: 4 }}>Expenses</div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: G500, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>{fmt(eExp)}</div>
+                              </div>
+                              <div style={{ paddingLeft: 14 }}>
+                                <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: eNet >= 0 ? (lit ? e.color : MU2) : MU2, marginBottom: 4, transition: 'color 0.2s' }}>Net</div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: eNet >= 0 ? e.color : B, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                                  {eNet < 0 ? '−' : ''}{fmt(Math.abs(eNet))}
+                                </div>
+                              </div>
+                            </div>
+                            {/* Mini counts */}
+                            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                              {([
+                                { label: 'Projects',     count: eProjCt },
+                                { label: 'Checks',       count: eChkCt },
+                                { label: 'Transactions', count: eTxnCt },
+                              ] as { label: string; count: number }[]).map(({ label, count }) => (
+                                <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                                  <span style={{ fontSize: 16, fontWeight: 800, color: B, fontFamily: NUMFONT, lineHeight: 1 }}>{count}</span>
+                                  <span style={{ fontSize: 7.5, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: MU2 }}>{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Footer: EST. + selected indicator */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${lit ? e.color + '28' : 'rgba(0,0,0,0.06)'}`, transition: 'border-color 0.2s' }}>
+                            <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.3em', textTransform: 'uppercase', color: lit ? e.color : MU2, transition: 'color 0.2s' }}>
+                              EST. {e.since}
+                            </div>
+                            <AnimatePresence mode="wait">
+                              {isActive ? (
+                                <motion.div key="chk" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                                  style={{ width: 22, height: 22, borderRadius: '50%', backgroundColor: e.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <CheckCircle2 style={{ width: 10, height: 10, color: W }} strokeWidth={2.5} />
+                                </motion.div>
+                              ) : (
+                                <motion.div key="arr" initial={{ opacity: 0 }} animate={{ opacity: isHov ? 0.85 : 0.18 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+                                  <ChevronRight style={{ width: 14, height: 14, color: e.color, strokeWidth: 2 }} />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+
+                        {/* Open Dashboard strip — always visible at card bottom */}
+                        <button
+                          onClick={ev => { ev.stopPropagation(); navigate(`/finance/dashboard?entity=${e.id}`); }}
+                          style={{ width: '100%', border: 'none', borderTop: `1px solid ${lit ? e.color + '30' : 'rgba(0,0,0,0.07)'}`, backgroundColor: isActive ? e.color : 'rgba(0,0,0,0.03)', padding: '11px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'background 0.2s, border-color 0.2s', flexShrink: 0, position: 'relative', zIndex: 11 }}
+                          onMouseEnter={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = isActive ? e.color + 'DD' : e.colorMuted; }}
+                          onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = isActive ? e.color : 'rgba(0,0,0,0.03)'; }}
+                        >
+                          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.26em', textTransform: 'uppercase', color: isActive ? W : (lit ? e.color : G500), transition: 'color 0.2s' }}>
+                            Open Dashboard
+                          </span>
+                          <ArrowUpRight style={{ width: 13, height: 13, color: isActive ? W : (lit ? e.color : G500), transition: 'color 0.2s' }} strokeWidth={2.5} />
+                        </button>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                {/* ── Active entity data panel ── */}
+                <AnimatePresence mode="wait">
+                  <motion.div key={activeId} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+
+                    {/* P&L summary + counts — single compact band */}
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-0 mb-4" style={{ border: `1px solid ${G200}`, backgroundColor: W }}>
+                      {([
+                        { label: 'Total Income',   value: fmt(income),                              numColor: B,                         span: 2 },
+                        { label: 'Total Expenses', value: fmt(expense),                             numColor: G500,                      span: 2 },
+                        { label: 'Net Balance',    value: (net < 0 ? '−' : '') + fmt(Math.abs(net)), numColor: net >= 0 ? activeEnt.color : B, span: 2 },
+                      ] as { label: string; value: string; numColor: string; span: number }[]).map(({ label, value, numColor }, i) => (
+                        <div key={label} style={{ padding: '15px 18px', borderRight: `1px solid ${G200}`, gridColumn: 'span 2' }}>
+                          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.28em', textTransform: 'uppercase', color: G500, marginBottom: 5 }}>{label}</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: numColor, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Section quick-access links */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16, padding: '14px 16px', backgroundColor: G50, border: `1px solid ${G200}` }}>
+                      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.34em', textTransform: 'uppercase', color: G500, width: '100%', marginBottom: 6 }}>
+                        Quick Access — {activeEnt.name}
+                      </div>
+                      {SECTION_LINKS.map(({ label, to, Icon: Ic }) => (
+                        <Link key={label} to={to}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 15px', border: `1px solid ${G200}`, color: B, fontSize: '9px', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none', backgroundColor: W, transition: 'all 0.14s' }}
+                          onMouseEnter={ev => { const el = ev.currentTarget as HTMLElement; el.style.backgroundColor = activeEnt.color; el.style.color = W; el.style.borderColor = activeEnt.color; }}
+                          onMouseLeave={ev => { const el = ev.currentTarget as HTMLElement; el.style.backgroundColor = W; el.style.color = B; el.style.borderColor = G200; }}
+                        >
+                          <Ic style={{ width: 11, height: 11 }} strokeWidth={1.5} />
+                          {label}
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Recent transactions */}
+                    <div style={{ border: `1px solid ${G200}`, backgroundColor: W }}>
+                      <div style={{ padding: '12px 18px', borderBottom: `1px solid ${G200}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: G50 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: B }}>Recent Transactions</span>
+                          <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.28em', textTransform: 'uppercase', padding: '2px 8px', backgroundColor: `${activeEnt.color}14`, color: activeEnt.color, border: `1px solid ${activeEnt.color}28` }}>{activeEnt.short}</span>
+                        </div>
+                        <Link to={`/ledger?entity=${activeId}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase', color: activeEnt.color, textDecoration: 'none', transition: 'opacity 0.15s' }}
+                          onMouseEnter={ev => { (ev.currentTarget as HTMLElement).style.opacity = '0.65'; }}
+                          onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.opacity = '1'; }}
+                        >
+                          View All <ArrowUpRight style={{ width: 11, height: 11 }} strokeWidth={2.5} />
+                        </Link>
+                      </div>
+
+                      {recentTxns.length === 0 ? (
+                        <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                          <DollarSign style={{ width: 28, height: 28, color: G200, display: 'block', margin: '0 auto 10px' }} strokeWidth={1} />
+                          <div style={{ fontSize: 13, color: G500, marginBottom: 12 }}>No transactions for {activeEnt.name} yet.</div>
+                          <button onClick={() => navigate(`/income?entity=${activeId}`)}
+                            style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '0.24em', textTransform: 'uppercase', color: activeEnt.color, background: 'none', border: `1px solid ${activeEnt.color}`, padding: '8px 16px', cursor: 'pointer' }}>
+                            Log First Transaction
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Mobile cards */}
+                          <div className="sm:hidden">
+                            {recentTxns.map((t: any, i: number) => {
+                              const isInc = t.type === 'income';
+                              return (
+                                <div key={t.id} style={{ padding: '13px 16px', borderBottom: i < recentTxns.length - 1 ? `1px solid ${G200}` : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <div style={{ width: 3, alignSelf: 'stretch', flexShrink: 0, backgroundColor: isInc ? activeEnt.color : G200 }} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13.5, fontWeight: 500, color: B, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {t.notes || t.source_name || '—'}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', padding: '2px 7px', backgroundColor: isInc ? `${activeEnt.color}12` : 'rgba(0,0,0,0.05)', color: isInc ? activeEnt.color : G500 }}>{t.type || '—'}</span>
+                                      <span style={{ fontSize: 11, color: G500 }}>{t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: 15, fontWeight: 700, color: isInc ? activeEnt.color : B, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                                    {isInc ? '+' : '−'}{t.amount ? fmt(Number(t.amount)) : '—'}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* Desktop table */}
+                          <div className="hidden sm:block">
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                              <thead>
+                                <tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
+                                  {['Type', 'Description', 'Amount', 'Date'].map(h => (
+                                    <th key={h} style={{ padding: '9px 18px', textAlign: 'left', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.28em', fontWeight: 700, color: G500 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {recentTxns.map((t: any, i: number) => {
+                                  const isInc = t.type === 'income';
+                                  return (
+                                    <tr key={t.id} style={{ borderBottom: i < recentTxns.length - 1 ? `1px solid ${G200}` : 'none', transition: 'background 0.1s' }}
+                                      onMouseEnter={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = G50; }}
+                                      onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.backgroundColor = W; }}>
+                                      <td style={{ padding: '11px 18px' }}>
+                                        <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', padding: '3px 9px', backgroundColor: isInc ? `${activeEnt.color}12` : 'rgba(0,0,0,0.05)', color: isInc ? activeEnt.color : G500 }}>{t.type || '—'}</span>
+                                      </td>
+                                      <td style={{ padding: '11px 18px', fontSize: 13, fontWeight: 400, color: B }}>
+                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{t.notes || t.source_name || '—'}</div>
+                                      </td>
+                                      <td style={{ padding: '11px 18px', fontSize: 14, fontWeight: 700, color: isInc ? activeEnt.color : B, fontFamily: NUMFONT, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                        {isInc ? '+' : '−'}{t.amount ? fmt(Number(t.amount)) : '—'}
+                                      </td>
+                                      <td style={{ padding: '11px 18px', fontSize: 12, fontWeight: 400, color: G500, whiteSpace: 'nowrap' }}>
+                                        {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                  </motion.div>
+                </AnimatePresence>
+
+              </motion.div>
+            );
+          })()}
+
+          {/* ══════ ANALYTICS ══════ */}
+          {tab === 'analytics' && (() => {
+            /* ── Derived chart data ── */
+            const briefCount    = Object.keys(briefs).length;
+            const activeMsggers = Object.keys(allMsgs).filter(k => (allMsgs[k]?.length ?? 0) > 1).length;
+            const avgMsgs       = clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0;
+
+            const funnelData = [
+              { name: 'Registered', value: clients.length,  fill: '#3b82f6' },
+              { name: 'Brief Sent', value: briefCount,       fill: AC },
+              { name: 'Messaging',  value: activeMsggers,   fill: '#8b5cf6' },
             ];
 
-            const activeEntities = finEntityTab === 'all' ? ENTITY_DEFS.map(e => e.id) : [finEntityTab];
+            const leadData = [
+              { name: 'Start Project', value: startBriefs.length,  fill: '#10b981' },
+              { name: 'Contact Form',  value: contactForms.length, fill: '#f59e0b' },
+              { name: 'Portal Reg.',   value: clients.length,       fill: '#3b82f6' },
+            ];
 
-            const entityIncome  = (id: string) => finTxns.filter((t: any) => t.entity_id === id && t.type === 'income').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
-            const entityExpense = (id: string) => finTxns.filter((t: any) => t.entity_id === id && t.type === 'expense').reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
-            const entityChecks  = (id: string) => finChecks.filter((c: any) => c.entity_id === id);
-            const entityProjects = (id: string) => finProjects.filter((p: any) => p.entity_id === id);
+            /* Monthly registrations — last 6 months */
+            const now = new Date();
+            const monthlyData = Array.from({ length: 6 }, (_, i) => {
+              const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+              const label = d.toLocaleDateString('en-US', { month: 'short' });
+              const count = clients.filter((c: any) => {
+                const cd = new Date(c.createdAt ?? c.created_at ?? 0);
+                return cd.getFullYear() === d.getFullYear() && cd.getMonth() === d.getMonth();
+              }).length;
+              return { name: label, Registrations: count };
+            });
 
-            const filteredProjects = finProjects.filter((p: any) => activeEntities.includes(p.entity_id));
-            const filteredChecks   = finChecks.filter((c: any) => activeEntities.includes(c.entity_id));
-            const filteredTxns     = finTxns.filter((t: any) => activeEntities.includes(t.entity_id));
-
-            const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            const PIE_COLORS = ['#10b981', '#f59e0b', '#3b82f6'];
 
             return (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-                {/* Finance Hub link + quick-access row */}
-                <div className="flex flex-wrap items-center gap-3 p-4 mb-6 agl">
-                  <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.1)' }}>
-                    <DollarSign className="w-4 h-4" style={{ color: AC }} strokeWidth={1.5} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-bold mb-0.5" style={{ color: B }}>HOU INC Finance Hub</div>
-                    <div className="text-[10px] font-light" style={{ color: G500 }}>Live entity-aware financial data — multi-company P&amp;L, projects, checks, and transactions.</div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {ENTITY_DEFS.map(e => (
-                      <button key={e.id}
-                        onClick={() => navigate(`/finance/dashboard?entity=${e.id}`)}
-                        className="text-[8px] uppercase tracking-[0.2em] font-black px-3 py-1.5 transition-opacity hover:opacity-80"
-                        style={{ backgroundColor: e.color + '18', color: e.color, border: `1px solid ${e.color}40` }}>
-                        {e.short}
-                      </button>
-                    ))}
-                    <Link to="/finance" className="flex items-center gap-1.5 text-[8px] uppercase tracking-[0.22em] font-black px-4 py-1.5"
-                      style={{ backgroundColor: AC, color: W }}>
-                      Open Hub <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Entity tabs */}
-                <div className="flex items-center gap-1 mb-5 overflow-x-auto">
-                  {[{ id: 'all', name: 'All Entities', short: 'All', color: AC }, ...ENTITY_DEFS].map(e => (
-                    <button key={e.id} onClick={() => setFinEntityTab(e.id)}
-                      className="text-[8px] uppercase tracking-[0.24em] font-black px-4 py-2 shrink-0 transition-all"
-                      style={{
-                        backgroundColor: finEntityTab === e.id ? e.color : 'transparent',
-                        color: finEntityTab === e.id ? W : G500,
-                        border: `1px solid ${finEntityTab === e.id ? e.color : G200}`,
-                      }}>
-                      {e.short}
-                    </button>
+                {/* KPI row */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-7">
+                  {[
+                    { label: 'Portal Registrations', value: clients.length,    color: '#3b82f6', tag: 'Total' },
+                    { label: 'Briefs Submitted',      value: briefCount,         color: AC,        tag: 'Portal' },
+                    { label: 'Website Leads',          value: allLeads,           color: '#10b981', tag: 'Inbound' },
+                    { label: 'Active Conversations',   value: activeMsggers,     color: '#8b5cf6', tag: 'Messaging' },
+                    { label: 'Portfolio Projects',     value: portfolioCount,    color: '#ec4899', tag: 'Published' },
+                    { label: 'Avg Msgs / Client',      value: avgMsgs,           color: '#f59e0b', tag: 'Engagement' },
+                  ].map(s => (
+                    <div key={s.label} className="p-5 agl-stat">
+                      <div className="text-[30px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
+                      <div className="text-[11px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
+                      <div className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 inline-block"
+                        style={{ backgroundColor: `${s.color}14`, color: s.color }}>{s.tag}</div>
+                    </div>
                   ))}
                 </div>
 
-                {/* Per-entity P&L summary cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-                  {ENTITY_DEFS.filter(e => finEntityTab === 'all' || e.id === finEntityTab).map(e => {
-                    const income  = entityIncome(e.id);
-                    const expense = entityExpense(e.id);
-                    const net     = income - expense;
-                    const checks  = entityChecks(e.id).length;
-                    const projects = entityProjects(e.id).length;
-                    return (
-                      <div key={e.id} className="agl-stat" style={{ borderTop: `3px solid ${e.color}` }}>
-                        <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(232,228,222,0.5)' }}>
-                          <div className="text-[8px] font-black uppercase tracking-[0.38em] mb-1" style={{ color: e.color }}>{e.short}</div>
-                          <div className="text-[13px] font-semibold" style={{ color: B }}>{e.name}</div>
-                        </div>
-                        <div className="p-5 space-y-3">
-                          <div className="flex justify-between items-baseline">
-                            <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Income</span>
-                            <span className="text-[15px] font-black" style={{ color: '#10b981', fontFamily: SERIF }}>{fmt(income)}</span>
-                          </div>
-                          <div className="flex justify-between items-baseline">
-                            <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Expenses</span>
-                            <span className="text-[15px] font-black" style={{ color: '#ef4444', fontFamily: SERIF }}>{fmt(expense)}</span>
-                          </div>
-                          <div style={{ height: 1, backgroundColor: G200 }} />
-                          <div className="flex justify-between items-baseline">
-                            <span className="text-[9px] uppercase tracking-[0.2em] font-black" style={{ color: B }}>Net Balance</span>
-                            <span className="text-[17px] font-black" style={{ color: net >= 0 ? '#10b981' : '#ef4444', fontFamily: SERIF }}>{fmt(Math.abs(net))}</span>
-                          </div>
-                          <div className="flex gap-4 pt-1">
-                            <div>
-                              <span className="text-[18px] font-black" style={{ color: B, fontFamily: SERIF }}>{projects}</span>
-                              <div className="text-[7.5px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Projects</div>
-                            </div>
-                            <div>
-                              <span className="text-[18px] font-black" style={{ color: B, fontFamily: SERIF }}>{checks}</span>
-                              <div className="text-[7.5px] uppercase tracking-[0.2em] font-bold" style={{ color: G500 }}>Checks</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="px-5 py-3" style={{ borderTop: `1px solid ${G200}` }}>
-                          <button
-                            onClick={() => navigate(`/finance/dashboard?entity=${e.id}`)}
-                            className="flex items-center gap-1 text-[8px] uppercase tracking-[0.22em] font-black hover:opacity-70 transition-opacity"
-                            style={{ color: e.color, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                            Open Dashboard <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                {/* Monthly registrations chart */}
+                <div className="p-6 mb-5 agl">
+                  <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-4" style={{ color: AC }}>
+                    Monthly Portal Registrations (last 6 months)
+                  </div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={monthlyData} margin={{ top: 4, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: G500 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: G500 }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ background: '#fff', border: `1px solid ${G200}`, borderRadius: 0, fontSize: 11 }}
+                        labelStyle={{ color: B, fontWeight: 700 }}
+                      />
+                      <Line type="monotone" dataKey="Registrations" stroke={AC} strokeWidth={2} dot={{ r: 4, fill: AC }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
 
-                {/* Aggregate stats row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                  {[
-                    { label: 'Projects',      value: filteredProjects.length, icon: ClipboardList,    color: '#3b82f6' },
-                    { label: 'Checks',        value: filteredChecks.length,   icon: CreditCard, color: AC },
-                    { label: 'Transactions',  value: filteredTxns.length,     icon: FileText,  color: '#8b5cf6' },
-                    { label: 'Vendors', value: finEntityTab === 'all' ? finVendors.length : finVendors.filter((v: any) => v.entity_id === finEntityTab).length, icon: Package, color: '#10b981' },
-                  ].map(s => {
-                    const Icon = s.icon;
-                    return (
-                      <div key={s.label} className="flex items-center gap-3 p-4 agl-stat">
-                        <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}12` }}>
-                          <Icon className="w-3.5 h-3.5" style={{ color: s.color }} strokeWidth={1.5} />
-                        </div>
-                        <div>
-                          <div className="text-[20px] font-black leading-none" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
-                          <div className="text-[8.5px] font-bold uppercase tracking-[0.14em] mt-0.5" style={{ color: G500 }}>{s.label}</div>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                  {/* Conversion funnel bar chart */}
+                  <div className="p-6 agl">
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-4" style={{ color: AC }}>
+                      Portal Conversion Funnel
+                    </div>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 10, left: 60, bottom: 0 }}>
+                        <XAxis type="number" hide allowDecimals={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: G500 }} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ background: '#fff', border: `1px solid ${G200}`, fontSize: 11 }}
+                          cursor={{ fill: 'rgba(26,20,16,0.03)' }}
+                        />
+                        <Bar dataKey="value" radius={[0, 3, 3, 0]} isAnimationActive>
+                          {funnelData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Lead sources pie chart */}
+                  <div className="p-6 agl">
+                    <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-4" style={{ color: AC }}>
+                      Lead Sources
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <ResponsiveContainer width={140} height={140}>
+                        <PieChart>
+                          <Pie data={leadData} cx="50%" cy="50%" innerRadius={38} outerRadius={60}
+                            dataKey="value" paddingAngle={2} isAnimationActive>
+                            {leadData.map((entry, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ background: '#fff', border: `1px solid ${G200}`, fontSize: 11 }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex flex-col gap-2.5 flex-1">
+                        {leadData.map((d, i) => (
+                          <div key={d.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i] }} />
+                              <span className="text-[10px]" style={{ color: G500 }}>{d.name}</span>
+                            </div>
+                            <span className="text-[11px] font-bold tabular-nums" style={{ color: B }}>{d.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })()}
+
+          {/* ══════ NOTIFICATIONS ══════ */}
+          {tab === 'notifications' && (() => {
+            const HelpStatusColors: Record<string, { bg: string; color: string }> = {
+              open:        { bg: 'rgba(245,158,11,0.08)',  color: '#f59e0b' },
+              in_progress: { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' },
+              resolved:    { bg: 'rgba(16,185,129,0.08)', color: '#10b981' },
+            };
+
+            async function markResolved(reqId: string) {
+              await (supabase as any).rpc('resolve_portal_help_request', {
+                p_request_id:    reqId,
+                p_resolver_name: BUILDER.name,
+              });
+              setHelpRequests(prev => prev.map((r: any) => r.id === reqId ? { ...r, status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: BUILDER.name } : r));
+            }
+
+            async function markInProgress(reqId: string) {
+              await supabase.from('portal_help_requests').update({ status: 'in_progress' }).eq('id', reqId);
+              setHelpRequests(prev => prev.map((r: any) => r.id === reqId ? { ...r, status: 'in_progress' } : r));
+            }
+
+            const openReqs     = helpRequests.filter((r: any) => r.status === 'open');
+            const inProgReqs   = helpRequests.filter((r: any) => r.status === 'in_progress');
+            const resolvedReqs = helpRequests.filter((r: any) => r.status === 'resolved');
+
+            function RequestCard({ req }: { req: any }) {
+              const sc    = HelpStatusColors[req.status] ?? HelpStatusColors.open;
+              const cname = req.portal_clients?.name ?? clientName(req.client_id);
+              const created = new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+              return (
+                <div className="agl" style={{ marginBottom: 12, padding: '18px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: B }}>{req.subject}</span>
+                        <span className="status-pill" style={{ backgroundColor: sc.bg, color: sc.color }}>{req.status.replace('_', ' ')}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: G500, marginBottom: 2 }}>
+                        <span style={{ fontWeight: 600 }}>{cname}</span>
+                        {req.project_title && <> · <span>{req.project_title}</span></>}
+                      </div>
+                      <div style={{ fontSize: 9, color: G500 }}>{created}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {req.status === 'open' && (
+                        <button onClick={() => markInProgress(req.id)}
+                          style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '5px 10px', backgroundColor: 'rgba(59,130,246,0.08)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.22)', cursor: 'pointer' }}>
+                          In Progress
+                        </button>
+                      )}
+                      {req.status !== 'resolved' && (
+                        <button onClick={() => markResolved(req.id)}
+                          style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '5px 10px', backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.22)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <CheckSquare className="w-3 h-3" /> Resolve
+                        </button>
+                      )}
+                      {req.status !== 'resolved' && (
+                        <button onClick={() => { setTab('clients'); setSelectedClientId(req.client_id); setClientSubTab('messages'); }}
+                          style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '5px 10px', backgroundColor: `rgba(157,126,63,0.08)`, color: AC, border: `1px solid rgba(157,126,63,0.22)`, cursor: 'pointer' }}>
+                          Reply →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 13, color: G500, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{req.message}</p>
+                  {req.resolved_by && (
+                    <div style={{ marginTop: 10, fontSize: 10, color: '#10b981' }}>Resolved by {req.resolved_by} · {req.resolved_at ? new Date(req.resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase', color: AC, marginBottom: 5 }}>Client Portal</div>
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: B }}>Help Requests</div>
+                  </div>
+                  <button onClick={refreshData}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.22em', padding: '8px 14px', border: `1px solid ${G200}`, color: G500, background: W, cursor: 'pointer' }}>
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                  </button>
                 </div>
 
-                {/* Projects table */}
-                {filteredProjects.length > 0 && (
-                  <div className="mb-5 agl agl-tbl">
-                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
-                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Projects</div>
-                      <Link to="/projects" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
-                        Manage <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                      </Link>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                          {['Entity', 'Project', 'Status', 'Budget', 'Created'].map(h => (
-                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
-                          ))}
-                        </tr></thead>
-                        <tbody>
-                          {filteredProjects.slice(0, 10).map((p: any, i: number) => {
-                            const eDef = ENTITY_DEFS.find(e => e.id === p.entity_id);
-                            return (
-                              <tr key={p.id} style={{ borderBottom: i < Math.min(filteredProjects.length, 10) - 1 ? `1px solid ${G200}` : 'none' }}>
-                                <td className="px-4 py-3">
-                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
-                                </td>
-                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: B }}>{p.name || '—'}</td>
-                                <td className="px-4 py-3"><span className="text-[7.5px] uppercase tracking-[0.18em] font-bold px-2 py-0.5" style={{ backgroundColor: 'rgba(157,126,63,0.08)', color: AC }}>{p.status || '—'}</span></td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{p.budget ? fmt(Number(p.budget)) : '—'}</td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                {helpRequests.length === 0 && (
+                  <div style={{ textAlign: 'center', paddingBlock: 72 }}>
+                    <Bell className="w-10 h-10 mx-auto mb-4" style={{ color: G500, opacity: 0.4 }} strokeWidth={1} />
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 22, color: B, marginBottom: 8 }}>All clear</div>
+                    <p style={{ fontSize: 13, color: G500 }}>No help requests from clients yet.</p>
                   </div>
                 )}
 
-                {/* Checks table */}
-                {filteredChecks.length > 0 && (
-                  <div className="mb-5 agl agl-tbl">
-                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
-                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Checks</div>
-                      <Link to="/checks" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
-                        View All <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                      </Link>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                          {['Entity', 'Check #', 'Amount', 'Payee', 'Date', 'Status'].map(h => (
-                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
-                          ))}
-                        </tr></thead>
-                        <tbody>
-                          {filteredChecks.slice(0, 8).map((c: any, i: number) => {
-                            const eDef = ENTITY_DEFS.find(e => e.id === c.entity_id);
-                            return (
-                              <tr key={c.id} style={{ borderBottom: i < Math.min(filteredChecks.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
-                                <td className="px-4 py-3">
-                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
-                                </td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.check_number || '—'}</td>
-                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: B }}>{c.amount ? fmt(Number(c.amount)) : '—'}</td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.payee_name || '—'}</td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{c.issue_date || '—'}</td>
-                                <td className="px-4 py-3"><span className="text-[7.5px] uppercase tracking-[0.18em] font-bold px-2 py-0.5" style={{ backgroundColor: 'rgba(16,185,129,0.08)', color: '#10b981' }}>{c.status || 'issued'}</span></td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                {openReqs.length > 0 && (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.36em', color: '#f59e0b', marginBottom: 12 }}>Open · {openReqs.length}</div>
+                    {openReqs.map((r: any) => <RequestCard key={r.id} req={r} />)}
                   </div>
                 )}
 
-                {/* Recent transactions */}
-                {filteredTxns.length > 0 && (
-                  <div className="agl agl-tbl">
-                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${G200}` }}>
-                      <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>Recent Transactions</div>
-                      <Link to="/ledger" className="flex items-center gap-1 text-[8px] uppercase tracking-[0.2em] font-black hover:opacity-70 transition-opacity" style={{ color: AC }}>
-                        Full Ledger <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
-                      </Link>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead><tr style={{ borderBottom: `1px solid ${G200}`, backgroundColor: G50 }}>
-                          {['Entity', 'Type', 'Description', 'Amount', 'Date'].map(h => (
-                            <th key={h} className="px-4 py-2.5 text-left text-[8.5px] uppercase tracking-[0.24em] font-bold" style={{ color: G500 }}>{h}</th>
-                          ))}
-                        </tr></thead>
-                        <tbody>
-                          {filteredTxns.slice(0, 8).map((t: any, i: number) => {
-                            const eDef = ENTITY_DEFS.find(e => e.id === t.entity_id);
-                            const isIncome = t.type === 'income';
-                            return (
-                              <tr key={t.id} style={{ borderBottom: i < Math.min(filteredTxns.length, 8) - 1 ? `1px solid ${G200}` : 'none' }}>
-                                <td className="px-4 py-3">
-                                  {eDef && <span className="text-[7.5px] font-black uppercase tracking-[0.18em] px-1.5 py-0.5" style={{ backgroundColor: eDef.color + '16', color: eDef.color }}>{eDef.short}</span>}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="text-[7.5px] font-bold uppercase tracking-[0.18em] px-2 py-0.5" style={{ backgroundColor: isIncome ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', color: isIncome ? '#10b981' : '#ef4444' }}>
-                                    {t.type || '—'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-[11px] font-light max-w-[180px] truncate" style={{ color: B }}>{t.notes || t.source_name || '—'}</td>
-                                <td className="px-4 py-3 text-[12px] font-semibold" style={{ color: isIncome ? '#10b981' : '#ef4444' }}>
-                                  {isIncome ? '+' : '-'}{t.amount ? fmt(Number(t.amount)) : '—'}
-                                </td>
-                                <td className="px-4 py-3 text-[11px] font-light" style={{ color: G500 }}>{t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '—'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                {inProgReqs.length > 0 && (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.36em', color: '#3b82f6', marginBottom: 12 }}>In Progress · {inProgReqs.length}</div>
+                    {inProgReqs.map((r: any) => <RequestCard key={r.id} req={r} />)}
                   </div>
                 )}
 
-                {filteredProjects.length === 0 && filteredChecks.length === 0 && filteredTxns.length === 0 && (
-                  <div className="text-center py-16 agl">
-                    <DollarSign className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
-                    <div className="text-[12px] font-light mb-1" style={{ color: G500 }}>No financial data yet for this entity.</div>
-                    <Link to="/finance" className="text-[9px] uppercase tracking-[0.24em] font-black" style={{ color: AC }}>Open Finance Hub →</Link>
+                {resolvedReqs.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.36em', color: '#10b981', marginBottom: 12 }}>Resolved · {resolvedReqs.length}</div>
+                    {resolvedReqs.map((r: any) => <RequestCard key={r.id} req={r} />)}
                   </div>
                 )}
               </motion.div>
             );
           })()}
 
-          {/* ══════ ANALYTICS ══════ */}
-          {tab === 'analytics' && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-7">
-                {[
-                  { label: 'Portal Registrations',  value: clients.length,                              trend: 'Total',    color: '#3b82f6' },
-                  { label: 'Briefs Submitted',       value: Object.keys(briefs).length,                 trend: 'Portal',   color: AC },
-                  { label: 'Start Project Leads',    value: startBriefs.length,                         trend: 'Website',  color: '#10b981' },
-                  { label: 'Contact Form Leads',     value: contactForms.length,                        trend: 'Website',  color: '#f59e0b' },
-                  { label: 'Portfolio Projects',     value: portfolioCount,                              trend: 'Active',   color: '#8b5cf6' },
-                  { label: 'Avg Messages / Client',  value: clients.length > 0 ? Math.round(totalMsgs / clients.length) : 0, trend: 'Avg', color: '#ec4899' },
-                ].map(s => (
-                  <div key={s.label} className="p-5 agl-stat">
-                    <div className="text-[30px] font-black mb-0.5" style={{ color: B, fontFamily: SERIF }}>{s.value}</div>
-                    <div className="text-[11px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
-                    <div className="text-[8px] uppercase tracking-[0.18em] font-bold px-2 py-0.5 inline-block" style={{ backgroundColor: `${s.color}12`, color: s.color }}>{s.trend}</div>
+          {/* ══════ CHANGELOG ══════ */}
+          {tab === 'changelog' && (() => {
+            const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
+              created:    { bg: 'rgba(16,185,129,0.08)',  color: '#10b981' },
+              approved:   { bg: 'rgba(16,185,129,0.08)',  color: '#10b981' },
+              confirmed:  { bg: 'rgba(59,130,246,0.08)',  color: '#3b82f6' },
+              updated:    { bg: 'rgba(59,130,246,0.08)',  color: '#3b82f6' },
+              message_sent: { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' },
+              rejected:   { bg: 'rgba(239,68,68,0.08)',   color: '#ef4444' },
+              cancelled:  { bg: 'rgba(239,68,68,0.08)',   color: '#ef4444' },
+              deleted:    { bg: 'rgba(239,68,68,0.08)',   color: '#ef4444' },
+              resolved:   { bg: 'rgba(139,92,246,0.08)',  color: '#8b5cf6' },
+            };
+            const DASH_COLORS: Record<string, string> = {
+              admin:   AC, finance: '#3b82f6', portal: '#10b981', public: G500,
+            };
+
+            const allDashboards = ['all', ...Array.from(new Set(changelogEntries.map((e: any) => e.dashboard)))];
+            const allEntities   = ['all', ...Array.from(new Set(changelogEntries.map((e: any) => e.entity)))];
+
+            const filtered = changelogEntries.filter((e: any) => {
+              if (clDashFilter !== 'all' && e.dashboard !== clDashFilter) return false;
+              if (clEntityFilter !== 'all' && e.entity !== clEntityFilter) return false;
+              if (clSearch) {
+                const q = clSearch.toLowerCase();
+                if (
+                  !e.action?.toLowerCase().includes(q) &&
+                  !e.entity?.toLowerCase().includes(q) &&
+                  !e.entity_label?.toLowerCase().includes(q) &&
+                  !e.changed_by?.toLowerCase().includes(q) &&
+                  !e.dashboard?.toLowerCase().includes(q)
+                ) return false;
+              }
+              return true;
+            });
+
+            function exportChangelogPDF() {
+              try {
+                const { jsPDF } = require('jspdf') as { jsPDF: typeof import('jspdf').jsPDF };
+                const autoTable = (require('jspdf-autotable') as any).default ?? require('jspdf-autotable');
+                const doc = new jsPDF({ format: 'letter', unit: 'mm' });
+                const PW = 215.9, M = 18;
+                doc.setFillColor(157, 126, 63); doc.rect(0, 0, PW, 2.5, 'F');
+                doc.setFillColor(18, 18, 18);   doc.rect(0, 2.5, PW, 22, 'F');
+                doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+                doc.text('HOU INC', M, 16.5);
+                doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+                doc.text('Admin Changelog · Audit Trail', M, 21.5);
+                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+                doc.text('Changelog', PW - M, 21.5, { align: 'right' });
+
+                const rows = filtered.map((e: any) => [
+                  new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
+                  e.action?.replace(/_/g, ' ') ?? '—',
+                  e.entity?.replace(/_/g, ' ') ?? '—',
+                  e.dashboard ?? '—',
+                  e.entity_label ?? '—',
+                  e.changed_by ?? '—',
+                ]);
+
+                autoTable(doc, {
+                  startY: 34,
+                  margin: { left: M, right: M, top: 14, bottom: 20 },
+                  head: [['Timestamp', 'Action', 'Entity', 'Dashboard', 'Item', 'Changed By']],
+                  body: rows,
+                  headStyles: { fillColor: [18, 18, 18], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7, cellPadding: { top: 4, bottom: 4, left: 4, right: 4 } },
+                  bodyStyles: { fontSize: 7.5, textColor: [18, 18, 18], cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
+                  alternateRowStyles: { fillColor: [248, 248, 248] },
+                  columnStyles: { 0: { cellWidth: 36 }, 5: { cellWidth: 26 } },
+                  tableLineColor: [229, 229, 229],
+                  tableLineWidth: 0.2,
+                });
+
+                const pages = doc.getNumberOfPages();
+                for (let i = 1; i <= pages; i++) {
+                  doc.setPage(i);
+                  const fy = 279.4 - 14;
+                  doc.setDrawColor(229, 229, 229); doc.setLineWidth(0.25); doc.line(M, fy, PW - M, fy);
+                  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(97, 97, 97);
+                  doc.text('HOU INC · Admin Changelog', M, fy + 4.5);
+                  doc.text(`Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, PW / 2, fy + 4.5, { align: 'center' });
+                  doc.setFont('helvetica', 'bold');
+                  doc.text(`Page ${i} of ${pages}  ·  CONFIDENTIAL`, PW - M, fy + 4.5, { align: 'right' });
+                }
+                doc.save(`hou-changelog-${new Date().toISOString().slice(0, 10)}.pdf`);
+              } catch { toast({ title: 'PDF export failed', description: 'Please try again.' }); }
+            }
+
+            function exportChangelogExcel() {
+              try {
+                const XLSX = require('xlsx') as typeof import('xlsx');
+                const headers = ['Timestamp', 'Action', 'Entity', 'Dashboard', 'Item / Label', 'Changed By', 'Details'];
+                const rows = filtered.map((e: any) => [
+                  new Date(e.created_at).toLocaleString('en-US'),
+                  e.action?.replace(/_/g, ' ') ?? '',
+                  e.entity?.replace(/_/g, ' ') ?? '',
+                  e.dashboard ?? '',
+                  e.entity_label ?? '',
+                  e.changed_by ?? '',
+                  e.details ? JSON.stringify(e.details) : '',
+                ]);
+                const aoa = [
+                  ['HOU INC — Admin Changelog'],
+                  [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
+                  [],
+                  headers,
+                  ...rows,
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(aoa);
+                ws['!cols'] = [28, 18, 18, 14, 28, 20, 40].map(w => ({ wch: w }));
+                ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Changelog');
+                XLSX.writeFile(wb, `hou-changelog-${new Date().toISOString().slice(0, 10)}.xlsx`);
+              } catch { toast({ title: 'Excel export failed', description: 'Please try again.' }); }
+            }
+
+            const fmtTime = (ts: string) => new Date(ts).toLocaleDateString('en-US', {
+              month: 'short', day: 'numeric', year: 'numeric',
+              hour: 'numeric', minute: '2-digit',
+            });
+
+            return (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
+                  <div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.46em', textTransform: 'uppercase', color: AC, marginBottom: 5 }}>Audit Trail</div>
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: B }}>Changelog</div>
+                    <div style={{ fontSize: 11, color: G500, marginTop: 4 }}>Permanent record of every change made across all dashboards</div>
                   </div>
-                ))}
-              </div>
-
-              <div className="p-7 mb-6 agl">
-                <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Portal Conversion Funnel</div>
-                <div className="space-y-4">
-                  {[
-                    { label: 'Registered Accounts',  count: clients.length,                color: '#3b82f6' },
-                    { label: 'Brief Submitted',       count: Object.keys(briefs).length,    color: AC },
-                    { label: 'Messaging Active',      count: Object.keys(allMsgs).filter(k => (allMsgs[k]?.length ?? 0) > 1).length, color: '#8b5cf6' },
-                  ].map((s, i, arr) => {
-                    const pct = arr[0].count > 0 ? Math.round((s.count / arr[0].count) * 100) : 0;
-                    return (
-                      <div key={s.label}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-semibold" style={{ color: B }}>{s.label}</span>
-                          <span className="text-[11px] font-bold" style={{ color: B }}>{s.count} <span className="text-[10px] font-light" style={{ color: G500 }}>({pct}%)</span></span>
-                        </div>
-                        <div className="h-2 overflow-hidden" style={{ backgroundColor: 'rgba(26,20,16,0.06)' }}>
-                          <motion.div className="h-full" style={{ backgroundColor: s.color }}
-                            initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: i * 0.1 }} />
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button onClick={refreshData}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '8px 13px', border: `1px solid ${G200}`, color: G500, background: W, cursor: 'pointer' }}>
+                      <RefreshCw className="w-3 h-3" /> Refresh
+                    </button>
+                    <button onClick={exportChangelogPDF}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '8px 13px', border: `1px solid ${G200}`, color: G500, background: W, cursor: 'pointer' }}>
+                      <FileDown className="w-3 h-3" /> PDF
+                    </button>
+                    <button onClick={exportChangelogExcel}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', padding: '8px 13px', backgroundColor: AC, color: W, cursor: 'pointer' }}>
+                      <FileDown className="w-3 h-3" /> Excel
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-7 agl">
-                <div className="text-[9px] uppercase tracking-[0.3em] font-bold mb-5" style={{ color: AC }}>Lead Sources</div>
-                <div className="flex gap-6">
-                  {[
-                    { label: 'Start Project Form', count: startBriefs.length, color: '#10b981' },
-                    { label: 'Contact Form',       count: contactForms.length, color: '#f59e0b' },
-                    { label: 'Portal Sign-up',     count: clients.length,      color: '#3b82f6' },
-                  ].map(s => {
-                    const total = startBriefs.length + contactForms.length + clients.length;
-                    const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
-                    return (
-                      <div key={s.label} className="flex-1 text-center">
-                        <div className="text-[28px] font-black mb-1" style={{ color: B, fontFamily: SERIF }}>{pct}%</div>
-                        <div className="text-[10px] font-semibold mb-1" style={{ color: B }}>{s.label}</div>
-                        <div className="text-[11px] font-light" style={{ color: G500 }}>{s.count} submissions</div>
-                        <div className="h-1 mt-3" style={{ backgroundColor: s.color, width: `${pct}%`, margin: '12px auto 0' }} />
-                      </div>
-                    );
-                  })}
+                {/* Filters */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, padding: '14px 16px', backgroundColor: W, border: `1px solid ${G200}` }}>
+                  <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 0 }}>
+                    <Search className="w-3 h-3" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: G500 }} strokeWidth={1.5} />
+                    <input
+                      value={clSearch} onChange={e => setClSearch(e.target.value)}
+                      placeholder="Search entries…"
+                      style={{ width: '100%', paddingLeft: 30, paddingRight: 12, paddingTop: 7, paddingBottom: 7, border: `1px solid ${G200}`, fontSize: 11, color: B, outline: 'none', backgroundColor: G50 }}
+                    />
+                  </div>
+                  <select value={clDashFilter} onChange={e => setClDashFilter(e.target.value)}
+                    style={{ padding: '7px 10px', border: `1px solid ${G200}`, fontSize: 11, color: B, outline: 'none', backgroundColor: W, cursor: 'pointer' }}>
+                    {allDashboards.map(d => <option key={d} value={d}>{d === 'all' ? 'All Dashboards' : d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                  </select>
+                  <select value={clEntityFilter} onChange={e => setClEntityFilter(e.target.value)}
+                    style={{ padding: '7px 10px', border: `1px solid ${G200}`, fontSize: 11, color: B, outline: 'none', backgroundColor: W, cursor: 'pointer' }}>
+                    {allEntities.map(e => <option key={e} value={e}>{e === 'all' ? 'All Entities' : e.replace(/_/g, ' ')}</option>)}
+                  </select>
+                  <div style={{ fontSize: 10, color: G500, alignSelf: 'center', marginLeft: 4, whiteSpace: 'nowrap' }}>
+                    {filtered.length} of {changelogEntries.length} entries
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
+
+                {/* Empty state */}
+                {changelogEntries.length === 0 && (
+                  <div style={{ textAlign: 'center', paddingBlock: 72 }}>
+                    <History className="w-10 h-10 mx-auto mb-4" style={{ color: G500, opacity: 0.35 }} strokeWidth={1} />
+                    <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 22, color: B, marginBottom: 8 }}>No entries yet</div>
+                    <p style={{ fontSize: 12, color: G500 }}>
+                      Changelog entries appear here as you make changes across the dashboards.
+                      <br/>You may need to <button onClick={() => { const s = document.createElement('span'); s.textContent = 'run the migration'; document.body.appendChild(s); document.body.removeChild(s); }} style={{ color: AC, background: 'none', border: 'none', cursor: 'default', fontSize: 12 }}>run the migration SQL</button> in the Supabase dashboard first.
+                    </p>
+                  </div>
+                )}
+
+                {/* Timeline */}
+                {filtered.length > 0 && (
+                  <div style={{ position: 'relative' }}>
+                    {/* Vertical line */}
+                    <div style={{ position: 'absolute', left: 17, top: 0, bottom: 0, width: 1, backgroundColor: G200 }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {filtered.map((entry: any, idx: number) => {
+                        const sc = ACTION_COLORS[entry.action] ?? { bg: 'rgba(138,133,128,0.08)', color: G500 };
+                        const dc = DASH_COLORS[entry.dashboard] ?? G500;
+                        const details = entry.details ?? {};
+                        const hasDetails = Object.keys(details).length > 0;
+                        return (
+                          <div key={entry.id ?? idx} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', paddingBottom: 10 }}>
+                            {/* Dot */}
+                            <div style={{ width: 35, height: 35, borderRadius: '50%', backgroundColor: sc.bg, border: `2px solid ${sc.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1 }}>
+                              <History className="w-3.5 h-3.5" style={{ color: sc.color }} strokeWidth={1.5} />
+                            </div>
+                            {/* Card */}
+                            <div style={{ flex: 1, backgroundColor: W, border: `1px solid ${G200}`, padding: '12px 16px', minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', padding: '2px 8px', borderRadius: 9999, backgroundColor: sc.bg, color: sc.color }}>
+                                    {entry.action?.replace(/_/g, ' ') ?? 'unknown'}
+                                  </span>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: B }}>
+                                    {entry.entity?.replace(/_/g, ' ')}
+                                    {entry.entity_label && <span style={{ fontWeight: 400, color: G500 }}> · {entry.entity_label}</span>}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: 7.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '2px 7px', backgroundColor: `${dc}12`, color: dc }}>
+                                  {entry.dashboard}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 10, color: G500 }}>
+                                <span>By <span style={{ fontWeight: 600, color: B }}>{entry.changed_by}</span></span>
+                                <span>{fmtTime(entry.created_at)}</span>
+                                {hasDetails && Object.entries(details).slice(0, 3).map(([k, v]) => (
+                                  <span key={k} style={{ color: G500 }}>{k}: <span style={{ color: B, fontWeight: 500 }}>{String(v).slice(0, 60)}</span></span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
 
         </div>}
       </main>

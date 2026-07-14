@@ -23,7 +23,7 @@ const QUICK_PROMPTS = [
 ];
 
 export default function PortalMessages() {
-  const { client, loaded, getMessages, sendMessage, commitBuilderReply } = usePortal();
+  const { client, loaded, getMessages, sendMessage } = usePortal();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,11 +31,9 @@ export default function PortalMessages() {
     if (!client) navigate('/portal', { replace: true });
   }, [client, loaded, navigate]);
 
-  const [msgs, setMsgs]         = useState<PortalMessage[]>([]);
-  const [input, setInput]       = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const bottomRef   = useRef<HTMLDivElement>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [msgs, setMsgs]   = useState<PortalMessage[]>([]);
+  const [input, setInput] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   // Sync from hook whenever hook messages update (after initial Supabase load or sends)
   useEffect(() => {
@@ -50,11 +48,9 @@ export default function PortalMessages() {
     });
   }, [getMessages]);
 
-  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current); }, []);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [msgs, isTyping]);
+  }, [msgs]);
 
   // Real-time subscription for builder messages sent from Admin dashboard
   useEffect(() => {
@@ -78,23 +74,12 @@ export default function PortalMessages() {
 
   if (!client) return null;
 
-  const dispatchReply = (text: string) => {
-    setIsTyping(true);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(async () => {
-      const updated = await commitBuilderReply(text);
-      setMsgs(updated);
-      setIsTyping(false);
-    }, 1200 + Math.random() * 900);
-  };
-
   const handleSend = async () => {
     const text = input.trim();
     if (!text) return;
     setInput('');
     const updated = await sendMessage(text);
     setMsgs(updated);
-    dispatchReply(text);
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -104,7 +89,6 @@ export default function PortalMessages() {
   const handleQuick = async (prompt: string) => {
     const updated = await sendMessage(prompt);
     setMsgs(updated);
-    dispatchReply(prompt);
   };
 
   const clientInitials = client.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -147,7 +131,7 @@ export default function PortalMessages() {
         <div className="flex-1 overflow-y-auto py-5 px-4 sm:px-6 md:px-8 space-y-4"
           style={{ backgroundColor: CREAM }}>
 
-          {msgs.length === 0 && !isTyping && (
+          {msgs.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center py-16 gap-4">
               <div className="w-12 h-12 flex items-center justify-center"
                 style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.2)` }}>
@@ -221,31 +205,6 @@ export default function PortalMessages() {
             })}
           </AnimatePresence>
 
-          {/* Typing indicator */}
-          <AnimatePresence>
-            {isTyping && (
-              <motion.div key="typing"
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.22 }}
-                className="flex items-end gap-2 sm:gap-3">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-[9px] font-black shrink-0 mb-1"
-                  style={{ backgroundColor: 'rgba(157,126,63,0.12)', color: GOLD, border: `1px solid rgba(157,126,63,0.25)`, fontFamily: SERIF }}>
-                  {BUILDER.initials}
-                </div>
-                <div className="px-4 py-3"
-                  style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, boxShadow: '0 1px 6px rgba(28,24,20,0.05)' }}>
-                  <div className="flex gap-1 items-center" style={{ height: 14 }}>
-                    {[0, 1, 2].map(i => (
-                      <motion.div key={i} className="w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: GOLD }}
-                        animate={{ y: [0, -4, 0], opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.18, ease: 'easeInOut' }} />
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           <div ref={bottomRef} />
         </div>
@@ -265,8 +224,8 @@ export default function PortalMessages() {
               <div className="flex gap-2 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible"
                 style={{ scrollbarWidth: 'none' }}>
                 {QUICK_PROMPTS.map(q => (
-                  <button key={q} onClick={() => handleQuick(q)} disabled={isTyping}
-                    className="shrink-0 text-[10px] font-semibold px-3 py-1.5 whitespace-nowrap transition-opacity hover:opacity-75 active:opacity-60 disabled:opacity-30"
+                  <button key={q} onClick={() => handleQuick(q)}
+                    className="shrink-0 text-[10px] font-semibold px-3 py-1.5 whitespace-nowrap transition-opacity hover:opacity-75 active:opacity-60"
                     style={{ border: `1px solid rgba(157,126,63,0.38)`, color: GOLD, backgroundColor: 'rgba(157,126,63,0.04)' }}>
                     {q}
                   </button>
@@ -285,9 +244,8 @@ export default function PortalMessages() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey}
-              disabled={isTyping}
-              placeholder={isTyping ? `${BUILDER.name} is typing…` : 'Message your builder… (Enter to send)'}
-              className="flex-1 resize-none text-[13px] font-light py-2.5 px-3 sm:px-4 outline-none transition-colors disabled:opacity-50"
+              placeholder="Message your builder… (Enter to send)"
+              className="flex-1 resize-none text-[13px] font-light py-2.5 px-3 sm:px-4 outline-none transition-colors"
               style={{
                 backgroundColor: CREAM, border: `1px solid ${BORDER}`,
                 color: DARK, fontFamily: 'inherit', lineHeight: 1.5,
@@ -295,7 +253,7 @@ export default function PortalMessages() {
               onFocus={e => (e.target.style.borderColor = GOLD)}
               onBlur={e => (e.target.style.borderColor = BORDER)}
             />
-            <button onClick={handleSend} disabled={!input.trim() || isTyping}
+            <button onClick={handleSend} disabled={!input.trim()}
               className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center shrink-0 transition-opacity hover:opacity-85 active:scale-95 disabled:opacity-25"
               style={{ backgroundColor: GOLD }}>
               <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: DARK }} strokeWidth={2} />

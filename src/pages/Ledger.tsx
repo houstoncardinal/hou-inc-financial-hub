@@ -15,6 +15,7 @@ import { generateLedgerReport, savePDF, downloadLedgerExcel } from '@/lib/report
 import { FileText, Table2, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
+import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
 
 const EXPENSE_CATEGORIES = [
   'Materials & Supplies', 'Labor & Subcontractors', 'Permits & Fees',
@@ -58,6 +59,11 @@ const LDG_CSS = `
 .ldg-type-check{background:rgba(157,126,63,0.07)!important;border-color:rgba(157,126,63,0.28)!important;color:#9D7E3F!important;}
 .ldg-type-income{background:rgba(34,197,94,0.07)!important;border-color:rgba(34,197,94,0.28)!important;color:rgb(21,128,61)!important;}
 .ldg-type-expense{background:rgba(239,68,68,0.07)!important;border-color:rgba(239,68,68,0.28)!important;color:rgb(185,28,28)!important;}
+.dark .ldg-stat{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .ldg-stat:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 22px rgba(0,0,0,0.25);}
+.dark .ldg-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
+.dark .ldg-type-income{color:hsl(142 72% 55%)!important;}
+.dark .ldg-type-expense{color:hsl(0 84% 70%)!important;}
 `;
 
 export default function Ledger() {
@@ -78,10 +84,11 @@ export default function Ledger() {
   const [project, setProject] = useState('all');
   const [type, setType] = useState('all');
   const [addOpen, setAddOpen] = useState<'income' | 'expense' | 'check' | null>(null);
+  const [detailRow, setDetailRow] = useState<any>(null);
   const [reconcileMode, setReconcileMode] = useState(false);
 
-  const blankIncome = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), source_name: '', project_id: '', category: '', notes: '' };
-  const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '', cost_type: '' };
+  const blankIncome  = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), source_name: '', project_id: '', category: '', notes: '', payment_method: '', check_reference: '', retainage_percent: '', retainage_amount: '', invoice_id: '', cost_phase: '' };
+  const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '', cost_type: '', check_reference: '', cost_phase: '' };
   const blankCheck = { amount: '', issue_date: new Date().toISOString().slice(0, 10), payee_name: '', check_number: '', memo: '', project_id: '' };
 
   const [formIncome, setFormIncome] = useState(blankIncome);
@@ -123,14 +130,40 @@ export default function Ledger() {
   const submitIncome = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formIncome.amount) { toast.error('Amount required'); return; }
-    await txnUpsert.mutateAsync({ type: 'income', amount: parseFloat(formIncome.amount), transaction_date: formIncome.transaction_date, source_name: formIncome.source_name || null, project_id: formIncome.project_id || null, category: formIncome.category || null, notes: formIncome.notes || null } as any);
+    await txnUpsert.mutateAsync({
+      type: 'income',
+      amount: parseFloat(formIncome.amount),
+      transaction_date: formIncome.transaction_date,
+      source_name: formIncome.source_name || null,
+      project_id: formIncome.project_id || null,
+      category: formIncome.category || null,
+      notes: formIncome.notes || null,
+      payment_method: formIncome.payment_method || null,
+      check_reference: formIncome.check_reference || null,
+      retainage_percent: formIncome.retainage_percent ? parseFloat(formIncome.retainage_percent) : null,
+      retainage_amount:  formIncome.retainage_amount  ? parseFloat(formIncome.retainage_amount)  : null,
+      invoice_id: formIncome.invoice_id || null,
+      cost_phase: formIncome.cost_phase || null,
+    } as any);
     toast.success('Income logged'); setAddOpen(null); setFormIncome(blankIncome);
   };
 
   const submitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formExpense.amount) { toast.error('Amount required'); return; }
-    await txnUpsert.mutateAsync({ type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date, vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null, category: formExpense.category || null, notes: formExpense.notes || null, payment_method: formExpense.payment_method || null, cost_type: formExpense.cost_type || null } as any);
+    await txnUpsert.mutateAsync({
+      type: 'expense',
+      amount: parseFloat(formExpense.amount),
+      transaction_date: formExpense.transaction_date,
+      vendor_id: formExpense.vendor_id || null,
+      project_id: formExpense.project_id || null,
+      category: formExpense.category || null,
+      notes: formExpense.notes || null,
+      payment_method: formExpense.payment_method || null,
+      cost_type: formExpense.cost_type || null,
+      check_reference: formExpense.check_reference || null,
+      cost_phase: formExpense.cost_phase || null,
+    } as any);
     toast.success('Expense recorded'); setAddOpen(null); setFormExpense(blankExpense);
   };
 
@@ -186,7 +219,7 @@ export default function Ledger() {
         <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportExcel}><Table2 className="w-3 h-3 mr-1" />Excel</Button>
       </div>
 
-      <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px" style={{ background: 'rgba(220,214,204,0.45)' }}>
+      <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px bg-border/50">
         {[{ l: 'Inflow', v: fmtUSD(totals.inflow), c: 'text-positive' }, { l: 'Outflow', v: fmtUSD(totals.outflow), c: '' }, { l: 'Net Position', v: fmtUSD(totals.net), c: totals.net >= 0 ? 'text-positive' : 'text-accent' }].map(s => (
           <div key={s.l} className="ldg-stat px-4 sm:px-5 py-3"><div className="micro-label">{s.l}</div><div className={`text-base sm:text-xl font-semibold font-mono-tab mt-1 ${s.c}`}>{s.v}</div></div>
         ))}
@@ -250,14 +283,14 @@ export default function Ledger() {
           </div>
           {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             rows.map(r => (
-              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row ${(r as any).reconciled ? 'opacity-50' : ''}`}>
+              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer ${(r as any).reconciled ? 'opacity-50' : ''}`} onClick={() => setDetailRow(r)}>
                 <div className="text-muted-foreground">{fmtDate(r.date)}</div>
                 <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type === 'Check' ? 'ldg-type-check' : r.type === 'Income' ? 'ldg-type-income' : 'ldg-type-expense'}`}>{r.type}</span></div>
                 <div className="truncate text-muted-foreground">{r.ref}</div>
                 <div className="truncate">{r.party}</div>
                 <div className="truncate text-muted-foreground">{r.project || '—'}</div>
                 <div className={`text-right font-semibold ${r.amount >= 0 ? 'text-positive' : ''}`}>{r.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(r.amount))}</div>
-                <div className="flex justify-end">
+                <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                   {reconcileMode ? (
                     <button onClick={() => toggleReconcile(r)} className="text-muted-foreground hover:text-positive transition-colors">
                       {(r as any).reconciled
@@ -315,15 +348,67 @@ export default function Ledger() {
                 </div>
                 <div className="space-y-1.5"><Label className="micro-label">Date</Label><Input type="date" className="rounded-none h-10" value={is ? formIncome.transaction_date : formExpense.transaction_date} onChange={e => is ? setFormIncome(f => ({ ...f, transaction_date: e.target.value })) : setFormExpense(f => ({ ...f, transaction_date: e.target.value }))} /></div>
               </div>
-              {is && <div className="space-y-1.5"><Label className="micro-label">Source</Label><Input className="rounded-none h-10" value={formIncome.source_name} onChange={e => setFormIncome(f => ({ ...f, source_name: e.target.value }))} placeholder="Client or source name" /></div>}
+              {/* Source / Vendor */}
+              {is  && <div className="space-y-1.5"><Label className="micro-label">Source / Client</Label><Input className="rounded-none h-10" value={formIncome.source_name} onChange={e => setFormIncome(f => ({ ...f, source_name: e.target.value }))} placeholder="Client or source name" /></div>}
               {isE && <div className="space-y-1.5"><Label className="micro-label">Vendor</Label><QuickCreateSelect value={formExpense.vendor_id} onValueChange={v => setFormExpense(f => ({ ...f, vendor_id: v }))} options={vendors} placeholder="Select vendor" entityLabel="Vendor" onCreateNew={async (name) => { const r = await createVendor.mutateAsync({ name }); toast.success(`Vendor "${name}" created`); return r; }} /></div>}
+
+              {/* Payment Method + Reference # */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
+                  <Select
+                    value={is ? formIncome.payment_method : formExpense.payment_method}
+                    onValueChange={v => is ? setFormIncome(f => ({ ...f, payment_method: v, check_reference: '' })) : setFormExpense(f => ({ ...f, payment_method: v, check_reference: '' }))}
+                  >
+                    <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectContent>
+                      {(is
+                        ? [{ value:'check',label:'Check' },{ value:'ach_wire',label:'ACH / Wire' },{ value:'credit_card',label:'Credit Card' },{ value:'financing_draw',label:'Financing Draw' },{ value:'cash',label:'Cash' },{ value:'other',label:'Other' }]
+                        : [{ value:'check',label:'Check' },{ value:'credit_card',label:'Credit Card' },{ value:'ach',label:'ACH' },{ value:'net_30',label:'NET 30' },{ value:'net_60',label:'NET 60' },{ value:'net_90',label:'NET 90' },{ value:'cash',label:'Cash' },{ value:'wire',label:'Wire' },{ value:'other',label:'Other' }]
+                      ).map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {new Set(['check','ach_wire','ach','wire']).has(is ? formIncome.payment_method : formExpense.payment_method) && (
+                  <div className="space-y-1.5">
+                    <Label className="micro-label">{(is ? formIncome.payment_method : formExpense.payment_method) === 'check' ? 'Check #' : 'Reference #'}</Label>
+                    <Input className="rounded-none h-10" placeholder={is ? 'e.g. 1042' : 'Trace / check #'}
+                      value={is ? formIncome.check_reference : formExpense.check_reference}
+                      onChange={e => is ? setFormIncome(f => ({ ...f, check_reference: e.target.value })) : setFormExpense(f => ({ ...f, check_reference: e.target.value }))} />
+                  </div>
+                )}
+              </div>
+
+              {/* Retainage — income only */}
+              {is && (
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Retainage / Holdback <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <Input type="number" min="0" max="100" step="0.1" className="rounded-none h-10 pr-7" placeholder="10"
+                        value={formIncome.retainage_percent}
+                        onChange={e => { const pct = e.target.value; const computed = pct && formIncome.amount ? String(Math.round(parseFloat(formIncome.amount) * parseFloat(pct) / 100 * 100) / 100) : ''; setFormIncome(f => ({ ...f, retainage_percent: pct, retainage_amount: computed })); }} />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                      <Input type="number" min="0" step="0.01" className="rounded-none h-10 pl-6" placeholder="10,000"
+                        value={formIncome.retainage_amount}
+                        onChange={e => { const amt = e.target.value; const computed = amt && formIncome.amount ? String(Math.round(parseFloat(amt) / parseFloat(formIncome.amount) * 100 * 100) / 100) : ''; setFormIncome(f => ({ ...f, retainage_amount: amt, retainage_percent: computed })); }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Category */}
               <div className="space-y-1.5"><Label className="micro-label">Category</Label>
                 <Select value={is ? formIncome.category : formExpense.category} onValueChange={v => is ? setFormIncome(f => ({ ...f, category: v })) : setFormExpense(f => ({ ...f, category: v }))}>
                   <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>{(is ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {isE && <>
+
+              {/* Cost Type — expense only */}
+              {isE && (
                 <div className="space-y-1.5"><Label className="micro-label">Cost Type</Label>
                   <Select value={formExpense.cost_type} onValueChange={v => setFormExpense(f => ({ ...f, cost_type: v }))}>
                     <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Labor / Material / …" /></SelectTrigger>
@@ -337,13 +422,19 @@ export default function Ledger() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5"><Label className="micro-label">Payment Method</Label>
-                  <Select value={formExpense.payment_method} onValueChange={v => setFormExpense(f => ({ ...f, payment_method: v }))}>
-                    <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
-                    <SelectContent><SelectItem value="credit_card">Credit Card</SelectItem><SelectItem value="bank_transfer">Bank Transfer</SelectItem><SelectItem value="net30">NET30</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="wire">Wire</SelectItem><SelectItem value="check">Check</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </>}
+              )}
+
+              {/* Cost Phase */}
+              <div className="space-y-1.5"><Label className="micro-label">Cost Phase <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                <Select value={is ? formIncome.cost_phase : formExpense.cost_phase} onValueChange={v => is ? setFormIncome(f => ({ ...f, cost_phase: v })) : setFormExpense(f => ({ ...f, cost_phase: v }))}>
+                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select phase (optional)" /></SelectTrigger>
+                  <SelectContent>
+                    {['Phase 1: Site Prep & Demo','Phase 2: Foundation & Concrete','Phase 3: Framing & Structure','Phase 4: Rough-Ins (MEP)','Phase 5: Exterior & Roofing','Phase 6: Insulation & Drywall','Phase 7: Finishes & Fixtures','Phase 8: Landscaping & Final','General / Overhead'].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Project */}
               <div className="space-y-1.5"><Label className="micro-label">Project</Label>
                 <QuickCreateSelect value={is ? formIncome.project_id : formExpense.project_id} onValueChange={v => is ? setFormIncome(f => ({ ...f, project_id: v })) : setFormExpense(f => ({ ...f, project_id: v }))} options={projects} placeholder="Assign (optional)" entityLabel="Project" onCreateNew={async (name) => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }} />
               </div>
@@ -353,6 +444,7 @@ export default function Ledger() {
           </form>
         </DialogContent>
       </Dialog>
+      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind="ledger" data={detailRow} />
     </AppShell>
   );
 }

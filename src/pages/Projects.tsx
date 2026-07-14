@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AnimatePresence } from 'framer-motion';
+import FinanceProjectWizard from '@/components/FinanceProjectWizard';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -56,6 +58,7 @@ export default function Projects() {
   const upsert = useUpsert('projects', [['projects']]);
   const del    = useDelete('projects', [['projects']]);
 
+  const [showWizard, setShowWizard] = useState(false);
   const [open,       setOpen]       = useState(false);
   const [form,       setForm]       = useState<any>(blank);
   const [view,       setView]       = useState<'grid' | 'table' | 'wip'>('grid');
@@ -130,7 +133,19 @@ export default function Projects() {
   return (
     <AppShell>
       <style>{PROJ_CSS}</style>
-      {/* ── Project Form Modal ── */}
+
+      {/* ── New Project Wizard ── */}
+      <AnimatePresence>
+        {showWizard && (
+          <FinanceProjectWizard
+            open={showWizard}
+            onClose={() => setShowWizard(false)}
+            existingCount={projects.length}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Edit Project Dialog ── */}
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setForm(blank); }}>
         <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -219,7 +234,7 @@ export default function Projects() {
                 <Table2 className="w-3.5 h-3.5" />
               </button>
             </div>
-            <Button onClick={() => { setForm(blank); setOpen(true); }} className="rounded-none h-8 text-[10px] uppercase tracking-wider">
+            <Button onClick={() => setShowWizard(true)} className="rounded-none h-8 text-[10px] uppercase tracking-wider">
               <Plus className="w-3 h-3 mr-1.5" /> New Project
             </Button>
           </div>
@@ -310,7 +325,7 @@ export default function Projects() {
               : 'Create your first project to start tracking budgets, costs, and revenue across all active jobs.'}
           </div>
           {!search && filter === 'all' && (
-            <Button onClick={() => { setForm(blank); setOpen(true); }} className="rounded-none h-9 text-xs uppercase tracking-wider">
+            <Button onClick={() => setShowWizard(true)} className="rounded-none h-9 text-xs uppercase tracking-wider">
               <Plus className="w-3.5 h-3.5 mr-1.5" /> Create First Project
             </Button>
           )}

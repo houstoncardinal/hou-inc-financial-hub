@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Award, ShieldCheck, Building2, Leaf, HardHat, Users, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,17 +9,17 @@ import TiltCard from '@/components/motion/TiltCard';
 import MagneticButton from '@/components/motion/MagneticButton';
 
 /* ── Tokens ───────────────────────────────────────────────────────── */
-const B   = '#0A0A0A';
-const W   = '#FFFFFF';
-const OW  = '#F7F7F6';
-const G50 = '#F2F2F0';
+const B    = '#0A0A0A';
+const W    = '#FFFFFF';
+const G50  = '#F2F2F0';
 const G200 = '#E2E2E2';
 const G500 = '#8A8A8A';
 const G700 = '#3A3A3A';
-const AC  = '#9D7E3F';
-const SF  = "'Cormorant Garamond', Georgia, serif";
-const LB  = '#E2E2E2';
-const DB  = 'rgba(255,255,255,0.06)';
+const AC   = '#9D7E3F';
+const ACL  = '#C4A76B';
+const SF   = "'Cormorant Garamond', Georgia, serif";
+const LB   = '#E2E2E2';
+const DB   = 'rgba(255,255,255,0.06)';
 
 const GRID_D: React.CSSProperties = {
   backgroundImage: ['linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px)', 'linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)'].join(','),
@@ -73,16 +73,224 @@ const AWARDS = [
   { year: 'LEED Gold · 4 Bldgs',org: 'U.S. Green Bldg Council', title: 'Sustainable Construction' },
 ];
 
+/* ── Interactive Milestones ─────────────────────────────────────── */
+function MilestonesInteractive() {
+  const [active, setActive] = useState(0);
+  const [cycleKey, setCycleKey] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setActive(a => (a + 1) % TIMELINE.length), 5500);
+    return () => clearInterval(t);
+  }, [cycleKey]);
+
+  const select = (i: number) => { setActive(i); setCycleKey(k => k + 1); };
+  const cur = TIMELINE[active];
+
+  return (
+    <>
+      {/* Desktop: split panel */}
+      <div className="hidden lg:grid lg:grid-cols-12" style={{ border: `1px solid ${LB}` }}>
+
+        {/* Left: clickable year list */}
+        <div className="lg:col-span-4" style={{ borderRight: `1px solid ${LB}` }}>
+          {TIMELINE.map((t, i) => {
+            const on = active === i;
+            return (
+              <button
+                key={t.y}
+                onClick={() => select(i)}
+                style={{
+                  width: '100%', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  padding: '16px 24px',
+                  borderBottom: i < TIMELINE.length - 1 ? `1px solid ${LB}` : 'none',
+                  backgroundColor: on ? B : 'transparent',
+                  cursor: 'pointer', border: 'none',
+                  position: 'relative', overflow: 'hidden',
+                  transition: 'background-color 0.22s ease',
+                  outline: 'none',
+                }}
+              >
+                {/* Gold left accent bar — shared layoutId for smooth cross-slide */}
+                {on && (
+                  <motion.div
+                    layoutId="ms-bar"
+                    style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: AC }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 45 }}
+                  />
+                )}
+                {/* Auto-advance progress indicator */}
+                {on && (
+                  <motion.div
+                    key={`prog-${cycleKey}-${i}`}
+                    style={{ position: 'absolute', bottom: 0, left: 0, height: 2, backgroundColor: AC, zIndex: 2 }}
+                    initial={{ width: 0 }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: 5.5, ease: 'linear' }}
+                  />
+                )}
+                <span style={{
+                  fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                  fontSize: '1.05rem', color: on ? ACL : G500,
+                  minWidth: 36, flexShrink: 0, transition: 'color 0.22s',
+                }}>
+                  {t.y}
+                </span>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, lineHeight: 1.3,
+                  color: on ? W : G700, transition: 'color 0.22s',
+                }}>
+                  {t.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right: animated detail */}
+        <div className="lg:col-span-8 relative overflow-hidden" style={{ backgroundColor: B, minHeight: 400 }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={active}
+              initial={{ opacity: 0, y: 22 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+              style={{ padding: '48px 52px', position: 'absolute', inset: 0, ...GRID_D }}
+            >
+              {/* Subtle gold glow */}
+              <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 80% 20%, rgba(157,126,63,0.08) 0%, transparent 60%)', pointerEvents: 'none' }} />
+
+              {/* Ghost year watermark */}
+              <div aria-hidden style={{
+                position: 'absolute', right: 28, top: 20,
+                fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                fontSize: 'clamp(90px, 12vw, 148px)',
+                color: AC, lineHeight: 0.85, opacity: 0.1,
+                letterSpacing: '-0.02em', userSelect: 'none', pointerEvents: 'none',
+              }}>
+                {cur.y}
+              </div>
+
+              {/* Eyebrow */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, position: 'relative' }}>
+                <div style={{ width: 18, height: 1, backgroundColor: AC }} />
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: ACL }}>
+                  {cur.y}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h3 style={{
+                fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                fontSize: 'clamp(24px, 3vw, 44px)', color: W,
+                lineHeight: 1.1, marginBottom: 20, maxWidth: '20ch',
+                position: 'relative',
+              }}>
+                {cur.title}
+              </h3>
+
+              {/* Body */}
+              <p style={{
+                fontSize: 13, fontWeight: 300,
+                color: 'rgba(255,255,255,0.4)',
+                lineHeight: 1.82, maxWidth: '50ch',
+                position: 'relative',
+              }}>
+                {cur.body}
+              </p>
+
+              {/* Dot navigation */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 40, position: 'relative' }}>
+                {TIMELINE.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => select(i)}
+                    style={{
+                      width: active === i ? 20 : 5, height: 5,
+                      backgroundColor: active === i ? AC : 'rgba(255,255,255,0.16)',
+                      border: 'none', cursor: 'pointer', padding: 0,
+                      transition: 'all 0.3s ease', outline: 'none',
+                    }}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Mobile: tab strip + detail card */}
+      <div className="lg:hidden">
+        <div style={{
+          display: 'flex', overflowX: 'auto', scrollbarWidth: 'none',
+          borderBottom: `1px solid ${LB}`,
+        }}>
+          {TIMELINE.map((t, i) => {
+            const on = active === i;
+            return (
+              <button
+                key={t.y}
+                onClick={() => select(i)}
+                style={{
+                  flexShrink: 0, padding: '11px 14px', border: 'none',
+                  borderBottom: on ? `2px solid ${AC}` : '2px solid transparent',
+                  backgroundColor: 'transparent', cursor: 'pointer',
+                  fontSize: 13, fontWeight: on ? 600 : 400,
+                  color: on ? AC : G500,
+                  fontFamily: SF, fontStyle: on ? 'italic' : 'normal',
+                  marginBottom: -1, outline: 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {t.y}
+              </button>
+            );
+          })}
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={active}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ backgroundColor: B, padding: '36px 28px', ...GRID_D }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 14, height: 1, backgroundColor: AC }} />
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.44em', textTransform: 'uppercase', color: ACL }}>
+                {cur.y}
+              </span>
+            </div>
+            <h3 style={{
+              fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+              fontSize: 'clamp(22px, 6vw, 34px)', color: W,
+              lineHeight: 1.1, marginBottom: 16,
+            }}>
+              {cur.title}
+            </h3>
+            <p style={{ fontSize: 12, fontWeight: 300, color: 'rgba(255,255,255,0.4)', lineHeight: 1.82 }}>
+              {cur.body}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </>
+  );
+}
+
 /* ── Team card ────────────────────────────────────────────────────── */
 function TeamCard({ m }: { m: typeof TEAM[0] }) {
   const [hov, setHov] = useState(false);
   return (
     <motion.div
       className="relative p-8 md:p-10 flex flex-col items-start gap-5 cursor-default"
-      style={{ border: `1px solid ${LB}`, backgroundColor: hov ? G50 : W }}
+      style={{ border: `1px solid ${LB}`, backgroundColor: hov ? '#F2F2F0' : W }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      animate={{ backgroundColor: hov ? G50 : W }}
+      animate={{ backgroundColor: hov ? '#F2F2F0' : W }}
       transition={{ duration: 0.22 }}
     >
       <Brackets c={hov ? AC : 'rgba(0,0,0,0.06)'} sz={12} w={1} />
@@ -129,13 +337,13 @@ export default function About() {
 
       {/* Hero */}
       <section className="relative flex flex-col justify-end overflow-hidden"
-        style={{ minHeight: '82vh', backgroundColor: B, ...GRID_D }}>
+        style={{ minHeight: '65vh', backgroundColor: B, ...GRID_D }}>
         <motion.div className="absolute top-0 inset-x-0 h-px origin-left" style={{ backgroundColor: AC }}
           initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }} />
         <div aria-hidden className="absolute inset-0 pointer-events-none"
           style={{ background: 'radial-gradient(ellipse at 80% 12%, rgba(157,126,63,0.09) 0%, transparent 50%)' }} />
 
-        <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-20 pt-44 w-full">
+        <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-14 pt-28 w-full">
           <motion.div className="flex items-center gap-4 mb-10"
             initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9 }}>
             <motion.div className="h-px" style={{ backgroundColor: AC }}
@@ -168,7 +376,7 @@ export default function About() {
       </section>
 
       {/* Mission */}
-      <section className="py-36 md:py-48" style={{ backgroundColor: W }}>
+      <section className="py-20 md:py-28" style={{ backgroundColor: W }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
           <div className="grid md:grid-cols-12 gap-12 md:gap-20 items-center">
             <Reveal direction="left" x={48} className="md:col-span-7">
@@ -213,9 +421,9 @@ export default function About() {
       </section>
 
       {/* Foundation story */}
-      <section className="py-36 md:py-48" style={{ backgroundColor: B, ...GRID_D }}>
+      <section className="py-20 md:py-28" style={{ backgroundColor: B, ...GRID_D }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-20">
+          <Reveal className="mb-12">
             <div className="flex items-center gap-3 mb-5">
               <div className="h-px w-10" style={{ backgroundColor: AC }} />
               <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: 'rgba(255,255,255,0.26)' }}>The Beginning</div>
@@ -256,9 +464,9 @@ export default function About() {
       </section>
 
       {/* Values */}
-      <section className="py-36 md:py-48" style={{ backgroundColor: G50 }}>
+      <section className="py-20 md:py-28" style={{ backgroundColor: '#F2F2F0' }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-16">
+          <Reveal className="mb-12">
             <div className="flex items-center gap-3 mb-5">
               <div className="h-px w-10" style={{ backgroundColor: AC }} />
               <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>Our Core Beliefs</div>
@@ -286,10 +494,10 @@ export default function About() {
         </div>
       </section>
 
-      {/* Timeline */}
-      <section className="py-36 md:py-48" style={{ backgroundColor: W }}>
+      {/* Milestones — interactive split panel */}
+      <section className="py-20 md:py-28" style={{ backgroundColor: W }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-20">
+          <Reveal className="mb-12">
             <div className="flex items-center gap-3 mb-5">
               <div className="h-px w-10" style={{ backgroundColor: AC }} />
               <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>25 Years of Excellence</div>
@@ -298,47 +506,14 @@ export default function About() {
               Milestones
             </h2>
           </Reveal>
-
-          <div className="relative">
-            {/* Animated vertical line */}
-            <motion.div
-              className="absolute left-6 md:left-10 top-0 bottom-0 w-px origin-top"
-              style={{ backgroundColor: G200 }}
-              initial={{ scaleY: 0 }}
-              whileInView={{ scaleY: 1 }}
-              viewport={{ once: true, amount: 0.1 }}
-              transition={{ duration: 2.4, ease: [0.22, 1, 0.36, 1] }}
-            />
-
-            <div className="space-y-0">
-              {TIMELINE.map((t, i) => (
-                <Reveal key={t.y} delay={i * 0.07} y={24}>
-                  <div className="relative flex gap-10 md:gap-16 py-8 md:py-10 pl-16 md:pl-24 group cursor-default">
-                    {/* Dot */}
-                    <motion.div
-                      className="absolute w-3 h-3 -translate-y-1/2 top-1/2"
-                      style={{ left: 'calc(1.5rem - 6px)', backgroundColor: W, border: `1.5px solid ${G200}` }}
-                      whileHover={{ scale: 1.4, borderColor: AC, backgroundColor: AC }}
-                      transition={{ duration: 0.22 }}
-                    />
-
-                    <div style={{ fontFamily: SF, fontStyle: 'italic', fontWeight: 300, fontSize: '1.1rem', color: AC, minWidth: 48, paddingTop: 2 }}>{t.y}</div>
-                    <div className="flex-1 pb-8" style={{ borderBottom: i < TIMELINE.length - 1 ? `1px solid ${LB}` : 'none' }}>
-                      <div className="text-[13px] font-bold mb-2 tracking-tight" style={{ color: B }}>{t.title}</div>
-                      <p className="text-[11px] leading-relaxed font-light" style={{ color: G500 }}>{t.body}</p>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
+          <MilestonesInteractive />
         </div>
       </section>
 
       {/* Leadership */}
-      <section className="py-36 md:py-48" style={{ backgroundColor: G50, ...DOT_L }}>
+      <section className="py-16 md:py-22" style={{ backgroundColor: G50, ...DOT_L }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-16">
+          <Reveal className="mb-10">
             <div className="flex items-center gap-3 mb-5">
               <div className="h-px w-10" style={{ backgroundColor: AC }} />
               <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>The Team</div>
@@ -347,10 +522,10 @@ export default function About() {
               Leadership
             </h2>
           </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-0" style={{ border: `1px solid ${LB}` }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-0" style={{ border: `1px solid ${LB}` }}>
             {TEAM.map((m, i) => (
               <Reveal key={m.name} delay={i * 0.09} y={28}
-                style={{ borderRight: (i + 1) % 3 !== 0 ? `1px solid ${LB}` : 'none', borderBottom: i < 3 ? `1px solid ${LB}` : 'none' }}>
+                style={{ borderRight: i === 0 ? `1px solid ${LB}` : 'none' }}>
                 <TeamCard m={m} />
               </Reveal>
             ))}
@@ -359,9 +534,9 @@ export default function About() {
       </section>
 
       {/* Awards */}
-      <section className="py-24 md:py-32" style={{ backgroundColor: W, borderTop: `1px solid ${LB}` }}>
+      <section className="py-14 md:py-20" style={{ backgroundColor: W, borderTop: `1px solid ${LB}` }}>
         <div className="max-w-7xl mx-auto px-6 lg:px-10">
-          <Reveal className="mb-12">
+          <Reveal className="mb-10">
             <div className="flex items-center gap-3 mb-5">
               <div className="h-px w-10" style={{ backgroundColor: AC }} />
               <div className="text-[8px] uppercase tracking-[0.46em] font-semibold" style={{ color: G500 }}>Recognition</div>
@@ -401,7 +576,7 @@ export default function About() {
               { Icon: Leaf,        l: 'LEED Gold Certified' },
               { Icon: HardHat,     l: '150+ Expert Craftsmen' },
               { Icon: Users,       l: 'Dedicated Project Lead' },
-            ].map(({ Icon, l }, i) => (
+            ].map(({ Icon, l }) => (
               <motion.div key={l}
                 className="flex flex-col items-center gap-2.5 px-5 py-7 cursor-default"
                 style={{ borderRight: DB }}
@@ -416,7 +591,7 @@ export default function About() {
       </section>
 
       {/* CTA */}
-      <section className="py-44 md:py-56 relative overflow-hidden" style={{ backgroundColor: B, ...GRID_D }}>
+      <section className="py-24 md:py-32 relative overflow-hidden" style={{ backgroundColor: B, ...GRID_D }}>
         <div aria-hidden className="absolute inset-0 pointer-events-none"
           style={{ background: 'radial-gradient(circle at 50% 58%, rgba(157,126,63,0.12), transparent 50%)' }} />
         <div className="relative max-w-4xl mx-auto px-6 lg:px-10 text-center">

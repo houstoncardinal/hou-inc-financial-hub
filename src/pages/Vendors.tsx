@@ -15,6 +15,7 @@ import { fmtUSD } from '@/lib/format';
 import { Trash2, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/reports';
+import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
 
 const blank = { name: '', contact_email: '', contact_phone: '', address: '', notes: '', ein: '', w9_on_file: false, requires_1099: false, lien_waiver_required: false };
 
@@ -31,6 +32,7 @@ export default function Vendors() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(blank);
   const [q, setQ] = useState('');
+  const [detailRow, setDetailRow] = useState<any>(null);
 
   const enriched = useMemo(() => vendors.filter((v: any) => !q || v.name.toLowerCase().includes(q.toLowerCase())).map((v: any) => {
     const checksTotal = checks.filter((c: any) => c.payee_vendor_id === v.id && c.status !== 'voided').reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -161,7 +163,7 @@ export default function Vendors() {
         <div className="sm:hidden space-y-3">
           {enriched.length === 0 ? <div className="py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
             enriched.map((v: any) => (
-              <div key={v.id} className="border border-border p-4 space-y-2">
+              <div key={v.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(v)}>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">{v.name}</span>
                   <span className="text-sm font-semibold font-mono-tab">{fmtUSD(v.totalPaid)}</span>
@@ -174,7 +176,7 @@ export default function Vendors() {
                   <span>{v.txnCount} transactions</span>
                   <span>{v.address || '—'}</span>
                 </div>
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex justify-end gap-2 pt-1" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '', ein: v.ein || '', w9_on_file: v.w9_on_file || false, requires_1099: v.requires_1099 || false, lien_waiver_required: v.lien_waiver_required || false }); setOpen(true); }}>Edit</Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="rounded-none h-7 w-7 text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
@@ -195,7 +197,7 @@ export default function Vendors() {
           </div>
           {enriched.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
             enriched.map((v: any) => (
-              <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab vnd-row items-center">
+              <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab vnd-row items-center cursor-pointer" onClick={() => setDetailRow(v)}>
                 <div className="col-span-3 font-medium">{v.name}</div>
                 <div className="col-span-2 text-muted-foreground truncate">{v.contact_email || '—'}</div>
                 <div className="col-span-1 text-muted-foreground truncate">{v.contact_phone || '—'}</div>
@@ -212,7 +214,7 @@ export default function Vendors() {
                 </div>
                 <div className="col-span-1 text-right text-muted-foreground">{v.txnCount}</div>
                 <div className="col-span-2 text-right font-semibold">{fmtUSD(v.totalPaid)}</div>
-                <div className="col-span-1 flex justify-end gap-1">
+                <div className="col-span-1 flex justify-end gap-1" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" className="h-7 rounded-none text-xs" onClick={() => { setForm({ id: v.id, name: v.name, contact_email: v.contact_email || '', contact_phone: v.contact_phone || '', address: v.address || '', notes: v.notes || '', ein: v.ein || '', w9_on_file: v.w9_on_file || false, requires_1099: v.requires_1099 || false, lien_waiver_required: v.lien_waiver_required || false }); setOpen(true); }}>Edit</Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
@@ -226,6 +228,7 @@ export default function Vendors() {
             ))}
         </div>
       </div>
+      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind="vendor" data={detailRow} />
     </AppShell>
   );
 }

@@ -166,6 +166,15 @@ const IDX_CSS = `
 .idx-widget{background:rgba(255,255,255,0.80)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);transition:background 0.2s,box-shadow 0.2s,border-color 0.2s;}
 .idx-widget:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 20px rgba(10,10,10,0.08);}
 .idx-row:hover{background-color:rgba(157,126,63,0.025)!important;}
+.dark .stat-card{border:1px solid hsl(var(--border))!important;box-shadow:0 1px 8px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04)!important;}
+.dark .stat-card:hover{box-shadow:0 10px 40px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,255,0.05)!important;}
+.dark .idx-kpi{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .idx-kpi:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 18px rgba(0,0,0,0.25);}
+.dark .idx-qa{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .idx-qa:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 18px rgba(0,0,0,0.25)!important;}
+.dark .idx-widget{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .idx-widget:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 20px rgba(0,0,0,0.3);}
+.dark .idx-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
 `;
 
 export default function Index() {
@@ -407,9 +416,9 @@ export default function Index() {
       color: stats.balance >= 0 ? 'var(--positive)' : 'var(--accent)',
       badge: stats.balance >= 0 ? 'Positive' : 'Negative',
       badgeColor: stats.balance >= 0 ? 'bg-positive/10 text-positive border-positive/30' : 'bg-accent/10 text-accent border-accent/30',
-      bg: 'from-blue-50/80 to-blue-100/50',
-      borderAccent: 'border-blue-200/50',
-      bokeh: 'from-white/60 via-white/30 to-transparent',
+      bg: 'from-blue-50/80 dark:from-blue-950/30 to-blue-100/50 dark:to-blue-950/10',
+      borderAccent: 'border-blue-200/50 dark:border-blue-800/25',
+      bokeh: 'from-white/60 via-white/30 to-transparent dark:from-white/[0.03] dark:via-transparent',
       chart: <BalanceTrendChart data={balanceTrendData} color={stats.balance >= 0 ? 'var(--positive)' : 'var(--accent)'} />,
       onClick: () => navigate('/ledger'),
     },
@@ -420,9 +429,9 @@ export default function Index() {
       color: 'var(--positive)',
       badge: 'Revenue',
       badgeColor: 'bg-positive/10 text-positive border-positive/30',
-      bg: 'from-emerald-50/80 to-emerald-100/50',
-      borderAccent: 'border-emerald-200/50',
-      bokeh: 'from-white/60 via-white/30 to-transparent',
+      bg: 'from-emerald-50/80 dark:from-emerald-950/30 to-emerald-100/50 dark:to-emerald-950/10',
+      borderAccent: 'border-emerald-200/50 dark:border-emerald-800/25',
+      bokeh: 'from-white/60 via-white/30 to-transparent dark:from-white/[0.03] dark:via-transparent',
       chart: <InflowChart monthlyData={inflowMonthlyData} categoryData={inflowCategoryData} />,
       onClick: () => navigate('/income'),
     },
@@ -433,9 +442,9 @@ export default function Index() {
       color: 'var(--accent)',
       badge: 'Spend',
       badgeColor: 'bg-accent/10 text-accent border-accent/30',
-      bg: 'from-rose-50/80 to-rose-100/50',
-      borderAccent: 'border-rose-200/50',
-      bokeh: 'from-white/60 via-white/30 to-transparent',
+      bg: 'from-rose-50/80 dark:from-rose-950/30 to-rose-100/50 dark:to-rose-950/10',
+      borderAccent: 'border-rose-200/50 dark:border-rose-800/25',
+      bokeh: 'from-white/60 via-white/30 to-transparent dark:from-white/[0.03] dark:via-transparent',
       chart: <OutflowChart monthlyData={outflowMonthlyData} categoryData={outflowCategoryData} />,
       onClick: () => navigate('/expenses'),
     },
@@ -447,9 +456,9 @@ export default function Index() {
       color: 'var(--warning)',
       badge: 'Awaiting',
       badgeColor: 'bg-warning/10 text-warning border-warning/30',
-      bg: 'from-amber-50/80 to-amber-100/50',
-      borderAccent: 'border-amber-200/50',
-      bokeh: 'from-white/60 via-white/30 to-transparent',
+      bg: 'from-amber-50/80 dark:from-amber-950/30 to-amber-100/50 dark:to-amber-950/10',
+      borderAccent: 'border-amber-200/50 dark:border-amber-800/25',
+      bokeh: 'from-white/60 via-white/30 to-transparent dark:from-white/[0.03] dark:via-transparent',
       chart: <PendingAgingChart agingBuckets={pendingAgingData} totalValue={stats.pendingValue} />,
       onClick: () => navigate('/checks'),
     },
@@ -603,7 +612,7 @@ export default function Index() {
             ))}
           </div>
           {/* Action tiles below */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px border border-border" style={{ background: 'rgba(220,214,204,0.45)' }}>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-px border border-border bg-border/50">
             {quickActions.map(a => (
               <button key={a.label} onClick={a.onClick}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 idx-qa active:bg-secondary transition-all duration-200 group ${a.accent ? 'ring-1 ring-inset ring-foreground/10' : ''}`}
@@ -662,7 +671,7 @@ export default function Index() {
         <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground mb-2.5">
           Construction Intelligence · YTD
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px border border-border" style={{ background: 'rgba(220,214,204,0.45)' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px border border-border bg-border/50">
           {([
             {
               label: 'Gross Margin',
@@ -708,19 +717,10 @@ export default function Index() {
         </div>
       </div>
 
-      {/* ── Quick-access widgets: Projects & Vendors ── */}
+      {/* ── Projects strip + quick widgets ── */}
       <div className="px-4 sm:px-8 py-3 border-b border-border">
-        <div className="flex items-center gap-3 overflow-x-auto pb-1">
-          <button onClick={() => navigate('/projects')}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border idx-widget transition-all shrink-0">
-            <div className="w-7 h-7 flex items-center justify-center bg-amber-600/10 text-amber-600">
-              <FolderKanban className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </div>
-            <div className="text-left">
-              <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Projects</div>
-              <div className="text-xs font-semibold font-mono-tab">{projects.length} active</div>
-            </div>
-          </button>
+        {/* Row 1: Vendors + Invoices quick-access */}
+        <div className="flex items-center gap-3 mb-3 overflow-x-auto pb-0.5">
           <button onClick={() => navigate('/vendors')}
             className="flex items-center gap-2.5 px-3.5 py-2.5 border border-border idx-widget transition-all shrink-0">
             <div className="w-7 h-7 flex items-center justify-center bg-blue-600/10 text-blue-600">
@@ -746,6 +746,61 @@ export default function Index() {
             </div>
           </button>
           <div className="flex-1 min-w-4" />
+        </div>
+
+        {/* Row 2: Project cards — click any to jump to project detail */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">
+              Active Projects ({projects.filter((p: any) => p.status === 'active' || !p.status).length})
+            </div>
+            <button onClick={() => navigate('/projects')}
+              className="text-[9px] uppercase tracking-[0.18em] font-bold text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5">
+              All <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          {projects.filter((p: any) => p.status === 'active' || !p.status).length === 0 ? (
+            <button onClick={() => navigate('/projects')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-dashed border-border text-[10px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all">
+              <FolderKanban className="w-3.5 h-3.5" strokeWidth={1.5} /> No active projects — create one
+            </button>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {projects
+                .filter((p: any) => p.status === 'active' || !p.status)
+                .slice(0, 6)
+                .map((p: any) => {
+                  const pChecks  = [];
+                  const pExpAmt  = 0;
+                  const budget   = Number(p.budget || 0);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                      className="flex items-center gap-3 px-3.5 py-3 border border-border idx-widget transition-all text-left group w-full"
+                    >
+                      <div className="w-1 self-stretch shrink-0 bg-positive/60" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-semibold truncate group-hover:text-accent transition-colors">
+                          {p.name}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {p.code && (
+                            <span className="text-[8px] font-black font-mono-tab text-muted-foreground bg-secondary px-1 py-0.5">
+                              {p.code}
+                            </span>
+                          )}
+                          {budget > 0 && (
+                            <span className="text-[9px] font-mono-tab text-muted-foreground">{fmtUSD(budget)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" strokeWidth={1.5} />
+                    </button>
+                  );
+                })}
+            </div>
+          )}
         </div>
       </div>
 

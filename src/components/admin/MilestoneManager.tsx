@@ -81,21 +81,27 @@ function MilestoneItem({
   onSave,
   onStatusChange,
   onDelete,
+  confirmingDelete,
+  onConfirmDelete,
+  onCancelDelete,
   onMoveUp,
   onMoveDown,
 }: {
-  milestone:      MilestoneRow;
-  index:          number;
-  total:          number;
-  expanded:       boolean;
-  saving:         boolean;
-  onToggle:       () => void;
-  onChange:       (field: keyof MilestoneRow, value: string | boolean) => void;
-  onSave:         () => void;
-  onStatusChange: (status: Status) => void;
-  onDelete:       () => void;
-  onMoveUp:       () => void;
-  onMoveDown:     () => void;
+  milestone:        MilestoneRow;
+  index:            number;
+  total:            number;
+  expanded:         boolean;
+  saving:           boolean;
+  onToggle:         () => void;
+  onChange:         (field: keyof MilestoneRow, value: string | boolean) => void;
+  onSave:           () => void;
+  onStatusChange:   (status: Status) => void;
+  onDelete:         () => void;
+  confirmingDelete: boolean;
+  onConfirmDelete:  () => void;
+  onCancelDelete:   () => void;
+  onMoveUp:         () => void;
+  onMoveDown:       () => void;
 }) {
   const {
     attributes, listeners, setNodeRef,
@@ -218,15 +224,30 @@ function MilestoneItem({
           {/* Saving spinner */}
           {saving && <Loader2 className="w-3 h-3 animate-spin shrink-0" style={{ color: AC }} />}
 
-          {/* Delete */}
-          <button
-            onClick={e => { e.stopPropagation(); onDelete(); }}
-            className="shrink-0 flex items-center justify-center w-10 h-10 transition-opacity hover:opacity-100 opacity-30"
-            style={{ color: '#ef4444' }}
-            title="Delete milestone"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {/* Delete — inline confirmation */}
+          {confirmingDelete ? (
+            <div className="shrink-0 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={onConfirmDelete}
+                className="text-[8px] font-black uppercase tracking-widest px-2 py-1"
+                style={{ background: '#ef4444', color: '#fff' }}
+              >Delete</button>
+              <button
+                onClick={onCancelDelete}
+                className="text-[8px] font-bold uppercase tracking-widest px-2 py-1"
+                style={{ border: `1px solid ${G200}`, color: G500 }}
+              >Cancel</button>
+            </div>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(); }}
+              className="shrink-0 flex items-center justify-center w-10 h-10 transition-opacity hover:opacity-100 opacity-30"
+              style={{ color: '#ef4444' }}
+              title="Delete milestone"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Expand toggle */}
           <button
@@ -370,6 +391,7 @@ export default function MilestoneManager({ clientId }: { clientId: string }) {
   const [savingId, setSavingId]   = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [liveFlash, setLiveFlash] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   /* Track draft edits per row so typing doesn't conflict with realtime reloads */
   const drafts = useRef<Record<string, Partial<MilestoneRow>>>({});
@@ -508,9 +530,9 @@ export default function MilestoneManager({ clientId }: { clientId: string }) {
   }, [clientId, rows]);
 
   /* ── Delete ── */
-  const handleDelete = useCallback(async (rowId: string, name: string) => {
-    if (!confirm(`Delete "${name || 'this milestone'}"? This cannot be undone.`)) return;
+  const handleDelete = useCallback(async (rowId: string) => {
     setRows(prev => prev.filter(r => r.id !== rowId));
+    setConfirmDeleteId(null);
     const { error } = await (supabase as any)
       .from('project_milestones')
       .delete()
@@ -702,7 +724,10 @@ export default function MilestoneManager({ clientId }: { clientId: string }) {
                 onChange={(field, value) => editRow(row.id, field, value)}
                 onSave={() => saveRow(row)}
                 onStatusChange={status => handleStatusChange(row.id, status)}
-                onDelete={() => handleDelete(row.id, row.phase_name)}
+                onDelete={() => setConfirmDeleteId(row.id)}
+                confirmingDelete={confirmDeleteId === row.id}
+                onConfirmDelete={() => handleDelete(row.id)}
+                onCancelDelete={() => setConfirmDeleteId(null)}
                 onMoveUp={() => moveRow(i, -1)}
                 onMoveDown={() => moveRow(i, 1)}
               />

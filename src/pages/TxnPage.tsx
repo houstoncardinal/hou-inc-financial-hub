@@ -8,10 +8,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useDelete, useProjects, useTransactions, useUpsert, useVendors, useQuickCreate } from '@/hooks/useFinance';
 import { useEntity } from '@/contexts/EntityContext';
+import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
 import { Trash2, FileText, Table2, Plus, Upload, Camera, X, CheckCircle2, Sparkles, ScanLine } from 'lucide-react';
+import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import { generateTransactionReport, savePDF, downloadTransactionExcel } from '@/lib/reports';
@@ -30,6 +32,41 @@ const INCOME_CATEGORIES = [
   'Reimbursement', 'Interest Income', 'Grant', 'Investment',
   'Refund', 'Other Income',
 ];
+
+const INCOME_PAYMENT_METHODS = [
+  { value: 'check',           label: 'Check' },
+  { value: 'ach_wire',        label: 'ACH / Wire' },
+  { value: 'credit_card',     label: 'Credit Card' },
+  { value: 'financing_draw',  label: 'Financing Draw' },
+  { value: 'cash',            label: 'Cash' },
+  { value: 'other',           label: 'Other' },
+];
+
+const EXPENSE_PAYMENT_METHODS = [
+  { value: 'check',       label: 'Check' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'ach',         label: 'ACH' },
+  { value: 'net_30',      label: 'NET 30' },
+  { value: 'net_60',      label: 'NET 60' },
+  { value: 'net_90',      label: 'NET 90' },
+  { value: 'cash',        label: 'Cash' },
+  { value: 'wire',        label: 'Wire' },
+  { value: 'other',       label: 'Other' },
+];
+
+const COST_PHASES = [
+  'Phase 1: Site Prep & Demo',
+  'Phase 2: Foundation & Concrete',
+  'Phase 3: Framing & Structure',
+  'Phase 4: Rough-Ins (MEP)',
+  'Phase 5: Exterior & Roofing',
+  'Phase 6: Insulation & Drywall',
+  'Phase 7: Finishes & Fixtures',
+  'Phase 8: Landscaping & Final',
+  'General / Overhead',
+];
+
+const REF_REQUIRED_METHODS = new Set(['check', 'ach_wire', 'ach', 'wire']);
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -177,6 +214,8 @@ function ReceiptScanner({ preview, scanning, scanned, scanError, onCamera, onUpl
 const TXN_CSS = `
 .txn-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .txn-stat{background:rgba(255,255,255,0.86)!important;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
+.dark .txn-stat{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .txn-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
 `;
 
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
@@ -190,13 +229,17 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const createProject = useQuickCreate('projects');
 
   const isIncome = kind === 'income';
+  const { invoices } = useInvoices();
 
   /* ── Dialog + form state ── */
   const [open, setOpen] = useState(false);
+  const [detailRow, setDetailRow] = useState<any>(null);
   const blankForm = {
     amount: '', transaction_date: new Date().toISOString().slice(0, 10),
     vendor_id: '', source_name: '', project_id: '',
     category: '', notes: '', payment_method: '',
+    check_reference: '', retainage_percent: '', retainage_amount: '',
+    invoice_id: '', cost_phase: '',
   };
   const [form, setForm] = useState(blankForm);
   const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
@@ -308,14 +351,19 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         category: form.category || null,
         notes: form.notes || null,
         project_id: form.project_id || null,
+        payment_method: form.payment_method || null,
+        check_reference: form.check_reference || null,
+        cost_phase: form.cost_phase || null,
       };
       if (isIncome) {
         payload.source_name = form.source_name || null;
         payload.vendor_id = null;
+        payload.invoice_id = form.invoice_id || null;
+        payload.retainage_percent = form.retainage_percent ? parseFloat(form.retainage_percent) : null;
+        payload.retainage_amount  = form.retainage_amount  ? parseFloat(form.retainage_amount)  : null;
       } else {
         payload.source_name = null;
         payload.vendor_id = form.vendor_id || null;
-        if (form.payment_method) payload.payment_method = form.payment_method;
       }
       await upsert.mutateAsync(payload as any);
       toast.success(isIncome ? 'Income saved' : 'Expense saved');
@@ -431,46 +479,97 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                     </div>
                   </div>
 
+                  {/* Source / Vendor */}
                   {isIncome ? (
                     <div>
-                      <AutoLabel label="Source" filled={autoFilled.has('source_name')} />
-                      <Input placeholder="Client / source name" className="rounded-none h-10" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} />
+                      <AutoLabel label="Source / Client" filled={autoFilled.has('source_name')} />
+                      <Input placeholder="Client or source name" className="rounded-none h-10" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} />
                     </div>
                   ) : (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label className="micro-label">Vendor</Label>
-                        <QuickCreateSelect
-                          value={form.vendor_id}
-                          onValueChange={v => setForm(f => ({ ...f, vendor_id: v }))}
-                          options={vendors}
-                          placeholder="Select vendor"
-                          entityLabel="Vendor"
-                          onCreateNew={async (name) => {
-                            const result = await createVendor.mutateAsync({ name });
-                            toast.success(`Vendor "${name}" created`);
-                            return result;
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="micro-label">Payment Method</Label>
-                        <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
-                          <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select payment method" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="check">Check</SelectItem>
-                            <SelectItem value="credit_card">Credit Card</SelectItem>
-                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                            <SelectItem value="net30">NET30</SelectItem>
-                            <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="wire">Wire</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Vendor</Label>
+                      <QuickCreateSelect
+                        value={form.vendor_id}
+                        onValueChange={v => setForm(f => ({ ...f, vendor_id: v }))}
+                        options={vendors}
+                        placeholder="Select vendor"
+                        entityLabel="Vendor"
+                        onCreateNew={async (name) => {
+                          const result = await createVendor.mutateAsync({ name });
+                          toast.success(`Vendor "${name}" created`);
+                          return result;
+                        }}
+                      />
+                    </div>
                   )}
 
+                  {/* Payment Method + Check/Reference # */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Payment Method</Label>
+                      <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v, check_reference: '' }))}>
+                        <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                        <SelectContent>
+                          {(isIncome ? INCOME_PAYMENT_METHODS : EXPENSE_PAYMENT_METHODS).map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {REF_REQUIRED_METHODS.has(form.payment_method) && (
+                      <div className="space-y-1.5">
+                        <Label className="micro-label">
+                          {form.payment_method === 'check' ? 'Check Number' : 'Reference / Trace #'}
+                        </Label>
+                        <Input
+                          className="rounded-none h-10"
+                          placeholder={form.payment_method === 'check' ? 'e.g. 1042' : 'Wire / ACH trace #'}
+                          value={form.check_reference}
+                          onChange={e => setForm(f => ({ ...f, check_reference: e.target.value }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Retainage — income only */}
+                  {isIncome && (
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Retainage / Holdback <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="relative">
+                          <Input
+                            type="number" min="0" max="100" step="0.1"
+                            className="rounded-none h-10 pr-7"
+                            placeholder="e.g. 10"
+                            value={form.retainage_percent}
+                            onChange={e => {
+                              const pct = e.target.value;
+                              const computed = pct && form.amount ? String(Math.round(parseFloat(form.amount) * parseFloat(pct) / 100 * 100) / 100) : '';
+                              setForm(f => ({ ...f, retainage_percent: pct, retainage_amount: computed }));
+                            }}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                          <Input
+                            type="number" min="0" step="0.01"
+                            className="rounded-none h-10 pl-6"
+                            placeholder="e.g. 10,000"
+                            value={form.retainage_amount}
+                            onChange={e => {
+                              const amt = e.target.value;
+                              const computed = amt && form.amount ? String(Math.round(parseFloat(amt) / parseFloat(form.amount) * 100 * 100) / 100) : '';
+                              setForm(f => ({ ...f, retainage_amount: amt, retainage_percent: computed }));
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Enter % or $ — the other calculates automatically. Tracks the holdback portion not yet receivable.</p>
+                    </div>
+                  )}
+
+                  {/* Category */}
                   <div>
                     <AutoLabel label="Category" filled={autoFilled.has('category')} />
                     <CategorySelect
@@ -480,6 +579,38 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                     />
                   </div>
 
+                  {/* Invoice link — income only */}
+                  {isIncome && (
+                    <div className="space-y-1.5">
+                      <Label className="micro-label">Link to Invoice <span className="text-muted-foreground font-normal normal-case">(marks it paid)</span></Label>
+                      <Select value={form.invoice_id} onValueChange={v => setForm(f => ({ ...f, invoice_id: v }))}>
+                        <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select invoice (optional)" /></SelectTrigger>
+                        <SelectContent>
+                          {invoices.filter((inv: any) => inv.status !== 'paid').map((inv: any) => (
+                            <SelectItem key={inv.id} value={inv.id}>
+                              {inv.invoice_number} — {inv.client_name} ({inv.status})
+                            </SelectItem>
+                          ))}
+                          {invoices.filter((inv: any) => inv.status !== 'paid').length === 0 && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">No open invoices</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Cost Phase */}
+                  <div className="space-y-1.5">
+                    <Label className="micro-label">Cost Phase / Code <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                    <Select value={form.cost_phase} onValueChange={v => setForm(f => ({ ...f, cost_phase: v }))}>
+                      <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select phase (optional)" /></SelectTrigger>
+                      <SelectContent>
+                        {COST_PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Project */}
                   <div className="space-y-1.5">
                     <Label className="micro-label">Project</Label>
                     <QuickCreateSelect
@@ -543,7 +674,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           {txns.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No records.</div>
           ) : txns.map((t: any) => (
-            <div key={t.id} className="border border-border p-4 space-y-2">
+            <div key={t.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
                 <span className={`text-sm font-semibold font-mono-tab ${isIncome ? 'text-positive' : ''}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</span>
@@ -553,7 +684,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                 <span>{t.projects?.name || 'No project'}</span>
                 <span>{isIncome ? (t.notes || '') : (t.category || '')}</span>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-muted-foreground hover:text-accent">
@@ -586,13 +717,13 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           {txns.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No records.</div>
           ) : txns.map((t: any) => (
-            <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center">
+            <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
               <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
               <div className="col-span-3 truncate text-muted-foreground">{t.projects?.name || '—'}</div>
               <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : (t.category || '—')}</div>
               <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : ''}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</div>
-              <div className="col-span-1 flex justify-end">
+              <div className="col-span-1 flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent">
@@ -612,6 +743,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           ))}
         </div>
       </div>
+      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind={kind === 'income' ? 'income' : 'expense'} data={detailRow} />
     </AppShell>
   );
 }

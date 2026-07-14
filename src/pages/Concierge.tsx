@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate } from '@/hooks/useFinance';
 import { useUploadDocument } from '@/hooks/useDocuments';
+import { useInvoices } from '@/hooks/useInvoices';
 import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
@@ -32,7 +33,11 @@ interface Question {
   required?: boolean;
   icon?: any;
   helper?: string;
+  skipIf?: (data: Record<string, string>) => boolean;
 }
+
+const REF_METHODS_INCOME = new Set(['check', 'ach_wire']);
+const REF_METHODS_EXPENSE = new Set(['check', 'ach', 'wire']);
 
 interface ServiceDef {
   icon: any;
@@ -50,7 +55,12 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
       { id: 'amount', label: 'How much was received?', placeholder: '0.00', type: 'number', required: true, icon: DollarSign },
       { id: 'date', label: 'When was it received?', type: 'date', required: true, icon: Calendar },
       { id: 'source_name', label: 'Who sent this payment?', placeholder: 'Client or source name', type: 'text', icon: User },
-      { id: 'category', label: 'What type of income is this?', type: 'category', options: ['Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee', 'Reimbursement', 'Interest Income', 'Grant', 'Investment', 'Refund', 'Other Income'], icon: FileSpreadsheet },
+      { id: 'payment_method', label: 'How was this payment received?', type: 'payment_income', icon: CreditCard },
+      { id: 'check_reference', label: 'Check or reference number?', placeholder: 'e.g. 1042', type: 'text', icon: Hash, helper: 'For bank reconciliation — matches your bank statement', skipIf: d => !REF_METHODS_INCOME.has(d.payment_method) },
+      { id: 'retainage', label: 'Any retainage / holdback?', type: 'retainage', icon: DollarSign, helper: 'Enter the holdback % or $ amount — leave blank to skip' },
+      { id: 'category', label: 'What type of income is this?', type: 'category', options: ['Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee', 'Reimbursement', 'Interest Income', 'Grant', 'Financing Draw', 'Refund', 'Other Income'], icon: FileSpreadsheet },
+      { id: 'invoice_id', label: 'Link to an invoice?', type: 'invoice', icon: FileText, helper: 'Optional — marks the invoice as paid' },
+      { id: 'cost_phase', label: 'Construction phase?', type: 'phase', icon: FolderKanban, helper: 'Optional — assign to a project phase for cost tracking' },
       { id: 'project_id', label: 'Assign to a project?', type: 'project', icon: FolderKanban },
       { id: 'notes', label: 'Any notes?', placeholder: 'Optional notes…', type: 'textarea', icon: MessageSquare },
     ],
@@ -62,7 +72,9 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
       { id: 'date', label: 'When did it occur?', type: 'date', required: true, icon: Calendar },
       { id: 'vendor_id', label: 'Which vendor?', type: 'vendor', icon: Building2 },
       { id: 'category', label: 'What category?', type: 'category', options: ['Materials & Supplies', 'Labor & Subcontractors', 'Permits & Fees', 'Equipment Rental', 'Transportation & Freight', 'Office & Admin', 'Insurance', 'Utilities', 'Marketing & Advertising', 'Professional Services', 'Travel & Meals', 'Software & Subscriptions', 'Maintenance & Repairs', 'Taxes & Licenses', 'Miscellaneous'], icon: FileSpreadsheet },
-      { id: 'payment_method', label: 'How was it paid?', type: 'payment', icon: CreditCard },
+      { id: 'payment_method', label: 'How was it paid?', type: 'payment_expense', icon: CreditCard },
+      { id: 'check_reference', label: 'Check or reference number?', placeholder: 'Trace # or check #', type: 'text', icon: Hash, helper: 'For bank reconciliation — matches your bank statement', skipIf: d => !REF_METHODS_EXPENSE.has(d.payment_method) },
+      { id: 'cost_phase', label: 'Construction phase?', type: 'phase', icon: FolderKanban, helper: 'Optional — assign to a project phase for cost tracking' },
       { id: 'project_id', label: 'Link to a project?', type: 'project', icon: FolderKanban },
       { id: 'receipt', label: 'Upload receipt (optional)', type: 'receipt', icon: Camera },
       { id: 'notes', label: 'Any notes?', placeholder: 'Optional notes…', type: 'textarea', icon: MessageSquare },
@@ -119,18 +131,43 @@ function SimpleInput({ type, value, onChange, placeholder, options }: { type: st
           </SelectContent>
         </Select>
       );
-    case 'payment':
+    case 'payment_income':
       return (
         <Select value={value} onValueChange={onChange}>
           <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select payment method" /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="check">Check</SelectItem>
+            <SelectItem value="ach_wire">ACH / Wire</SelectItem>
             <SelectItem value="credit_card">Credit Card</SelectItem>
-            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-            <SelectItem value="net30">NET30</SelectItem>
+            <SelectItem value="financing_draw">Financing Draw</SelectItem>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+    case 'payment_expense':
+      return (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select payment method" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="check">Check</SelectItem>
+            <SelectItem value="credit_card">Credit Card</SelectItem>
+            <SelectItem value="ach">ACH</SelectItem>
+            <SelectItem value="net_30">NET 30</SelectItem>
+            <SelectItem value="net_60">NET 60</SelectItem>
+            <SelectItem value="net_90">NET 90</SelectItem>
             <SelectItem value="cash">Cash</SelectItem>
             <SelectItem value="wire">Wire</SelectItem>
-            <SelectItem value="check">Check</SelectItem>
             <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+    case 'phase':
+      return (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select phase (optional)" /></SelectTrigger>
+          <SelectContent>
+            {['Phase 1: Site Prep & Demo','Phase 2: Foundation & Concrete','Phase 3: Framing & Structure','Phase 4: Rough-Ins (MEP)','Phase 5: Exterior & Roofing','Phase 6: Insulation & Drywall','Phase 7: Finishes & Fixtures','Phase 8: Landscaping & Final','General / Overhead'].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
       );
@@ -175,6 +212,7 @@ export default function Concierge() {
 
   const { data: vendors = [] } = useVendors();
   const { data: projects = [] } = useProjects();
+  const { invoices = [] } = useInvoices();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
   const { data: checks = [] } = useChecks();
@@ -182,7 +220,7 @@ export default function Concierge() {
   const service = serviceType ? SERVICE_DEFS[serviceType] : null;
   const questions = service?.questions || [];
   const currentQuestion = questions[step] || null;
-  const isLast = service && step === questions.length - 1;
+  const isLast = service && questions.slice(step + 1).every(q => q.skipIf?.(data));
 
   const mtd = useMemo(() => {
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
@@ -222,13 +260,17 @@ export default function Concierge() {
       toast.error('Please fill in this field');
       return;
     }
-    if (isLast) { setPhase('summary'); }
-    else { setStep(prev => prev + 1); setCustomCat(false); setCustomCatVal(''); }
+    let nextStep = step + 1;
+    while (nextStep < questions.length && questions[nextStep].skipIf?.(data)) nextStep++;
+    if (nextStep >= questions.length) { setPhase('summary'); }
+    else { setStep(nextStep); setCustomCat(false); setCustomCatVal(''); }
   };
 
   const goBack = () => {
     if (step === 0) { setPhase('welcome'); return; }
-    setStep(prev => prev - 1); setCustomCat(false); setCustomCatVal('');
+    let prevStep = step - 1;
+    while (prevStep > 0 && questions[prevStep].skipIf?.(data)) prevStep--;
+    setStep(prevStep); setCustomCat(false); setCustomCatVal('');
   };
 
   const commitCustomCategory = () => {
@@ -303,11 +345,38 @@ export default function Concierge() {
     try {
       switch (serviceType) {
         case 'income':
-          await incomeUpsert.mutateAsync({ type: 'income', amount: parseFloat(getVal('amount')), transaction_date: getVal('date'), source_name: getVal('source_name') || null, vendor_id: null, project_id: getVal('project_id') || null, category: getVal('category') || null, notes: getVal('notes') || null } as any);
+          await incomeUpsert.mutateAsync({
+            type: 'income',
+            amount: parseFloat(getVal('amount')),
+            transaction_date: getVal('date'),
+            source_name: getVal('source_name') || null,
+            vendor_id: null,
+            project_id: getVal('project_id') || null,
+            category: getVal('category') || null,
+            notes: getVal('notes') || null,
+            payment_method: getVal('payment_method') || null,
+            check_reference: getVal('check_reference') || null,
+            retainage_percent: getVal('retainage_percent') ? parseFloat(getVal('retainage_percent')) : null,
+            retainage_amount: getVal('retainage_amount') ? parseFloat(getVal('retainage_amount')) : null,
+            invoice_id: getVal('invoice_id') || null,
+            cost_phase: getVal('cost_phase') || null,
+          } as any);
           break;
         case 'expense': {
           const txnId = crypto.randomUUID();
-          await expenseUpsert.mutateAsync({ id: txnId, type: 'expense', amount: parseFloat(getVal('amount')), transaction_date: getVal('date'), vendor_id: getVal('vendor_id') || null, project_id: getVal('project_id') || null, category: getVal('category') || null, notes: getVal('notes') || null, payment_method: getVal('payment_method') || null } as any);
+          await expenseUpsert.mutateAsync({
+            id: txnId,
+            type: 'expense',
+            amount: parseFloat(getVal('amount')),
+            transaction_date: getVal('date'),
+            vendor_id: getVal('vendor_id') || null,
+            project_id: getVal('project_id') || null,
+            category: getVal('category') || null,
+            notes: getVal('notes') || null,
+            payment_method: getVal('payment_method') || null,
+            check_reference: getVal('check_reference') || null,
+            cost_phase: getVal('cost_phase') || null,
+          } as any);
           if (receiptFile) {
             uploadDocument.mutateAsync({ file: receiptFile, docType: 'receipt', runOcr: true, linked_transaction_id: txnId })
               .catch(() => toast.error('Expense saved — receipt upload failed'));
@@ -461,6 +530,58 @@ export default function Concierge() {
     };
 
     const renderInput = () => {
+      // Retainage (income only) — dual % / $ inputs sharing data keys
+      if (q.type === 'retainage') {
+        const pct = getVal('retainage_percent');
+        const amtVal = getVal('retainage_amount');
+        const base = getVal('amount');
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Percent %</div>
+                <div className="relative">
+                  <Input type="number" min="0" max="100" step="0.1" className="rounded-none h-12 pr-7" placeholder="10"
+                    value={pct} autoFocus
+                    onChange={e => { const p = e.target.value; const computed = p && base ? String(Math.round(parseFloat(base) * parseFloat(p) / 100 * 100) / 100) : ''; setVal('retainage_percent', p); setVal('retainage_amount', computed); }} />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">%</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Dollar Amount</div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                  <Input type="number" min="0" step="0.01" className="rounded-none h-12 pl-6" placeholder="0.00"
+                    value={amtVal}
+                    onChange={e => { const a = e.target.value; const computed = a && base ? String(Math.round(parseFloat(a) / parseFloat(base) * 100 * 100) / 100) : ''; setVal('retainage_amount', a); setVal('retainage_percent', computed); }} />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">Leave both blank to skip retainage tracking.</p>
+          </div>
+        );
+      }
+
+      // Invoice link (income only)
+      if (q.type === 'invoice') {
+        const openInvoices = (invoices as any[]).filter(inv => inv.status !== 'paid');
+        return (
+          <div className="space-y-3">
+            <Select value={getVal('invoice_id')} onValueChange={v => setVal('invoice_id', v)}>
+              <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="No invoice (skip)" /></SelectTrigger>
+              <SelectContent>
+                {openInvoices.map((inv: any) => (
+                  <SelectItem key={inv.id} value={inv.id}>
+                    {inv.invoice_number} — {inv.client_name || 'Client'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {openInvoices.length === 0 && <p className="text-xs text-muted-foreground text-center">No open invoices found.</p>}
+          </div>
+        );
+      }
+
       // Receipt
       if (q.type === 'receipt') {
         return (
@@ -630,7 +751,8 @@ export default function Concierge() {
     };
 
     // Determine if we need the generic continue button
-    const showContinue = q.type !== 'receipt' && q.type !== 'vendor' && q.type !== 'project' && !(q.type === 'category' && !customCat);
+    const noAutoSubmit = new Set(['receipt','vendor','project','retainage','invoice','phase','payment_income','payment_expense']);
+    const showContinue = !noAutoSubmit.has(q.type) && !(q.type === 'category' && !customCat);
 
     return (
       <AppShell>
@@ -674,8 +796,8 @@ export default function Concierge() {
                   </div>
                 )}
 
-                {/* Continue for vendor/project */}
-                {(q.type === 'vendor' || q.type === 'project') && (
+                {/* Continue for select/optional types */}
+                {noAutoSubmit.has(q.type) && q.type !== 'receipt' && !(q.type === 'vendor' && quickVendorOpen) && !(q.type === 'project' && quickProjectOpen) && (
                   <div className="flex justify-center mt-4">
                     <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
                       {isLast ? 'Review & Save' : 'Continue'}
@@ -723,9 +845,27 @@ export default function Concierge() {
               <div className="border border-border divide-y divide-border mb-8">
                 {questions.map(q => {
                   if (q.type === 'receipt') return null;
+                  if (q.skipIf?.(data)) return null;
+                  if (q.type === 'retainage') {
+                    const pct = getVal('retainage_percent');
+                    const amt = getVal('retainage_amount');
+                    if (!pct && !amt) return null;
+                    return (
+                      <div key="retainage" className="flex items-center justify-between px-4 py-3">
+                        <span className="text-xs text-muted-foreground">Retainage</span>
+                        <span className="text-sm font-medium font-mono-tab text-right ml-4">{pct ? `${pct}%` : ''}{pct && amt ? ' / ' : ''}{amt ? `$${amt}` : ''}</span>
+                      </div>
+                    );
+                  }
                   const val = getVal(q.id);
                   if (!val) return null;
-                  const label = q.id === 'vendor_id' ? (vendors.find((v: any) => v.id === val)?.name || val) : q.id === 'project_id' ? (projects.find((p: any) => p.id === val)?.name || val) : val;
+                  const label = q.id === 'vendor_id'
+                    ? (vendors.find((v: any) => v.id === val)?.name || val)
+                    : q.id === 'project_id'
+                    ? (projects.find((p: any) => p.id === val)?.name || val)
+                    : q.id === 'invoice_id'
+                    ? ((invoices as any[]).find((inv: any) => inv.id === val)?.invoice_number || val)
+                    : val;
                   return (
                     <div key={q.id} className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-muted-foreground">{q.label}</span>

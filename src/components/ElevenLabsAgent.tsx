@@ -195,7 +195,7 @@ export default function ElevenLabsAgent() {
       return { ok: true, message: `Found ${rows.length} matching records`, data: rows.slice(0, 25) };
     },
 
-    createIncome: async ({ amount, date, source_name, category, project, notes }: any): Promise<ToolResult> => {
+    createIncome: async ({ amount, date, source_name, category, payment_method, check_reference, retainage_percent, retainage_amount, invoice_id, cost_phase, project, notes }: any): Promise<ToolResult> => {
       const p = findByNameOrId(projects as any[], project);
       await transactionUpsert.mutateAsync({
         type: 'income',
@@ -206,11 +206,17 @@ export default function ElevenLabsAgent() {
         project_id: p?.id || null,
         notes: notes || null,
         vendor_id: null,
+        payment_method: payment_method || null,
+        check_reference: check_reference || null,
+        retainage_percent: retainage_percent ? Number(retainage_percent) : null,
+        retainage_amount: retainage_amount ? Number(retainage_amount) : null,
+        invoice_id: invoice_id || null,
+        cost_phase: cost_phase || null,
       } as any);
       return { ok: true, message: 'Income saved' };
     },
 
-    createExpense: async ({ amount, date, vendor, category, payment_method, project, notes }: any): Promise<ToolResult> => {
+    createExpense: async ({ amount, date, vendor, category, payment_method, check_reference, cost_phase, project, notes }: any): Promise<ToolResult> => {
       const v = findByNameOrId(vendors as any[], vendor);
       const p = findByNameOrId(projects as any[], project);
       await transactionUpsert.mutateAsync({
@@ -220,6 +226,8 @@ export default function ElevenLabsAgent() {
         vendor_id: v?.id || null,
         category: category || null,
         payment_method: payment_method || null,
+        check_reference: check_reference || null,
+        cost_phase: cost_phase || null,
         project_id: p?.id || null,
         notes: notes || null,
         source_name: null,
