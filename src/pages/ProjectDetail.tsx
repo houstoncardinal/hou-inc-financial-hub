@@ -4,10 +4,13 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useProjects, useChecks, useTransactions, useUpsert } from '@/hooks/useFinance';
+import { useProjectFinancialSummary } from '@/hooks/useConstructionFinance';
 import { useRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
 import { fmtUSD, fmtDate } from '@/lib/format';
@@ -88,6 +91,7 @@ export default function ProjectDetail() {
   const { data: checks = [] }   = useChecks();
   const { data: income = [] }   = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
+  const { data: financeSummary } = useProjectFinancialSummary(id);
 
   /* ── Draw schedule ── */
   const [draws, setDraws]       = useState<any[]>([]);
@@ -317,6 +321,7 @@ export default function ProjectDetail() {
   if (!enriched) return null;
 
   const statusMeta = STATUS_META[enriched.status as StatusKey] ?? STATUS_META.archived;
+  const projectSummary = financeSummary;
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview',   label: 'Overview' },
     { key: 'breakdown',  label: 'Breakdown' },
@@ -397,10 +402,7 @@ export default function ProjectDetail() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="micro-label">Contract Budget (USD)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground z-10 pointer-events-none">$</span>
-                  <Input type="number" step="0.01" className="pl-7 rounded-none h-10 font-mono-tab text-right" value={editForm.budget} onChange={e => setEditForm(f => ({ ...f, budget: e.target.value }))} placeholder="0.00" />
-                </div>
+                <CurrencyInput value={editForm.budget} onValueChange={v => setEditForm(f => ({ ...f, budget: v }))} placeholder="0.00" />
               </div>
               <div className="space-y-1.5">
                 <Label className="micro-label">Status</Label>
@@ -450,6 +452,69 @@ export default function ProjectDetail() {
       ══════════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
         <div className="p-4 sm:p-8 space-y-6">
+          {projectSummary && (
+            <div className="border border-border bg-secondary/20">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">Construction Finance Intelligence</div>
+                  <div className="text-sm font-semibold mt-0.5">Contract, billing, cost, and cash position from linked source records</div>
+                </div>
+                <span className={`hidden sm:inline-flex text-[8px] uppercase tracking-[0.18em] px-2 py-1 border font-bold ${
+                  projectSummary.projects_over_budget ? 'border-accent/30 bg-accent/10 text-accent' : 'border-positive/30 bg-positive/10 text-positive'
+                }`}>
+                  {projectSummary.projects_over_budget ? 'Over budget watch' : 'Within budget'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-px bg-border">
+                {[
+                  {
+                    label: 'Current Contract',
+                    value: fmtUSD(projectSummary.current_contract_value),
+                    sub: `${fmtUSD(projectSummary.approved_change_orders)} approved COs`,
+                    tone: '',
+                  },
+                  {
+                    label: 'Accounts Receivable',
+                    value: fmtUSD(projectSummary.accounts_receivable),
+                    sub: `${projectSummary.percentage_collected.toFixed(1)}% collected`,
+                    tone: projectSummary.accounts_receivable > 0 ? 'text-warning' : 'text-positive',
+                  },
+                  {
+                    label: 'Actual Costs',
+                    value: fmtUSD(projectSummary.actual_project_costs),
+                    sub: `${fmtUSD(projectSummary.outstanding_checks)} outstanding checks`,
+                    tone: projectSummary.projects_over_budget ? 'text-accent' : '',
+                  },
+                  {
+                    label: 'Forecast Profit',
+                    value: fmtUSD(projectSummary.estimated_gross_profit),
+                    sub: `${projectSummary.estimated_gross_margin.toFixed(1)}% estimated margin`,
+                    tone: projectSummary.estimated_gross_profit >= 0 ? 'text-positive' : 'text-accent',
+                  },
+                ].map(card => (
+                  <div key={card.label} className="bg-background px-4 py-3.5">
+                    <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground leading-tight">{card.label}</div>
+                    <div className={`text-lg font-bold font-mono-tab mt-1 leading-tight ${card.tone}`}>{card.value}</div>
+                    <div className="text-[10px] text-muted-foreground mt-1 font-mono-tab">{card.sub}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border-t border-border">
+                {[
+                  ['Unbilled Contract', projectSummary.unbilled_contract_amount],
+                  ['Retainage Held', projectSummary.retainage_withheld],
+                  ['Unpaid Costs', projectSummary.unpaid_costs],
+                  ['Cash Position', projectSummary.cash_position],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-background px-4 py-2.5">
+                    <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+                    <div className="text-sm font-semibold font-mono-tab mt-0.5">{fmtUSD(Number(value))}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Snapshot KPIs ── */}
           <div className="border border-border overflow-hidden">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
@@ -877,16 +942,11 @@ export default function ProjectDetail() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label className="micro-label">Draw Amount</Label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground z-10">$</span>
-                          <Input type="number" step="0.01" className="pl-7 rounded-none h-10 font-mono-tab text-right" required
-                            value={drawForm.draw_amount} onChange={e => setDrawForm(f => ({ ...f, draw_amount: e.target.value }))} />
-                        </div>
+                        <CurrencyInput required value={drawForm.draw_amount} onValueChange={v => setDrawForm(f => ({ ...f, draw_amount: v }))} />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="micro-label">Scheduled Date</Label>
-                        <Input type="date" className="rounded-none h-10"
-                          value={drawForm.scheduled_date} onChange={e => setDrawForm(f => ({ ...f, scheduled_date: e.target.value }))} />
+                        <DateInput className="h-10" value={drawForm.scheduled_date} onChange={e => setDrawForm(f => ({ ...f, scheduled_date: e.target.value }))} />
                       </div>
                     </div>
                     <div className="space-y-1.5">

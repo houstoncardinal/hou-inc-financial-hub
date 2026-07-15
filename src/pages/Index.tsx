@@ -1,10 +1,9 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
 import { useInvoices, invoiceTotal } from '@/hooks/useInvoices';
-import { useEntity, ENTITIES } from '@/contexts/EntityContext';
-import type { Entity } from '@/contexts/EntityContext';
+import { useEntity } from '@/contexts/EntityContext';
 import { useAuth } from '@/hooks/useAuth';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import {
@@ -12,13 +11,16 @@ import {
   ConciergeBell, FolderKanban, Users, Receipt, AlertTriangle,
   X, Camera, BookOpen, Grid3X3, BookMarked, FolderOpen,
   Upload, ChevronRight, Layers, ChevronDown, Settings2,
-  Plus, Check as CheckIcon, Calendar,
+  Plus, Check as CheckIcon, Calendar, BarChart3,
 } from 'lucide-react';
 import { getDateRange } from '@/components/TimeFilter';
 import { CashFlowChart } from '@/components/FinancialChartPanel';
 import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from '@/components/StatChartPanel';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis,
+  Tooltip as RechartsTooltip, ResponsiveContainer,
+} from 'recharts';
 
 const parseLocalDate = (d: string): Date => {
   const [y, m, day] = d.split('-').map(Number);
@@ -57,7 +59,7 @@ function CompactPeriodPicker({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`group flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-semibold transition-all duration-150 whitespace-nowrap ${
+        className={`group flex items-center justify-center gap-1.5 min-w-[8.25rem] sm:min-w-0 px-3 sm:px-2.5 py-2 sm:py-1.5 border text-[11px] font-semibold transition-all duration-150 whitespace-nowrap ${
           open
             ? 'border-foreground/30 bg-secondary text-foreground'
             : 'border-border bg-background hover:border-foreground/25 hover:bg-secondary/60 text-foreground/80'
@@ -79,7 +81,7 @@ function CompactPeriodPicker({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={{ duration: 0.11, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-1.5 w-44 border border-border bg-background shadow-2xl z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-1.5 w-56 sm:w-44 border border-border bg-background shadow-2xl z-50 overflow-hidden"
           >
             <div className="px-3 pt-2 pb-1.5 border-b border-border/50">
               <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Time Range</div>
@@ -112,94 +114,6 @@ function CompactPeriodPicker({
   );
 }
 
-/* ── Real-time entity switcher ────────────────────────────────────────────── */
-function EntitySwitcher({ entity, setEntity }: { entity: Entity; setEntity: (e: Entity) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 border transition-all hover:opacity-90 active:opacity-75"
-        style={{ borderColor: `${entity.color}60`, backgroundColor: entity.colorMuted }}
-      >
-        <div
-          className="w-5 h-5 flex items-center justify-center shrink-0 text-[8px] font-black leading-none"
-          style={{ backgroundColor: entity.color, color: '#fff' }}
-        >
-          {entity.shortName.charAt(0)}
-        </div>
-        <span
-          className="text-[10px] uppercase tracking-[0.18em] font-bold hidden sm:block"
-          style={{ color: entity.color }}
-        >
-          {entity.shortName}
-        </span>
-        <ChevronDown
-          className={`w-3 h-3 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
-          style={{ color: entity.color }}
-          strokeWidth={2.5}
-        />
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.96 }}
-            transition={{ duration: 0.11, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-1.5 w-64 border border-border bg-background shadow-2xl z-50 overflow-hidden"
-          >
-            <div className="px-3 pt-2 pb-1.5 border-b border-border/50">
-              <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Switch Entity</div>
-            </div>
-            <div className="p-1.5 space-y-0.5">
-              {ENTITIES.map(e => {
-                const active = e.id === entity.id;
-                return (
-                  <button
-                    key={e.id}
-                    onClick={() => { setEntity(e); setOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 text-left transition-all hover:bg-secondary/60 group ${active ? 'bg-secondary/40' : ''}`}
-                  >
-                    <div
-                      className="w-9 h-9 flex items-center justify-center shrink-0 text-[9px] font-black tracking-tight leading-tight"
-                      style={{
-                        backgroundColor: e.colorMuted,
-                        color: e.color,
-                        border: `1.5px solid ${e.color}35`,
-                      }}
-                    >
-                      {e.shortName}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold truncate">{e.name}</div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">{e.category} · Est. {e.since}</div>
-                    </div>
-                    {active && (
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0 mr-0.5" style={{ backgroundColor: e.color }} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 /* ── Mobile Finance Menu ──────────────────────────────────────────────────── */
 const FINANCE_SECTIONS = [
   {
@@ -218,6 +132,7 @@ const FINANCE_SECTIONS = [
       { to: '/projects', label: 'Projects', icon: FolderKanban, desc: 'Active & archived jobs' },
       { to: '/vendors',  label: 'Vendors',  icon: Users,        desc: 'Vendor directory' },
       { to: '/invoices', label: 'Invoices', icon: Receipt,      desc: 'Billing & collections' },
+      { to: '/charts',   label: 'Charts',   icon: BarChart3,    desc: 'Analytics & trends' },
     ],
   },
   {
@@ -233,6 +148,7 @@ const FINANCE_SECTIONS = [
 
 function MobileFinanceMenu({ open, onClose, entityColor }: { open: boolean; onClose: () => void; entityColor?: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const color = entityColor || '#9D7E3F';
   const go = (to: string) => { onClose(); navigate(to); };
 
@@ -247,45 +163,52 @@ function MobileFinanceMenu({ open, onClose, entityColor }: { open: boolean; onCl
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border"
+            className="fixed inset-x-0 bottom-0 z-50 bg-background border-t border-border shadow-2xl"
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-            style={{ maxHeight: '85vh', overflowY: 'auto', paddingBottom: 'env(safe-area-inset-bottom)' }}
+            style={{ maxHeight: '88vh', overflowY: 'auto', paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
+            <div className="h-1" style={{ background: `linear-gradient(90deg, ${color}, ${color}66, transparent)` }} />
             <div className="sticky top-0 bg-background border-b border-border z-10">
               <div className="flex justify-center pt-3 pb-2">
                 <div className="w-10 h-1 rounded-full bg-border" />
               </div>
-              <div className="px-5 pb-3 flex items-center justify-between">
+              <div className="px-5 pb-4 flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-[8px] uppercase tracking-[0.3em] text-muted-foreground">Finance Hub</div>
-                  <div className="text-sm font-semibold tracking-tight">All Sections</div>
+                  <div className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color }}>Finance Hub</div>
+                  <div className="text-base font-semibold tracking-tight mt-0.5">All entity sections</div>
+                  <div className="text-[10px] text-muted-foreground mt-1">Jump to any dashboard, register, or finance tool.</div>
                 </div>
                 <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary text-muted-foreground hover:text-foreground">
                   <X className="w-4 h-4" strokeWidth={1.5} />
                 </button>
               </div>
             </div>
-            <div className="px-4 py-3 space-y-4">
+            <div className="px-4 py-4 space-y-5">
               {FINANCE_SECTIONS.map(section => (
                 <div key={section.group}>
                   <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground/60 mb-2 px-1">{section.group}</div>
                   <div className="grid grid-cols-2 gap-2">
-                    {section.items.map(item => (
-                      <button
-                        key={item.to}
-                        onClick={() => go(item.to)}
-                        className="flex items-center gap-2.5 p-3 border border-border bg-background hover:bg-secondary/40 active:bg-secondary transition-colors text-left"
-                      >
-                        <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}14` }}>
-                          <item.icon className="w-3.5 h-3.5" style={{ color }} strokeWidth={1.5} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold truncate">{item.label}</div>
-                          <div className="text-[9px] text-muted-foreground truncate">{item.desc}</div>
-                        </div>
-                      </button>
-                    ))}
+                    {section.items.map(item => {
+                      const active = location.pathname === item.to || (item.to === '/finance/dashboard' && location.pathname === '/finance/dashboard');
+                      return (
+                        <button
+                          key={item.to}
+                          onClick={() => go(item.to)}
+                          className="relative flex items-center gap-2.5 p-3 border bg-background hover:bg-secondary/40 active:bg-secondary transition-colors text-left overflow-hidden min-h-[74px]"
+                          style={{ borderColor: active ? `${color}80` : 'hsl(var(--border))', backgroundColor: active ? `${color}0D` : undefined }}
+                        >
+                          {active && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ backgroundColor: color }} />}
+                          <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}14`, border: `1px solid ${color}28` }}>
+                            <item.icon className="w-4 h-4" style={{ color }} strokeWidth={1.6} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold truncate">{item.label}</div>
+                            <div className="text-[9px] text-muted-foreground leading-snug line-clamp-2">{item.desc}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -311,6 +234,129 @@ function TypeBadge({ kind }: { kind: string }) {
   );
 }
 
+function UserAvatar({ name, email }: { name?: string; email?: string }) {
+  const label = name || email || 'User';
+  const initials = label.includes('@')
+    ? label.slice(0, 2).toUpperCase()
+    : label.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div className="w-8 h-8 flex items-center justify-center border border-border bg-secondary/70 text-[10px] font-bold font-mono-tab text-foreground shrink-0" title={label}>
+      {initials || 'U'}
+    </div>
+  );
+}
+
+function MiniTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background/95 border border-border px-2.5 py-1.5 text-[10px] shadow-md">
+      <div className="text-muted-foreground mb-1">{label}</div>
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="font-mono-tab font-semibold">
+            {p.name}: {typeof p.value === 'number' ? fmtUSD(p.value) : p.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MiniArea({
+  data, dataKey, color, gid, height = 52,
+}: {
+  data: any[]; dataKey: string; color: string; gid: string; height?: number;
+}) {
+  return (
+    <div style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.34} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip content={<MiniTooltip />} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
+          <Area type="monotone" dataKey={dataKey} name={dataKey} stroke={color} fill={`url(#${gid})`} strokeWidth={1.6} dot={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ReceivablesMiniChart({ data }: {
+  data: { label: string; outstanding: number; overdue: number; collected: number }[];
+}) {
+  return (
+    <div className="w-full">
+      <ResponsiveContainer width="100%" height={58}>
+        <BarChart data={data} margin={{ top: 3, right: 0, left: 0, bottom: 0 }}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip content={<MiniTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.12 }} />
+          <Bar dataKey="collected" name="Collected" stackId="a" fill="var(--positive)" fillOpacity={0.55} radius={[0, 0, 1, 1]} maxBarSize={18} />
+          <Bar dataKey="outstanding" name="Open" stackId="a" fill="var(--warning)" fillOpacity={0.75} maxBarSize={18} />
+          <Bar dataKey="overdue" name="Overdue" stackId="a" fill="var(--destructive)" fillOpacity={0.75} radius={[1, 1, 0, 0]} maxBarSize={18} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap gap-1 mt-1">
+        <span className="text-[7px] px-1 py-0.5 bg-positive/10 text-positive font-mono-tab">paid</span>
+        <span className="text-[7px] px-1 py-0.5 bg-warning/10 text-warning font-mono-tab">open</span>
+        <span className="text-[7px] px-1 py-0.5 bg-destructive/10 text-destructive font-mono-tab">overdue</span>
+      </div>
+    </div>
+  );
+}
+
+function ProjectsMiniChart({ data }: {
+  data: { name: string; budget: number; spent: number; remaining: number; pct: number; revenue?: number }[];
+}) {
+  const totalBudget = data.reduce((s, p) => s + p.budget, 0);
+  const totalSpent = data.reduce((s, p) => s + p.spent, 0);
+  const burn = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const atRisk = data.filter(p => p.budget > 0 && p.pct >= 85).length;
+
+  if (data.length === 0) {
+    return <div className="h-[58px] flex items-center text-[9px] text-muted-foreground">No active project budget data</div>;
+  }
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-3 gap-1 text-[8px] font-mono-tab">
+        <div className="bg-background/45 border border-border/50 px-1.5 py-1">
+          <div className="text-muted-foreground">Burn</div>
+          <div className={burn > 90 ? 'text-destructive font-semibold' : burn > 72 ? 'text-warning font-semibold' : 'font-semibold'}>{Math.round(burn)}%</div>
+        </div>
+        <div className="bg-background/45 border border-border/50 px-1.5 py-1">
+          <div className="text-muted-foreground">At Risk</div>
+          <div className={atRisk > 0 ? 'text-warning font-semibold' : 'font-semibold'}>{atRisk}</div>
+        </div>
+        <div className="bg-background/45 border border-border/50 px-1.5 py-1">
+          <div className="text-muted-foreground">Jobs</div>
+          <div className="font-semibold">{data.length}</div>
+        </div>
+      </div>
+      {data.slice(0, 3).map(p => (
+        <div key={p.name} className="min-w-0">
+          <div className="flex items-center justify-between gap-2 text-[8px] mb-0.5">
+            <span className="truncate text-muted-foreground">{p.name}</span>
+            <span className="font-mono-tab font-semibold">{p.budget > 0 ? `${Math.round(p.pct)}%` : fmtUSD(p.revenue)}</span>
+          </div>
+          <div className="h-1.5 bg-border/50 overflow-hidden">
+            <div
+              className={`h-full ${p.pct > 90 ? 'bg-destructive' : p.pct > 72 ? 'bg-warning' : 'bg-positive'}`}
+              style={{ width: `${Math.min(100, Math.max(3, p.pct))}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── KPI card catalog (static) ────────────────────────────────────────────── */
 const KPI_OPTIONS = [
   { id: 'balance',     label: 'Total Balance' },
@@ -328,9 +374,9 @@ const DEFAULT_KPI_MAX  = 4;
 
 /* ── Quick action catalog (static) ───────────────────────────────────────── */
 const QA_CATALOG = [
-  { id: 'income',    label: 'Log Income',     icon: ArrowDownToLine, desc: 'Record revenue',       colorCls: 'bg-positive/12 text-positive',       dest: '/income' },
-  { id: 'expense',   label: 'Record Expense', icon: ArrowUpFromLine, desc: 'Log payment',          colorCls: 'bg-destructive/10 text-destructive',  dest: '/expenses' },
-  { id: 'check',     label: 'New Check',      icon: FileText,        desc: 'Issue a check',        colorCls: 'bg-warning/10 text-warning',          dest: '/checks/new' },
+  { id: 'income',    label: 'Log Income',     icon: ArrowDownToLine, desc: 'Guided revenue',       colorCls: 'bg-positive/12 text-positive',       dest: '/concierge?start=income' },
+  { id: 'expense',   label: 'Record Expense', icon: ArrowUpFromLine, desc: 'Guided payment',       colorCls: 'bg-destructive/10 text-destructive',  dest: '/concierge?start=expense' },
+  { id: 'check',     label: 'New Check',      icon: FileText,        desc: 'Guided check',         colorCls: 'bg-warning/10 text-warning',          dest: '/concierge?start=check' },
   { id: 'projects',  label: 'Projects',       icon: FolderKanban,    desc: 'Manage jobs',          colorCls: 'bg-blue-500/10 text-blue-500',        dest: '/projects' },
   { id: 'scan',      label: 'Scan Receipt',   icon: Camera,          desc: 'Capture photo',        colorCls: 'bg-violet-500/10 text-violet-500',    dest: '_camera' },
   { id: 'concierge', label: 'Concierge',      icon: ConciergeBell,   desc: 'AI assistant',         colorCls: 'bg-foreground/8 text-foreground',     dest: '/concierge' },
@@ -366,7 +412,7 @@ const IDX_CSS = `
 
 export default function Index() {
   const navigate    = useNavigate();
-  const { entity, setEntity, ready } = useEntity();
+  const { entity, ready } = useEntity();
   const { user }    = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -476,6 +522,96 @@ export default function Index() {
       };
     });
   }, [income, expenses, checks]);
+
+  const periodInvoices = useMemo(() => {
+    const { start, end } = getDateRange(timePeriod);
+    const inRange = (d?: string) => {
+      if (!d) return false;
+      const dt = parseLocalDate(d);
+      return dt >= start && dt <= end;
+    };
+    return invoices.filter((i: any) => inRange(i.issue_date) || inRange(i.due_date));
+  }, [invoices, timePeriod]);
+
+  const invoiceTrendData = useMemo(() => {
+    return Array.from({ length: 6 }, (_, i) => {
+      const d     = new Date(); d.setMonth(d.getMonth() - (5 - i));
+      const start = new Date(d.getFullYear(), d.getMonth(), 1);
+      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const inR   = (dt?: string) => {
+        if (!dt) return false;
+        const d2 = parseLocalDate(dt);
+        return d2 >= start && d2 < end;
+      };
+      const monthInvoices = invoices.filter((inv: any) => inR(inv.issue_date) || inR(inv.due_date));
+      return {
+        label:       d.toLocaleDateString('en-US', { month: 'short' }),
+        outstanding: monthInvoices.filter((inv: any) => inv.status === 'sent').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
+        overdue:     monthInvoices.filter((inv: any) => inv.status === 'overdue').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
+        collected:   monthInvoices.filter((inv: any) => inv.status === 'paid').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
+      };
+    });
+  }, [invoices]);
+
+  const invoicePeriodStats = useMemo(() => {
+    const total = periodInvoices.reduce((s, i) => s + invoiceTotal(i), 0);
+    const paid = periodInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + invoiceTotal(i), 0);
+    const open = periodInvoices.filter(i => i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + invoiceTotal(i), 0);
+    const overdue = periodInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + invoiceTotal(i), 0);
+    return {
+      total,
+      paid,
+      open,
+      overdue,
+      count: periodInvoices.length,
+      openCount: periodInvoices.filter(i => i.status === 'sent' || i.status === 'overdue').length,
+      overdueCount: periodInvoices.filter(i => i.status === 'overdue').length,
+      collectionPct: total > 0 ? (paid / total) * 100 : 0,
+    };
+  }, [periodInvoices]);
+
+  const projectFinancialData = useMemo(() => {
+    const active = projects.filter((p: any) => p.status === 'active' || !p.status);
+    return active.map((p: any) => {
+      const projectExpenses = expenses
+        .filter((t: any) => t.project_id === p.id)
+        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+      const projectChecks = checks
+        .filter((c: any) => c.project_id === p.id && c.status !== 'voided')
+        .reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+      const projectIncome = income
+        .filter((t: any) => t.project_id === p.id)
+        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+      const budget = Number(p.budget || 0);
+      const spent = projectExpenses + projectChecks;
+      return {
+        id: p.id,
+        name: p.name || 'Untitled project',
+        code: p.code,
+        budget,
+        spent,
+        revenue: projectIncome,
+        remaining: Math.max(0, budget - spent),
+        pct: budget > 0 ? (spent / budget) * 100 : 0,
+      };
+    }).sort((a, b) => b.budget - a.budget);
+  }, [projects, expenses, checks, income]);
+
+  const vendorSpendData = useMemo(() => {
+    const m: Record<string, number> = {};
+    filtered.expenses.forEach((t: any) => {
+      const k = t.vendors?.name || t.vendor_name || t.category || 'Unassigned';
+      m[k] = (m[k] || 0) + Number(t.amount || 0);
+    });
+    filtered.checks.forEach((c: any) => {
+      const k = c.vendors?.name || c.payee_name || 'Checks';
+      m[k] = (m[k] || 0) + Number(c.amount || 0);
+    });
+    return Object.entries(m)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [filtered.expenses, filtered.checks]);
 
   const recent = useMemo(() => [
     ...filtered.checks.map((c: any) => ({
@@ -602,6 +738,11 @@ export default function Index() {
     : 0;
 
   const activeProjects = projects.filter((p: any) => p.status === 'active' || !p.status);
+  const projectBudgetTotal = projectFinancialData.reduce((s, p) => s + p.budget, 0);
+  const projectSpentTotal = projectFinancialData.reduce((s, p) => s + p.spent, 0);
+  const projectBurnPct = projectBudgetTotal > 0 ? (projectSpentTotal / projectBudgetTotal) * 100 : 0;
+  const vendorSpendTotal = vendorSpendData.reduce((s, v) => s + v.value, 0);
+  const topVendorShare = vendorSpendTotal > 0 && vendorSpendData[0] ? (vendorSpendData[0].value / vendorSpendTotal) * 100 : 0;
 
   /* ── KPI card full catalog ──────────────────────────────────────────────── */
   const ALL_KPI_CARDS = [
@@ -699,20 +840,24 @@ export default function Index() {
       id: 'receivables',
       label: 'Receivables',
       value: fmtUSD(constructionKPIs.receivables),
-      sub: constructionKPIs.receivables > 0 ? 'Sent + overdue invoices' : 'All invoices collected',
+      sub: invoiceAlerts.overdueCount > 0
+        ? `${invoiceAlerts.overdueCount} overdue · ${fmtUSD(invoiceAlerts.overdueTotal)}`
+        : constructionKPIs.receivables > 0 ? `${invoiceAlerts.outstanding ? 'Open collections' : 'Sent invoices'}` : 'All invoices collected',
       color: constructionKPIs.receivables > 0 ? 'var(--warning)' : 'var(--positive)',
       bg: 'from-violet-50/70 dark:from-violet-950/25 to-violet-50/30 dark:to-violet-950/5',
-      chart: null,
+      chart: <ReceivablesMiniChart data={invoiceTrendData} />,
       onClick: () => navigate('/invoices'),
     },
     {
       id: 'projects',
       label: 'Active Projects',
       value: `${constructionKPIs.activeProjectCount}`,
-      sub: constructionKPIs.totalBudget > 0 ? `${fmtUSD(constructionKPIs.totalBudget)} combined budget` : 'No budgets set',
-      color: 'var(--foreground)',
+      sub: projectBudgetTotal > 0
+        ? `${Math.round(projectBurnPct)}% committed · ${fmtUSD(projectBudgetTotal)} budget`
+        : 'No budgets set',
+      color: projectBurnPct > 90 ? 'var(--destructive)' : projectBurnPct > 72 ? 'var(--warning)' : 'var(--foreground)',
       bg: 'from-slate-50/60 dark:from-slate-950/20 to-slate-50/20 dark:to-slate-950/5',
-      chart: null,
+      chart: <ProjectsMiniChart data={projectFinancialData} />,
       onClick: () => navigate('/projects'),
     },
   ];
@@ -757,45 +902,57 @@ export default function Index() {
   /* ── Construction intelligence cards ───────────────────────────────────── */
   const ciCards = [
     {
-      label:      'Gross Margin',
+      label:      'Margin Control',
       value:      `${pMargin.toFixed(1)}%`,
-      sub:        periodStats.income > 0 ? `on ${fmtUSD(periodStats.income)} revenue` : 'No revenue this period',
+      sub:        `${fmtUSD(periodStats.income)} in · ${fmtUSD(periodStats.outflow)} out`,
+      detail:     pMargin >= 20 ? 'Healthy spread' : pMargin >= 0 ? 'Watch cost creep' : 'Negative margin',
       valueColor: pMargin >= 20 ? 'text-positive' : pMargin >= 0 ? 'text-warning' : 'text-destructive',
-      data:       ciTrendData, key: 'margin' as const, stroke: pMargin >= 20 ? '#10b981' : '#f59e0b', gid: 'cig0',
+      chart:      <MiniArea data={ciTrendData} dataKey="margin" color={pMargin >= 20 ? '#10b981' : pMargin >= 0 ? '#f59e0b' : '#ef4444'} gid="cig-margin" height={44} />,
     },
     {
-      label:      'Revenue',
-      value:      fmtUSD(periodStats.income),
-      sub:        periodStats.label,
-      valueColor: 'text-foreground',
-      data:       ciTrendData, key: 'revenue' as const, stroke: '#10b981', gid: 'cig1',
+      label:      'Receivables Risk',
+      value:      fmtUSD(invoicePeriodStats.open || constructionKPIs.receivables),
+      sub:        invoicePeriodStats.count > 0 ? `${invoicePeriodStats.openCount} open · ${invoicePeriodStats.overdueCount} overdue` : 'No invoices in range',
+      detail:     invoicePeriodStats.collectionPct > 0 ? `${invoicePeriodStats.collectionPct.toFixed(0)}% collected` : 'Collections watch',
+      valueColor: invoicePeriodStats.overdue > 0 ? 'text-destructive' : invoicePeriodStats.open > 0 ? 'text-warning' : 'text-positive',
+      chart:      <ReceivablesMiniChart data={invoiceTrendData} />,
     },
     {
-      label:      'Receivables',
-      value:      fmtUSD(constructionKPIs.receivables),
-      sub:        constructionKPIs.receivables > 0 ? 'Sent + overdue' : 'All collected',
-      valueColor: constructionKPIs.receivables > 0 ? 'text-warning' : 'text-positive',
-      data:       [] as typeof ciTrendData, key: 'revenue' as const, stroke: '#f59e0b', gid: 'cig2',
+      label:      'Project Burn',
+      value:      `${Math.round(projectBurnPct)}%`,
+      sub:        `${fmtUSD(projectSpentTotal)} of ${fmtUSD(projectBudgetTotal)} committed`,
+      detail:     `${activeProjects.length} active job${activeProjects.length !== 1 ? 's' : ''}`,
+      valueColor: projectBurnPct > 90 ? 'text-destructive' : projectBurnPct > 72 ? 'text-warning' : 'text-foreground',
+      chart:      <ProjectsMiniChart data={projectFinancialData} />,
     },
     {
-      label:      'Retainage Held',
-      value:      fmtUSD(constructionKPIs.retainageHeld),
-      sub:        constructionKPIs.retainageHeld > 0 ? 'Withheld from disbursements' : 'None on record',
-      valueColor: constructionKPIs.retainageHeld > 0 ? 'text-accent' : 'text-muted-foreground',
-      data:       [] as typeof ciTrendData, key: 'outflow' as const, stroke: '#9d7e3f', gid: 'cig3',
-    },
-    {
-      label:      'Active Jobs',
-      value:      `${constructionKPIs.activeProjectCount}`,
-      sub:        constructionKPIs.totalBudget > 0 ? `${fmtUSD(constructionKPIs.totalBudget)} budget` : 'No budgets set',
-      valueColor: 'text-foreground',
-      data:       [] as typeof ciTrendData, key: 'revenue' as const, stroke: '#6366f1', gid: 'cig4',
+      label:      'Vendor Concentration',
+      value:      topVendorShare > 0 ? `${topVendorShare.toFixed(0)}%` : '0%',
+      sub:        vendorSpendData[0] ? `${vendorSpendData[0].name} leads spend` : 'No vendor spend this period',
+      detail:     `${vendorSpendData.length} active vendor${vendorSpendData.length !== 1 ? 's' : ''}`,
+      valueColor: topVendorShare > 45 ? 'text-warning' : 'text-foreground',
+      chart:      <MiniArea data={vendorSpendData.map(v => ({ label: v.name, value: v.value }))} dataKey="value" color="#0891b2" gid="cig-vendor" height={44} />,
     },
   ];
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
-    <AppShell>
+    <AppShell
+      hideMobileMenuButton
+      mobileHeaderActions={
+        <div className="flex items-center gap-1">
+          <UserAvatar name={user?.user_metadata?.full_name} email={user?.email} />
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="h-9 px-3 min-w-[4.5rem] flex items-center justify-center gap-1.5 border border-border bg-secondary/60 hover:bg-secondary transition-colors"
+            aria-label="Open finance hub"
+          >
+            <Layers className="w-3.5 h-3.5" strokeWidth={1.5} />
+            <span className="text-[8px] uppercase tracking-[0.12em] font-bold">Hub</span>
+          </button>
+        </div>
+      }
+    >
       <style>{IDX_CSS}</style>
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCameraCapture} />
@@ -819,15 +976,15 @@ export default function Index() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            <button onClick={() => navigate('/income')}
+            <button onClick={() => navigate('/concierge?start=income')}
               className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
               <Plus className="w-3 h-3" strokeWidth={2.5} /> Income
             </button>
-            <button onClick={() => navigate('/expenses')}
+            <button onClick={() => navigate('/concierge?start=expense')}
               className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
               <Plus className="w-3 h-3" strokeWidth={2.5} /> Expense
             </button>
-            <button onClick={() => navigate('/checks/new')}
+            <button onClick={() => navigate('/concierge?start=check')}
               className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
               <Plus className="w-3 h-3" strokeWidth={2.5} /> Check
             </button>
@@ -835,7 +992,6 @@ export default function Index() {
             <div className="w-px h-4 bg-border/70 mx-0.5" />
 
             <CompactPeriodPicker value={timePeriod} onChange={setTimePeriod} accentColor={entity.color} />
-            <EntitySwitcher entity={entity} setEntity={setEntity} />
           </div>
         </div>
 
@@ -851,22 +1007,15 @@ export default function Index() {
                 {greeting}{firstName ? `, ${firstName}` : ''}.
               </h1>
             </div>
-            <div className="flex items-center gap-1.5">
-              <CompactPeriodPicker value={timePeriod} onChange={setTimePeriod} accentColor={entity.color} />
-              <EntitySwitcher entity={entity} setEntity={setEntity} />
-              <button onClick={() => setMobileMenuOpen(true)}
-                className="w-8 h-8 flex items-center justify-center border border-border bg-secondary/60 hover:bg-secondary transition-colors">
-                <Grid3X3 className="w-3.5 h-3.5" strokeWidth={1.5} />
-              </button>
-            </div>
+            <CompactPeriodPicker value={timePeriod} onChange={setTimePeriod} accentColor={entity.color} />
           </div>
 
           {/* Mobile quick-add row */}
           <div className="grid grid-cols-3 gap-1.5">
             {[
-              { label: '+ Income',  dest: '/income' },
-              { label: '+ Expense', dest: '/expenses' },
-              { label: '+ Check',   dest: '/checks/new' },
+              { label: '+ Income',  dest: '/concierge?start=income' },
+              { label: '+ Expense', dest: '/concierge?start=expense' },
+              { label: '+ Check',   dest: '/concierge?start=check' },
             ].map(b => (
               <button key={b.label} onClick={() => navigate(b.dest)}
                 className="py-1.5 text-[11px] font-semibold border border-border hover:bg-secondary transition-colors text-center">
@@ -961,18 +1110,22 @@ export default function Index() {
             <motion.button key={card.id} onClick={card.onClick}
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04 }}
-              className={`stat-card group relative text-left bg-gradient-to-br ${card.bg} overflow-hidden transition-all duration-200 hover:-translate-y-0.5`}
+              className={`stat-card group relative text-left bg-gradient-to-br ${card.bg} overflow-hidden transition-all duration-200 hover:-translate-y-0.5 h-full flex flex-col`}
             >
               <div className="h-[2px] w-full" style={{ backgroundColor: card.color }} />
-              <div className="px-3.5 py-3">
-                <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-muted-foreground font-medium mb-1.5 leading-tight">
-                  {card.label}
+              <div className="px-2.5 py-2 sm:px-3.5 sm:py-3 flex flex-row sm:flex-col gap-2 sm:gap-0 flex-1 min-h-[92px] sm:min-h-0">
+                <div className="min-w-0 flex-1 sm:flex-none">
+                  <div className="text-[8px] sm:text-[10px] uppercase tracking-[0.14em] sm:tracking-[0.16em] text-muted-foreground font-medium mb-1 sm:mb-1.5 leading-tight sm:min-h-[2.35em] flex items-start">
+                    {card.label}
+                  </div>
+                  <div className="text-[15px] sm:text-xl font-bold tracking-tight font-mono-tab leading-tight sm:min-h-[1.3em] flex items-center" style={{ color: card.color }}>
+                    {card.value}
+                  </div>
+                  <div className="text-[8px] sm:text-[9px] text-muted-foreground mt-0.5 font-mono-tab leading-snug sm:min-h-[2.25em]">
+                    {card.sub || ''}
+                  </div>
                 </div>
-                <div className="text-lg sm:text-xl font-bold tracking-tight font-mono-tab leading-tight" style={{ color: card.color }}>
-                  {card.value}
-                </div>
-                {card.sub && <div className="text-[9px] text-muted-foreground mt-0.5 font-mono-tab">{card.sub}</div>}
-                {card.chart && <div className="mt-2.5">{card.chart}</div>}
+                {card.chart && <div className="w-[42%] min-w-[120px] sm:w-full sm:min-w-0 mt-0 sm:mt-2.5 flex items-center sm:block">{card.chart}</div>}
               </div>
             </motion.button>
           ))}
@@ -1047,32 +1200,20 @@ export default function Index() {
       {/* ══ CONSTRUCTION INTELLIGENCE ═══════════════════════════════════════ */}
       <div className="px-4 sm:px-8 pt-4 pb-3 border-b border-border/60">
         <div className="micro-label mb-3">Construction Intelligence · {periodStats.label}</div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           {ciCards.map((ci, idx) => (
             <motion.div key={ci.label}
               initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04 }}
-              className="ci-card border border-border bg-background p-3 transition-shadow duration-200"
+              className="ci-card border border-border bg-background p-2.5 sm:p-3 transition-shadow duration-200 min-w-0"
             >
               <div className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-medium mb-1.5 leading-tight">{ci.label}</div>
-              <div className={`text-base font-bold font-mono-tab leading-tight ${ci.valueColor}`}>{ci.value}</div>
-              {ci.data.length > 0 && (
-                <div className="mt-1.5" style={{ height: 38 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={ci.data} margin={{ top: 1, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id={ci.gid} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={ci.stroke} stopOpacity={0.32} />
-                          <stop offset="95%" stopColor={ci.stroke} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey={ci.key} stroke={ci.stroke} fill={`url(#${ci.gid})`}
-                        strokeWidth={1.5} dot={false} isAnimationActive animationDuration={500} animationEasing="ease-out" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              <div className="text-[8px] text-muted-foreground mt-1.5 leading-snug">{ci.sub}</div>
+              <div className="flex items-end justify-between gap-2">
+                <div className={`text-base sm:text-lg font-bold font-mono-tab leading-tight ${ci.valueColor}`}>{ci.value}</div>
+                <div className="text-[8px] text-muted-foreground text-right leading-tight">{ci.detail}</div>
+              </div>
+              <div className="mt-1.5">{ci.chart}</div>
+              <div className="text-[8px] sm:text-[9px] text-muted-foreground mt-1.5 leading-snug font-mono-tab">{ci.sub}</div>
             </motion.div>
           ))}
         </div>
@@ -1080,137 +1221,181 @@ export default function Index() {
 
       {/* ══ PROJECTS + CASH FLOW + RECENT ACTIVITY ══════════════════════════ */}
       <div className="px-4 sm:px-8 pt-4 pb-6">
-        <div className="lg:grid lg:grid-cols-5 lg:gap-5">
-
-          {/* Projects — 2/5 cols */}
-          <div className="lg:col-span-2 mb-5 lg:mb-0">
-            <div className="flex items-center gap-2 mb-3">
-              <button onClick={() => navigate('/vendors')}
-                className="flex items-center gap-2 px-3 py-2 border border-border idx-widget transition-all flex-1">
-                <div className="w-6 h-6 flex items-center justify-center bg-blue-600/10 text-blue-600 shrink-0">
-                  <Users className="w-3 h-3" strokeWidth={1.5} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[8px] uppercase tracking-[0.1em] text-muted-foreground">Vendors</div>
-                  <div className="text-[11px] font-semibold font-mono-tab">{vendors.length} on file</div>
-                </div>
-              </button>
-              <button onClick={() => navigate('/invoices')}
-                className="flex items-center gap-2 px-3 py-2 border border-border idx-widget transition-all flex-1">
-                <div className={`w-6 h-6 flex items-center justify-center shrink-0 ${invoiceAlerts.overdueCount > 0 ? 'bg-accent/10 text-accent' : 'bg-violet-600/10 text-violet-600'}`}>
-                  <Receipt className="w-3 h-3" strokeWidth={1.5} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[8px] uppercase tracking-[0.1em] text-muted-foreground">Invoices</div>
-                  <div className={`text-[11px] font-semibold font-mono-tab ${invoiceAlerts.overdueCount > 0 ? 'text-accent' : ''}`}>
-                    {invoiceAlerts.overdueCount > 0 ? `${invoiceAlerts.overdueCount} overdue` : `${fmtUSD(invoiceAlerts.outstanding)} out`}
-                  </div>
-                </div>
-              </button>
+        <div className="grid gap-3 xl:grid-cols-12 xl:items-start">
+          <div className="xl:col-span-7 border border-border overflow-hidden idx-widget">
+            <div className="flex items-center justify-between px-3.5 py-3 border-b border-border bg-secondary/25">
+              <div>
+                <div className="micro-label">Recent Activity</div>
+                <div className="text-[9px] text-muted-foreground">{recent.length} movement{recent.length !== 1 ? 's' : ''} in {periodStats.label.toLowerCase()}</div>
+              </div>
+              <Link to="/ledger" className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground transition-colors">
+                View all <ChevronRight className="inline w-3 h-3" />
+              </Link>
             </div>
 
-            <div className="flex items-center justify-between mb-2">
-              <div className="micro-label">Active Projects ({activeProjects.length})</div>
-              <button onClick={() => navigate('/projects')}
-                className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5">
-                All <ChevronRight className="w-3 h-3" />
-              </button>
+            <div className="grid grid-cols-3 border-b border-border">
+              <div className="px-3 py-2">
+                <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">Income</div>
+                <div className="text-sm font-bold font-mono-tab text-positive">{fmtUSD(periodStats.income)}</div>
+              </div>
+              <div className="px-3 py-2 border-l border-border">
+                <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">Outflow</div>
+                <div className="text-sm font-bold font-mono-tab text-destructive">{fmtUSD(periodStats.outflow)}</div>
+              </div>
+              <div className="px-3 py-2 border-l border-border">
+                <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">Net</div>
+                <div className={`text-sm font-bold font-mono-tab ${periodStats.net >= 0 ? 'text-positive' : 'text-destructive'}`}>
+                  {periodStats.net >= 0 ? '+' : '-'}{fmtUSD(Math.abs(periodStats.net))}
+                </div>
+              </div>
+            </div>
+
+            <div className="sm:hidden divide-y divide-border">
+              {recent.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">No activity yet.</div>
+              ) : recent.slice(0, 7).map(r => (
+                <button key={r.kind + r.id}
+                  onClick={() => navigate(r.kind === 'Check' ? '/checks' : r.kind === 'Expense' ? '/expenses' : '/income')}
+                  className="w-full grid grid-cols-[1fr_auto] gap-2 p-3 text-left idx-row">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1"><TypeBadge kind={r.kind} /><span className="text-[9px] text-muted-foreground font-mono-tab">{fmtDate(r.date)}</span></div>
+                    <div className="text-[12px] font-medium truncate">{r.label}</div>
+                    <div className="text-[9px] text-muted-foreground truncate">{r.project || 'Unassigned'}</div>
+                  </div>
+                  <span className={`text-xs font-semibold font-mono-tab self-center ${r.amount >= 0 ? 'text-positive' : 'text-destructive'}`}>
+                    {r.amount >= 0 ? '+' : '-'}{fmtUSD(Math.abs(r.amount))}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="hidden sm:block">
+              <div className="grid grid-cols-12 px-3.5 py-1.5 border-b border-border text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
+                <div className="col-span-2">Date</div>
+                <div className="col-span-2">Type</div>
+                <div className="col-span-4">Counterparty</div>
+                <div className="col-span-2">Project</div>
+                <div className="col-span-2 text-right">Amount</div>
+              </div>
+              {recent.length === 0 ? (
+                <div className="px-3.5 py-10 text-center text-sm text-muted-foreground">No activity this period.</div>
+              ) : (
+                <div className="divide-y divide-border max-h-[330px] overflow-y-auto">
+                  {recent.map(r => (
+                    <button key={r.kind + r.id}
+                      onClick={() => navigate(r.kind === 'Check' ? '/checks' : r.kind === 'Expense' ? '/expenses' : '/income')}
+                      className="w-full grid grid-cols-12 px-3.5 py-2.5 text-xs font-mono-tab idx-row items-center transition-colors text-left">
+                      <div className="col-span-2 text-muted-foreground text-[10px]">{fmtDate(r.date)}</div>
+                      <div className="col-span-2"><TypeBadge kind={r.kind} /></div>
+                      <div className="col-span-4 truncate pr-2 text-[11px]">{r.label}</div>
+                      <div className="col-span-2 truncate pr-2 text-[10px] text-muted-foreground">{r.project || 'Unassigned'}</div>
+                      <div className={`col-span-2 text-right font-semibold text-[11px] ${r.amount >= 0 ? 'text-positive' : 'text-destructive'}`}>
+                        {r.amount >= 0 ? '+' : '-'}{fmtUSD(Math.abs(r.amount))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="xl:col-span-5 h-fit">
+            <CashFlowChart data={cashFlowData} />
+          </div>
+        </div>
+
+        <div className="grid gap-3 mt-3 lg:grid-cols-3">
+          <button onClick={() => navigate('/projects')}
+            className="idx-widget border border-border p-3 text-left transition-all min-w-0">
+            <div className="flex items-center justify-between mb-2.5">
+              <div>
+                <div className="micro-label">Active Projects ({activeProjects.length})</div>
+                <div className="text-[9px] text-muted-foreground font-mono-tab">
+                  {fmtUSD(projectSpentTotal)} committed · {projectBudgetTotal > 0 ? `${Math.round(projectBurnPct)}% burn` : 'no budgets'}
+                </div>
+              </div>
+              <div className="w-8 h-8 flex items-center justify-center bg-blue-600/10 text-blue-600 shrink-0">
+                <FolderKanban className="w-4 h-4" strokeWidth={1.5} />
+              </div>
             </div>
 
             {activeProjects.length === 0 ? (
-              <button onClick={() => navigate('/projects')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 border border-dashed border-border text-[10px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all">
-                <FolderKanban className="w-3.5 h-3.5" strokeWidth={1.5} /> No active projects — create one
-              </button>
+              <div className="py-4 border border-dashed border-border text-center text-[10px] text-muted-foreground">No active projects</div>
             ) : (
               <div className="space-y-1.5">
-                {activeProjects.slice(0, 6).map((p: any) => (
-                  <button key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-                    className="flex items-center gap-2.5 w-full px-3 py-2.5 border border-border idx-widget text-left group">
-                    <div className="w-1 self-stretch shrink-0 bg-positive/60" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold truncate group-hover:text-accent transition-colors">{p.name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {p.code && <span className="text-[8px] font-black font-mono-tab text-muted-foreground bg-secondary px-1 py-0.5">{p.code}</span>}
-                        {Number(p.budget) > 0 && <span className="text-[9px] font-mono-tab text-muted-foreground">{fmtUSD(Number(p.budget))}</span>}
+                {projectFinancialData.slice(0, 4).map(p => (
+                  <div key={p.id} className="grid grid-cols-[1fr_auto] gap-2">
+                    <div className="min-w-0">
+                      <div className="flex justify-between gap-2 text-[9px] mb-0.5">
+                        <span className="truncate font-medium">{p.name}</span>
+                        <span className="font-mono-tab text-muted-foreground">{p.budget > 0 ? `${Math.round(p.pct)}%` : fmtUSD(p.revenue)}</span>
+                      </div>
+                      <div className="h-1.5 bg-border/50 overflow-hidden">
+                        <div className={`h-full ${p.pct > 90 ? 'bg-destructive' : p.pct > 72 ? 'bg-warning' : 'bg-positive'}`} style={{ width: `${Math.min(100, Math.max(3, p.pct))}%` }} />
                       </div>
                     </div>
-                    <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" strokeWidth={1.5} />
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
-          </div>
+          </button>
 
-          {/* Cash Flow + Recent Activity — 3/5 cols */}
-          <div className="lg:col-span-3 space-y-4">
-            <CashFlowChart data={cashFlowData} />
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="micro-label">Recent Activity</div>
-                <Link to="/ledger" className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground transition-colors">
-                  View all →
-                </Link>
+          <button onClick={() => navigate('/vendors')}
+            className="idx-widget border border-border p-3 text-left transition-all min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <div className="micro-label">Vendors</div>
+                <div className="text-[9px] text-muted-foreground truncate">{vendors.length} on file</div>
               </div>
-
-              {/* Mobile */}
-              <div className="sm:hidden space-y-1.5">
-                {recent.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-muted-foreground">No activity yet.</div>
-                ) : recent.slice(0, 5).map(r => (
-                  <div key={r.kind + r.id} className="border border-border p-2.5 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <TypeBadge kind={r.kind} />
-                      <span className={`text-xs font-semibold font-mono-tab ${r.amount >= 0 ? 'text-positive' : 'text-destructive'}`}>
-                        {r.amount >= 0 ? '+' : ''}{fmtUSD(Math.abs(r.amount))}
-                      </span>
-                    </div>
-                    <div className="text-[12px] font-medium">{r.label}</div>
-                    <div className="flex justify-between text-[9px] text-muted-foreground">
-                      <span>{r.project || '—'}</span>
-                      <span className="font-mono-tab">{fmtDate(r.date)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Desktop */}
-              <div className="hidden sm:block border border-border overflow-hidden">
-                <div className="grid grid-cols-12 px-3.5 py-1.5 border-b border-border bg-secondary/40 text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
-                  <div className="col-span-2">Date</div>
-                  <div className="col-span-2">Type</div>
-                  <div className="col-span-4">Counterparty</div>
-                  <div className="col-span-3 text-right">Amount</div>
-                  <div className="col-span-1" />
-                </div>
-                {recent.length === 0 ? (
-                  <div className="px-3.5 py-6 text-center text-sm text-muted-foreground">No activity this period.</div>
-                ) : (
-                  <div className="divide-y divide-border max-h-[320px] overflow-y-auto">
-                    {recent.map(r => (
-                      <div key={r.kind + r.id}
-                        className="grid grid-cols-12 px-3.5 py-2 text-xs font-mono-tab idx-row items-center transition-colors">
-                        <div className="col-span-2 text-muted-foreground text-[10px]">{fmtDate(r.date)}</div>
-                        <div className="col-span-2"><TypeBadge kind={r.kind} /></div>
-                        <div className="col-span-4 truncate pr-2 text-[11px]">{r.label}</div>
-                        <div className={`col-span-3 text-right font-semibold text-[11px] ${r.amount >= 0 ? 'text-positive' : 'text-destructive'}`}>
-                          {r.amount >= 0 ? '+' : ''}{fmtUSD(Math.abs(r.amount))}
-                        </div>
-                        <div className="col-span-1 flex justify-end">
-                          <button
-                            onClick={() => navigate(r.kind === 'Check' ? '/checks' : r.kind === 'Expense' ? '/expenses' : '/income')}
-                            className="text-[9px] text-muted-foreground hover:text-foreground transition-colors">
-                            →
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="w-8 h-8 flex items-center justify-center bg-cyan-600/10 text-cyan-600 shrink-0">
+                <Users className="w-4 h-4" strokeWidth={1.5} />
               </div>
             </div>
-          </div>
+            <div className="text-lg font-bold font-mono-tab">{fmtUSD(vendorSpendTotal)}</div>
+            <div className="text-[8px] text-muted-foreground mb-2">period spend</div>
+            <div className="space-y-1">
+              {vendorSpendData.length === 0 ? (
+                <div className="h-10 flex items-center text-[9px] text-muted-foreground">No spend this period</div>
+              ) : vendorSpendData.slice(0, 4).map(v => (
+                <div key={v.name}>
+                  <div className="flex justify-between gap-2 text-[8px]">
+                    <span className="truncate">{v.name}</span>
+                    <span className="font-mono-tab">{vendorSpendTotal > 0 ? ((v.value / vendorSpendTotal) * 100).toFixed(0) : 0}%</span>
+                  </div>
+                  <div className="h-1 bg-border/50 overflow-hidden">
+                    <div className="h-full bg-cyan-600/75" style={{ width: `${vendorSpendTotal > 0 ? (v.value / vendorSpendTotal) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </button>
+
+          <button onClick={() => navigate('/invoices')}
+            className="idx-widget border border-border p-3 text-left transition-all min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <div className="micro-label">Invoices</div>
+                <div className="text-[9px] text-muted-foreground truncate">{invoicePeriodStats.count} in range</div>
+              </div>
+              <div className={`w-8 h-8 flex items-center justify-center shrink-0 ${invoiceAlerts.overdueCount > 0 ? 'bg-destructive/10 text-destructive' : 'bg-violet-600/10 text-violet-600'}`}>
+                <Receipt className="w-4 h-4" strokeWidth={1.5} />
+              </div>
+            </div>
+            <div className={`text-lg font-bold font-mono-tab ${invoicePeriodStats.overdue > 0 ? 'text-destructive' : ''}`}>
+              {fmtUSD(invoicePeriodStats.open || invoiceAlerts.outstanding)}
+            </div>
+            <div className="text-[8px] text-muted-foreground mb-2">open receivables</div>
+            <div className="h-2 bg-border/50 overflow-hidden flex">
+              <div className="h-full bg-positive/70" style={{ width: `${invoicePeriodStats.total > 0 ? (invoicePeriodStats.paid / invoicePeriodStats.total) * 100 : 0}%` }} />
+              <div className="h-full bg-warning/75" style={{ width: `${invoicePeriodStats.total > 0 ? ((invoicePeriodStats.open - invoicePeriodStats.overdue) / invoicePeriodStats.total) * 100 : 0}%` }} />
+              <div className="h-full bg-destructive/75" style={{ width: `${invoicePeriodStats.total > 0 ? (invoicePeriodStats.overdue / invoicePeriodStats.total) * 100 : 0}%` }} />
+            </div>
+            <div className="grid grid-cols-3 gap-1 mt-2 text-[8px] font-mono-tab text-muted-foreground">
+              <span>{invoicePeriodStats.collectionPct.toFixed(0)}% paid</span>
+              <span>{invoicePeriodStats.openCount} open</span>
+              <span>{invoicePeriodStats.overdueCount} late</span>
+            </div>
+          </button>
         </div>
       </div>
 

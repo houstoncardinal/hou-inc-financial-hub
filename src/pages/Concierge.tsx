@@ -1,13 +1,16 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate } from '@/hooks/useFinance';
+import { useCreatePortalClient, usePortalClients } from '@/hooks/usePortalClients';
 import { useUploadDocument } from '@/hooks/useDocuments';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useEntity } from '@/contexts/EntityContext';
@@ -113,9 +116,9 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
 function SimpleInput({ type, value, onChange, placeholder, options }: { type: string; value: string; onChange: (v: string) => void; placeholder?: string; options?: string[] }) {
   switch (type) {
     case 'number':
-      return <Input type="number" step="0.01" className="rounded-none h-12 text-right font-mono-tab text-xl" placeholder={placeholder || '0.00'} value={value} onChange={e => onChange(e.target.value)} autoFocus />;
+      return <CurrencyInput className="h-12 text-xl" placeholder={placeholder || '0.00'} value={value} onValueChange={onChange} autoFocus />;
     case 'date':
-      return <Input type="date" className="rounded-none h-12 text-base" value={value} onChange={e => onChange(e.target.value)} autoFocus />;
+      return <DateInput className="h-12 text-base" value={value} onChange={e => onChange(e.target.value)} autoFocus />;
     case 'email':
       return <Input type="email" className="rounded-none h-12 text-base" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} autoFocus />;
     case 'phone':
@@ -179,6 +182,7 @@ function SimpleInput({ type, value, onChange, placeholder, options }: { type: st
 /* ─── MAIN ─── */
 export default function Concierge() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { entity } = useEntity();
   const inputFileRef = useRef<HTMLInputElement>(null);
   const captureFileRef = useRef<HTMLInputElement>(null);
@@ -194,6 +198,7 @@ export default function Concierge() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [customCat, setCustomCat] = useState(false);
   const [customCatVal, setCustomCatVal] = useState('');
+  const [savingEntry, setSavingEntry] = useState(false);
 
   // Inline quick-create forms (replaces browser prompt())
   const [quickVendorOpen, setQuickVendorOpen] = useState(false);
@@ -202,16 +207,24 @@ export default function Concierge() {
   const [quickProjectName, setQuickProjectName] = useState('');
   const [quickProjectCode, setQuickProjectCode] = useState('');
   const [quickProjectBudget, setQuickProjectBudget] = useState('');
+  const [quickClientOpen, setQuickClientOpen] = useState(false);
+  const [quickClientName, setQuickClientName] = useState('');
+  const [quickClientEmail, setQuickClientEmail] = useState('');
+  const [quickClientPhone, setQuickClientPhone] = useState('');
+  const [quickClientProjectType, setQuickClientProjectType] = useState('');
+  const [quickClientReference, setQuickClientReference] = useState('');
 
   const incomeUpsert = useUpsert('transactions', [['transactions']]);
   const expenseUpsert = useUpsert('transactions', [['transactions']]);
   const checkUpsert = useUpsert('checks', [['checks']]);
   const vendorCreate = useQuickCreate('vendors');
   const projectCreate = useQuickCreate('projects');
+  const clientCreate = useCreatePortalClient();
   const uploadDocument = useUploadDocument();
 
   const { data: vendors = [] } = useVendors();
   const { data: projects = [] } = useProjects();
+  const { data: portalClients = [] } = usePortalClients();
   const { invoices = [] } = useInvoices();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
@@ -249,10 +262,24 @@ export default function Concierge() {
     setReceiptPreview(null);
     setCreatingVendor(false);
     setCreatingProject(false);
+    setQuickClientOpen(false);
+    setQuickClientName('');
+    setQuickClientEmail('');
+    setQuickClientPhone('');
+    setQuickClientProjectType('');
+    setQuickClientReference('');
     setCustomCat(false);
     setCustomCatVal('');
     setPhase('guided');
   };
+
+  useEffect(() => {
+    const start = searchParams.get('start') as ServiceType | null;
+    if (!start || !(start in SERVICE_DEFS)) return;
+    startService(start);
+    searchParams.delete('start');
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const goNext = () => {
     if (!currentQuestion) return;
@@ -340,42 +367,97 @@ export default function Concierge() {
     setCreatingProject(false);
   };
 
+  const createClientNow = async () => {
+    if (!quickClientName.trim()) { toast.error('Enter a client name'); return; }
+    if (!quickClientEmail.trim()) { toast.error('Enter an email so payments can be matched to this client'); return; }
+    try {
+      const result = await clientCreate.mutateAsync({
+        name: quickClientName.trim(),
+        email: quickClientEmail.trim(),
+        phone: quickClientPhone.trim(),
+        project_type: quickClientProjectType.trim() || 'Client payment source',
+        project_interest: quickClientReference.trim(),
+      });
+      setVal('portal_client_id', result.id);
+      setVal('source_name', result.name);
+      toast.success(`Client "${result.name}" added`);
+      setQuickClientOpen(false);
+      setQuickClientName('');
+      setQuickClientEmail('');
+      setQuickClientPhone('');
+      setQuickClientProjectType('');
+      setQuickClientReference('');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add client');
+    }
+  };
+
   const submitAll = async () => {
     if (!service || !serviceType) return;
+    if (savingEntry) return;
+    setSavingEntry(true);
     try {
+      const paymentRef = getVal('check_reference');
+      const mergedNotes = [getVal('notes'), paymentRef ? `Payment reference: ${paymentRef}` : '']
+        .filter(Boolean)
+        .join('\n');
       switch (serviceType) {
         case 'income':
           await incomeUpsert.mutateAsync({
             type: 'income',
             amount: parseFloat(getVal('amount')),
+            amount_before_tax: parseFloat(getVal('amount')),
+            total_amount: parseFloat(getVal('amount')),
+            net_amount: Math.max(0, parseFloat(getVal('amount')) - (getVal('retainage_amount') ? parseFloat(getVal('retainage_amount')) : 0)),
             transaction_date: getVal('date'),
+            posting_date: getVal('date'),
             source_name: getVal('source_name') || null,
+            client_id: getVal('portal_client_id') || null,
             vendor_id: null,
             project_id: getVal('project_id') || null,
             category: getVal('category') || null,
-            notes: getVal('notes') || null,
+            description: getVal('category') || getVal('source_name') || mergedNotes || null,
+            notes: mergedNotes || null,
             payment_method: getVal('payment_method') || null,
             check_reference: getVal('check_reference') || null,
             retainage_percent: getVal('retainage_percent') ? parseFloat(getVal('retainage_percent')) : null,
             retainage_amount: getVal('retainage_amount') ? parseFloat(getVal('retainage_amount')) : null,
             invoice_id: getVal('invoice_id') || null,
             cost_phase: getVal('cost_phase') || null,
+            status: 'posted',
+            approval_status: 'approved',
+            payment_status: 'paid',
+            reconciliation_status: 'unreconciled',
+            fiscal_year: new Date(getVal('date')).getFullYear(),
+            accounting_period: getVal('date').slice(0, 7),
           } as any);
           break;
         case 'expense': {
           const txnId = crypto.randomUUID();
           await expenseUpsert.mutateAsync({
             id: txnId,
+            __mode: 'insert',
             type: 'expense',
             amount: parseFloat(getVal('amount')),
+            amount_before_tax: parseFloat(getVal('amount')),
+            total_amount: parseFloat(getVal('amount')),
+            net_amount: parseFloat(getVal('amount')),
             transaction_date: getVal('date'),
+            posting_date: getVal('date'),
             vendor_id: getVal('vendor_id') || null,
             project_id: getVal('project_id') || null,
             category: getVal('category') || null,
-            notes: getVal('notes') || null,
+            description: getVal('category') || mergedNotes || null,
+            notes: mergedNotes || null,
             payment_method: getVal('payment_method') || null,
             check_reference: getVal('check_reference') || null,
             cost_phase: getVal('cost_phase') || null,
+            status: 'posted',
+            approval_status: 'approved',
+            payment_status: 'paid',
+            reconciliation_status: 'unreconciled',
+            fiscal_year: new Date(getVal('date')).getFullYear(),
+            accounting_period: getVal('date').slice(0, 7),
           } as any);
           if (receiptFile) {
             uploadDocument.mutateAsync({ file: receiptFile, docType: 'receipt', runOcr: true, linked_transaction_id: txnId })
@@ -395,7 +477,11 @@ export default function Concierge() {
       }
       toast.success(`${service.submitLabel} — done!`);
       setPhase('done');
-    } catch (err: any) { toast.error(err?.message || 'Something went wrong'); }
+    } catch (err: any) {
+      toast.error(err?.message || 'Something went wrong');
+    } finally {
+      setSavingEntry(false);
+    }
   };
 
   /* ═════════════════════ WELCOME ═════════════════════ */
@@ -550,10 +636,9 @@ export default function Concierge() {
               <div className="space-y-1.5">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Dollar Amount</div>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
-                  <Input type="number" min="0" step="0.01" className="rounded-none h-12 pl-6" placeholder="0.00"
+                  <CurrencyInput className="h-12" placeholder="0.00"
                     value={amtVal}
-                    onChange={e => { const a = e.target.value; const computed = a && base ? String(Math.round(parseFloat(a) / parseFloat(base) * 100 * 100) / 100) : ''; setVal('retainage_amount', a); setVal('retainage_percent', computed); }} />
+                    onValueChange={a => { const computed = a && base ? String(Math.round(parseFloat(a) / parseFloat(base) * 100 * 100) / 100) : ''; setVal('retainage_amount', a); setVal('retainage_percent', computed); }} />
                 </div>
               </div>
             </div>
@@ -578,6 +663,86 @@ export default function Concierge() {
               </SelectContent>
             </Select>
             {openInvoices.length === 0 && <p className="text-xs text-muted-foreground text-center">No open invoices found.</p>}
+          </div>
+        );
+      }
+
+      if (q.id === 'source_name') {
+        return (
+          <div className="space-y-3">
+            <Select
+              value={getVal('portal_client_id')}
+              onValueChange={v => {
+                const client = portalClients.find(c => c.id === v);
+                setVal('portal_client_id', v);
+                setVal('source_name', client?.name || '');
+                setQuickClientOpen(false);
+              }}
+            >
+              <SelectTrigger className="rounded-none h-12 text-base">
+                <SelectValue placeholder="Select registered client or add one" />
+              </SelectTrigger>
+              <SelectContent>
+                {portalClients.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}{c.email ? ` — ${c.email}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="relative">
+              <Input
+                className="rounded-none h-11 text-base"
+                placeholder="Or type source / client name"
+                value={getVal('source_name')}
+                onChange={e => {
+                  setVal('source_name', e.target.value);
+                  setVal('portal_client_id', '');
+                }}
+              />
+            </div>
+
+            {quickClientOpen ? (
+              <div className="border border-foreground/20 p-4 space-y-3 bg-secondary/30">
+                <div>
+                  <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">New Payment Client</div>
+                  <div className="text-xs text-muted-foreground mt-1">Creates a finance-tracked client record only. No portal login is created.</div>
+                </div>
+                <Input autoFocus className="rounded-none h-11 text-base" placeholder="Client / household / company name *" value={quickClientName} onChange={e => setQuickClientName(e.target.value)} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input type="email" className="rounded-none h-10 text-sm" placeholder="Email for payment matching *" value={quickClientEmail} onChange={e => setQuickClientEmail(e.target.value)} />
+                  <Input type="tel" className="rounded-none h-10 text-sm" placeholder="Phone / billing contact" value={quickClientPhone} onChange={e => setQuickClientPhone(e.target.value)} />
+                </div>
+                <Select value={quickClientProjectType} onValueChange={setQuickClientProjectType}>
+                  <SelectTrigger className="rounded-none h-10 text-sm"><SelectValue placeholder="Client type / relationship" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Residential client">Residential client</SelectItem>
+                    <SelectItem value="Commercial client">Commercial client</SelectItem>
+                    <SelectItem value="Developer / investor">Developer / investor</SelectItem>
+                    <SelectItem value="Insurance / lender">Insurance / lender</SelectItem>
+                    <SelectItem value="Internal funding source">Internal funding source</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Textarea
+                  className="rounded-none text-sm min-h-[74px]"
+                  placeholder="Identifying notes: billing address, project address, invoice reference, primary contact, or payment relationship"
+                  value={quickClientReference}
+                  onChange={e => setQuickClientReference(e.target.value)}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); createClientNow(); } }}
+                />
+                <div className="flex gap-2">
+                  <Button type="button" onClick={createClientNow} disabled={clientCreate.isPending || !quickClientName.trim() || !quickClientEmail.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
+                    {clientCreate.isPending ? 'Adding…' : 'Add Client'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => { setQuickClientOpen(false); setQuickClientName(''); setQuickClientEmail(''); setQuickClientPhone(''); setQuickClientProjectType(''); setQuickClientReference(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setQuickClientOpen(true)} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
+                <Plus className="w-3 h-3" /> Add new client without portal account
+              </Button>
+            )}
           </div>
         );
       }
@@ -687,12 +852,11 @@ export default function Concierge() {
                     value={quickProjectCode}
                     onChange={e => setQuickProjectCode(e.target.value)}
                   />
-                  <Input
-                    type="number"
-                    className="rounded-none h-10 text-sm font-mono-tab text-right"
+                  <CurrencyInput
+                    className="h-10 text-sm"
                     placeholder="Budget $"
                     value={quickProjectBudget}
-                    onChange={e => setQuickProjectBudget(e.target.value)}
+                    onValueChange={setQuickProjectBudget}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createProjectNow(); } }}
                   />
                 </div>
@@ -882,8 +1046,13 @@ export default function Concierge() {
               </div>
               <div className="flex gap-3 justify-center">
                 <Button variant="outline" onClick={() => setPhase('guided')} className="rounded-none h-11 px-8">Edit</Button>
-                <Button onClick={submitAll} className="rounded-none h-11 px-8 bg-foreground text-background hover:opacity-90">
-                  <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} /> Confirm & Save
+                <Button
+                  onClick={submitAll}
+                  disabled={savingEntry || incomeUpsert.isPending || expenseUpsert.isPending || checkUpsert.isPending}
+                  className="rounded-none h-11 px-8 bg-foreground text-background hover:opacity-90 disabled:opacity-60"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} />
+                  {savingEntry ? 'Saving...' : 'Confirm & Save'}
                 </Button>
               </div>
             </div>
@@ -896,20 +1065,29 @@ export default function Concierge() {
   /* ═════════════════════ DONE ═════════════════════ */
   return (
     <AppShell>
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-positive/10 text-positive mb-8">
-            <PartyPopper className="w-9 h-9" strokeWidth={1.5} />
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-6 sm:py-10">
+        <div className="w-full max-w-md text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-positive/10 text-positive mb-5 sm:mb-8">
+            <PartyPopper className="w-7 h-7 sm:w-9 sm:h-9" strokeWidth={1.5} />
           </div>
-          <h2 className="text-3xl font-light tracking-tight mb-3">All done!</h2>
-          <p className="text-sm text-muted-foreground mb-10 max-w-sm mx-auto leading-relaxed">
+          <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-2 sm:mb-3">All done!</h2>
+          <p className="text-sm text-muted-foreground mb-6 sm:mb-10 max-w-sm mx-auto leading-relaxed">
             Your {service?.submitLabel?.toLowerCase()} has been recorded successfully.
           </p>
-          <div className="flex gap-4 justify-center">
-            <Button onClick={() => setPhase('welcome')} className="rounded-none h-12 px-8 bg-foreground text-background hover:opacity-90">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <Button onClick={() => setPhase('welcome')} className="rounded-none h-11 sm:h-12 w-full px-4 bg-foreground text-background hover:opacity-90">
               <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} /> Do Another
             </Button>
-            <Button variant="outline" onClick={() => navigate('/finance/dashboard')} className="rounded-none h-12 px-8">
+            {serviceType && ['income', 'expense', 'check'].includes(serviceType) && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(serviceType === 'income' ? '/income' : serviceType === 'expense' ? '/expenses' : '/checks')}
+                className="rounded-none h-11 sm:h-12 w-full px-4"
+              >
+                View {serviceType === 'check' ? 'Checks' : serviceType === 'expense' ? 'Expenses' : 'Income'}
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => navigate('/finance/dashboard')} className="rounded-none h-11 sm:h-12 w-full px-4">
               Back to Overview
             </Button>
           </div>

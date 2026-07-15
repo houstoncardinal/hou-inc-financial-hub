@@ -3,6 +3,8 @@ import PageHeader from '@/components/PageHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, THEMES } from '@/hooks/useTheme';
 import { useIntegrations } from '@/hooks/useIntegrations';
+import { useEnsureAccountingConfig } from '@/hooks/useConstructionFinance';
+import { useEntity } from '@/contexts/EntityContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +17,8 @@ export default function Settings() {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const { cfg, save: saveIntegrations } = useIntegrations();
+  const { entity } = useEntity();
+  const ensureAccounting = useEnsureAccountingConfig();
 
   const [displayName,    setDisplayName]    = useState(user?.user_metadata?.full_name || '');
   const [saving,         setSaving]         = useState(false);
@@ -106,6 +110,36 @@ export default function Settings() {
                 Sign Out
               </Button>
             </div>
+          </div>
+        </section>
+
+        {/* Construction Finance */}
+        <section className="border border-border p-5">
+          <div className="micro-label mb-1">Construction Finance Core</div>
+          <div className="text-xs text-muted-foreground mb-5">
+            Initialize chart of accounts, accounting settings, and construction finance categories for the active entity.
+          </div>
+          <div className="flex items-center justify-between gap-4 border border-border bg-secondary/30 p-4">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{entity?.name || 'No entity selected'}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                Creates default accounts for cash, AR, AP, retainage, deposits, revenue, job costs, taxes, and fees.
+              </div>
+            </div>
+            <Button
+              disabled={!entity || ensureAccounting.isPending}
+              onClick={async () => {
+                try {
+                  await ensureAccounting.mutateAsync();
+                  toast.success('Accounting foundation initialized');
+                } catch (e: any) {
+                  toast.error(e?.message || 'Unable to initialize accounting foundation');
+                }
+              }}
+              className="rounded-none h-9 text-xs bg-foreground text-background hover:opacity-90 shrink-0"
+            >
+              {ensureAccounting.isPending ? 'Initializing…' : 'Initialize'}
+            </Button>
           </div>
         </section>
 

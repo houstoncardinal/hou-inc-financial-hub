@@ -9,6 +9,8 @@ import {
   AlertTriangle, MapPin, UserCheck,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 
 /* ── Tokens ─────────────────────────────────────────────────────── */
 const AC    = '#9D7E3F';
@@ -474,13 +476,13 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <MicroLabel>Start Date</MicroLabel>
-              <input autoFocus type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)}
-                className="w-full h-11 px-3 text-[13px] border border-border bg-background text-foreground focus:outline-none focus:border-foreground/40 transition-colors" />
+              <DateInput autoFocus value={form.start_date} onChange={e => set('start_date', e.target.value)}
+                className="h-11 text-[13px] border-border focus-visible:ring-0 focus-visible:ring-offset-0" />
             </div>
             <div>
               <MicroLabel>Estimated Completion</MicroLabel>
-              <input type="date" value={form.estimated_completion} onChange={e => set('estimated_completion', e.target.value)}
-                className="w-full h-11 px-3 text-[13px] border border-border bg-background text-foreground focus:outline-none focus:border-foreground/40 transition-colors" />
+              <DateInput value={form.estimated_completion} onChange={e => set('estimated_completion', e.target.value)}
+                className="h-11 text-[13px] border-border focus-visible:ring-0 focus-visible:ring-offset-0" />
             </div>
           </div>
           {form.start_date && form.estimated_completion && (() => {
@@ -507,22 +509,20 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
           <div>
             <MicroLabel>Contract Amount</MicroLabel>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground select-none text-sm">$</span>
-              <input autoFocus type="number" step="1000" value={form.contract_amount}
-                onChange={e => handleContractChange(e.target.value)}
+              <CurrencyInput autoFocus value={form.contract_amount}
+                onValueChange={handleContractChange}
                 placeholder="0"
-                className="w-full h-12 pl-7 pr-4 text-[15px] font-mono border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors" />
+                className="h-12 text-[15px] border-border focus-visible:ring-0 focus-visible:ring-offset-0" />
             </div>
             <p className="text-[9px] text-muted-foreground mt-1.5">The total contract value — appears in the finance portfolio.</p>
           </div>
           <div>
             <MicroLabel>Budget <span className="font-normal text-muted-foreground/60 normal-case tracking-normal">(auto-fills from contract)</span></MicroLabel>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground select-none text-sm">$</span>
-              <input type="number" step="1000" value={form.budget}
-                onChange={e => set('budget', e.target.value)}
+              <CurrencyInput value={form.budget}
+                onValueChange={v => set('budget', v)}
                 placeholder="0"
-                className="w-full h-12 pl-7 pr-4 text-[15px] font-mono border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors" />
+                className="h-12 text-[15px] border-border focus-visible:ring-0 focus-visible:ring-offset-0" />
             </div>
           </div>
           {form.contract_amount && form.budget &&

@@ -13,6 +13,8 @@ import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
   Layers, TrendingUp, Receipt, Calendar, History,
 } from 'lucide-react';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'payments' | 'reconciliation' | 'notes' | 'audit';
@@ -550,15 +552,15 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Contract Amount ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={sovForm.contract_amount} onChange={sov('contract_amount')} placeholder="0.00" />
+                          <CurrencyInput value={sovForm.contract_amount} onValueChange={v => setSovForm(p => ({ ...p, contract_amount: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">CO Amount ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={sovForm.change_order_amount} onChange={sov('change_order_amount')} placeholder="0.00" />
+                          <CurrencyInput value={sovForm.change_order_amount} onValueChange={v => setSovForm(p => ({ ...p, change_order_amount: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Approved Credit ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={sovForm.approved_credit_amount} onChange={sov('approved_credit_amount')} placeholder="0.00" />
+                          <CurrencyInput value={sovForm.approved_credit_amount} onValueChange={v => setSovForm(p => ({ ...p, approved_credit_amount: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">% Complete</div>
@@ -566,7 +568,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Total Billed ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={sovForm.total_billed} onChange={sov('total_billed')} placeholder="0.00" />
+                          <CurrencyInput value={sovForm.total_billed} onValueChange={v => setSovForm(p => ({ ...p, total_billed: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Work Status</div>
@@ -751,19 +753,19 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                       </div>
                       <div className="space-y-1">
                         <div className="micro-label">Planned Start</div>
-                        <input type="date" className={F} value={msForm.planned_start_date} onChange={ms('planned_start_date')} />
+                        <DateInput className={F} value={msForm.planned_start_date} onChange={ms('planned_start_date')} />
                       </div>
                       <div className="space-y-1">
                         <div className="micro-label">Planned Completion</div>
-                        <input type="date" className={F} value={msForm.planned_completion_date} onChange={ms('planned_completion_date')} />
+                        <DateInput className={F} value={msForm.planned_completion_date} onChange={ms('planned_completion_date')} />
                       </div>
                       <div className="space-y-1">
                         <div className="micro-label">Actual Completion</div>
-                        <input type="date" className={F} value={msForm.actual_completion_date} onChange={ms('actual_completion_date')} />
+                        <DateInput className={F} value={msForm.actual_completion_date} onChange={ms('actual_completion_date')} />
                       </div>
                       <div className="space-y-1">
                         <div className="micro-label">Billing Amount ($)</div>
-                        <input type="number" className={`${F} font-mono-tab text-right`} value={msForm.billing_amount} onChange={ms('billing_amount')} placeholder="0.00" />
+                        <CurrencyInput value={msForm.billing_amount} onValueChange={v => setMsForm(p => ({ ...p, billing_amount: v }))} placeholder="0.00" className={F} />
                       </div>
                       <div className="flex items-center gap-2 pt-2">
                         <input type="checkbox" id="ms-be" checked={msForm.billing_eligible} onChange={e => setMsForm(p => ({ ...p, billing_eligible: e.target.checked }))} className="accent-foreground w-3.5 h-3.5" />
@@ -860,19 +862,19 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Draw Amount ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={drawForm.draw_amount} onChange={dr('draw_amount')} placeholder="0.00" />
+                          <CurrencyInput value={drawForm.draw_amount} onValueChange={v => setDrawForm(p => ({ ...p, draw_amount: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Billing Period Start</div>
-                          <input type="date" className={F} value={drawForm.billing_period_start} onChange={dr('billing_period_start')} />
+                          <DateInput className={F} value={drawForm.billing_period_start} onChange={dr('billing_period_start')} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Billing Period End</div>
-                          <input type="date" className={F} value={drawForm.billing_period_end} onChange={dr('billing_period_end')} />
+                          <DateInput className={F} value={drawForm.billing_period_end} onChange={dr('billing_period_end')} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Scheduled Date</div>
-                          <input type="date" className={F} value={drawForm.scheduled_date} onChange={dr('scheduled_date')} />
+                          <DateInput className={F} value={drawForm.scheduled_date} onChange={dr('scheduled_date')} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Status</div>
@@ -1031,7 +1033,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Amount ($)</div>
-                          <input type="number" className={`${F} font-mono-tab text-right`} value={coForm.amount} onChange={co('amount')} placeholder="0.00" />
+                          <CurrencyInput value={coForm.amount} onValueChange={v => setCoForm(p => ({ ...p, amount: v }))} placeholder="0.00" className={F} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Status</div>
@@ -1043,11 +1045,11 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Date Requested</div>
-                          <input type="date" className={F} value={coForm.requested_date} onChange={co('requested_date')} />
+                          <DateInput className={F} value={coForm.requested_date} onChange={co('requested_date')} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Date Approved</div>
-                          <input type="date" className={F} value={coForm.approved_date} onChange={co('approved_date')} />
+                          <DateInput className={F} value={coForm.approved_date} onChange={co('approved_date')} />
                         </div>
                         <div className="sm:col-span-2 space-y-1">
                           <div className="micro-label">Approval Method</div>

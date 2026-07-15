@@ -15,6 +15,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DateInput } from '@/components/ui/date-input';
 
 /* ── Tokens ──────────────────────────────────────────────────────────── */
 const B    = '#0A0A0A';
@@ -302,12 +303,11 @@ function MilestoneItem({
                     <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1.5" style={{ color: G500 }}>
                       <Calendar className="w-2.5 h-2.5 inline mr-1" />Target Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={milestone.target_date}
                       onChange={e => onChange('target_date', e.target.value)}
                       onBlur={onSave}
-                      className="w-full text-[11px] font-light outline-none"
+                      className="h-8 text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                       style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
                     />
                   </div>
@@ -315,12 +315,11 @@ function MilestoneItem({
                     <label className="text-[7px] uppercase tracking-[0.28em] font-bold block mb-1.5" style={{ color: G500 }}>
                       <CheckCircle2 className="w-2.5 h-2.5 inline mr-1" />Completion Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={milestone.completed_date}
                       onChange={e => onChange('completed_date', e.target.value)}
                       onBlur={onSave}
-                      className="w-full text-[11px] font-light outline-none"
+                      className="h-8 text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                       style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
                     />
                   </div>

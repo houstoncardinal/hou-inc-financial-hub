@@ -4,6 +4,8 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
 import EmailInput from '@/components/ui/smart/EmailInput';
 import { Label } from '@/components/ui/label';
@@ -19,34 +21,6 @@ import { supabase } from '@/integrations/supabase/client';
 
 function newLineItem(): LineItem {
   return { id: crypto.randomUUID(), description: '', qty: 1, rate: 0 };
-}
-
-function CurrencyInput({ value, onChange, placeholder = '0.00' }: { value: number; onChange: (v: number) => void; placeholder?: string }) {
-  const [raw, setRaw] = useState(value === 0 ? '' : String(value));
-
-  useEffect(() => {
-    if (value === 0 && raw === '') return;
-    if (parseFloat(raw) !== value) setRaw(value === 0 ? '' : String(value));
-  }, [value]);
-
-  return (
-    <div className="relative">
-      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
-      <Input
-        type="text"
-        inputMode="decimal"
-        placeholder={placeholder}
-        value={raw}
-        onChange={e => {
-          const cleaned = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1');
-          setRaw(cleaned);
-          onChange(parseFloat(cleaned) || 0);
-        }}
-        onBlur={() => { if (raw === '' || raw === '.') { setRaw(''); onChange(0); } }}
-        className="pl-6 font-mono-tab text-right rounded-none h-9 text-sm"
-      />
-    </div>
-  );
 }
 
 export default function InvoiceNew() {
@@ -239,11 +213,11 @@ export default function InvoiceNew() {
             </div>
             <div className="space-y-1.5">
               <Label className="micro-label">Issue Date</Label>
-              <Input type="date" value={form.issue_date} onChange={e => setField('issue_date', e.target.value)} className="rounded-none h-10" />
+              <DateInput value={form.issue_date} onChange={e => setField('issue_date', e.target.value)} className="h-10" />
             </div>
             <div className="space-y-1.5">
               <Label className="micro-label">Due Date</Label>
-              <Input type="date" value={form.due_date} onChange={e => setField('due_date', e.target.value)} className="rounded-none h-10" />
+              <DateInput value={form.due_date} onChange={e => setField('due_date', e.target.value)} className="h-10" />
             </div>
           </div>
 
@@ -356,7 +330,7 @@ export default function InvoiceNew() {
                     }}
                     className="rounded-none h-9 text-sm text-center border-0 shadow-none px-0 focus-visible:ring-0 bg-transparent"
                   />
-                  <CurrencyInput value={item.rate} onChange={v => setLineItem(idx, { rate: v })} />
+                  <CurrencyInput value={item.rate} onValueChange={() => undefined} onNumberChange={v => setLineItem(idx, { rate: v })} className="h-9 text-sm" />
                   <button
                     onClick={() => removeLine(idx)}
                     className="text-muted-foreground/40 hover:text-accent transition-colors flex items-center justify-center"

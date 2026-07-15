@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
 import { usePortal, PortalMeeting } from '@/hooks/usePortal';
+import { DateInput } from '@/components/ui/date-input';
 
 const DARK   = '#1A1410';
 const MUTED  = '#7A6E64';
@@ -315,9 +316,9 @@ export default function PortalMeetings() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-[9px] uppercase tracking-[0.32em] font-bold mb-2" style={{ color: MUTED }}>Preferred Date</label>
-                          <input type="date" value={date} min={minDateStr} onChange={e => setDate(e.target.value)} required
-                            className="w-full text-[13px] font-light outline-none"
-                            style={{ padding: '12px 14px', border: `1px solid ${BORDER}`, backgroundColor: '#FAFAF9', color: DARK, borderRadius: 0 }} />
+                          <DateInput value={date} min={minDateStr} onChange={e => setDate(e.target.value)} required
+                            className="h-11 text-[13px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                            style={{ padding: '12px 40px 12px 14px', border: `1px solid ${BORDER}`, backgroundColor: '#FAFAF9', color: DARK, borderRadius: 0 }} />
                         </div>
                         <div>
                           <label className="block text-[9px] uppercase tracking-[0.32em] font-bold mb-2" style={{ color: MUTED }}>Preferred Time</label>

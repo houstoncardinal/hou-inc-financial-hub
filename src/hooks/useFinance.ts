@@ -1,20 +1,198 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
 
 type TableName = 'vendors' | 'projects' | 'checks' | 'transactions';
+type SaveMode = 'insert' | 'update';
+type SaveHints = {
+  __mode?: SaveMode;
+  __forceInsert?: boolean;
+};
 
 const relatedQueryKeys: Record<TableName, string[][]> = {
-  vendors:      [['vendors'],       ['transactions'], ['checks']],
-  projects:     [['projects'],      ['transactions'], ['checks']],
-  checks:       [['checks'],        ['projects'],     ['vendors']],
-  transactions: [['transactions'],  ['projects'],     ['vendors']],
+  vendors:      [['vendors'],       ['transactions'], ['checks'], ['invoices'], ['project-financial-summary']],
+  projects:     [['projects'],      ['transactions'], ['checks'], ['invoices'], ['project-financial-summary']],
+  checks:       [['checks'],        ['projects'],     ['vendors'], ['project-financial-summary']],
+  transactions: [['transactions'],  ['projects'],     ['vendors'], ['invoices'], ['project-financial-summary']],
 };
 
 const stripJoinedRelations = <T extends Record<string, unknown>>(row: T) => {
-  const { projects, vendors, ...payload } = row;
+  const { projects, vendors, subcontractors, __mode, __forceInsert, ...payload } = row;
   return payload;
+};
+
+const missingColumnFromSchemaCache = (message?: string) => {
+  if (!message) return null;
+  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? null;
+};
+
+const CRITICAL_FINANCE_COLUMNS = new Set([
+  'check_reference',
+  'retainage_percent',
+  'retainage_amount',
+  'invoice_id',
+  'cost_phase',
+  'client_id',
+  'total_amount',
+  'net_amount',
+  'posting_date',
+  'receipt_status',
+  'billable_status',
+  'reimbursable_status',
+  'expense_type',
+]);
+
+const nextUuid = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const writeWithSchemaCacheFallback = async (
+  table: TableName,
+  mode: 'insert' | 'update',
+  payload: Record<string, unknown>,
+  id?: string,
+) => {
+  let current = { ...payload };
+  if (mode === 'insert' && !current.id) current.id = nextUuid();
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const result = mode === 'update'
+      ? await supabase.from(table).update(current).eq('id', id)
+      : await supabase.from(table).insert(current);
+
+    if (!result.error) {
+      const recordId = (mode === 'update' ? id : current.id) as string | undefined;
+      if (!recordId) return current;
+      const verify = await supabase.from(table).select('*').eq('id', recordId).maybeSingle();
+      if (verify.error) {
+        throw new Error(`Saved ${table}, but verification failed: ${verify.error.message}`);
+      }
+      if (!verify.data) {
+        throw new Error(`Save reached ${table}, but the saved row is hidden from the current session. Confirm you are signed in as the same user, the active entity is correct, and reload the app after the latest RLS migration.`);
+      }
+      return verify.data;
+    }
+
+    const missing = missingColumnFromSchemaCache(result.error.message);
+    if (!missing || !(missing in current)) throw result.error;
+    if (CRITICAL_FINANCE_COLUMNS.has(missing)) {
+      throw new Error(`Database is missing required finance column "${missing}". Run supabase/migrations/20260715000002_finance_logging_repair.sql, then reload the app.`);
+    }
+
+    const { [missing]: _ignored, ...next } = current;
+    current = next;
+  }
+
+  throw new Error('Could not save because the database schema cache rejected multiple columns.');
+};
+
+export const useFinanceBankAccounts = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-bank-accounts', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_bank_accounts')
+        .select('*')
+        .eq('entity_id', entityId)
+        .eq('is_active', true)
+        .order('is_default', { ascending: false })
+        .order('account_name', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceCostCodes = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-cost-codes', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_cost_codes')
+        .select('*, finance_construction_divisions(name, code)')
+        .eq('entity_id', entityId)
+        .eq('is_active', true)
+        .order('code', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceDivisions = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-construction-divisions', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_construction_divisions')
+        .select('*')
+        .eq('entity_id', entityId)
+        .eq('is_active', true)
+        .order('code', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceProjectPhases = (projectId?: string) => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-project-phases', entityId, projectId ?? 'all'],
+    enabled: ready,
+    queryFn: async () => {
+      let query = supabase
+        .from('finance_project_phases')
+        .select('*')
+        .eq('entity_id', entityId)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+      if (projectId) query = query.eq('project_id', projectId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useCreateTransactionAllocations = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+
+  return useMutation({
+    mutationFn: async ({ transactionId, allocations }: { transactionId: string; allocations: Record<string, unknown>[] }) => {
+      if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
+      if (!user?.id) throw new Error('You must be signed in to save allocations');
+      const cleaned = allocations
+        .map(a => ({ ...a, transaction_id: transactionId, user_id: user.id, entity_id: entityId }))
+        .filter(a => Number(a.allocated_amount ?? 0) > 0);
+      if (!cleaned.length) return [];
+      const { data, error } = await supabase
+        .from('finance_transaction_allocations')
+        .insert(cleaned)
+        .select('*');
+      if (error) throw error;
+      return data ?? [];
+    },
+    onSuccess: () => {
+      [['transactions'], ['project-financial-summary'], ['finance-allocations']].forEach(k => qc.invalidateQueries({ queryKey: k }));
+    },
+  });
 };
 
 // ── Query hooks ───────────────────────────────────────────────────────────────
@@ -36,6 +214,36 @@ export const useVendors = () => {
       return data ?? [];
     },
   });
+};
+
+export const useFinanceRealtime = () => {
+  const { entity, ready } = useEntity();
+  const qc = useQueryClient();
+  const entityId = entity?.id;
+
+  useEffect(() => {
+    if (!ready || !entityId) return;
+
+    const invalidateFinance = () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['checks'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['vendors'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['project-financial-summary'] });
+    };
+
+    const channel = supabase
+      .channel(`finance-realtime-${entityId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checks', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [ready, entityId, qc]);
 };
 
 export const useProjects = () => {
@@ -66,7 +274,7 @@ export const useChecks = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('checks')
-        .select('*, projects(name), vendors(name)')
+        .select('*, projects:project_id(name), vendors:payee_vendor_id(name)')
         .eq('entity_id', entityId)
         .is('deleted_at', null)
         .order('issue_date', { ascending: false });
@@ -85,7 +293,7 @@ export const useTransactions = (type?: 'income' | 'expense') => {
     queryFn: async () => {
       let query = supabase
         .from('transactions')
-        .select('*, projects(name), vendors(name)')
+        .select('*, projects:project_id(name), vendors:vendor_id(name), subcontractors:subcontractor_id(name)')
         .eq('entity_id', entityId)
         .is('deleted_at', null)
         .order('transaction_date', { ascending: false });
@@ -99,7 +307,7 @@ export const useTransactions = (type?: 'income' | 'expense') => {
 
 // ── Mutation hooks ────────────────────────────────────────────────────────────
 
-export const useUpsert = <T extends { id?: string }>(
+export const useUpsert = <T extends { id?: string } & SaveHints>(
   table: TableName,
   invalidate: string[][],
 ) => {
@@ -111,21 +319,21 @@ export const useUpsert = <T extends { id?: string }>(
   return useMutation({
     mutationFn: async (row: T) => {
       if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
+      if (!user?.id) throw new Error('You must be signed in to save finance records');
       const payload = stripJoinedRelations(row as Record<string, unknown>);
-      if (row.id) {
-        const { error } = await supabase.from(table).update(payload).eq('id', row.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from(table)
-          .insert({ ...payload, user_id: user!.id, entity_id: entityId });
-        if (error) throw error;
+      const requestedMode: SaveMode | undefined = row.__forceInsert ? 'insert' : row.__mode;
+      if (requestedMode === 'insert') {
+        return await writeWithSchemaCacheFallback(table, 'insert', { ...payload, user_id: user.id, entity_id: entityId });
       }
+      if (requestedMode === 'update' || row.id) {
+        return await writeWithSchemaCacheFallback(table, 'update', payload, row.id);
+      }
+      return await writeWithSchemaCacheFallback(table, 'insert', { ...payload, user_id: user.id, entity_id: entityId });
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       // Invalidate all variants — queryKey prefix match covers all entity buckets
       const keys = [...invalidate, ...relatedQueryKeys[table]];
-      await Promise.all(keys.map(k => qc.invalidateQueries({ queryKey: k })));
+      keys.forEach(k => qc.invalidateQueries({ queryKey: k }));
     },
   });
 };
@@ -140,9 +348,9 @@ export const useDelete = (table: TableName, invalidate: string[][]) => {
         .eq('id', id);
       if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       const keys = [...invalidate, ...relatedQueryKeys[table]];
-      await Promise.all(keys.map(k => qc.invalidateQueries({ queryKey: k })));
+      keys.forEach(k => qc.invalidateQueries({ queryKey: k }));
     },
   });
 };
@@ -164,8 +372,8 @@ export const useQuickCreate = (table: 'vendors' | 'projects') => {
       if (error) throw error;
       return created;
     },
-    onSuccess: async () => {
-      await Promise.all(relatedQueryKeys[table].map(k => qc.invalidateQueries({ queryKey: k })));
+    onSuccess: () => {
+      relatedQueryKeys[table].forEach(k => qc.invalidateQueries({ queryKey: k }));
     },
   });
 };

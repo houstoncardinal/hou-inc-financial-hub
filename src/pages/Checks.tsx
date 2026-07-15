@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { useChecks, useDelete, useUpsert } from '@/hooks/useFinance';
 import { fmtDate, fmtUSD } from '@/lib/format';
@@ -229,7 +230,7 @@ export default function Checks() {
               </div>
               <div className="space-y-1.5">
                 <Label className="micro-label">Amount</Label>
-                <Input type="number" step="0.01" value={editForm.amount || ''} onChange={e => setEditForm((f: any) => ({ ...f, amount: e.target.value }))} className="rounded-none h-9 text-sm font-mono-tab" />
+                <CurrencyInput value={editForm.amount || ''} onValueChange={v => setEditForm((f: any) => ({ ...f, amount: v }))} className="h-9 text-sm" />
               </div>
             </div>
             <div className="space-y-1.5">

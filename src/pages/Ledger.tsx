@@ -3,6 +3,8 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,17 +40,6 @@ const COST_PHASES = [
 const INCOME_METHODS  = [{ v:'check',label:'Check' },{ v:'ach_wire',label:'ACH / Wire' },{ v:'credit_card',label:'Credit Card' },{ v:'financing_draw',label:'Financing Draw' },{ v:'cash',label:'Cash' },{ v:'other',label:'Other' }];
 const EXPENSE_METHODS = [{ v:'check',label:'Check' },{ v:'credit_card',label:'Credit Card' },{ v:'ach',label:'ACH' },{ v:'net_30',label:'NET 30' },{ v:'net_60',label:'NET 60' },{ v:'net_90',label:'NET 90' },{ v:'cash',label:'Cash' },{ v:'wire',label:'Wire' },{ v:'other',label:'Other' }];
 const REF_METHODS = new Set(['check','ach_wire','ach','wire']);
-
-function CurrencyInput({ value, onChange, className = '' }: { value: string; onChange: (v: string) => void; className?: string }) {
-  return (
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
-      <Input type="text" inputMode="decimal" value={value}
-        onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ''); const p = raw.split('.'); onChange(p.length > 2 ? p[0] + '.' + p.slice(1).join('') : raw); }}
-        className={`pl-7 font-mono-tab text-right rounded-none h-10 ${className}`} />
-    </div>
-  );
-}
 
 function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
   return (
@@ -183,13 +174,19 @@ export default function Ledger() {
     e.preventDefault();
     if (!formIncome.amount) { toast.error('Amount required'); return; }
     await txnUpsert.mutateAsync({
-      type: 'income', amount: parseFloat(formIncome.amount), transaction_date: formIncome.transaction_date,
+      type: 'income', amount: parseFloat(formIncome.amount),
+      amount_before_tax: parseFloat(formIncome.amount),
+      total_amount: parseFloat(formIncome.amount),
+      net_amount: Math.max(0, parseFloat(formIncome.amount) - (formIncome.retainage_amount ? parseFloat(formIncome.retainage_amount) : 0)),
+      transaction_date: formIncome.transaction_date, posting_date: formIncome.transaction_date,
       source_name: formIncome.source_name || null, project_id: formIncome.project_id || null,
-      category: formIncome.category || null, notes: formIncome.notes || null,
+      category: formIncome.category || null, description: formIncome.category || formIncome.source_name || formIncome.notes || null, notes: formIncome.notes || null,
       payment_method: formIncome.payment_method || null, check_reference: formIncome.check_reference || null,
       retainage_percent: formIncome.retainage_percent ? parseFloat(formIncome.retainage_percent) : null,
       retainage_amount:  formIncome.retainage_amount  ? parseFloat(formIncome.retainage_amount)  : null,
       cost_phase: formIncome.cost_phase || null,
+      status: 'posted', approval_status: 'approved', payment_status: 'paid', reconciliation_status: 'unreconciled',
+      fiscal_year: new Date(formIncome.transaction_date).getFullYear(), accounting_period: formIncome.transaction_date.slice(0, 7),
     } as any);
     toast.success('Income logged'); closeAdd();
   };
@@ -198,11 +195,18 @@ export default function Ledger() {
     e.preventDefault();
     if (!formExpense.amount) { toast.error('Amount required'); return; }
     await txnUpsert.mutateAsync({
-      type: 'expense', amount: parseFloat(formExpense.amount), transaction_date: formExpense.transaction_date,
+      type: 'expense', amount: parseFloat(formExpense.amount),
+      amount_before_tax: parseFloat(formExpense.amount),
+      total_amount: parseFloat(formExpense.amount),
+      net_amount: parseFloat(formExpense.amount),
+      transaction_date: formExpense.transaction_date, posting_date: formExpense.transaction_date,
       vendor_id: formExpense.vendor_id || null, project_id: formExpense.project_id || null,
-      category: formExpense.category || null, notes: formExpense.notes || null,
+      category: formExpense.category || null, description: formExpense.category || formExpense.notes || null, notes: formExpense.notes || null,
       payment_method: formExpense.payment_method || null, cost_type: formExpense.cost_type || null,
       check_reference: formExpense.check_reference || null, cost_phase: formExpense.cost_phase || null,
+      subcontractor_id: formExpense.cost_type === 'subcontract' ? formExpense.vendor_id || null : null,
+      status: 'posted', approval_status: 'approved', payment_status: 'paid', reconciliation_status: 'unreconciled',
+      fiscal_year: new Date(formExpense.transaction_date).getFullYear(), accounting_period: formExpense.transaction_date.slice(0, 7),
     } as any);
     toast.success('Expense recorded'); closeAdd();
   };
@@ -210,7 +214,12 @@ export default function Ledger() {
   const submitCheck = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCheck.amount || !formCheck.payee_name) { toast.error('Amount and payee required'); return; }
-    await checkUpsert.mutateAsync({ amount: parseFloat(formCheck.amount), payee_name: formCheck.payee_name, issue_date: formCheck.issue_date, check_number: formCheck.check_number || null, memo: formCheck.memo || null, project_id: formCheck.project_id || null, status: 'pending' } as any);
+    await checkUpsert.mutateAsync({
+      amount: parseFloat(formCheck.amount), payee_name: formCheck.payee_name, issue_date: formCheck.issue_date,
+      posting_date: formCheck.issue_date, check_number: formCheck.check_number || null, memo: formCheck.memo || null,
+      project_id: formCheck.project_id || null, status: 'pending', approval_status: 'approved',
+      print_status: 'not_printed', delivery_status: 'not_delivered', reconciliation_status: 'unreconciled',
+    } as any);
     toast.success('Check created'); closeAdd();
   };
 
@@ -364,8 +373,8 @@ export default function Ledger() {
                 {incomeStep === 1 && (
                   <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>{fld('Amount *')}<CurrencyInput value={formIncome.amount} onChange={v => setFormIncome(f => ({...f, amount: v}))} /></div>
-                      <div>{fld('Date')}<Input type="date" className="rounded-none h-10" value={formIncome.transaction_date} onChange={e => setFormIncome(f => ({...f, transaction_date: e.target.value}))} /></div>
+                      <div>{fld('Amount *')}<CurrencyInput value={formIncome.amount} onValueChange={v => setFormIncome(f => ({...f, amount: v}))} /></div>
+                      <div>{fld('Date')}<DateInput className="h-10" value={formIncome.transaction_date} onChange={e => setFormIncome(f => ({...f, transaction_date: e.target.value}))} /></div>
                     </div>
                     <div>
                       {fld('Source / Client')}
@@ -430,8 +439,8 @@ export default function Ledger() {
                         </div>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
-                          <Input type="number" min="0" step="0.01" className="rounded-none h-10 pl-6" placeholder="e.g. 10,000" value={formIncome.retainage_amount}
-                            onChange={e => { const amt = e.target.value; const computed = amt && formIncome.amount ? String(Math.round(parseFloat(amt)/parseFloat(formIncome.amount)*100*100)/100) : ''; setFormIncome(f => ({...f, retainage_amount: amt, retainage_percent: computed})); }} />
+                          <CurrencyInput className="h-10" placeholder="e.g. 10,000" value={formIncome.retainage_amount}
+                            onValueChange={amt => { const computed = amt && formIncome.amount ? String(Math.round(parseFloat(amt)/parseFloat(formIncome.amount)*100*100)/100) : ''; setFormIncome(f => ({...f, retainage_amount: amt, retainage_percent: computed})); }} />
                         </div>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-1.5">Enter % or $ — the other calculates automatically.</p>
@@ -460,8 +469,8 @@ export default function Ledger() {
                 {expenseStep === 1 && (
                   <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>{fld('Amount *')}<CurrencyInput value={formExpense.amount} onChange={v => setFormExpense(f => ({...f, amount: v}))} /></div>
-                      <div>{fld('Date')}<Input type="date" className="rounded-none h-10" value={formExpense.transaction_date} onChange={e => setFormExpense(f => ({...f, transaction_date: e.target.value}))} /></div>
+                      <div>{fld('Amount *')}<CurrencyInput value={formExpense.amount} onValueChange={v => setFormExpense(f => ({...f, amount: v}))} /></div>
+                      <div>{fld('Date')}<DateInput className="h-10" value={formExpense.transaction_date} onChange={e => setFormExpense(f => ({...f, transaction_date: e.target.value}))} /></div>
                     </div>
                     <div>
                       {fld('Vendor')}
@@ -554,8 +563,8 @@ export default function Ledger() {
                 {checkStep === 1 && (
                   <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>{fld('Amount *')}<CurrencyInput value={formCheck.amount} onChange={v => setFormCheck(f => ({...f, amount: v}))} /></div>
-                      <div>{fld('Date')}<Input type="date" className="rounded-none h-10" value={formCheck.issue_date} onChange={e => setFormCheck(f => ({...f, issue_date: e.target.value}))} /></div>
+                      <div>{fld('Amount *')}<CurrencyInput value={formCheck.amount} onValueChange={v => setFormCheck(f => ({...f, amount: v}))} /></div>
+                      <div>{fld('Date')}<DateInput className="h-10" value={formCheck.issue_date} onChange={e => setFormCheck(f => ({...f, issue_date: e.target.value}))} /></div>
                     </div>
                     <div>
                       {fld('Payee *')}

@@ -4,6 +4,8 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,6 +44,12 @@ export default function CheckNew() {
       await upsert.mutateAsync({
         ...form,
         amount: parseFloat(form.amount),
+        posting_date: form.issue_date,
+        reconciliation_status: form.status === 'cleared' ? 'reconciled' : 'unreconciled',
+        cleared_date: form.status === 'cleared' ? form.issue_date : null,
+        approval_status: 'approved',
+        print_status: 'not_printed',
+        delivery_status: 'not_delivered',
         retainage_pct: form.retainage_pct ? parseFloat(form.retainage_pct) : 0,
         retainage_held: form.retainage_pct && form.amount
           ? parseFloat(form.amount) * (parseFloat(form.retainage_pct) / 100)
@@ -66,7 +74,7 @@ export default function CheckNew() {
             <div className="space-y-1.5"><Label className="micro-label">Check Number</Label>
               <Input className="rounded-none h-10 font-mono-tab" value={form.check_number} onChange={e => setForm({ ...form, check_number: e.target.value })} /></div>
             <div className="space-y-1.5"><Label className="micro-label">Issue Date</Label>
-              <Input type="date" className="rounded-none h-10" value={form.issue_date} onChange={e => setForm({ ...form, issue_date: e.target.value })} /></div>
+              <DateInput className="h-10" value={form.issue_date} onChange={e => setForm({ ...form, issue_date: e.target.value })} /></div>
           </div>
 
           <div className="space-y-1.5"><Label className="micro-label">Payee · Vendor</Label>
@@ -92,22 +100,7 @@ export default function CheckNew() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label className="micro-label">Amount</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono-tab text-muted-foreground pointer-events-none select-none z-10">$</span>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={e => {
-                    const raw = e.target.value.replace(/[^0-9.]/g, '');
-                    const parts = raw.split('.');
-                    const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
-                    setForm({ ...form, amount: cleaned });
-                  }}
-                  className="pl-7 rounded-none h-10 font-mono-tab text-right"
-                  required
-                />
-              </div>
+              <CurrencyInput value={form.amount} onValueChange={v => setForm({ ...form, amount: v })} required />
             </div>
             <div className="space-y-1.5"><Label className="micro-label">Retainage %</Label>
               <Input

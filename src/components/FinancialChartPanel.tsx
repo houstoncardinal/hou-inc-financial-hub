@@ -1,17 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Area,
+  ReferenceLine, Line,
 } from 'recharts';
 import { fmtUSD } from '@/lib/format';
-
-const COLORS = {
-  positive: 'var(--positive)',
-  accent: 'var(--accent)',
-  muted: 'var(--muted-foreground)',
-  border: 'var(--border)',
-  grid: 'var(--border)',
-};
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -28,40 +21,140 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-/* ── Cash Flow Trend Line Chart ── */
+/* ── Cash Flow Trend Composite Chart ── */
 export function CashFlowChart({ data }: {
   data: { label: string; inflow: number; outflow: number; net: number }[];
 }) {
+  const [mode, setMode] = useState<'flow' | 'net'>('flow');
+  const totalIn = data.reduce((s, d) => s + d.inflow, 0);
+  const totalOut = data.reduce((s, d) => s + d.outflow, 0);
+  const totalNet = data.reduce((s, d) => s + d.net, 0);
+  const avgNet = data.length ? totalNet / data.length : 0;
+  const bestMonth = data.reduce((best, d) => (d.net > best.net ? d : best), data[0] ?? { label: '—', net: 0 });
+  const last = data[data.length - 1] ?? { inflow: 0, outflow: 0, net: 0 };
+  const prior = data[data.length - 2] ?? last;
+  const netDelta = last.net - prior.net;
+
   return (
-    <div className="border border-border p-4">
-      <div className="micro-label mb-3">Cash Flow Trend · 6 Month</div>
-      <div className="h-48 sm:h-52">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-              axisLine={{ stroke: 'var(--border)' }}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v: number) => fmtUSD(v)}
-            />
-            <RechartsTooltip content={<ChartTooltip />} />
-            <Line type="monotone" dataKey="inflow" name="Income" stroke="var(--positive)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-            <Line type="monotone" dataKey="outflow" name="Expenses" stroke="var(--accent)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
-            <Line type="monotone" dataKey="net" name="Net" stroke="var(--foreground)" strokeWidth={3} strokeDasharray="none" dot={{ r: 3, fill: 'var(--foreground)', strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0, fill: 'var(--foreground)' }} />
-          </LineChart>
-        </ResponsiveContainer>
+    <div className="border border-border idx-widget overflow-hidden">
+      <div className="p-3 sm:p-4 border-b border-border/70">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <div className="micro-label">Cash Flow Trend · 6 Month</div>
+            <div className={`text-lg sm:text-xl font-bold font-mono-tab mt-1 leading-tight ${totalNet >= 0 ? 'text-positive' : 'text-destructive'}`}>
+              {totalNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(totalNet))}
+            </div>
+            <div className="text-[9px] text-muted-foreground font-mono-tab mt-0.5">
+              Avg {avgNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(avgNet))} / month · Best {bestMonth.label}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between sm:justify-end gap-2">
+            <div className="grid grid-cols-2 gap-2 text-right text-[9px] font-mono-tab">
+              <div className="px-2 py-1 border border-positive/20 bg-positive/5">
+                <div className="text-muted-foreground">In</div>
+                <div className="text-positive font-semibold">{fmtUSD(totalIn)}</div>
+              </div>
+              <div className="px-2 py-1 border border-accent/20 bg-accent/5">
+                <div className="text-muted-foreground">Out</div>
+                <div className="text-accent font-semibold">{fmtUSD(totalOut)}</div>
+              </div>
+            </div>
+            <div className="flex border border-border overflow-hidden shrink-0">
+              {(['flow', 'net'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setMode(opt)}
+                  className={`px-2.5 py-1.5 text-[9px] uppercase tracking-[0.14em] font-semibold transition-colors ${
+                    mode === opt ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {opt === 'flow' ? 'trend' : 'net'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="flex gap-4 text-[9px] text-muted-foreground uppercase tracking-wider pt-2 border-t border-border mt-2">
+
+      <div className="px-2 sm:px-3 pt-3">
+        <div className="h-44 sm:h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+              <defs>
+                <linearGradient id="cash-inflow-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--positive)" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="var(--positive)" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="cash-outflow-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.16} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.01} />
+                </linearGradient>
+                <linearGradient id="cash-net-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--foreground)" stopOpacity={0.16} />
+                  <stop offset="65%" stopColor="var(--foreground)" stopOpacity={0.04} />
+                  <stop offset="100%" stopColor="var(--foreground)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} strokeOpacity={0.65} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+                axisLine={false}
+                tickLine={false}
+                dy={6}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+                axisLine={false}
+                tickLine={false}
+                width={58}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
+              <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.4} />
+              <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.08 }} />
+              {mode === 'flow' && (
+                <>
+                  <Area type="monotone" dataKey="inflow" name="Income" stroke="var(--positive)" fill="url(#cash-inflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: 'var(--positive)', stroke: 'var(--background)', strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="outflow" name="Expenses" stroke="var(--accent)" fill="url(#cash-outflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: 'var(--accent)', stroke: 'var(--background)', strokeWidth: 2 }} />
+                </>
+              )}
+              {mode === 'net' && (
+                <Area type="monotone" dataKey="net" name="Net Area" stroke="transparent" fill="url(#cash-net-fill)" dot={false} activeDot={false} />
+              )}
+              <Line
+                type="monotone"
+                dataKey="net"
+                name="Net"
+                stroke="var(--foreground)"
+                strokeWidth={2.8}
+                dot={{ r: 3, fill: 'var(--background)', stroke: 'var(--foreground)', strokeWidth: 1.7 }}
+                activeDot={{ r: 5, fill: 'var(--foreground)', stroke: 'var(--background)', strokeWidth: 2 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 border-t border-border mt-2">
+        <div className="px-3 py-2">
+          <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">Latest</div>
+          <div className={`text-[11px] font-semibold font-mono-tab ${last.net >= 0 ? 'text-positive' : 'text-destructive'}`}>
+            {last.net >= 0 ? '+' : '-'}{fmtUSD(Math.abs(last.net))}
+          </div>
+        </div>
+        <div className="px-3 py-2 border-l border-border">
+          <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">Change</div>
+          <div className={`text-[11px] font-semibold font-mono-tab ${netDelta >= 0 ? 'text-positive' : 'text-destructive'}`}>
+            {netDelta >= 0 ? '+' : '-'}{fmtUSD(Math.abs(netDelta))}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-3 text-[9px] text-muted-foreground uppercase tracking-wider px-3 py-2 border-t border-border">
         <span className="flex items-center gap-1"><span className="w-2 h-2 bg-positive rounded-full" /> Income</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent rounded-full" /> Expenses</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 border border-foreground rounded-full" /> Net</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 border border-foreground rounded-full" /> Net</span>
       </div>
     </div>
   );

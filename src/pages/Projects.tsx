@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -172,11 +173,7 @@ export default function Projects() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="micro-label">Contract Budget (USD)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground z-10 select-none pointer-events-none">$</span>
-                  <Input type="number" step="0.01" className="pl-7 rounded-none h-10 font-mono-tab text-right"
-                    value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} placeholder="0.00" />
-                </div>
+                <CurrencyInput value={form.budget} onValueChange={v => setForm({ ...form, budget: v })} placeholder="0.00" />
               </div>
               <div className="space-y-1.5">
                 <Label className="micro-label">Status</Label>
