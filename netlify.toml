@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# supabase/config.toml only holds the public Supabase project ref (the same
+# id already shipped client-side in VITE_SUPABASE_URL); it happens to match
+# the VITE_SUPABASE_PROJECT_ID build var by value, which trips Netlify's
+# generic secrets scanner even though nothing sensitive is in the file.
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = "supabase/config.toml"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

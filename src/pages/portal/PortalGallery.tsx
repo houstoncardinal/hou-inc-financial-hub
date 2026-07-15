@@ -34,8 +34,8 @@ export default function PortalGallery() {
 
   useEffect(() => {
     if (!client) return;
-    (async () => {
-      setLoading(true);
+
+    const load = async () => {
       try {
         const { data } = await (supabase as any)
           .from('project_photos')
@@ -45,7 +45,22 @@ export default function PortalGallery() {
         setPhotos(data ?? []);
       } catch { setPhotos([]); }
       setLoading(false);
-    })();
+    };
+
+    setLoading(true);
+    load();
+
+    // Real-time: new uploads from the admin side appear here without a refresh.
+    const channel = supabase
+      .channel(`portal-gallery-${client.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_photos', filter: `client_id=eq.${client.id}` }, () => {
+        load();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [client?.id]);
 
   if (!client) return null;

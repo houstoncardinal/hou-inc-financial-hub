@@ -12,7 +12,7 @@ import { fmtUSD, fmtDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
-  Layers, TrendingUp, Receipt, Calendar, History,
+  Layers, TrendingUp, Receipt, Calendar, History, PackagePlus,
   ClipboardCheck, FileSpreadsheet, CreditCard, MessageSquare, ShieldCheck,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { generateProjectReconciliationReport, savePDF } from '@/lib/reports';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
-type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'payments' | 'reconciliation' | 'notes' | 'audit';
+type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'addons' | 'payments' | 'reconciliation' | 'notes' | 'audit';
 
 type ScopeItem = {
   id: string;
@@ -63,6 +63,25 @@ type ChangeOrder = {
   created_at: string;
 };
 
+type AddOn = {
+  id: string;
+  line_item: string;
+  kind: 'addition' | 'credit';
+  unit_cost: number | null;
+  unit_quantity: number | null;
+  unit_label: string | null;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  approval_method: string | null;
+  requested_date: string | null;
+  approved_date: string | null;
+  client_visible: boolean;
+  client_visible_notes: string | null;
+  internal_notes: string | null;
+  custom_fields: Record<string, string>;
+  created_at: string;
+};
+
 type Milestone = {
   id: string;
   title: string;
@@ -101,6 +120,7 @@ const SUB_TABS: { key: SubTab; label: string; short: string; desc: string; icon:
   { key: 'milestones',     label: 'Milestones', short: 'Milestones', desc: 'Schedule and progress', icon: ClipboardCheck, group: 'Scope' },
   { key: 'draws',          label: 'Draws & Billing', short: 'Draws', desc: 'Funding and billing dates', icon: Calendar, group: 'Money' },
   { key: 'cos',            label: 'Change Orders', short: 'COs', desc: 'Additions, credits, approvals', icon: TrendingUp, group: 'Money' },
+  { key: 'addons',         label: 'Add Ons', short: 'Add Ons', desc: 'Extra work, unit pricing, credits', icon: PackagePlus, group: 'Money' },
   { key: 'payments',       label: 'Payments', short: 'Payments', desc: 'Client receipts and collections', icon: CreditCard, group: 'Money' },
   { key: 'reconciliation', label: 'Reconciliation', short: 'Reconcile', desc: 'Per-line over/under status', icon: Layers, group: 'Control' },
   { key: 'notes',          label: 'Notes', short: 'Notes', desc: 'Client and internal notes', icon: MessageSquare, group: 'Records' },
@@ -123,8 +143,10 @@ const PB_CSS = `
 .pb-workflow-head{padding:15px 16px 12px;border-bottom:1px solid hsl(var(--border));background:linear-gradient(180deg,hsl(var(--secondary)/0.34),hsl(var(--background)));position:relative;}
 .pb-workflow-body{max-height:calc(100vh - 138px);overflow:auto;padding:10px;background:linear-gradient(180deg,hsl(var(--secondary)/0.12),transparent 130px);}
 .pb-workflow-body .micro-label{font-size:7.5px;letter-spacing:.18em;}
+.pb-nav-select{width:100%;height:44px;padding:0 34px 0 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));appearance:none;}
+.pb-nav-select:focus{outline:none;border-color:hsl(var(--foreground)/0.35);}
 @media(min-width:640px){.pb-entry-grid{grid-template-columns:repeat(4,minmax(0,1fr));}.pb-span-2{grid-column:span 2 / span 2}.pb-span-4{grid-column:span 4 / span 4}.pb-workflow-body{padding:12px;}.pb-entry-panel{padding:12px;}}
-@media(max-width:639px){.pb-workflow-head{padding:13px 12px 10px}.pb-workflow-body{max-height:calc(100vh - 128px)}.pb-entry-panel{padding:9px}.pb-entry-grid{gap:7px}.pb-entry-grid input,.pb-entry-grid select{height:34px;font-size:12px}.pb-entry-grid textarea{font-size:12px}.pb-advanced summary{padding:7px 9px}.pb-workflow-body button{min-height:34px}}
+@media(max-width:639px){.pb-workflow-head{padding:13px 12px 10px}.pb-workflow-body{max-height:calc(100vh - 128px)}.pb-entry-panel{padding:9px}.pb-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 8px}.pb-span-2,.pb-span-4{grid-column:span 2 / span 2}.pb-entry-grid input,.pb-entry-grid select{height:34px;font-size:12px}.pb-entry-grid textarea{font-size:12px}.pb-advanced summary{padding:7px 9px}.pb-workflow-body button{min-height:34px}.pb-nav-select{height:40px;font-size:10px}}
 .dark .pb-nav-card,.dark .pb-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
@@ -172,19 +194,23 @@ const DRAW_STATUS: Record<string, { label: string; color: string }> = {
 const CO_SIGN: Record<string, number> = {
   addition: 1, allowance: 1, deduction: -1, credit: -1,
 };
+const AO_SIGN: Record<string, number> = {
+  addition: 1, credit: -1,
+};
 
 /* ── Blank form defaults ───────────────────────────────────────────────────── */
-const blankSOV  = () => ({ name: '', cost_code: '', category: '', description: '', contract_amount: '', change_order_amount: '0', approved_credit_amount: '0', percent_complete: '0', total_billed: '0', payment_status: 'not_billed', work_status: 'not_started', notes: '', internal_notes: '', client_visible_notes: '' });
-const blankCO   = () => ({ co_number: '', title: '', description: '', type: 'addition', amount: '', status: 'pending', requested_date: '', approved_date: '', approval_method: '', client_visible_notes: '', internal_notes: '', notes: '' });
-const blankMS   = () => ({ title: '', description: '', planned_start_date: '', planned_completion_date: '', actual_completion_date: '', percent_complete: '0', status: 'not_started', billing_eligible: false, billing_amount: '0', client_visible: true, client_visible_notes: '', internal_notes: '' });
-const blankDraw = () => ({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '', invoice_number: '', billing_period_start: '', billing_period_end: '' });
+const blankSOV   = () => ({ name: '', cost_code: '', category: '', description: '', contract_amount: '', change_order_amount: '0', approved_credit_amount: '0', percent_complete: '0', total_billed: '0', payment_status: 'not_billed', work_status: 'not_started', notes: '', internal_notes: '', client_visible_notes: '' });
+const blankCO    = () => ({ co_number: '', title: '', description: '', type: 'addition', amount: '', status: 'pending', requested_date: '', approved_date: '', approval_method: '', client_visible_notes: '', internal_notes: '', notes: '' });
+const blankMS    = () => ({ title: '', description: '', planned_start_date: '', planned_completion_date: '', actual_completion_date: '', percent_complete: '0', status: 'not_started', billing_eligible: false, billing_amount: '0', client_visible: true, client_visible_notes: '', internal_notes: '' });
+const blankDraw  = () => ({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '', invoice_number: '', billing_period_start: '', billing_period_end: '' });
+const blankAddOn = () => ({ line_item: '', kind: 'addition', unit_cost: '', unit_quantity: '', unit_label: '', amount: '', status: 'pending', approval_method: '', requested_date: '', approved_date: '', client_visible: true, client_visible_notes: '', internal_notes: '', custom_fields: [] as { key: string; value: string }[] });
 
 /* ── Shared mini-components ────────────────────────────────────────────────── */
 function KpiGrid({ items }: { items: { label: string; value: string; sub?: string; accent?: boolean }[] }) {
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-${items.length <= 4 ? items.length : 4} gap-px bg-border`}>
       {items.map(item => (
-        <div key={item.label} className="bg-background px-4 sm:px-5 py-3.5">
+        <div key={item.label} className="bg-background px-4 sm:px-5 py-3">
           <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1 leading-tight">{item.label}</div>
           <div className={`text-base font-bold font-mono-tab leading-tight ${item.accent ? 'text-accent' : 'text-foreground'}`}>{item.value}</div>
           {item.sub && <div className="text-[10px] text-muted-foreground mt-0.5">{item.sub}</div>}
@@ -273,7 +299,7 @@ function WorkflowDialog({
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════════ */
-export default function ProjectBreakdown({ project, enriched }: { project: any; enriched: any }) {
+export default function ProjectBreakdown({ project, enriched, projectDocs = [] }: { project: any; enriched: any; projectDocs?: any[] }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { entity } = useEntity();
@@ -286,6 +312,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   /* ── data ────────────────────────────────────────────────────────────────── */
   const [scopeItems,   setScopeItems]   = useState<ScopeItem[]>([]);
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
+  const [addOns,       setAddOns]       = useState<AddOn[]>([]);
   const [milestones,   setMilestones]   = useState<Milestone[]>([]);
   const [draws,        setDraws]        = useState<DrawSchedule[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -319,18 +346,26 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const [showDraw,   setShowDraw]   = useState(false);
   const [savingDraw, setSavingDraw] = useState(false);
 
+  /* ── Add-On form ─────────────────────────────────────────────────────────── */
+  const [addOnForm,   setAddOnForm]   = useState(blankAddOn());
+  const [editAddOnId, setEditAddOnId] = useState<string | null>(null);
+  const [showAddOn,   setShowAddOn]   = useState(false);
+  const [savingAddOn, setSavingAddOn] = useState(false);
+
   /* ── load ────────────────────────────────────────────────────────────────── */
   const load = async () => {
     if (!projectId) return;
     setLoading(true);
-    const [s, c, m, d] = await Promise.all([
+    const [s, c, ao, m, d] = await Promise.all([
       (supabase as any).from('project_scope_items').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('project_change_orders').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+      (supabase as any).from('project_add_ons').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('project_milestones').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('draw_schedules').select('*').eq('project_id', projectId).order('scheduled_date'),
     ]);
     setScopeItems((s.data ?? []) as ScopeItem[]);
     setChangeOrders((c.data ?? []) as ChangeOrder[]);
+    setAddOns((ao.data ?? []) as AddOn[]);
     setMilestones((m.data ?? []) as Milestone[]);
     setDraws((d.data ?? []) as DrawSchedule[]);
     setLoading(false);
@@ -344,7 +379,12 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     const additions  = approvd.filter(co => co.type === 'addition' || co.type === 'allowance').reduce((s, co) => s + Number(co.amount), 0);
     const credits    = approvd.filter(co => co.type === 'deduction' || co.type === 'credit').reduce((s, co) => s + Number(co.amount), 0);
     const net        = additions - credits;
-    const revised    = originalContractValue + net;
+    const approvedAddOns   = addOns.filter(a => a.status === 'approved');
+    const addOnsAdditions  = approvedAddOns.filter(a => a.kind === 'addition').reduce((s, a) => s + Number(a.amount), 0);
+    const addOnsCredits    = approvedAddOns.filter(a => a.kind === 'credit').reduce((s, a) => s + Number(a.amount), 0);
+    const addOnsNet        = addOnsAdditions - addOnsCredits;
+    const pendingAddOns    = addOns.filter(a => a.status === 'pending').reduce((s, a) => s + Number(a.amount), 0);
+    const revised    = originalContractValue + net + addOnsNet;
     const earned     = scopeItems.reduce((s, i) => {
       const r = Number(i.contract_amount) + Number(i.change_order_amount) - Number(i.approved_credit_amount || 0);
       return s + (r * Number(i.percent_complete) / 100);
@@ -355,6 +395,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     const pending    = changeOrders.filter(co => co.status === 'pending').reduce((s, co) => s + Number(co.amount), 0);
     return {
       originalContractValue, additions, credits, net, revised, earned, pctDone,
+      addOnsAdditions, addOnsCredits, addOnsNet, pendingAddOns,
       billed, paid,
       ar:            billed - paid,
       unbilled:      earned - billed,
@@ -364,13 +405,120 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
       billedPct:     revised > 0 ? Math.min(100, billed / revised * 100) : 0,
       pendingCOs:    pending,
     };
-  }, [scopeItems, changeOrders, draws, enriched?.incomeList]);
+  }, [scopeItems, changeOrders, addOns, draws, enriched?.incomeList]);
+
+  /* ── Unified activity feed — shared by the Audit sub-tab and the Reconciliation ── */
+  /* ── Summary sub-tab's Project Activity card (single source, no duplication).   ── */
+  type AuditEntry = {
+    id: string;
+    created_at: string;
+    kind: 'sov' | 'milestone' | 'co' | 'addon' | 'draw';
+    title: string;
+    subtitle: string | null;
+    status: string;
+    statusColor: string;
+    value: string;
+    icon: React.ReactNode;
+    badge: string;
+    badgeBg: string;
+  };
+
+  const auditEntries: AuditEntry[] = useMemo(() => [
+    ...scopeItems.map(item => ({
+      id: item.id,
+      created_at: item.created_at,
+      kind: 'sov' as const,
+      title: item.name,
+      subtitle: item.category ?? null,
+      status: (item.work_status ?? 'not_started').replace(/_/g, ' '),
+      statusColor: (item.work_status ?? '') === 'completed' ? 'text-emerald-500' : (item.work_status ?? '') === 'in_progress' ? 'text-amber-500' : 'text-muted-foreground',
+      value: fmtUSD(item.contract_amount),
+      icon: <Layers className="w-3.5 h-3.5" />,
+      badge: 'SOV',
+      badgeBg: 'bg-blue-500/10 text-blue-400',
+    })),
+    ...milestones.map(m => {
+      const meta = MS_STATUS[m.status] ?? MS_STATUS.not_started;
+      return {
+        id: m.id,
+        created_at: m.created_at,
+        kind: 'milestone' as const,
+        title: m.title,
+        subtitle: m.planned_completion_date ? `Due ${fmtDate(m.planned_completion_date)}` : null,
+        status: meta.label,
+        statusColor: meta.color,
+        value: `${m.percent_complete}%`,
+        icon: <Calendar className="w-3.5 h-3.5" />,
+        badge: 'Milestone',
+        badgeBg: 'bg-violet-500/10 text-violet-400',
+      };
+    }),
+    ...changeOrders.map(c => ({
+      id: c.id,
+      created_at: c.created_at,
+      kind: 'co' as const,
+      title: c.title,
+      subtitle: c.co_number ? `CO #${c.co_number}` : null,
+      status: c.status,
+      statusColor: c.status === 'approved' ? 'text-emerald-500' : c.status === 'rejected' ? 'text-destructive' : 'text-amber-500',
+      value: fmtUSD(c.amount),
+      icon: <TrendingUp className="w-3.5 h-3.5" />,
+      badge: 'Change Order',
+      badgeBg: 'bg-amber-500/10 text-amber-400',
+    })),
+    ...addOns.map(a => ({
+      id: a.id,
+      created_at: a.created_at,
+      kind: 'addon' as const,
+      title: a.line_item,
+      subtitle: a.approval_method || null,
+      status: a.status,
+      statusColor: a.status === 'approved' ? 'text-emerald-500' : a.status === 'rejected' ? 'text-destructive' : 'text-amber-500',
+      value: fmtUSD(a.amount),
+      icon: <PackagePlus className="w-3.5 h-3.5" />,
+      badge: 'Add On',
+      badgeBg: 'bg-rose-500/10 text-rose-400',
+    })),
+    ...draws.map(d => {
+      const meta = DRAW_STATUS[d.status];
+      return {
+        id: d.id,
+        created_at: d.created_at,
+        kind: 'draw' as const,
+        title: d.milestone_name,
+        subtitle: d.invoice_number ? `Invoice ${d.invoice_number}` : null,
+        status: meta.label,
+        statusColor: meta.color,
+        value: fmtUSD(d.draw_amount),
+        icon: <Receipt className="w-3.5 h-3.5" />,
+        badge: 'Draw',
+        badgeBg: 'bg-emerald-500/10 text-emerald-400',
+      };
+    }),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [scopeItems, milestones, changeOrders, addOns, draws]);
+
+  /* ── Monthly billed-vs-paid series (last 12 months) for the Billing vs Payments chart. ── */
+  const billingVsPaymentsSeries = useMemo(() => {
+    const months: { key: string; period: string }[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, period: d.toLocaleDateString('en-US', { month: 'short' }) });
+    }
+    const buckets: Record<string, { billed: number; paid: number }> = {};
+    months.forEach(m => { buckets[m.key] = { billed: 0, paid: 0 }; });
+    const bucketKey = (dateStr: string | null) => dateStr?.slice(0, 7);
+    draws.forEach(d => { const k = bucketKey(d.scheduled_date || d.created_at); if (k && buckets[k]) buckets[k].billed += Number(d.draw_amount) || 0; });
+    (enriched?.incomeList ?? []).forEach((t: any) => { const k = bucketKey(t.transaction_date); if (k && buckets[k]) buckets[k].paid += Number(t.amount) || 0; });
+    return months.map(m => ({ period: m.period, billed: buckets[m.key].billed, paid: buckets[m.key].paid }));
+  }, [draws, enriched?.incomeList]);
 
   const exportReconciliationPDF = () => {
     const doc = generateProjectReconciliationReport({
       project,
       scopeItems,
       changeOrders,
+      addOns,
       draws,
       payments: enriched?.incomeList ?? [],
       fin,
@@ -392,6 +540,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const co   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setCoForm(p => ({ ...p, [k]: e.target.value }));
   const ms   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setMsForm(p => ({ ...p, [k]: e.target.value }));
   const dr   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setDrawForm(p => ({ ...p, [k]: e.target.value }));
+  const aof  = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setAddOnForm(p => ({ ...p, [k]: e.target.value }));
   const dbError = (label: string, error: any) => {
     console.error(label, error);
     toast.error(label, {
@@ -435,6 +584,58 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     }
   };
   const deleteCO = async (id: string) => { if (!confirm('Delete this change order?')) return; await (supabase as any).from('project_change_orders').delete().eq('id', id); toast.success('Deleted'); load(); };
+
+  /* Add-On */
+  const openAddAddOn = () => { setAddOnForm(blankAddOn()); setEditAddOnId(null); setShowAddOn(true); };
+  const openEditAddOn = (a: AddOn) => {
+    setAddOnForm({
+      line_item: a.line_item, kind: a.kind,
+      unit_cost: a.unit_cost != null ? String(a.unit_cost) : '',
+      unit_quantity: a.unit_quantity != null ? String(a.unit_quantity) : '',
+      unit_label: a.unit_label ?? '', amount: String(a.amount), status: a.status,
+      approval_method: a.approval_method ?? '', requested_date: a.requested_date ?? '', approved_date: a.approved_date ?? '',
+      client_visible: a.client_visible, client_visible_notes: a.client_visible_notes ?? '', internal_notes: a.internal_notes ?? '',
+      custom_fields: Object.entries(a.custom_fields ?? {}).map(([key, value]) => ({ key, value: String(value) })),
+    });
+    setEditAddOnId(a.id); setShowAddOn(true);
+  };
+  const applyUnitMath = () => {
+    const cost = parseFloat(addOnForm.unit_cost);
+    const qty  = parseFloat(addOnForm.unit_quantity);
+    if (!Number.isFinite(cost) || !Number.isFinite(qty)) return toast.error('Set both unit cost and quantity first');
+    setAddOnForm(p => ({ ...p, amount: String(cost * qty) }));
+  };
+  const saveAddOn = async () => {
+    if (!addOnForm.line_item.trim()) return toast.error('Line item name is required');
+    if (!user || !projectId) return toast.error('Sign in and open an active project before saving');
+    setSavingAddOn(true);
+    try {
+      const customFields = Object.fromEntries(
+        addOnForm.custom_fields.filter(f => f.key.trim()).map(f => [f.key.trim(), f.value])
+      );
+      const p = {
+        project_id: projectId, entity_id: entityId, user_id: user.id,
+        line_item: addOnForm.line_item.trim(), kind: addOnForm.kind,
+        unit_cost: addOnForm.unit_cost !== '' ? parseFloat(addOnForm.unit_cost) : null,
+        unit_quantity: addOnForm.unit_quantity !== '' ? parseFloat(addOnForm.unit_quantity) : null,
+        unit_label: addOnForm.unit_label || null,
+        amount: parseFloat(addOnForm.amount) || 0, status: addOnForm.status,
+        approval_method: addOnForm.approval_method || null,
+        requested_date: addOnForm.requested_date || null, approved_date: addOnForm.approved_date || null,
+        client_visible: addOnForm.client_visible, client_visible_notes: addOnForm.client_visible_notes || null,
+        internal_notes: addOnForm.internal_notes || null, custom_fields: customFields,
+      };
+      const { error } = editAddOnId ? await (supabase as any).from('project_add_ons').update(p).eq('id', editAddOnId) : await (supabase as any).from('project_add_ons').insert(p);
+      if (error) dbError('Add-on save failed', error); else { toast.success(editAddOnId ? 'Add-on updated' : 'Add-on added'); setShowAddOn(false); await load(); }
+    } finally {
+      setSavingAddOn(false);
+    }
+  };
+  const deleteAddOn = async (id: string) => { if (!confirm('Delete this add-on?')) return; await (supabase as any).from('project_add_ons').delete().eq('id', id); toast.success('Deleted'); load(); };
+  const addCustomField = () => setAddOnForm(p => ({ ...p, custom_fields: [...p.custom_fields, { key: '', value: '' }] }));
+  const updateCustomField = (i: number, field: 'key' | 'value', v: string) =>
+    setAddOnForm(p => ({ ...p, custom_fields: p.custom_fields.map((f, idx) => idx === i ? { ...f, [field]: v } : f) }));
+  const removeCustomField = (i: number) => setAddOnForm(p => ({ ...p, custom_fields: p.custom_fields.filter((_, idx) => idx !== i) }));
 
   /* Milestone */
   const openAddMS = () => { setMsForm(blankMS()); setEditMSId(null); setShowMS(true); };
@@ -501,6 +702,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     if (subTab === 'milestones') return { label: 'Add Milestone', onClick: openAddMS };
     if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
     if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
+    if (subTab === 'addons') return { label: 'Add Add-On', onClick: openAddAddOn };
     if (subTab === 'payments') return { label: 'Log Payment', onClick: () => navigate(`/concierge?type=income&project=${projectId}`) };
     if (subTab === 'notes') return { label: 'Edit Notes', onClick: () => setShowNotes(true), disabled: savingNotes };
     return null;
@@ -515,7 +717,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
           <select
             value={subTab}
             onChange={e => setSubTab(e.target.value as SubTab)}
-            className={`${F} pr-8 appearance-none`}
+            className="pb-nav-select"
           >
             {SUB_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
@@ -588,7 +790,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 OVERVIEW
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'overview' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {/* KPIs row 1 */}
                 <div className="border border-border">
                   <KpiGrid items={[
@@ -607,11 +809,20 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                     { label: 'Balance Remaining',  value: fmtUSD(fin.balance),  accent: true },
                   ]} />
                 </div>
+                {/* KPIs row 3 — Add Ons */}
+                <div className="border border-border">
+                  <KpiGrid items={[
+                    { label: 'Approved Add-Ons',   value: fmtUSD(fin.addOnsAdditions), sub: 'extra work approved' },
+                    { label: 'Approved Credits',   value: fmtUSD(fin.addOnsCredits) },
+                    { label: 'Net Add-Ons',         value: fmtUSD(fin.addOnsNet), accent: true },
+                    { label: 'Pending Add-Ons',     value: fmtUSD(fin.pendingAddOns), sub: 'awaiting approval' },
+                  ]} />
+                </div>
 
                 {/* Progress section */}
                 <div className="border border-border">
                   <PanelHeader label="Project Progress" />
-                  <div className="p-5 space-y-4">
+                  <div className="p-4 space-y-3">
                     {[
                       { label: 'Work Completed',  pct: fin.pctDone,      value: fin.earned,  hex: '#3b82f6' },
                       { label: 'Billed to Date',  pct: fin.billedPct,    value: fin.billed,  hex: '#f59e0b' },
@@ -687,7 +898,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 SCOPE / SCHEDULE OF VALUES
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'sov' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="border border-border">
                   <KpiGrid items={[
                     { label: 'Original Contract', value: fmtUSD(fin.originalContractValue) },
@@ -1037,7 +1248,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 DRAWS & BILLING
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'draws' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="border border-border">
                   <KpiGrid items={[
                     { label: 'Total Draw Requests', value: fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0)) },
@@ -1209,7 +1420,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 CHANGE ORDERS
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'cos' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="border border-border">
                   <KpiGrid items={[
                     { label: 'Approved Additions', value: fmtUSD(fin.additions) },
@@ -1383,10 +1594,227 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
             )}
 
             {/* ══════════════════════════════════════════════════════════════
+                ADD ONS
+            ══════════════════════════════════════════════════════════════ */}
+            {subTab === 'addons' && (
+              <div className="space-y-4">
+                <div className="border border-border">
+                  <KpiGrid items={[
+                    { label: 'Approved Add-Ons', value: fmtUSD(fin.addOnsAdditions) },
+                    { label: 'Approved Credits', value: fmtUSD(fin.addOnsCredits) },
+                    { label: 'Net Add-Ons',      value: fmtUSD(fin.addOnsNet), accent: true },
+                    { label: 'Pending Value',    value: fmtUSD(fin.pendingAddOns), sub: 'awaiting approval' },
+                  ]} />
+                </div>
+
+                <div className="border border-border">
+                  <PanelHeader label={`Add Ons — ${addOns.length}`} />
+
+                  {showAddOn && (
+                    <WorkflowDialog
+                      open={showAddOn}
+                      onOpenChange={setShowAddOn}
+                      kicker="Add Ons"
+                      title={`${editAddOnId ? 'Edit' : 'New'} Add-On`}
+                      description="Log extra-work items and credits outside the formal Change Order process — approved by text/verbal, priced flat or by unit cost × quantity."
+                    >
+                    <div className="pb-entry-panel space-y-3 border border-border bg-background">
+                      <GuidedEntryIntro
+                        title={`${editAddOnId ? 'Edit' : 'New'} Add-On`}
+                        intent="Capture the line item, how it's priced, and its approval status so it flows into the revised contract total once approved."
+                        steps={['Describe item', 'Price it', 'Confirm approval']}
+                      />
+                      <div className="pb-entry-grid">
+                        <div className="pb-span-4 space-y-1">
+                          <div className="micro-label">Line Item</div>
+                          <input className={F} value={addOnForm.line_item} onChange={aof('line_item')} placeholder="e.g. Door Locks, AC Unit, Flooring Credit" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Kind</div>
+                          <select className={F} value={addOnForm.kind} onChange={aof('kind')}>
+                            <option value="addition">Addition</option>
+                            <option value="credit">Credit</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Status</div>
+                          <select className={F} value={addOnForm.status} onChange={aof('status')}>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Unit Cost ($)</div>
+                          <CurrencyInput value={addOnForm.unit_cost} onValueChange={v => setAddOnForm(p => ({ ...p, unit_cost: v }))} placeholder="0.00" className={F} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Unit Quantity</div>
+                          <input type="number" step="any" className={`${F} font-mono-tab`} value={addOnForm.unit_quantity} onChange={aof('unit_quantity')} placeholder="e.g. 2600" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Unit Label</div>
+                          <input className={F} value={addOnForm.unit_label} onChange={aof('unit_label')} placeholder="e.g. Sq Ft, Unit, Linear Ft" />
+                        </div>
+                        <div className="pb-span-2 space-y-1">
+                          <div className="micro-label flex items-center justify-between">
+                            <span>Amount ($)</span>
+                            <button type="button" onClick={applyUnitMath} className="text-[9px] text-accent hover:opacity-80 font-bold normal-case tracking-normal">
+                              = Unit Cost × Qty
+                            </button>
+                          </div>
+                          <CurrencyInput value={addOnForm.amount} onValueChange={v => setAddOnForm(p => ({ ...p, amount: v }))} placeholder="0.00" className={F} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Approval Method</div>
+                          <input className={F} value={addOnForm.approval_method} onChange={aof('approval_method')} placeholder="e.g. Approved via WhatsApp" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Date Requested</div>
+                          <DateInput className={F} value={addOnForm.requested_date} onChange={aof('requested_date')} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Date Approved</div>
+                          <DateInput className={F} value={addOnForm.approved_date} onChange={aof('approved_date')} />
+                        </div>
+                        <div className="flex items-center gap-2 pt-2">
+                          <input type="checkbox" id="ao-cv" checked={addOnForm.client_visible} onChange={e => setAddOnForm(p => ({ ...p, client_visible: e.target.checked }))} className="accent-foreground w-3.5 h-3.5" />
+                          <label htmlFor="ao-cv" className="micro-label cursor-pointer">Client Visible</label>
+                        </div>
+                      </div>
+                      <details className="pb-advanced">
+                        <summary>Notes and custom fields</summary>
+                        <div className="p-3 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <div className="micro-label">Client Notes</div>
+                              <textarea className={TA} rows={2} value={addOnForm.client_visible_notes} onChange={aof('client_visible_notes')} placeholder="e.g. HE to connect and power units." />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="micro-label">Internal Notes</div>
+                              <textarea className={TA} rows={2} value={addOnForm.internal_notes} onChange={aof('internal_notes')} />
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="micro-label">Custom Fields</div>
+                              <button type="button" onClick={addCustomField} className="text-[9px] text-accent hover:opacity-80 font-bold">
+                                + Add Field
+                              </button>
+                            </div>
+                            {addOnForm.custom_fields.length === 0 ? (
+                              <p className="text-[10px] text-muted-foreground">No custom fields yet — add one for anything that doesn't fit the fields above.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {addOnForm.custom_fields.map((f, i) => (
+                                  <div key={i} className="flex gap-1.5">
+                                    <input className={F} value={f.key} onChange={e => updateCustomField(i, 'key', e.target.value)} placeholder="Field name" />
+                                    <input className={F} value={f.value} onChange={e => updateCustomField(i, 'value', e.target.value)} placeholder="Value" />
+                                    <button type="button" onClick={() => removeCustomField(i)} className={delBtn}><X className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </details>
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={saveAddOn} disabled={savingAddOn} className={saveBtn}>{savingAddOn ? 'Saving…' : 'Save'}</button>
+                        <button onClick={() => setShowAddOn(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                    </WorkflowDialog>
+                  )}
+
+                  {addOns.length === 0 ? (
+                    <EmptyState text="No add-ons yet." />
+                  ) : (
+                    <>
+                    {/* Mobile card view */}
+                    <div className="sm:hidden divide-y divide-border">
+                      {addOns.map(a => {
+                        const signed = AO_SIGN[a.kind] * Number(a.amount);
+                        const statusColor = a.status === 'approved' ? 'text-emerald-500' : a.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
+                        return (
+                          <div key={a.id} className="px-4 py-4 pd-row space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-foreground text-sm">{a.line_item}</div>
+                                {a.unit_cost != null && a.unit_quantity != null && (
+                                  <div className="micro-label mt-0.5">{a.unit_quantity} {a.unit_label || 'units'} @ {fmtUSD(a.unit_cost)}</div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button onClick={() => openEditAddOn(a)} className={iconBtn}><Edit3 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => deleteAddOn(a.id)} className={delBtn}><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-secondary border border-border capitalize">{a.kind}</span>
+                              <span className={`font-mono-tab font-bold text-sm ${signed >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                                {signed >= 0 ? '+' : ''}{fmtUSD(Math.abs(signed))}
+                              </span>
+                              <span className={`text-[10px] font-bold uppercase ${statusColor} ml-auto`}>{a.status}</span>
+                            </div>
+                            {a.approval_method && <div className="micro-label">{a.approval_method}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Desktop table */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full text-sm" style={{ minWidth: 620 }}>
+                        <thead>
+                          <tr className="border-b border-border">
+                            {['Line Item', 'Pricing', 'Amount', 'Status', 'Approval', ''].map(h => (
+                              <th key={h} className={`px-4 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {addOns.map(a => {
+                            const signed = AO_SIGN[a.kind] * Number(a.amount);
+                            const statusColor = a.status === 'approved' ? 'text-emerald-500' : a.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
+                            return (
+                              <tr key={a.id} className="border-b border-border pd-row">
+                                <td className="px-4 py-3">
+                                  <div className="font-medium text-foreground">{a.line_item}</div>
+                                  <div className="micro-label mt-0.5 capitalize">{a.kind}</div>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  {a.unit_cost != null && a.unit_quantity != null ? `${a.unit_quantity} ${a.unit_label || 'units'} @ ${fmtUSD(a.unit_cost)}` : '—'}
+                                </td>
+                                <td className={`px-4 py-3 text-right font-mono-tab font-semibold ${signed >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                                  {signed >= 0 ? '+' : ''}{fmtUSD(signed)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`text-[10px] font-bold uppercase tracking-[0.1em] capitalize ${statusColor}`}>{a.status}</span>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">{a.approval_method || '—'}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-0.5 justify-end">
+                                    <button onClick={() => openEditAddOn(a)} className={iconBtn}><Edit3 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => deleteAddOn(a.id)} className={delBtn}><Trash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════
                 PAYMENTS RECEIVED
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'payments' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="border border-border">
                   <KpiGrid items={[
                     { label: 'Total Received',    value: fmtUSD(fin.paid), accent: true },
@@ -1461,7 +1889,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 RECONCILIATION
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'reconciliation' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {/* Waterfall */}
                 <div className="border border-border">
                   <PanelHeader label="Contract Reconciliation" />
@@ -1597,81 +2025,6 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 AUDIT
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'audit' && (() => {
-              type AuditEntry = {
-                id: string;
-                created_at: string;
-                kind: 'sov' | 'milestone' | 'co' | 'draw';
-                title: string;
-                subtitle: string | null;
-                status: string;
-                statusColor: string;
-                value: string;
-                icon: React.ReactNode;
-                badge: string;
-                badgeBg: string;
-              };
-
-              const entries: AuditEntry[] = [
-                ...scopeItems.map(item => ({
-                  id: item.id,
-                  created_at: item.created_at,
-                  kind: 'sov' as const,
-                  title: item.name,
-                  subtitle: item.category ?? null,
-                  status: (item.work_status ?? 'not_started').replace(/_/g, ' '),
-                  statusColor: (item.work_status ?? '') === 'completed' ? 'text-emerald-500' : (item.work_status ?? '') === 'in_progress' ? 'text-amber-500' : 'text-muted-foreground',
-                  value: fmtUSD(item.contract_amount),
-                  icon: <Layers className="w-3.5 h-3.5" />,
-                  badge: 'SOV',
-                  badgeBg: 'bg-blue-500/10 text-blue-400',
-                })),
-                ...milestones.map(m => {
-                  const meta = MS_STATUS[m.status] ?? MS_STATUS.not_started;
-                  return {
-                    id: m.id,
-                    created_at: m.created_at,
-                    kind: 'milestone' as const,
-                    title: m.title,
-                    subtitle: m.planned_completion_date ? `Due ${fmtDate(m.planned_completion_date)}` : null,
-                    status: meta.label,
-                    statusColor: meta.color,
-                    value: `${m.percent_complete}%`,
-                    icon: <Calendar className="w-3.5 h-3.5" />,
-                    badge: 'Milestone',
-                    badgeBg: 'bg-violet-500/10 text-violet-400',
-                  };
-                }),
-                ...changeOrders.map(c => ({
-                  id: c.id,
-                  created_at: c.created_at,
-                  kind: 'co' as const,
-                  title: c.title,
-                  subtitle: c.co_number ? `CO #${c.co_number}` : null,
-                  status: c.status,
-                  statusColor: c.status === 'approved' ? 'text-emerald-500' : c.status === 'rejected' ? 'text-destructive' : 'text-amber-500',
-                  value: fmtUSD(c.amount),
-                  icon: <TrendingUp className="w-3.5 h-3.5" />,
-                  badge: 'Change Order',
-                  badgeBg: 'bg-amber-500/10 text-amber-400',
-                })),
-                ...draws.map(d => {
-                  const meta = DRAW_STATUS[d.status];
-                  return {
-                    id: d.id,
-                    created_at: d.created_at,
-                    kind: 'draw' as const,
-                    title: d.milestone_name,
-                    subtitle: d.invoice_number ? `Invoice ${d.invoice_number}` : null,
-                    status: meta.label,
-                    statusColor: meta.color,
-                    value: fmtUSD(d.draw_amount),
-                    icon: <Receipt className="w-3.5 h-3.5" />,
-                    badge: 'Draw',
-                    badgeBg: 'bg-emerald-500/10 text-emerald-400',
-                  };
-                }),
-              ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
               const fmtTs = (iso: string) => {
                 const d = new Date(iso);
                 return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1682,12 +2035,13 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                   <PanelHeader label="Record Audit Log" />
 
                   {/* Summary strip */}
-                  {entries.length > 0 && (
-                    <div className="grid grid-cols-4 gap-px bg-border border-b border-border">
+                  {auditEntries.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-px bg-border border-b border-border">
                       {[
                         { label: 'SOV Lines',    val: scopeItems.length },
                         { label: 'Milestones',   val: milestones.length },
                         { label: 'Change Orders', val: changeOrders.length },
+                        { label: 'Add Ons',      val: addOns.length },
                         { label: 'Draws',        val: draws.length },
                       ].map(s => (
                         <div key={s.label} className="bg-secondary/40 px-3 py-2.5 text-center">
@@ -1698,7 +2052,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                     </div>
                   )}
 
-                  {entries.length === 0 ? (
+                  {auditEntries.length === 0 ? (
                     <div className="py-16 text-center space-y-2">
                       <History className="w-8 h-8 text-muted-foreground/40 mx-auto" />
                       <p className="text-sm text-muted-foreground">No records yet.</p>
@@ -1706,7 +2060,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                     </div>
                   ) : (
                     <div className="divide-y divide-border">
-                      {entries.map(e => (
+                      {auditEntries.map(e => (
                         <div key={e.id} className="pd-row flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3">
                           {/* icon + badge */}
                           <div className="flex items-center gap-2 sm:shrink-0">
@@ -1733,10 +2087,10 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                     </div>
                   )}
 
-                  {entries.length > 0 && (
+                  {auditEntries.length > 0 && (
                     <div className="px-4 py-2.5 border-t border-border bg-secondary/30">
                       <p className="text-[10px] text-muted-foreground/60">
-                        {entries.length} record{entries.length !== 1 ? 's' : ''} · sorted by created date (newest first)
+                        {auditEntries.length} record{auditEntries.length !== 1 ? 's' : ''} · sorted by created date (newest first)
                       </p>
                     </div>
                   )}

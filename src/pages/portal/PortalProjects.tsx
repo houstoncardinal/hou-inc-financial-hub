@@ -259,7 +259,7 @@ export default function PortalProjects() {
           </div>
           {/* Add new project CTA */}
           <Link
-            to="/portal/project"
+            to="/portal/project?new=1"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.26em', fontWeight: 700, padding: '10px 18px', backgroundColor: DARK, color: WHITE, textDecoration: 'none', flexShrink: 0 }}>
             <Plus className="w-3 h-3" strokeWidth={2.5} />
             Add Project
@@ -463,7 +463,7 @@ export default function PortalProjects() {
               <FolderOpen className="w-4 h-4" style={{ color: GOLDF }} strokeWidth={1.5} />
               <span style={{ fontSize: 12, color: MUTED }}>Have another project in mind?</span>
               <Link
-                to="/portal/project"
+                to="/portal/project?new=1"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', padding: '8px 16px', backgroundColor: DARK, color: WHITE, textDecoration: 'none' }}>
                 <Plus className="w-3 h-3" strokeWidth={2.5} />
                 Add New Project
@@ -478,7 +478,7 @@ export default function PortalProjects() {
             <div style={{ padding: '24px 28px', borderBottom: `1px solid ${BORDER}` }}>
               <p style={{ fontSize: 13, color: MUTED, marginBottom: 16, lineHeight: 1.6 }}>Your project brief has been submitted and is under review. Your project manager will link your full project details soon.</p>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Link to="/portal/project" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', padding: '10px 20px', backgroundColor: DARK, color: WHITE, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>View Brief <ArrowUpRight className="w-3.5 h-3.5" /></Link>
+                <Link to={`/portal/project?id=${brief.id}`} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', padding: '10px 20px', backgroundColor: DARK, color: WHITE, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>View Brief <ArrowUpRight className="w-3.5 h-3.5" /></Link>
                 <Link to="/portal/messages" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', padding: '10px 20px', border: `1px solid ${BORDER}`, color: DARK, textDecoration: 'none' }}>Message Builder</Link>
               </div>
             </div>
@@ -515,7 +515,7 @@ export default function PortalProjects() {
             </div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: DARK, marginBottom: 10 }}>No active projects yet.</div>
             <p style={{ fontSize: 13, fontWeight: 300, marginBottom: 28, maxWidth: 280, color: MUTED }}>Submit your project brief and we'll build a custom plan tailored to your vision.</p>
-            <Link to="/portal/project" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.28em', fontWeight: 900, padding: '14px 28px', backgroundColor: GOLD, color: '#FAF7F2', textDecoration: 'none' }}>
+            <Link to="/portal/project?new=1" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.28em', fontWeight: 900, padding: '14px 28px', backgroundColor: GOLD, color: '#FAF7F2', textDecoration: 'none' }}>
               Submit Project Brief <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
             </Link>
           </div>

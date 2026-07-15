@@ -13,6 +13,7 @@ export interface PortalClient {
 }
 
 export interface ProjectBrief {
+  id?: string;
   type: string;
   location: string;
   sqft: string;
@@ -171,6 +172,7 @@ function mapClient(row: any): PortalClient {
 
 function mapBrief(row: any): ProjectBrief {
   return {
+    id: row.id,
     type: row.type ?? '',
     location: row.location ?? '',
     sqft: row.sqft ?? '',
@@ -251,7 +253,7 @@ export function usePortal() {
   const [client, setClient] = useState<PortalClient | null>(null);
   // true once the initial session-restore fetch has resolved (or there was no session)
   const [loaded, setLoaded] = useState(() => !localStorage.getItem(SESSION_KEY));
-  const [brief, setBrief]   = useState<ProjectBrief | null>(null);
+  const [briefs, setBriefs] = useState<ProjectBrief[]>([]);
   const [messages, setMessages]   = useState<PortalMessage[]>([]);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [meetings, setMeetings]   = useState<PortalMeeting[]>([]);
@@ -271,16 +273,16 @@ export function usePortal() {
   // Load all client data once the client record is resolved
   useEffect(() => {
     if (!client) {
-      setBrief(null); setMessages([]); setDocuments([]); setMeetings([]);
+      setBriefs([]); setMessages([]); setDocuments([]); setMeetings([]);
       return;
     }
     Promise.all([
-      supabase.from('portal_briefs').select('*').eq('client_id', client.id).maybeSingle(),
+      supabase.from('portal_briefs').select('*').eq('client_id', client.id).order('created_at', { ascending: false }),
       supabase.from('portal_messages').select('*').eq('client_id', client.id).order('created_at', { ascending: true }),
       supabase.from('portal_documents').select('*').eq('client_id', client.id),
       supabase.from('portal_meetings').select('*').eq('client_id', client.id).order('created_at', { ascending: false }),
     ]).then(([bRes, mRes, dRes, mtRes]) => {
-      if (bRes.data)  setBrief(mapBrief(bRes.data));
+      if (bRes.data)  setBriefs(bRes.data.map(mapBrief));
       if (mRes.data)  setMessages(mRes.data.map(mapMessage));
       if (dRes.data)  setDocuments(dRes.data.map(mapDocument));
       if (mtRes.data) setMeetings(mtRes.data.map(mapMeeting));
@@ -375,62 +377,73 @@ export function usePortal() {
     localStorage.removeItem(SESSION_KEY);
     setClientId(null);
     setClient(null);
-    setBrief(null);
+    setBriefs([]);
     setMessages([]);
     setDocuments([]);
     setMeetings([]);
   }, []);
 
   // ── Brief ─────────────────────────────────────────────────────────────────
+  // A client can submit more than one brief (multiple projects with the
+  // company over time). getBrief() keeps returning the most recent one for
+  // callers that only ever cared about a single glance (dashboard progress,
+  // projects-page summary); getBriefs() exposes the full list for the Project
+  // Brief tab, which lets a client view every brief and start a new one.
 
-  const getBrief = useCallback((): ProjectBrief | null => brief, [brief]);
+  const getBrief = useCallback((): ProjectBrief | null => briefs[0] ?? null, [briefs]);
+  const getBriefs = useCallback((): ProjectBrief[] => briefs, [briefs]);
 
-  const saveBrief = useCallback(async (partial: Partial<ProjectBrief>) => {
-    if (!client) return;
-    const merged = { ...(brief ?? {}), ...partial } as ProjectBrief;
-    const { data, error } = await supabase
-      .from('portal_briefs')
-      .upsert({
-        client_id:   client.id,
-        type:        merged.type,
-        location:    merged.location,
-        sqft:        merged.sqft,
-        bedrooms:    merged.bedrooms,
-        bathrooms:   merged.bathrooms,
-        floors:      merged.floors,
-        style:       merged.style,
-        budget:      merged.budget,
-        timeline:    merged.timeline,
-        description: merged.description,
-        status:      merged.status ?? 'draft',
-      }, { onConflict: 'client_id' })
-      .select()
-      .single();
-    if (!error && data) setBrief(mapBrief(data));
-  }, [client, brief]);
+  const saveBrief = useCallback(async (partial: Partial<ProjectBrief>, id?: string): Promise<string | undefined> => {
+    if (!client) return undefined;
+    const existing = id ? briefs.find(b => b.id === id) : undefined;
+    const merged = { ...(existing ?? {}), ...partial } as ProjectBrief;
+    const row = {
+      client_id:   client.id,
+      type:        merged.type,
+      location:    merged.location,
+      sqft:        merged.sqft,
+      bedrooms:    merged.bedrooms,
+      bathrooms:   merged.bathrooms,
+      floors:      merged.floors,
+      style:       merged.style,
+      budget:      merged.budget,
+      timeline:    merged.timeline,
+      description: merged.description,
+      status:      merged.status ?? 'draft',
+    };
+    const { data, error } = id
+      ? await supabase.from('portal_briefs').update(row).eq('id', id).select().single()
+      : await supabase.from('portal_briefs').insert(row).select().single();
+    if (error || !data) return id;
+    const saved = mapBrief(data);
+    setBriefs(prev => id ? prev.map(b => b.id === id ? saved : b) : [saved, ...prev]);
+    return saved.id;
+  }, [client, briefs]);
 
-  const submitBrief = useCallback(async (briefData: ProjectBrief) => {
-    if (!client) return;
-    const { data, error } = await supabase
-      .from('portal_briefs')
-      .upsert({
-        client_id:   client.id,
-        type:        briefData.type,
-        location:    briefData.location,
-        sqft:        briefData.sqft,
-        bedrooms:    briefData.bedrooms,
-        bathrooms:   briefData.bathrooms,
-        floors:      briefData.floors,
-        style:       briefData.style,
-        budget:      briefData.budget,
-        timeline:    briefData.timeline,
-        description: briefData.description,
-        status:      'submitted',
-        submitted_at: new Date().toISOString(),
-      }, { onConflict: 'client_id' })
-      .select()
-      .single();
-    if (!error && data) setBrief(mapBrief(data));
+  const submitBrief = useCallback(async (briefData: ProjectBrief, id?: string): Promise<string | undefined> => {
+    if (!client) return undefined;
+    const row = {
+      client_id:   client.id,
+      type:        briefData.type,
+      location:    briefData.location,
+      sqft:        briefData.sqft,
+      bedrooms:    briefData.bedrooms,
+      bathrooms:   briefData.bathrooms,
+      floors:      briefData.floors,
+      style:       briefData.style,
+      budget:      briefData.budget,
+      timeline:    briefData.timeline,
+      description: briefData.description,
+      status:      'submitted',
+      submitted_at: new Date().toISOString(),
+    };
+    const { data, error } = id
+      ? await supabase.from('portal_briefs').update(row).eq('id', id).select().single()
+      : await supabase.from('portal_briefs').insert(row).select().single();
+    if (!error && data) {
+      const saved = mapBrief(data);
+      setBriefs(prev => id ? prev.map(b => b.id === id ? saved : b) : [saved, ...prev]);
+    }
 
     // Auto-confirmation message
     const welcomeText = `Excellent, ${client.name} — I've received your project brief. A ${briefData.type} in ${briefData.location || 'the Houston area'}, approximately ${briefData.sqft} sq ft, ${briefData.budget} budget. This is a strong foundation. I'm preparing a preliminary project outline and will reach out within one business day to schedule our first consultation. Very much looking forward to working together. — ${BUILDER.name}`;
@@ -599,6 +612,7 @@ export function usePortal() {
     loginByEmail,
     logout,
     getBrief,
+    getBriefs,
     saveBrief,
     submitBrief,
     getMessages,

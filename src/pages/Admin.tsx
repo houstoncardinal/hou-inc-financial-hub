@@ -27,9 +27,8 @@ import PortfolioManager from '@/components/admin/PortfolioManager';
 import MilestoneManager from '@/components/admin/MilestoneManager';
 import ProjectManager from '@/components/admin/ProjectManager';
 import { toast } from '@/hooks/use-toast';
-import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import { makeDoc, tblCfg, addDecorations, buildSheet, writeWorkbook } from '@/lib/reports';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const B     = '#0A0A0A';
@@ -44,7 +43,7 @@ const SERIF = "'Cormorant Garamond', Georgia, serif";
 async function loadPortalData() {
   const [clientsRes, briefsRes, msgsRes, docsRes, meetsRes] = await Promise.all([
     supabase.from('portal_clients').select('*').order('created_at', { ascending: false }),
-    supabase.from('portal_briefs').select('*'),
+    supabase.from('portal_briefs').select('*').order('created_at', { ascending: true }),
     supabase.from('portal_messages').select('*').order('created_at', { ascending: true }),
     supabase.from('portal_documents').select('*'),
     supabase.from('portal_meetings').select('*').order('created_at', { ascending: false }),
@@ -57,6 +56,9 @@ async function loadPortalData() {
     createdAt:       c.created_at,
   }));
 
+  // A client can now have more than one brief (multi-project support). This admin
+  // view still only shows one per client — the query above orders ascending so
+  // this forEach's last write per client_id lands on their most recent brief.
   const briefs: Record<string, any> = {};
   (briefsRes.data ?? []).forEach((b: any) => {
     briefs[b.client_id] = { ...b, submittedAt: b.submitted_at };
@@ -112,8 +114,8 @@ async function loadFinanceData() {
 }
 
 /* ── Admin actions (Supabase writes) ────────────────────────────────── */
-async function adminUpdateBriefStatus(clientId: string, status: string) {
-  await supabase.from('portal_briefs').update({ status }).eq('client_id', clientId);
+async function adminUpdateBriefStatus(briefId: string, status: string) {
+  await supabase.from('portal_briefs').update({ status }).eq('id', briefId);
 }
 
 async function adminSendMessage(clientId: string, text: string) {
@@ -1590,7 +1592,7 @@ export default function Admin() {
                               const isActive = brief.status === s;
                               return (
                                 <button key={s}
-                                  onClick={async () => { await adminUpdateBriefStatus(selectedClientId, s); await refreshData(); }}
+                                  onClick={async () => { await adminUpdateBriefStatus(brief.id, s); await refreshData(); }}
                                   className="text-[8px] uppercase tracking-[0.2em] font-bold px-4 py-2.5 transition-all"
                                   style={{
                                     backgroundColor: isActive ? c.color : 'transparent',
@@ -2999,16 +3001,7 @@ export default function Admin() {
 
             function exportChangelogPDF() {
               try {
-                const doc = new jsPDF({ format: 'letter', unit: 'mm' });
-                const PW = 215.9, M = 18;
-                doc.setFillColor(157, 126, 63); doc.rect(0, 0, PW, 2.5, 'F');
-                doc.setFillColor(18, 18, 18);   doc.rect(0, 2.5, PW, 22, 'F');
-                doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-                doc.text('HOU INC', M, 16.5);
-                doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-                doc.text('Admin Changelog · Audit Trail', M, 21.5);
-                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-                doc.text('Changelog', PW - M, 21.5, { align: 'right' });
+                const { doc, y } = makeDoc('Changelog', 'Admin Changelog · Audit Trail');
 
                 const rows = filtered.map((e: any) => [
                   new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
@@ -3020,34 +3013,18 @@ export default function Admin() {
                 ]);
 
                 autoTable(doc, {
-                  startY: 34,
-                  margin: { left: M, right: M, top: 14, bottom: 20 },
+                  ...tblCfg(y),
                   head: [['Timestamp', 'Action', 'Entity', 'Dashboard', 'Item', 'Changed By']],
                   body: rows,
-                  headStyles: { fillColor: [18, 18, 18], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7, cellPadding: { top: 4, bottom: 4, left: 4, right: 4 } },
-                  bodyStyles: { fontSize: 7.5, textColor: [18, 18, 18], cellPadding: { top: 3, bottom: 3, left: 4, right: 4 } },
-                  alternateRowStyles: { fillColor: [248, 248, 248] },
                   columnStyles: { 0: { cellWidth: 36 }, 5: { cellWidth: 26 } },
-                  tableLineColor: [229, 229, 229],
-                  tableLineWidth: 0.2,
                 });
 
-                const pages = doc.getNumberOfPages();
-                for (let i = 1; i <= pages; i++) {
-                  doc.setPage(i);
-                  const fy = 279.4 - 14;
-                  doc.setDrawColor(229, 229, 229); doc.setLineWidth(0.25); doc.line(M, fy, PW - M, fy);
-                  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(97, 97, 97);
-                  doc.text('HOU INC · Admin Changelog', M, fy + 4.5);
-                  doc.text(`Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, PW / 2, fy + 4.5, { align: 'center' });
-                  doc.setFont('helvetica', 'bold');
-                  doc.text(`Page ${i} of ${pages}  ·  CONFIDENTIAL`, PW - M, fy + 4.5, { align: 'right' });
-                }
+                addDecorations(doc, 'Changelog');
                 doc.save(`hou-changelog-${new Date().toISOString().slice(0, 10)}.pdf`);
               } catch { toast({ title: 'PDF export failed', description: 'Please try again.' }); }
             }
 
-            function exportChangelogExcel() {
+            async function exportChangelogExcel() {
               try {
                 const headers = ['Timestamp', 'Action', 'Entity', 'Dashboard', 'Item / Label', 'Changed By', 'Details'];
                 const rows = filtered.map((e: any) => [
@@ -3059,19 +3036,11 @@ export default function Admin() {
                   e.changed_by ?? '',
                   e.details ? JSON.stringify(e.details) : '',
                 ]);
-                const aoa = [
-                  ['HOU INC — Admin Changelog'],
-                  [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
-                  [],
-                  headers,
-                  ...rows,
-                ];
-                const ws = XLSX.utils.aoa_to_sheet(aoa);
-                ws['!cols'] = [28, 18, 18, 14, 28, 20, 40].map(w => ({ wch: w }));
-                ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }];
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Changelog');
-                XLSX.writeFile(wb, `hou-changelog-${new Date().toISOString().slice(0, 10)}.xlsx`);
+                const ws = buildSheet({
+                  name: 'Changelog', headers, rows,
+                  colWidths: [28, 18, 18, 14, 28, 20, 40],
+                }, 'Admin Changelog');
+                await writeWorkbook([{ ws, name: 'Changelog' }], `hou-changelog-${new Date().toISOString().slice(0, 10)}.xlsx`);
               } catch { toast({ title: 'Excel export failed', description: 'Please try again.' }); }
             }
 

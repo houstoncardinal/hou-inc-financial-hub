@@ -41,7 +41,17 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
             onNumberChange?.(numeric);
             onBlur?.(e);
           }}
-          className={cn('pl-7 rounded-none h-10 font-mono-tab text-left tabular-nums', className)}
+          // pl-8/pr-3 are appended AFTER className on purpose: twMerge only
+          // evicts a narrower padding-left/-right utility when a wider
+          // padding-x utility appears after it, never the reverse, so a
+          // caller's px-3 (e.g. our shared form-field style) would otherwise
+          // silently delete our left padding and the "$" would sit on top of
+          // the digits. Appending pl-8/pr-3 last guarantees they win the
+          // cascade (Tailwind also emits those rules after px-* in the
+          // generated stylesheet, so this matches what actually renders).
+          // Everything else stays before className so callers can still
+          // override height/border/etc. to match sibling fields in a row.
+          className={cn('rounded-none h-10 font-mono-tab text-left tabular-nums', className, 'pl-8 pr-3')}
         />
       </div>
     );

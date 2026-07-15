@@ -1,9 +1,9 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 /* ── Design tokens ── */
-const C = {
+export const C = {
   black:    [18, 18, 18]    as [number, number, number],
   accent:   [157, 126, 63]  as [number, number, number],
   muted:    [97, 97, 97]    as [number, number, number],
@@ -13,28 +13,42 @@ const C = {
   positive: [30, 120, 60]   as [number, number, number],
   negative: [164, 30, 30]   as [number, number, number],
 };
-const PW = 215.9, PH = 279.4, M = 18;
+export const M = 18;
+
+// Fixed portrait Letter dims kept for callers that need a page-size constant
+// (e.g. layout math before a doc exists); everything below that draws onto an
+// actual doc reads the real page size via pageDims() so landscape works too.
+const PW = 215.9, PH = 279.4;
+
+function pageDims(doc: jsPDF): { w: number; h: number } {
+  return { w: doc.internal.pageSize.getWidth(), h: doc.internal.pageSize.getHeight() };
+}
 
 /* ── Formatters ── */
-const fmtUSD = (n: number | string | null | undefined): string => {
+export const fmtUSD = (n: number | string | null | undefined): string => {
   const v = typeof n === 'string' ? parseFloat(n) : (n ?? 0);
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'USD', minimumFractionDigits: 2,
   }).format(isNaN(v as number) ? 0 : (v as number));
 };
 
+const fmtGeneratedAt = () => new Date().toLocaleString('en-US', {
+  year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+});
+
 /* ── PDF building blocks ── */
 
-function makeDoc(title: string, sub: string): { doc: jsPDF; y: number } {
-  const doc = new jsPDF({ format: 'letter', unit: 'mm' });
+export function makeDoc(title: string, sub: string, orientation: 'portrait' | 'landscape' = 'portrait'): { doc: jsPDF; y: number } {
+  const doc = new jsPDF({ format: 'letter', unit: 'mm', orientation });
+  const { w } = pageDims(doc);
 
   // Thin enterprise document header
   doc.setFillColor(...C.accent);
-  doc.rect(0, 0, PW, 1.4, 'F');
+  doc.rect(0, 0, w, 1.4, 'F');
 
   doc.setDrawColor(...C.border);
   doc.setLineWidth(0.25);
-  doc.line(M, 22, PW - M, 22);
+  doc.line(M, 22, w - M, 22);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
@@ -44,25 +58,29 @@ function makeDoc(title: string, sub: string): { doc: jsPDF; y: number } {
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.muted);
   doc.text('Houston Enterprise Financial Records', M, 16);
+  doc.setFontSize(5.4);
+  doc.setTextColor(...C.muted);
+  doc.text(fmtGeneratedAt(), M, 19.8);
 
   doc.setFontSize(6.4);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.muted);
-  doc.text(sub, PW - M, 10.5, { align: 'right', maxWidth: 82 });
+  doc.text(sub, w - M, 10.5, { align: 'right', maxWidth: 82 });
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...C.black);
-  doc.text(title, PW - M, 17, { align: 'right', maxWidth: 92 });
+  doc.text(title, w - M, 17, { align: 'right', maxWidth: 92 });
 
   return { doc, y: 28 };
 }
 
 interface Metric { label: string; value: string; color?: [number, number, number] }
 
-function drawMetrics(doc: jsPDF, y: number, metrics: Metric[]): number {
+export function drawMetrics(doc: jsPDF, y: number, metrics: Metric[]): number {
+  const { w } = pageDims(doc);
   const n = metrics.length;
   const gap = 3;
-  const bw = (PW - 2 * M - gap * (n - 1)) / n;
+  const bw = (w - 2 * M - gap * (n - 1)) / n;
   metrics.forEach((m, i) => {
     const x = M + i * (bw + gap);
     doc.setFillColor(248, 248, 248);
@@ -80,47 +98,46 @@ function drawMetrics(doc: jsPDF, y: number, metrics: Metric[]): number {
   return y + 19;
 }
 
-function sectionLabel(doc: jsPDF, y: number, label: string): number {
+export function sectionLabel(doc: jsPDF, y: number, label: string): number {
+  const { w } = pageDims(doc);
   doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.muted);
   doc.text(label.toUpperCase(), M, y);
   doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
   const lw = doc.getTextWidth(label.toUpperCase());
-  doc.line(M + lw + 2, y - 0.5, PW - M, y - 0.5);
+  doc.line(M + lw + 2, y - 0.5, w - M, y - 0.5);
   return y + 5;
 }
 
-function addDecorations(doc: jsPDF, title: string) {
+export function addDecorations(doc: jsPDF, title: string) {
+  const { w, h } = pageDims(doc);
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
 
     if (i > 1) {
       // Compact continuation header
-      doc.setFillColor(...C.accent); doc.rect(0, 0, PW, 1.2, 'F');
-      doc.setDrawColor(...C.border); doc.line(M, 11, PW - M, 11);
+      doc.setFillColor(...C.accent); doc.rect(0, 0, w, 1.2, 'F');
+      doc.setDrawColor(...C.border); doc.line(M, 11, w - M, 11);
       doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.black);
       doc.text('HOU INC', M, 7.8);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-      doc.text(title, PW - M, 7.8, { align: 'right', maxWidth: 90 });
+      doc.text(title, w - M, 7.8, { align: 'right', maxWidth: 90 });
     }
 
     // Footer
-    const fy = PH - 14;
+    const fy = h - 14;
     doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
-    doc.line(M, fy, PW - M, fy);
+    doc.line(M, fy, w - M, fy);
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
     doc.text('HOU INC · Houston Enterprise Financial Records', M, fy + 4.5);
-    doc.text(
-      `Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-      PW / 2, fy + 4.5, { align: 'center' }
-    );
+    doc.text(`Generated ${fmtGeneratedAt()}`, w / 2, fy + 4.5, { align: 'center' });
     doc.setFont('helvetica', 'bold');
-    doc.text(`Page ${i} of ${n}  ·  CONFIDENTIAL`, PW - M, fy + 4.5, { align: 'right' });
+    doc.text(`Page ${i} of ${n}  ·  CONFIDENTIAL`, w - M, fy + 4.5, { align: 'right' });
   }
   doc.setPage(1);
 }
 
-const tblCfg = (startY: number) => ({
+export const tblCfg = (startY: number) => ({
   startY,
   margin: { left: M, right: M, top: 14, bottom: 20 },
   headStyles: {
@@ -573,6 +590,7 @@ export function generateProjectReconciliationReport({
   project,
   scopeItems,
   changeOrders,
+  addOns = [],
   draws,
   payments,
   fin,
@@ -580,51 +598,23 @@ export function generateProjectReconciliationReport({
   project: any;
   scopeItems: any[];
   changeOrders: any[];
+  addOns?: any[];
   draws: any[];
   payments: any[];
   fin: any;
 }) {
-  const doc = new jsPDF({ format: 'letter', orientation: 'landscape', unit: 'mm' });
-  const pageW = 279.4;
-  const margin = 8;
-  const today = new Date().toLocaleDateString('en-US');
+  const { doc, y: headerY } = makeDoc('Houston Enterprise Reconciliation', project?.name || 'Project', 'landscape');
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 8; // tighter than the shared M=18 — landscape needs the room for 5 draw columns
   const drawCols = draws.slice(0, 5);
 
-  doc.setFillColor(...C.black);
-  doc.rect(0, 0, pageW, 15, 'F');
-  doc.setFillColor(...C.accent);
-  doc.rect(0, 15, pageW, 1.4, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...C.white);
-  doc.text('Houston Enterprise Reconciliation', margin, 9.5);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.text(project?.name || 'Project', pageW - margin, 6.8, { align: 'right' });
-  doc.text(`Generated ${today}`, pageW - margin, 11, { align: 'right' });
-
-  const metrics = [
-    ['Project Total with Add Ons', fmtUSD(fin.revised)],
-    ['Total Work Completed', fmtUSD(fin.earned)],
-    ['Total Paid to Date', fmtUSD(fin.paid)],
-    ['Current Balance Due', fmtUSD(Math.max(fin.earned - fin.paid, 0))],
-    ['Project Balance Due', fmtUSD(fin.balance)],
-  ];
-  let x = margin;
-  const boxW = (pageW - margin * 2 - 8) / 5;
-  metrics.forEach(([label, value], i) => {
-    doc.setFillColor(248, 248, 248);
-    doc.setDrawColor(...C.border);
-    doc.rect(x, 21, boxW, 13, 'FD');
-    doc.setTextColor(...C.muted);
-    doc.setFontSize(5.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text(String(label).toUpperCase(), x + 2, 26);
-    doc.setTextColor(i === 3 ? C.accent[0] : C.black[0], i === 3 ? C.accent[1] : C.black[1], i === 3 ? C.accent[2] : C.black[2]);
-    doc.setFontSize(8.5);
-    doc.text(String(value), x + 2, 31.2);
-    x += boxW + 2;
-  });
+  const y0 = drawMetrics(doc, headerY, [
+    { label: 'Project Total with Add Ons', value: fmtUSD(fin.revised) },
+    { label: 'Total Work Completed', value: fmtUSD(fin.earned) },
+    { label: 'Total Paid to Date', value: fmtUSD(fin.paid) },
+    { label: 'Current Balance Due', value: fmtUSD(Math.max(fin.earned - fin.paid, 0)), color: C.accent },
+    { label: 'Project Balance Due', value: fmtUSD(fin.balance) },
+  ]);
 
   const drawHead = drawCols.map((d: any) => d.scheduled_date?.slice(0, 10) || d.invoice_number || 'Draw');
   const head = [[
@@ -654,13 +644,10 @@ export function generateProjectReconciliationReport({
   });
 
   autoTable(doc, {
-    startY: 39,
-    margin: { left: margin, right: margin, bottom: 18 },
+    ...tblCfg(y0),
+    margin: { left: margin, right: margin, top: 14, bottom: 18 },
     head,
     body,
-    styles: { fontSize: 6.6, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15, overflow: 'linebreak' },
-    headStyles: { fillColor: C.black, textColor: C.white, fontSize: 6.2, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [250, 250, 250] },
     columnStyles: {
       0: { cellWidth: 48 },
       1: { cellWidth: 24 },
@@ -676,7 +663,6 @@ export function generateProjectReconciliationReport({
       { content: fmtUSD(fin.earned), styles: { halign: 'right', fontStyle: 'bold' } },
       { content: fmtUSD(fin.balance), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } },
     ]],
-    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
   });
 
   let y = (doc as any).lastAutoTable.finalY + 6;
@@ -684,9 +670,9 @@ export function generateProjectReconciliationReport({
 
   const approvedCos = changeOrders.filter((c: any) => c.status === 'approved');
   autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: pageW / 2 + 3 },
-    head: [['Add Ons / Credits', 'Amount', 'Notes']],
+    ...tblCfg(y),
+    margin: { left: margin, right: pageW / 2 + 3, top: 14, bottom: 18 },
+    head: [['Change Orders / Credits', 'Amount', 'Notes']],
     body: approvedCos.map((c: any) => [
       c.title,
       { content: fmtUSD((c.type === 'deduction' || c.type === 'credit') ? -Number(c.amount) : Number(c.amount)), styles: { halign: 'right' } },
@@ -697,14 +683,12 @@ export function generateProjectReconciliationReport({
       { content: fmtUSD(fin.net), styles: { halign: 'right', fontStyle: 'bold' } },
       '',
     ]],
-    styles: { fontSize: 6.4, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15 },
-    headStyles: { fillColor: C.black, textColor: C.white, fontStyle: 'bold' },
-    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
   });
+  const y1 = (doc as any).lastAutoTable.finalY;
 
   autoTable(doc, {
-    startY: y,
-    margin: { left: pageW / 2 + 3, right: margin },
+    ...tblCfg(y),
+    margin: { left: pageW / 2 + 3, right: margin, top: 14, bottom: 18 },
     head: [['Payments Received', 'Paid']],
     body: payments.map((p: any) => [
       p.source_name || p.description || p.transaction_date?.slice(0, 10) || 'Payment',
@@ -714,10 +698,31 @@ export function generateProjectReconciliationReport({
       'Total Paid to Date',
       { content: `(${fmtUSD(fin.paid)})`, styles: { halign: 'right', fontStyle: 'bold' } },
     ]],
-    styles: { fontSize: 6.4, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15 },
-    headStyles: { fillColor: C.black, textColor: C.white, fontStyle: 'bold' },
-    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
   });
+  const y2 = (doc as any).lastAutoTable.finalY;
+
+  if (addOns.length > 0) {
+    let addOnsY = Math.max(y1, y2) + 6;
+    if (addOnsY > 165) { doc.addPage(); addOnsY = 18; }
+    const approvedAddOns = addOns.filter((a: any) => a.status === 'approved');
+    const addOnsNet = approvedAddOns.reduce((s: number, a: any) => s + (a.kind === 'credit' ? -Number(a.amount) : Number(a.amount)), 0);
+    autoTable(doc, {
+      ...tblCfg(addOnsY),
+      margin: { left: margin, right: margin, top: 14, bottom: 18 },
+      head: [['Add Ons', 'Pricing', 'Amount', 'Status', 'Notes']],
+      body: addOns.map((a: any) => [
+        a.line_item,
+        a.unit_cost != null && a.unit_quantity != null ? `${a.unit_quantity} ${a.unit_label || 'units'} @ ${fmtUSD(a.unit_cost)}` : '—',
+        { content: fmtUSD(a.kind === 'credit' ? -Number(a.amount) : Number(a.amount)), styles: { halign: 'right' } },
+        a.approval_method || a.status,
+        a.client_visible_notes || a.internal_notes || '—',
+      ]),
+      foot: [[
+        'Add Ons Total (Approved)',
+        '', { content: fmtUSD(addOnsNet), styles: { halign: 'right', fontStyle: 'bold' } }, '', '',
+      ]],
+    });
+  }
 
   addDecorations(doc, 'Houston Enterprise Reconciliation');
   return doc;
@@ -803,63 +808,87 @@ interface SheetDef {
   currencyCols?: number[];
 }
 
-function buildSheet(def: SheetDef, reportTitle: string): XLSX.WorkSheet {
-  const today = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
-
-  const aoa: any[][] = [
-    ['HOU INC — Houston Enterprise Financial Records'],
-    [reportTitle],
-    [`Generated: ${today}`],
-    [],
-    def.headers,
-    ...def.rows,
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // Column widths
-  ws['!cols'] = (def.colWidths ?? def.headers.map(h => Math.min(Math.max(String(h).length + 8, 14), 32))).map(w => ({ wch: w }));
-
-  // Freeze header row (rows 1-5 frozen so headers are always visible)
-  ws['!views'] = [{ state: 'frozen', ySplit: 5, topLeftCell: 'A6' } as any];
-  ws['!autofilter'] = {
-    ref: XLSX.utils.encode_range({
-      s: { r: 4, c: 0 },
-      e: { r: Math.max(4, def.rows.length + 4), c: def.headers.length - 1 },
-    }),
-  };
-
-  // Merge title/metadata rows across all columns
-  const lastCol = def.headers.length - 1;
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } },
-  ];
-
-  // Number format for currency columns
-  if (def.currencyCols) {
-    def.rows.forEach((_, ri) => {
-      def.currencyCols!.forEach(ci => {
-        const addr = XLSX.utils.encode_cell({ r: ri + 5, c: ci });
-        if (ws[addr] && ws[addr].t === 'n') {
-          ws[addr].z = '"$"#,##0.00';
-        }
-      });
-    });
-  }
-
-  return ws;
+// Bundles a sheet's data + title; the actual styled worksheet is built in
+// writeWorkbook (exceljs, unlike the xlsx package, actually writes cell
+// styles — fonts/fills/borders — to the output file, not just values).
+export function buildSheet(def: SheetDef, reportTitle: string): { def: SheetDef; title: string } {
+  return { def, title: reportTitle };
 }
 
-function writeWorkbook(sheets: Array<{ ws: XLSX.WorkSheet; name: string }>, filename: string) {
-  const wb = XLSX.utils.book_new();
-  sheets.forEach(({ ws, name }) =>
-    XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31))
-  );
-  XLSX.writeFile(wb, filename);
+export async function writeWorkbook(
+  sheets: Array<{ ws: { def: SheetDef; title: string }; name: string }>,
+  filename: string,
+) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'HOU INC';
+  wb.created = new Date();
+
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const HEADER_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF121212' } };
+  const TITLE_FILL: ExcelJS.Fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9D7E3F' } };
+  const ALT_FILL: ExcelJS.Fill    = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F8F8' } };
+  const THIN_BORDER: ExcelJS.Border = { style: 'thin', color: { argb: 'FFE5E5E5' } };
+
+  sheets.forEach(({ ws: { def, title }, name }) => {
+    const sheet = wb.addWorksheet(name.slice(0, 31), { views: [{ state: 'frozen', ySplit: 5 }] });
+    const lastCol = def.headers.length;
+
+    sheet.mergeCells(1, 1, 1, lastCol);
+    const titleCell = sheet.getCell(1, 1);
+    titleCell.value = 'HOU INC — Houston Enterprise Financial Records';
+    titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = TITLE_FILL;
+    titleCell.alignment = { vertical: 'middle', indent: 1 };
+    sheet.getRow(1).height = 24;
+
+    sheet.mergeCells(2, 1, 2, lastCol);
+    const subCell = sheet.getCell(2, 1);
+    subCell.value = title;
+    subCell.font = { bold: true, size: 11, color: { argb: 'FF121212' } };
+    subCell.alignment = { indent: 1 };
+
+    sheet.mergeCells(3, 1, 3, lastCol);
+    const genCell = sheet.getCell(3, 1);
+    genCell.value = `Generated ${today}  ·  CONFIDENTIAL`;
+    genCell.font = { italic: true, size: 9, color: { argb: 'FF616161' } };
+    genCell.alignment = { indent: 1 };
+
+    const headerRow = sheet.getRow(5);
+    def.headers.forEach((h, i) => {
+      const cell = headerRow.getCell(i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+      cell.fill = HEADER_FILL;
+      cell.alignment = { vertical: 'middle' };
+      cell.border = { bottom: THIN_BORDER };
+    });
+    headerRow.height = 18;
+
+    def.rows.forEach((r, ri) => {
+      const row = sheet.getRow(6 + ri);
+      r.forEach((v, ci) => {
+        const cell = row.getCell(ci + 1);
+        cell.value = v;
+        if (def.currencyCols?.includes(ci) && typeof v === 'number') cell.numFmt = '"$"#,##0.00';
+        if (ri % 2 === 1) cell.fill = ALT_FILL;
+        cell.border = { bottom: THIN_BORDER };
+      });
+    });
+
+    sheet.columns = (def.colWidths ?? def.headers.map(h => Math.min(Math.max(String(h).length + 8, 14), 32)))
+      .map(w => ({ width: w }));
+
+    if (def.rows.length > 0) {
+      sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + def.rows.length, column: lastCol } };
+    }
+  });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ────────────────────────────────────────────

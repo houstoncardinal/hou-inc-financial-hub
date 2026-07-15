@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
-  ArrowUpRight, ChevronRight, ChevronLeft, CheckCircle,
+  ArrowUpRight, ChevronRight, ChevronLeft, CheckCircle, Plus, FileText,
   Building2, Home, Users, Briefcase, Wrench, TrendingUp,
 } from 'lucide-react';
 import LocationAutocomplete from '@/components/ui/smart/LocationAutocomplete';
@@ -54,22 +54,49 @@ const EMPTY_BRIEF: ProjectBrief = {
 };
 
 export default function PortalProject() {
-  const { client, loaded, getBrief, saveBrief, submitBrief } = usePortal();
+  const { client, loaded, getBriefs, saveBrief, submitBrief } = usePortal();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (!loaded) return;
     if (!client) navigate('/portal', { replace: true });
   }, [client, loaded, navigate]);
 
-  const existing    = getBrief();
-  const isSubmitted = existing?.status === 'submitted' || existing?.status === 'reviewing'
-    || existing?.status === 'consultation_scheduled' || existing?.status === 'in_progress';
+  const briefs = getBriefs();
+  const isNew  = searchParams.get('new') === '1';
+  const viewId = searchParams.get('id');
+  const viewedBrief   = viewId ? (briefs.find(b => b.id === viewId) ?? null) : null;
+  const viewedIsDraft = viewedBrief?.status === 'draft';
 
-  const [step, setStep]         = useState(0);
+  // 'wizard' — starting fresh, resuming a draft, or this client's very first brief ever.
+  // 'detail' — viewing one specific already-submitted brief.
+  // 'list'   — the default landing once at least one brief exists: every brief, plus a way to start another.
+  let mode: 'wizard' | 'detail' | 'list';
+  if (isNew) mode = 'wizard';
+  else if (viewId) mode = viewedBrief ? (viewedIsDraft ? 'wizard' : 'detail') : (briefs.length > 0 ? 'list' : 'wizard');
+  else mode = briefs.length > 0 ? 'list' : 'wizard';
+
+  const [step, setStep]           = useState(0);
   const [direction, setDirection] = useState(1);
-  const [brief, setBrief]       = useState<ProjectBrief>(existing ?? EMPTY_BRIEF);
-  const [done, setDone]         = useState(false);
+  const [draftId, setDraftId]     = useState<string | null>(viewedIsDraft ? viewId : null);
+  const [brief, setBrief]         = useState<ProjectBrief>(viewedIsDraft && viewedBrief ? viewedBrief : EMPTY_BRIEF);
+  const [done, setDone]           = useState(false);
+
+  // Re-sync wizard state when navigating between a fresh brief and a specific draft
+  // (react-router doesn't remount the component for a search-param-only navigation).
+  // The `!!viewedBrief` dep (not `briefs` itself) matters: on a hard reload of a
+  // `?id=` link, `briefs` loads in asynchronously after the first render, so this
+  // re-fires once when the target draft actually becomes available — but it must
+  // NOT re-fire on every later `briefs` update (each autosave replaces an entry in
+  // place), or every keystroke's Continue click would reset the wizard to step 0.
+  useEffect(() => {
+    setStep(0);
+    setDirection(1);
+    setDone(false);
+    setDraftId(viewedIsDraft ? viewId : null);
+    setBrief(viewedIsDraft && viewedBrief ? viewedBrief : EMPTY_BRIEF);
+  }, [viewId, isNew, !!viewedBrief]);
 
   if (!loaded || !client) return null;
 
@@ -91,21 +118,80 @@ export default function PortalProject() {
     return true;
   };
 
-  const handleNext = () => {
-    saveBrief(brief);
+  const handleNext = async () => {
+    const savedId = await saveBrief(brief, draftId ?? undefined);
+    if (savedId && !draftId) setDraftId(savedId);
     if (step < STEPS.length - 1) { setDirection(1); setStep(s => s + 1); }
   };
 
   const handleBack = () => { setDirection(-1); setStep(s => s - 1); };
 
-  const handleSubmit = () => {
-    submitBrief({ ...brief, status: 'submitted' });
+  const handleSubmit = async () => {
+    await submitBrief({ ...brief, status: 'submitted' }, draftId ?? undefined);
     setDone(true);
   };
 
-  // ── Success / already submitted ──────────────────────────────────────
-  if (done || isSubmitted) {
-    const display = existing ?? brief;
+  // ── List — every brief on file, plus a way to start another ──────────
+  if (mode === 'list') {
+    return (
+      <PortalLayout>
+        <div className="px-5 sm:px-10 py-8 md:py-12 max-w-3xl mx-auto">
+          <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>Client Portal</div>
+              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px,4vw,44px)', color: DARK, lineHeight: 1.05 }}>
+                Project Briefs
+              </div>
+            </div>
+            <Link
+              to="/portal/project?new=1"
+              className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-bold px-5 py-3 transition-opacity hover:opacity-90"
+              style={{ backgroundColor: DARK, color: '#FFFFFF' }}
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Submit New Project Brief
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {briefs.map(b => {
+              const label = b.status === 'draft' ? 'Draft — In Progress'
+                : b.status === 'submitted' ? 'Submitted — Under Review'
+                : b.status === 'reviewing' ? 'Under Review'
+                : b.status === 'consultation_scheduled' ? 'Consultation Scheduled'
+                : b.status === 'in_progress' ? 'In Progress' : b.status;
+              return (
+                <Link
+                  key={b.id}
+                  to={`/portal/project?id=${b.id}`}
+                  className="flex items-center justify-between gap-4 px-6 py-5 transition-colors hover:bg-black/[0.02]"
+                  style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}
+                >
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.24)` }}>
+                      <FileText className="w-4 h-4" style={{ color: GOLD }} strokeWidth={1.5} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold truncate" style={{ color: DARK }}>{b.type || 'Untitled Project'}</div>
+                      <div className="text-[11px] font-light truncate" style={{ color: MUTED }}>
+                        {[b.location, b.budget].filter(Boolean).join(' · ') || 'No details yet'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-[0.18em] font-bold shrink-0" style={{ color: b.status === 'draft' ? MUTED : GOLD }}>
+                    {label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </PortalLayout>
+    );
+  }
+
+  // ── Success / brief detail ────────────────────────────────────────────
+  if (mode === 'detail' || done) {
+    const display = done ? brief : viewedBrief;
     return (
       <PortalLayout>
         <div className="min-h-[calc(100dvh-56px)] flex items-center justify-center p-6">
@@ -146,13 +232,21 @@ export default function PortalProject() {
                 ))}
               </div>
 
-              <div className="flex justify-center">
+              <div className="flex justify-center items-center gap-4 flex-wrap">
                 <button
                   onClick={() => navigate('/portal/messages')}
                   className="inline-flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4 transition-opacity hover:opacity-90"
                   style={{ backgroundColor: GOLD, color: DARK }}>
                   Message Your Builder <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </button>
+                {briefs.length > 1 && (
+                  <button
+                    onClick={() => navigate('/portal/project')}
+                    className="text-[9px] uppercase tracking-[0.24em] font-bold transition-opacity hover:opacity-70"
+                    style={{ color: MUTED }}>
+                    ← Back to all briefs
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

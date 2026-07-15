@@ -9,6 +9,13 @@ export const fmtDate = (d: string | Date | null | undefined) => {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
 };
 
+export const fmtBytes = (bytes: number | null | undefined) => {
+  if (!bytes) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
 export const amountToWords = (amount: number): string => {
   if (amount === 0) return 'Zero and 00/100';
   const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];

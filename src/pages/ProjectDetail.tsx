@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useProjects, useChecks, useTransactions, useUpsert } from '@/hooks/useFinance';
 import { useProjectFinancialSummary } from '@/hooks/useConstructionFinance';
+import { usePortalClients } from '@/hooks/usePortalClients';
 import { useRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, fmtBytes } from '@/lib/format';
 import { generateProjectReport, savePDF, downloadCSV } from '@/lib/reports';
 import {
   useProjectDocuments, useUploadDocument, useDeleteDocument,
@@ -21,14 +22,22 @@ import {
 } from '@/hooks/useDocuments';
 import {
   ArrowLeft, Download, FileText, ArrowUpRight, Plus, ExternalLink,
-  Users, LayoutDashboard, Upload, Trash2, File, Image, Eye,
-  ChevronRight, Pencil, Check, X, FolderOpen, Link2,
+  Users, LayoutDashboard, Upload, Trash2, File, Image, Eye, Camera,
+  ChevronRight, ChevronDown, Pencil, Check, X, FolderOpen, Link2,
   BarChart3, Receipt, ClipboardList, ShieldCheck, Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import ProjectBreakdown from '@/components/ProjectBreakdown';
+import { PDV2_CSS } from '@/components/project-detail/cardStyles';
+import { StatCard } from '@/components/project-detail/StatCard';
+import { DonutChart } from '@/components/project-detail/DonutChart';
+import { TrendLineChart } from '@/components/project-detail/TrendLineChart';
+import { MilestoneTimeline } from '@/components/project-detail/MilestoneTimeline';
+import { ActivityFeedCard } from '@/components/project-detail/ActivityFeedCard';
+import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
+import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
 
 /* ── Status config ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
@@ -75,7 +84,9 @@ const PD_CSS = `
 .pd-row:hover td,.pd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .pd-doc-row:hover{background-color:rgba(157,126,63,0.025)!important;}
 .pd-compact-table td,.pd-compact-table th{padding-top:9px!important;padding-bottom:9px!important;}
-@media(max-width:639px){.pd-section{padding:12px}.pd-tab-btn{height:32px;padding:0 9px;font-size:8px}.pd-panel{box-shadow:0 1px 2px rgba(10,10,10,0.04)}}
+.pd-nav-select{width:100%;height:44px;padding:0 34px 0 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));appearance:none;}
+.pd-nav-select:focus{outline:none;border-color:hsl(var(--foreground)/0.35);}
+@media(max-width:639px){.pd-section{padding:12px}.pd-tab-btn{height:32px;padding:0 9px;font-size:8px}.pd-panel{box-shadow:0 1px 2px rgba(10,10,10,0.04)}.pd-nav-select{height:40px;font-size:10px}}
 .dark .pd-intel-card,.dark .pd-tab-card,.dark .pd-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
@@ -85,15 +96,9 @@ function FileIcon({ mimeType, className = 'w-4 h-4' }: { mimeType: string | null
   return <FileText className={className} strokeWidth={1.5} />;
 }
 
-function fmtBytes(bytes: number | null) {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /* ── Tab type ── */
-type Tab = 'overview' | 'documents' | 'activity' | 'draws' | 'breakdown';
+type Tab = 'overview' | 'documents' | 'photos' | 'activity' | 'breakdown';
 
 export default function ProjectDetail() {
   const { id }     = useParams<{ id: string }>();
@@ -111,18 +116,65 @@ export default function ProjectDetail() {
   const { data: expenses = [] } = useTransactions('expense');
   const { data: financeSummary } = useProjectFinancialSummary(id);
 
-  /* ── Draw schedule ── */
-  const [draws, setDraws]       = useState<any[]>([]);
-  const [drawOpen, setDrawOpen] = useState(false);
-  const [drawForm, setDrawForm] = useState({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '' });
-  const [drawSaving, setDrawSaving] = useState(false);
+  /* ── Overview redesign: lightweight independent data (milestones, pending-item counts, recent events) ── */
+  const [pdMilestones, setPdMilestones]   = useState<any[]>([]);
+  const [pendingCounts, setPendingCounts] = useState({ changeOrders: 0, draws: 0, invoices: 0 });
+  const [recentDraws, setRecentDraws]         = useState<any[]>([]);
+  const [recentChangeOrders, setRecentChangeOrders] = useState<any[]>([]);
+  const [recentInvoices, setRecentInvoices]   = useState<any[]>([]);
 
   useEffect(() => {
     if (!id) return;
-    (supabase as any).from('draw_schedules').select('*').eq('project_id', id).order('scheduled_date').then(({ data }: any) => {
-      setDraws(data ?? []);
+    (supabase as any).from('project_milestones').select('*').eq('project_id', id).order('sort_order').limit(6)
+      .then(({ data }: any) => setPdMilestones(data ?? []));
+
+    (supabase as any).from('draw_schedules').select('id, milestone_name, draw_amount, status, created_at').eq('project_id', id).order('created_at', { ascending: false }).limit(5)
+      .then(({ data }: any) => setRecentDraws(data ?? []));
+
+    (supabase as any).from('project_change_orders').select('id, title, amount, status, created_at').eq('project_id', id).order('created_at', { ascending: false }).limit(5)
+      .then(({ data }: any) => setRecentChangeOrders(data ?? []));
+
+    (supabase as any).from('invoices').select('id, invoice_number, amount_paid, status, updated_at').eq('project_id', id).order('updated_at', { ascending: false }).limit(5)
+      .then(({ data }: any) => setRecentInvoices(data ?? []));
+
+    Promise.all([
+      (supabase as any).from('project_change_orders').select('id', { count: 'exact', head: true }).eq('project_id', id).eq('status', 'pending'),
+      (supabase as any).from('draw_schedules').select('id', { count: 'exact', head: true }).eq('project_id', id).in('status', ['pending', 'requested']),
+      (supabase as any).from('invoices').select('id', { count: 'exact', head: true }).eq('project_id', id).in('status', ['sent', 'overdue']),
+    ]).then(([co, dr, inv]) => {
+      setPendingCounts({ changeOrders: co.count ?? 0, draws: dr.count ?? 0, invoices: inv.count ?? 0 });
     });
   }, [id]);
+
+  const recentActivity = useMemo(() => {
+    if (!enriched) return [];
+    const entries = [
+      ...enriched.incomeList.map((t: any) => ({
+        id: `income-${t.id}`, created_at: t.transaction_date,
+        title: `Payment received${t.source_name ? ` from ${t.source_name}` : ''}`,
+        amount: fmtUSD(t.amount), dotColor: 'bg-positive',
+      })),
+      ...recentDraws.map((d: any) => ({
+        id: `draw-${d.id}`, created_at: d.created_at,
+        title: `Draw ${d.milestone_name} ${d.status === 'funded' ? 'funded' : d.status === 'requested' ? 'requested' : 'added'}`,
+        amount: fmtUSD(d.draw_amount), dotColor: 'bg-blue-400',
+      })),
+      ...recentChangeOrders.map((c: any) => ({
+        id: `co-${c.id}`, created_at: c.created_at,
+        title: `Change order "${c.title}" ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'added'}`,
+        amount: fmtUSD(c.amount), dotColor: c.status === 'approved' ? 'bg-positive' : c.status === 'rejected' ? 'bg-accent' : 'bg-warning',
+      })),
+      ...recentInvoices.filter((i: any) => i.status === 'paid').map((i: any) => ({
+        id: `inv-${i.id}`, created_at: i.updated_at,
+        title: `Invoice #${i.invoice_number} paid`,
+        amount: fmtUSD(i.amount_paid), dotColor: 'bg-positive',
+      })),
+    ];
+    return entries
+      .filter(e => e.created_at)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map(e => ({ ...e, timestamp: fmtDate(e.created_at) }));
+  }, [enriched, recentDraws, recentChangeOrders, recentInvoices]);
 
   /* ── Portal link info ── */
   const [portalClient, setPortalClient] = useState<any>(null);
@@ -139,23 +191,102 @@ export default function ProjectDetail() {
   const [uploading, setUploading]         = useState(false);
   const [docUrls, setDocUrls]             = useState<Record<string, string>>({});
 
+  /* ── Progress Photos ── */
+  const [photos, setPhotos]                 = useState<any[]>([]);
+  const photoInputRef                       = useRef<HTMLInputElement>(null);
+  const [photoPhase, setPhotoPhase]         = useState('General');
+  const [photoCaption, setPhotoCaption]     = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const loadPhotos = async () => {
+    if (!id) return;
+    const { data } = await (supabase as any).from('project_photos').select('*')
+      .eq('project_id', id)
+      .order('taken_at', { ascending: false });
+    setPhotos(data ?? []);
+  };
+  useEffect(() => { loadPhotos(); }, [id]);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !id) return;
+    if (!project?.portal_client_id) { toast.error('Link this project to a portal client before uploading progress photos.'); return; }
+    setUploadingPhoto(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `progress-photos/${id}/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage.from('portal-documents').upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('portal-documents').getPublicUrl(path);
+      const { error: insErr } = await (supabase as any).from('project_photos').insert({
+        project_id: id,
+        client_id: project.portal_client_id,
+        phase_label: photoPhase.trim() || 'General',
+        url: pub.publicUrl,
+        caption: photoCaption.trim() || null,
+        taken_at: new Date().toISOString().slice(0, 10),
+      });
+      if (insErr) throw insErr;
+      toast.success('Photo uploaded — now visible in the client portal');
+      setPhotoCaption('');
+      await loadPhotos();
+    } catch (err: any) {
+      toast.error('Upload failed', { description: err?.message });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const deletePhoto = async (photo: any) => {
+    if (!confirm('Delete this photo?')) return;
+    const marker = '/portal-documents/';
+    const idx = String(photo.url ?? '').indexOf(marker);
+    if (idx !== -1) {
+      const path = decodeURIComponent(photo.url.slice(idx + marker.length));
+      await supabase.storage.from('portal-documents').remove([path]);
+    }
+    await (supabase as any).from('project_photos').delete().eq('id', photo.id);
+    toast.success('Deleted');
+    loadPhotos();
+  };
+
   /* ── Edit project inline ── */
   const upsert = useUpsert('projects', [['projects']]);
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', code: '', budget: '', status: 'active' as StatusKey, notes: '' });
+  const [editForm, setEditForm] = useState({
+    name: '', code: '', budget: '', status: 'active' as StatusKey, notes: '', portal_client_id: '',
+    location: '', department: '', client_name_snapshot: '',
+    original_contract_value: '', current_contract_value: '', estimated_cost_to_complete: '',
+    project_manager: '', contract_type: '', start_date: '', end_date: '',
+  });
+  const { data: portalClients = [] } = usePortalClients();
 
   /* ── Derived project data ── */
   const project = useMemo(() => projects.find((p: any) => p.id === id), [projects, id]);
 
+  const editFormFromProject = (p: any) => ({
+    name:   p.name ?? '',
+    code:   p.code ?? '',
+    budget: String(p.budget ?? ''),
+    status: (p.status ?? 'active') as StatusKey,
+    notes:  p.notes ?? '',
+    portal_client_id: p.portal_client_id ?? '',
+    location: p.location ?? '',
+    department: p.department ?? '',
+    client_name_snapshot: p.client_name_snapshot ?? '',
+    original_contract_value: String(p.original_contract_value ?? ''),
+    current_contract_value: String(p.current_contract_value ?? ''),
+    estimated_cost_to_complete: String(p.estimated_cost_to_complete ?? ''),
+    project_manager: p.project_manager ?? '',
+    contract_type: p.contract_type ?? '',
+    start_date: p.start_date ?? '',
+    end_date: p.end_date ?? '',
+  });
+
   useEffect(() => {
     if (!project) return;
-    setEditForm({
-      name:   project.name ?? '',
-      code:   project.code ?? '',
-      budget: String(project.budget ?? ''),
-      status: (project.status ?? 'active') as StatusKey,
-      notes:  project.notes ?? '',
-    });
+    setEditForm(editFormFromProject(project));
   }, [project?.id]);
 
   /* ── Load portal client / brief if linked ── */
@@ -238,32 +369,47 @@ export default function ProjectDetail() {
     return enriched.checksList.reduce((s: number, c: any) => s + (Number(c.retainage_held) || 0), 0);
   }, [enriched]);
 
-  /* ── Draw schedule actions ── */
-  const saveDrawEntry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!drawForm.milestone_name || !drawForm.draw_amount) { toast.error('Milestone name and amount required'); return; }
-    setDrawSaving(true);
-    try {
-      const { data } = await (supabase as any).from('draw_schedules').insert({
-        project_id: id, milestone_name: drawForm.milestone_name,
-        draw_amount: parseFloat(drawForm.draw_amount),
-        scheduled_date: drawForm.scheduled_date || null,
-        status: drawForm.status, notes: drawForm.notes || null,
-      }).select().single();
-      setDraws(d => [...d, data]);
-      toast.success('Draw entry added');
-      setDrawOpen(false);
-      setDrawForm({ milestone_name: '', draw_amount: '', scheduled_date: '', status: 'pending', notes: '' });
-    } catch { toast.error('Failed to save draw entry'); }
-    setDrawSaving(false);
-  };
+  /* ── Real monthly cash-flow series (last 12 months) — drives the Cash Flow chart and the ── */
+  /* ── Budget Used / Forecast Profit / Cash Position sparklines. No fabricated data.        ── */
+  const cashFlowSeries = useMemo(() => {
+    if (!enriched) return [];
+    const months: { key: string; period: string }[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, period: d.toLocaleDateString('en-US', { month: 'short' }) });
+    }
+    const buckets: Record<string, { inflow: number; outflow: number }> = {};
+    months.forEach(m => { buckets[m.key] = { inflow: 0, outflow: 0 }; });
+    const bucketKey = (dateStr: string) => dateStr?.slice(0, 7);
+    enriched.incomeList.forEach((t: any) => { const k = bucketKey(t.transaction_date); if (buckets[k]) buckets[k].inflow += Number(t.amount) || 0; });
+    enriched.expenseList.forEach((t: any) => { const k = bucketKey(t.transaction_date); if (buckets[k]) buckets[k].outflow += Number(t.amount) || 0; });
+    enriched.checksList.forEach((c: any) => { const k = bucketKey(c.issue_date); if (buckets[k]) buckets[k].outflow += Number(c.amount) || 0; });
+    return months.map(m => ({
+      period: m.period,
+      inflow: buckets[m.key].inflow,
+      outflow: buckets[m.key].outflow,
+      net: buckets[m.key].inflow - buckets[m.key].outflow,
+    }));
+  }, [enriched]);
 
-  const updateDrawStatus = async (drawId: string, status: string) => {
-    try {
-      await (supabase as any).from('draw_schedules').update({ status }).eq('id', drawId);
-      setDraws(d => d.map(x => x.id === drawId ? { ...x, status } : x));
-    } catch (e: any) { toast.error(e?.message || 'Failed to update draw status'); }
-  };
+  /* ── Real cumulative trends for the stat-card sparklines (last 8 months). ── */
+  /* ── Cards with no genuine time-series (health score, cost-to-complete   ── */
+  /* ── estimate, forecast profit estimate, open-items count) get no trend. ── */
+  const { budgetUsedTrend, cashPositionTrend } = useMemo(() => {
+    if (!enriched || cashFlowSeries.length === 0) return { budgetUsedTrend: undefined, cashPositionTrend: undefined };
+    const budget = Number(enriched.budget) || 0;
+    let cumSpend = 0, cumNet = 0;
+    const budgetTrend: number[] = [];
+    const cashTrend: number[] = [];
+    cashFlowSeries.forEach(m => {
+      cumSpend += m.outflow;
+      cumNet += m.net;
+      budgetTrend.push(budget > 0 ? Math.min(100, (cumSpend / budget) * 100) : 0);
+      cashTrend.push(cumNet);
+    });
+    return { budgetUsedTrend: budgetTrend.slice(-8), cashPositionTrend: cashTrend.slice(-8) };
+  }, [enriched, cashFlowSeries]);
 
   /* ── Document actions ── */
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,7 +456,18 @@ export default function ProjectDetail() {
     e.preventDefault();
     if (!editForm.name.trim() || !id) return;
     try {
-      await upsert.mutateAsync({ id, ...editForm, budget: parseFloat(editForm.budget) || 0 } as any);
+      await upsert.mutateAsync({
+        id, ...editForm,
+        budget: parseFloat(editForm.budget) || 0,
+        portal_client_id: editForm.portal_client_id || null,
+        original_contract_value: parseFloat(editForm.original_contract_value) || 0,
+        current_contract_value: parseFloat(editForm.current_contract_value) || 0,
+        estimated_cost_to_complete: parseFloat(editForm.estimated_cost_to_complete) || 0,
+        project_manager: editForm.project_manager || null,
+        contract_type: editForm.contract_type || null,
+        start_date: editForm.start_date || null,
+        end_date: editForm.end_date || null,
+      } as any);
       toast.success('Project updated');
       setEditOpen(false);
     } catch { toast.error('Failed to save'); }
@@ -354,22 +511,19 @@ export default function ProjectDetail() {
   const TABS: { key: Tab; label: string; short: string; desc: string; count?: number; icon: any }[] = [
     { key: 'overview',   label: 'Overview', short: 'Overview', desc: 'Health, cash, budget, and project controls', icon: LayoutDashboard },
     { key: 'breakdown',  label: 'Houston Enterprise Reconciliation', short: 'Reconciliation', desc: 'SOV, draws, COs, payments, and audit', icon: ShieldCheck },
-    { key: 'documents',  label: 'Documents', short: 'Documents', desc: 'Contracts, permits, photos, receipts', count: projectDocs.length, icon: FolderOpen },
+    { key: 'documents',  label: 'Documents', short: 'Documents', desc: 'Contracts, permits, receipts', count: projectDocs.length, icon: FolderOpen },
+    { key: 'photos',     label: 'Progress Photos', short: 'Photos', desc: 'Site photos synced to the client portal', count: photos.length, icon: Camera },
     { key: 'activity',   label: 'Activity', short: 'Activity', desc: 'Income, expenses, and check movement', count: sortedActivity.length, icon: Receipt },
-    { key: 'draws',      label: 'Draws', short: 'Draws', desc: 'Milestone draw schedule and funding status', count: draws.length, icon: BarChart3 },
   ];
   const activeTabMeta = TABS.find(t => t.key === tab) ?? TABS[0];
   const ActiveTabIcon = activeTabMeta.icon;
-  const projectHealthCards = [
-    { label: 'Project Health', value: `${Math.round(healthScore)}`, sub: healthTone.label, color: healthTone.color, Icon: ShieldCheck },
-    { label: 'Budget Used', value: `${enriched.used.toFixed(1)}%`, sub: `${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`, color: enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F', Icon: BarChart3 },
-    { label: 'Cash Position', value: fmtUSD(enriched.net), sub: `${fmtUSD(enriched.outstanding)} open checks`, color: enriched.net >= 0 ? '#10b981' : '#ef4444', Icon: Receipt },
-    { label: 'Project Files', value: String(projectDocs.length), sub: `${sortedActivity.length} ledger movements`, color: '#2563eb', Icon: FolderOpen },
-  ];
+  const openItemsTotal = pendingCounts.changeOrders + pendingCounts.draws + pendingCounts.invoices;
+  const clientDisplayName = portalClient?.name || enriched.client_name_snapshot || null;
 
   return (
     <AppShell>
       <style>{PD_CSS}</style>
+      <style>{PDV2_CSS}</style>
 
       {/* ── Page Header ── */}
       <PageHeader
@@ -399,7 +553,7 @@ export default function ProjectDetail() {
                 <LayoutDashboard className="w-3 h-3" /> Admin
               </button>
             )}
-            <button onClick={() => { setEditForm({ name: enriched.name, code: enriched.code || '', budget: String(enriched.budget), status: enriched.status as StatusKey, notes: enriched.notes || '' }); setEditOpen(true); }}
+            <button onClick={() => { setEditForm(editFormFromProject(enriched)); setEditOpen(true); }}
               className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-[9px] uppercase tracking-[0.18em] font-bold border border-border text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all">
               <Pencil className="w-3 h-3" /> Edit
             </button>
@@ -411,7 +565,7 @@ export default function ProjectDetail() {
 
       {/* Mobile actions */}
       <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
-        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={() => { setEditForm({ name: enriched.name, code: enriched.code || '', budget: String(enriched.budget), status: enriched.status as StatusKey, notes: enriched.notes || '' }); setEditOpen(true); }}>
+        <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={() => { setEditForm(editFormFromProject(enriched)); setEditOpen(true); }}>
           <Pencil className="w-3.5 h-3.5 mr-1.5" />Edit
         </Button>
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
@@ -420,44 +574,139 @@ export default function ProjectDetail() {
 
       {/* Edit project dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-none sm:max-w-2xl w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="text-[8px] uppercase tracking-[0.32em] font-bold text-muted-foreground mb-0.5">Edit Project</div>
             <DialogTitle className="text-lg font-semibold">Edit {enriched.name}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={saveEdit} className="space-y-4 pt-2">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 space-y-1.5">
-                <Label className="micro-label">Project Name</Label>
-                <Input className="rounded-none h-10" required value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+          <form onSubmit={saveEdit} className="space-y-5 pt-2">
+
+            {/* Identity */}
+            <div className="space-y-3">
+              <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground border-b border-border pb-1.5">Identity</div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="micro-label">Project Name</Label>
+                  <Input className="rounded-none h-10" required value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Code / ID</Label>
+                  <Input className="rounded-none h-10 font-mono-tab" value={editForm.code} onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} placeholder="HOU-001" />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="micro-label">Code / ID</Label>
-                <Input className="rounded-none h-10 font-mono-tab" value={editForm.code} onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} placeholder="HOU-001" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Location</Label>
+                  <Input className="rounded-none h-10" value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Houston, TX" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Department</Label>
+                  <Input className="rounded-none h-10" value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} placeholder="e.g. Commercial, Residential" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Project Manager</Label>
+                  <Input className="rounded-none h-10" value={editForm.project_manager} onChange={e => setEditForm(f => ({ ...f, project_manager: e.target.value }))} placeholder="e.g. Hunain Qureshi" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Contract Type</Label>
+                  <Input className="rounded-none h-10" value={editForm.contract_type} onChange={e => setEditForm(f => ({ ...f, contract_type: e.target.value }))} placeholder="e.g. Lump Sum, Cost-Plus" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Start Date</Label>
+                  <DateInput className="h-10" value={editForm.start_date} onChange={e => setEditForm(f => ({ ...f, start_date: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">End Date</Label>
+                  <DateInput className="h-10" value={editForm.end_date} onChange={e => setEditForm(f => ({ ...f, end_date: e.target.value }))} />
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="micro-label">Contract Budget (USD)</Label>
-                <CurrencyInput value={editForm.budget} onValueChange={v => setEditForm(f => ({ ...f, budget: v }))} placeholder="0.00" />
+
+            {/* Financials */}
+            <div className="space-y-3">
+              <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground border-b border-border pb-1.5">Financials</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Original Contract Value</Label>
+                  <CurrencyInput value={editForm.original_contract_value} onValueChange={v => setEditForm(f => ({ ...f, original_contract_value: v }))} placeholder="0.00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Current Contract Value</Label>
+                  <CurrencyInput value={editForm.current_contract_value} onValueChange={v => setEditForm(f => ({ ...f, current_contract_value: v }))} placeholder="0.00" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Estimated Cost to Complete</Label>
+                  <CurrencyInput value={editForm.estimated_cost_to_complete} onValueChange={v => setEditForm(f => ({ ...f, estimated_cost_to_complete: v }))} placeholder="0.00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="micro-label">Status</Label>
+                  <Select value={editForm.status} onValueChange={(v: any) => setEditForm(f => ({ ...f, status: v }))}>
+                    <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="on_hold">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="micro-label">Status</Label>
-                <Select value={editForm.status} onValueChange={(v: any) => setEditForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                <Label className="micro-label">Legacy Budget (USD)</Label>
+                <CurrencyInput value={editForm.budget} onValueChange={v => setEditForm(f => ({ ...f, budget: v }))} placeholder="0.00" />
+                <p className="text-[10px] text-muted-foreground">
+                  Only used as a fallback when Contract Value above is 0 — the financial summary and reconciliation numbers prefer Contract Value.
+                </p>
+              </div>
+            </div>
+
+            {/* Client */}
+            <div className="space-y-3">
+              <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground border-b border-border pb-1.5">Client</div>
+              <div className="space-y-1.5">
+                <Label className="micro-label flex items-center gap-1.5"><Link2 className="w-3 h-3" strokeWidth={2} /> Portal Client</Label>
+                <Select
+                  value={editForm.portal_client_id || '__none__'}
+                  onValueChange={(v: string) => setEditForm(f => {
+                    if (v === '__none__') return { ...f, portal_client_id: '' };
+                    const picked = portalClients.find(c => c.id === v);
+                    return {
+                      ...f,
+                      portal_client_id: v,
+                      client_name_snapshot: f.client_name_snapshot || picked?.name || f.client_name_snapshot,
+                    };
+                  })}
+                >
+                  <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="No client linked" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="on_hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="__none__">— No client linked —</SelectItem>
+                    {portalClients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Links this project to a client portal account — required for Progress Photos and the Portal Bridge card to work.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="micro-label">Client Name (display)</Label>
+                <Input className="rounded-none h-10" value={editForm.client_name_snapshot} onChange={e => setEditForm(f => ({ ...f, client_name_snapshot: e.target.value }))} placeholder="Auto-filled from Portal Client" />
               </div>
             </div>
+
+            {/* Notes */}
             <div className="space-y-1.5">
               <Label className="micro-label">Notes / Scope</Label>
               <textarea className="w-full rounded-none text-sm border border-border p-2.5 resize-none focus:outline-none focus:border-foreground/30" rows={3} value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Client, address, scope…" />
             </div>
+
             <div className="flex gap-2 pt-1">
               <Button type="submit" className="rounded-none h-10 flex-1">Save Changes</Button>
               <Button type="button" variant="outline" className="rounded-none h-10" onClick={() => setEditOpen(false)}>Cancel</Button>
@@ -476,11 +725,11 @@ export default function ProjectDetail() {
               <select
                 value={tab}
                 onChange={e => setTab(e.target.value as Tab)}
-                className="w-full h-10 px-3 pr-9 text-xs font-bold uppercase tracking-[0.12em] border border-border bg-background text-foreground appearance-none focus:outline-none focus:border-foreground/35"
+                className="pd-nav-select"
               >
                 {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
-              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             </div>
 
             <div className="hidden sm:flex flex-wrap gap-1.5">
@@ -523,277 +772,247 @@ export default function ProjectDetail() {
       ══════════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
         <div className="pd-section space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-            {projectHealthCards.map(card => (
-              <div key={card.label} className="pd-intel-card p-3 min-w-0">
-                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                      <card.Icon className="w-3 h-3" style={{ color: card.color }} />
-                      {card.label}
-                    </div>
-                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
-                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+
+          {/* ── Stat cards ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+            <StatCard
+              label="Project Health" value={`${Math.round(healthScore)}`} sub={healthTone.label}
+              subColor="" trendColor={healthTone.color}
+            />
+            <StatCard
+              label="Budget Used" value={`${enriched.used.toFixed(1)}%`}
+              sub={`${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`}
+              trend={budgetUsedTrend} trendColor={enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F'}
+            />
+            <StatCard
+              label="Cost to Complete"
+              value={projectSummary ? fmtUSD(projectSummary.estimated_cost_to_complete) : '—'}
+              sub="Estimated"
+            />
+            <StatCard
+              label="Forecast Profit"
+              value={projectSummary ? fmtUSD(projectSummary.estimated_gross_profit) : '—'}
+              sub={projectSummary ? `${projectSummary.estimated_gross_margin.toFixed(1)}% margin` : 'Awaiting data'}
+              subColor={projectSummary && projectSummary.estimated_gross_profit >= 0 ? 'text-positive' : 'text-accent'}
+            />
+            <StatCard
+              label="Cash Position" value={fmtUSD(projectSummary?.cash_position ?? enriched.net)}
+              sub="Available" trend={cashPositionTrend} trendColor={(projectSummary?.cash_position ?? enriched.net) >= 0 ? '#10b981' : '#ef4444'}
+            />
+            <StatCard
+              label="Open Items" value={String(openItemsTotal)}
+              sub={openItemsTotal > 0 ? 'Requires attention' : 'All caught up'}
+              subColor={openItemsTotal > 0 ? 'text-warning' : 'text-positive'}
+            />
           </div>
-          {projectSummary && (
-            <div className="pd-panel bg-secondary/20 overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">Construction Finance Intelligence</div>
-                  <div className="text-sm font-semibold mt-0.5">Contract, billing, cost, and cash position from linked source records</div>
-                </div>
-                <span className={`hidden sm:inline-flex text-[8px] uppercase tracking-[0.18em] px-2 py-1 border font-bold ${
-                  projectSummary.projects_over_budget ? 'border-accent/30 bg-accent/10 text-accent' : 'border-positive/30 bg-positive/10 text-positive'
-                }`}>
-                  {projectSummary.projects_over_budget ? 'Over budget watch' : 'Within budget'}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-px bg-border">
-                {[
-                  {
-                    label: 'Current Contract',
-                    value: fmtUSD(projectSummary.current_contract_value),
-                    sub: `${fmtUSD(projectSummary.approved_change_orders)} approved COs`,
-                    tone: '',
-                  },
-                  {
-                    label: 'Accounts Receivable',
-                    value: fmtUSD(projectSummary.accounts_receivable),
-                    sub: `${projectSummary.percentage_collected.toFixed(1)}% collected`,
-                    tone: projectSummary.accounts_receivable > 0 ? 'text-warning' : 'text-positive',
-                  },
-                  {
-                    label: 'Actual Costs',
-                    value: fmtUSD(projectSummary.actual_project_costs),
-                    sub: `${fmtUSD(projectSummary.outstanding_checks)} outstanding checks`,
-                    tone: projectSummary.projects_over_budget ? 'text-accent' : '',
-                  },
-                  {
-                    label: 'Forecast Profit',
-                    value: fmtUSD(projectSummary.estimated_gross_profit),
-                    sub: `${projectSummary.estimated_gross_margin.toFixed(1)}% estimated margin`,
-                    tone: projectSummary.estimated_gross_profit >= 0 ? 'text-positive' : 'text-accent',
-                  },
-                ].map(card => (
-                  <div key={card.label} className="bg-background px-4 py-3.5">
-                    <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground leading-tight">{card.label}</div>
-                    <div className={`text-lg font-bold font-mono-tab mt-1 leading-tight ${card.tone}`}>{card.value}</div>
-                    <div className="text-[10px] text-muted-foreground mt-1 font-mono-tab">{card.sub}</div>
+
+          {/* ── Financial Summary / Budget vs Actual / Cash Flow / Project Details ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 items-stretch">
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Financial Summary</div></div>
+              <div className="p-4 space-y-2.5 text-[12px]">
+                {(projectSummary ? [
+                  ['Original Contract', fmtUSD(projectSummary.original_contract_value), false],
+                  ['Change Orders', fmtUSD(projectSummary.approved_change_orders), false],
+                  ['Revised Contract', fmtUSD(projectSummary.current_contract_value), true],
+                  ['Total Billed', fmtUSD(projectSummary.total_invoiced), false],
+                  ['Payments Received', fmtUSD(projectSummary.total_collected), false],
+                  ['Balance Remaining', fmtUSD(projectSummary.current_contract_value - projectSummary.total_collected), true],
+                ] : [
+                  ['Contract Budget', fmtUSD(enriched.budget), false],
+                  ['Deployed', fmtUSD(enriched.spent), false],
+                  ['Revenue Collected', fmtUSD(enriched.incoming), false],
+                  ['Net Position', fmtUSD(enriched.net), true],
+                ]).map(([label, value, bold]) => (
+                  <div key={label as string} className={`flex justify-between items-baseline ${bold ? 'pt-2 border-t border-border' : ''}`}>
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className={`font-mono-tab ${bold ? 'font-bold text-[13px] text-[#9D7E3F]' : 'font-semibold'}`}>{value}</span>
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border-t border-border">
-                {[
-                  ['Unbilled Contract', projectSummary.unbilled_contract_amount],
-                  ['Retainage Held', projectSummary.retainage_withheld],
-                  ['Unpaid Costs', projectSummary.unpaid_costs],
-                  ['Cash Position', projectSummary.cash_position],
-                ].map(([label, value]) => (
-                  <div key={label} className="bg-background px-4 py-2.5">
-                    <div className="text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
-                    <div className="text-sm font-semibold font-mono-tab mt-0.5">{fmtUSD(Number(value))}</div>
-                  </div>
-                ))}
+              <div className="px-4 pb-3.5">
+                <button onClick={() => setTab('breakdown')} className="pdv2-link">View full financial summary →</button>
               </div>
             </div>
-          )}
 
-          {/* ── Snapshot KPIs ── */}
-          <div className="pd-panel overflow-hidden">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
-              {[
-                { label: 'Contract Budget',  value: fmtUSD(enriched.budget),      c: '' },
-                { label: 'Deployed',         value: fmtUSD(enriched.spent),       c: '' },
-                { label: 'Revenue',          value: fmtUSD(enriched.incoming),    c: 'text-positive' },
-                { label: 'Pending Checks',   value: fmtUSD(enriched.outstanding), c: enriched.outstanding > 0 ? 'text-warning' : '' },
-                { label: 'Retainage Held',   value: fmtUSD(retainageHeld),        c: retainageHeld > 0 ? 'text-blue-400' : 'text-muted-foreground' },
-              ].map(s => (
-                <div key={s.label} className="bg-background px-4 sm:px-5 py-3">
-                  <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1.5 leading-tight">{s.label}</div>
-                  <div className={`text-lg sm:text-xl font-bold font-mono-tab leading-tight ${s.c}`}>{s.value}</div>
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Budget vs Actual</div></div>
+              <div className="p-4">
+                <DonutChart
+                  centerValue={`${enriched.used.toFixed(1)}%`}
+                  centerLabel="Budget Used"
+                  slices={[
+                    { label: 'Actual Costs', value: enriched.spent, color: '#9D7E3F' },
+                    { label: 'Committed Costs', value: projectSummary ? Math.max(projectSummary.committed_project_costs - enriched.spent, 0) : 0, color: '#f59e0b' },
+                    { label: 'Remaining Budget', value: Math.max(enriched.budget - enriched.spent, 0), color: '#e5e5e5' },
+                  ]}
+                />
+                <div className="flex justify-between items-baseline mt-3 pt-3 border-t border-border text-[11px]">
+                  <span className="text-muted-foreground">Total Budget</span>
+                  <span className="font-mono-tab font-bold">{fmtUSD(enriched.budget)}</span>
                 </div>
-              ))}
+              </div>
+              <div className="px-4 pb-3.5">
+                <button onClick={() => setTab('breakdown')} className="pdv2-link">View budget details →</button>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-
-            {/* Budget utilization */}
-            <div className="pd-panel p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="micro-label">Budget Utilization</div>
-                {enriched.used >= 100 && (
-                  <span className="text-[8px] uppercase tracking-[0.14em] px-2 py-1 border font-medium bg-accent/10 text-accent border-accent/30">
-                    Over Budget · {fmtUSD(enriched.spent - enriched.budget)} excess
-                  </span>
-                )}
-                {enriched.used >= 80 && enriched.used < 100 && (
-                  <span className="text-[8px] uppercase tracking-[0.14em] px-2 py-1 border font-medium bg-warning/10 text-warning border-warning/30">
-                    Near Limit · {(100 - enriched.used).toFixed(1)}% remaining
-                  </span>
-                )}
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                <span>{fmtUSD(enriched.spent)} spent of {fmtUSD(enriched.budget)}</span>
-                <span className={`font-mono-tab font-semibold ${enriched.used >= 100 ? 'text-accent' : enriched.used >= 80 ? 'text-warning' : ''}`}>
-                  {enriched.used.toFixed(1)}%
-                </span>
-              </div>
-              <div className="h-2 bg-secondary overflow-hidden">
-                <motion.div
-                  className={`h-full ${enriched.used >= 100 ? 'bg-accent' : enriched.used >= 80 ? 'bg-warning' : 'bg-foreground'}`}
-                  style={{ width: `${Math.min(enriched.used, 100)}%` }}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(enriched.used, 100)}%` }}
-                  transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Cash Flow Over Time</div></div>
+              <div className="p-4">
+                <TrendLineChart
+                  data={cashFlowSeries}
+                  series={[
+                    { key: 'inflow', label: 'Inflow', color: '#10b981' },
+                    { key: 'outflow', label: 'Outflow', color: '#ef4444' },
+                    { key: 'net', label: 'Net Cash Flow', color: '#3b82f6' },
+                  ]}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-5 font-mono-tab">
-                <div>
-                  <div className="micro-label">Net Position</div>
-                  <div className={`text-xl font-semibold mt-1 ${enriched.net >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(enriched.net)}</div>
-                </div>
-                <div>
-                  <div className="micro-label">Activity Count</div>
-                  <div className="text-xl font-semibold mt-1">{sortedActivity.length} entries</div>
-                </div>
+              <div className="px-4 pb-3.5">
+                <button onClick={() => setTab('activity')} className="pdv2-link">View cash flow →</button>
               </div>
-              {enriched.notes && (
-                <div className="mt-5 pt-4 border-t border-border">
-                  <div className="micro-label mb-1.5">Notes</div>
-                  <p className="text-sm text-muted-foreground">{enriched.notes}</p>
+            </div>
+
+            <ProjectDetailsCard
+              data={{
+                name: enriched.name,
+                code: enriched.code,
+                clientName: clientDisplayName,
+                projectManager: enriched.project_manager,
+                status: statusMeta.label,
+                statusColor: enriched.status === 'active' ? 'bg-positive/15 text-positive' : enriched.status === 'on_hold' ? 'bg-warning/15 text-warning' : 'bg-secondary text-foreground',
+                contractType: enriched.contract_type,
+                startDate: enriched.start_date,
+                endDate: enriched.end_date,
+                location: enriched.location,
+                department: enriched.department,
+              }}
+              onEdit={() => { setEditForm(editFormFromProject(enriched)); setEditOpen(true); }}
+            />
+          </div>
+
+          {/* ── Key Milestones ── */}
+          <div className="pdv2-card overflow-hidden">
+            <div className="pdv2-card-header flex items-center justify-between">
+              <div className="text-[11px] font-bold uppercase tracking-wide">Key Milestones</div>
+              <button onClick={() => setTab('breakdown')} className="pdv2-link">View all milestones →</button>
+            </div>
+            <div className="p-4">
+              <MilestoneTimeline
+                milestones={pdMilestones.map(m => ({
+                  id: m.id, title: m.title,
+                  date: m.actual_completion_date || m.planned_completion_date || m.planned_start_date,
+                  status: m.status === 'completed' ? 'completed' : m.status === 'in_progress' ? 'active' : 'pending',
+                }))}
+              />
+            </div>
+          </div>
+
+          {/* ── Recent Activity / Pending Items ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <ActivityFeedCard entries={recentActivity} onViewAll={() => setTab('activity')} />
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header flex items-center justify-between">
+                <div className="text-[11px] font-bold uppercase tracking-wide">Pending Items</div>
+                <button onClick={() => setTab('breakdown')} className="pdv2-link">View all →</button>
+              </div>
+              {openItemsTotal === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">Nothing pending — everything is caught up.</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {[
+                    { label: 'Change Orders', sub: 'Awaiting approval', count: pendingCounts.changeOrders },
+                    { label: 'Draw Requests', sub: 'Awaiting submission', count: pendingCounts.draws },
+                    { label: 'Invoices', sub: 'Awaiting payment', count: pendingCounts.invoices },
+                  ].filter(p => p.count > 0).map(p => (
+                    <div key={p.label} className="px-4 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-[12px] font-medium">{p.label}</div>
+                        <div className="text-[10px] text-muted-foreground">{p.sub}</div>
+                      </div>
+                      <span className="text-sm font-bold font-mono-tab text-warning">{p.count}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-
-            {/* Cost breakdown */}
-            {costBreakdown.length > 0 && (
-              <div className="pd-panel overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
-                  Budget vs. Actuals — Line Item Breakdown
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        {['Category', 'Items', 'Actual', '% of Spend'].map(h => (
-                          <th key={h} className={`px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium ${h !== 'Category' ? 'text-right' : 'text-left'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {costBreakdown.map((row) => (
-                        <tr key={row.category} className="border-b border-border last:border-b-0 pd-row">
-                          <td className="px-4 py-3 font-medium">{row.category}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">{row.count}</td>
-                          <td className="px-4 py-3 text-right font-semibold font-mono-tab">{fmtUSD(row.actual)}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">
-                            {enriched.spent > 0 ? ((row.actual / enriched.spent) * 100).toFixed(1) + '%' : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-border bg-secondary/40">
-                        <td className="px-4 py-3 font-bold text-[11px] uppercase tracking-wider">Total</td>
-                        <td className="px-4 py-3 text-right text-muted-foreground font-mono-tab">{enriched.expenseList.length + enriched.checksList.length}</td>
-                        <td className="px-4 py-3 text-right font-bold font-mono-tab">{fmtUSD(enriched.spent)}</td>
-                        <td className="px-4 py-3 text-right font-bold font-mono-tab">
-                          <span className={enriched.budget > 0 && enriched.spent > enriched.budget ? 'text-accent' : 'text-positive'}>
-                            {enriched.budget > 0 ? (enriched.budget > enriched.spent ? '+' : '−') + fmtUSD(Math.abs(enriched.budget - enriched.spent)) + ' vs budget' : '—'}
-                          </span>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Details card */}
-            <div className="pd-panel p-4 sm:p-5">
-              <div className="micro-label mb-3">Details</div>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd className="font-medium uppercase tracking-wider text-[10px]">{enriched.status}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Code</dt><dd className="font-semibold font-mono-tab">{enriched.code || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Created</dt><dd className="font-mono-tab text-muted-foreground">{fmtDate(enriched.created_at)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Checks</dt><dd className="font-semibold">{enriched.checkCount}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Transactions</dt><dd className="font-semibold">{enriched.txnCount}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">Documents</dt><dd className="font-semibold">{projectDocs.length}</dd></div>
-              </dl>
-            </div>
-
-            {/* Portal client bridge */}
-            {(portalClient || portalBrief) && (
-              <div className="pd-panel p-4 sm:p-5">
-                <div className="micro-label mb-3 flex items-center gap-1.5">
-                  <Link2 className="w-3 h-3" strokeWidth={2} /> Portal Bridge
-                </div>
-                {portalClient && (
-                  <div className="mb-3 pb-3 border-b border-border">
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground mb-1">Client</div>
-                    <div className="text-sm font-semibold">{portalClient.name}</div>
-                    <div className="text-[11px] text-muted-foreground">{portalClient.email}</div>
-                    {portalClient.phone && <div className="text-[11px] text-muted-foreground">{portalClient.phone}</div>}
-                    <div className={`text-[8px] uppercase tracking-[0.2em] font-bold mt-1.5 ${portalClient.status === 'approved' ? 'text-positive' : 'text-warning'}`}>
-                      ● {portalClient.status?.replace('_', ' ')}
-                    </div>
-                    {isAdmin && (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => navigate('/admin')}
-                          className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors">
-                          <ExternalLink className="w-2.5 h-2.5" /> View in Admin
-                        </button>
-                        {portalClient.email && (
-                          <a
-                            href={`mailto:${portalClient.email}?subject=${encodeURIComponent('Your Houston Enterprise Client Portal')}&body=${encodeURIComponent(`Hi ${portalClient.name?.split(' ')[0] || 'there'},\n\nYour Houston Enterprise client portal is ready. You can review project updates, invoices, documents, milestones, and messages here:\n\n${window.location.origin}/portal\n\nPlease sign in or register with this email address so we can connect your project record securely.\n\nBest,\nHouston Enterprise`)}`}
-                            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <Mail className="w-2.5 h-2.5" /> Invite
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
+          {/* ── Top Cost Categories / Documents ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Top Cost Categories</div></div>
+              <div className="p-4">
+                {costBreakdown.length === 0 ? (
+                  <div className="text-center text-xs text-muted-foreground py-6">No expenses recorded yet.</div>
+                ) : (
+                  <DonutChart
+                    centerValue={fmtUSD(enriched.spent)}
+                    centerLabel="Actual Costs"
+                    slices={costBreakdown.slice(0, 6).map((row, i) => ({
+                      label: row.category, value: row.actual,
+                      color: ['#9D7E3F', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'][i % 6],
+                    }))}
+                  />
                 )}
-                {portalBrief && (
-                  <div>
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground mb-1">Originating Brief</div>
-                    <div className="text-[11px] space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Type</span>
-                        <span className="font-medium capitalize">{portalBrief.type || '—'}</span>
+              </div>
+            </div>
+            <DocumentsCard documents={projectDocs} onViewAll={() => setTab('documents')} />
+          </div>
+
+          {/* ── Portal Bridge / Quick Actions ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {(portalClient || portalBrief) && (
+              <div className="pdv2-card overflow-hidden">
+                <div className="pdv2-card-header flex items-center gap-1.5">
+                  <Link2 className="w-3 h-3" strokeWidth={2} />
+                  <div className="text-[11px] font-bold uppercase tracking-wide">Portal Bridge</div>
+                </div>
+                <div className="p-4">
+                  {portalClient && (
+                    <div className="pb-3 mb-3 border-b border-border">
+                      <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground mb-1">Client</div>
+                      <div className="text-sm font-semibold">{portalClient.name}</div>
+                      <div className="text-[11px] text-muted-foreground">{portalClient.email}</div>
+                      {portalClient.phone && <div className="text-[11px] text-muted-foreground">{portalClient.phone}</div>}
+                      <div className={`text-[8px] uppercase tracking-[0.2em] font-bold mt-1.5 ${portalClient.status === 'approved' ? 'text-positive' : 'text-warning'}`}>
+                        ● {portalClient.status?.replace('_', ' ')}
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Status</span>
-                        <span className="font-medium capitalize">{portalBrief.status?.replace('_', ' ') || '—'}</span>
-                      </div>
-                      {portalBrief.budget && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Budget</span>
-                          <span className="font-mono-tab font-semibold">{portalBrief.budget}</span>
+                      {isAdmin && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button onClick={() => navigate('/admin')} className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors">
+                            <ExternalLink className="w-2.5 h-2.5" /> View in Admin
+                          </button>
+                          {portalClient.email && (
+                            <a
+                              href={`mailto:${portalClient.email}?subject=${encodeURIComponent('Your Houston Enterprise Client Portal')}&body=${encodeURIComponent(`Hi ${portalClient.name?.split(' ')[0] || 'there'},\n\nYour Houston Enterprise client portal is ready. You can review project updates, invoices, documents, milestones, and messages here:\n\n${window.location.origin}/portal\n\nPlease sign in or register with this email address so we can connect your project record securely.\n\nBest,\nHouston Enterprise`)}`}
+                              className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Mail className="w-2.5 h-2.5" /> Invite
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
+                  {portalBrief && (
+                    <div>
+                      <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground mb-1">Originating Brief</div>
+                      <div className="text-[11px] space-y-1">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span className="font-medium capitalize">{portalBrief.type || '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="font-medium capitalize">{portalBrief.status?.replace('_', ' ') || '—'}</span></div>
+                        {portalBrief.budget && <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-mono-tab font-semibold">{portalBrief.budget}</span></div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Quick links */}
-            <div className="pd-panel p-4 sm:p-5">
-              <div className="micro-label mb-3">Quick Actions</div>
-              <div className="space-y-1.5">
+            <div className="pdv2-card overflow-hidden">
+              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Quick Actions</div></div>
+              <div className="p-3 space-y-1.5">
                 {[
                   { label: 'Issue New Check',  icon: FileText,      onClick: () => navigate('/checks/new') },
                   { label: 'Log Income',        icon: Download,      onClick: () => navigate('/income') },
@@ -802,7 +1021,7 @@ export default function ProjectDetail() {
                   { label: 'Upload Document',   icon: Upload,        onClick: () => { setTab('documents'); setTimeout(() => fileInputRef.current?.click(), 100); } },
                 ].map(a => (
                   <button key={a.label} onClick={a.onClick}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border group">
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border rounded-md group">
                     <a.icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
                     <span className="flex-1 text-left">{a.label}</span>
                     <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -811,7 +1030,13 @@ export default function ProjectDetail() {
               </div>
             </div>
           </div>
-          </div>{/* end inner grid */}
+
+          {enriched.notes && (
+            <div className="pdv2-card p-4">
+              <div className="pdv2-label mb-1.5">Notes</div>
+              <p className="text-sm text-muted-foreground">{enriched.notes}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -889,7 +1114,7 @@ export default function ProjectDetail() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18, delay: i * 0.03 }}
-                    className="grid grid-cols-12 gap-3 px-4 py-3.5 border-b border-border last:border-b-0 items-center pd-doc-row">
+                    className="grid grid-cols-12 gap-3 px-4 py-2.5 border-b border-border last:border-b-0 items-center pd-doc-row">
                     {/* Name + icon */}
                     <div className="col-span-9 sm:col-span-5 flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 flex items-center justify-center bg-secondary shrink-0">
@@ -936,6 +1161,111 @@ export default function ProjectDetail() {
                 <span>All files stored securely · never auto-deleted</span>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          PROGRESS PHOTOS TAB
+      ══════════════════════════════════════════════════════════ */}
+      {tab === 'photos' && (
+        <div className="pd-section">
+          {!project.portal_client_id ? (
+            <div className="pd-panel py-16 flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 border border-border flex items-center justify-center mb-4">
+                <Camera className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
+              </div>
+              <div className="text-sm font-semibold tracking-tight mb-1">No portal client linked yet</div>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Link this project to a client in the Portal Bridge (Overview tab) before uploading progress photos — that's what tells the portal whose gallery to show them in.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Upload bar */}
+              <div className="pd-panel p-4 mb-5 bg-secondary/20">
+                <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground mb-3">Upload Progress Photo</div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[160px]">
+                    <label className="text-[8px] uppercase tracking-[0.2em] font-bold text-muted-foreground block mb-1.5">Phase / Section</label>
+                    <input
+                      value={photoPhase}
+                      onChange={e => setPhotoPhase(e.target.value)}
+                      placeholder="e.g. Framing, Electrical"
+                      className="w-full h-9 px-3 text-xs border border-border bg-background focus:outline-none focus:border-foreground/30 transition-colors"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-[8px] uppercase tracking-[0.2em] font-bold text-muted-foreground block mb-1.5">Caption (optional)</label>
+                    <input
+                      value={photoCaption}
+                      onChange={e => setPhotoCaption(e.target.value)}
+                      placeholder="e.g. Second floor framing complete"
+                      className="w-full h-9 px-3 text-xs border border-border bg-background focus:outline-none focus:border-foreground/30 transition-colors"
+                    />
+                  </div>
+                  <input ref={photoInputRef} type="file" className="hidden" onChange={handlePhotoSelect} accept="image/*" />
+                  <button
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    className="h-9 px-4 flex items-center gap-2 text-[9px] uppercase tracking-[0.2em] font-bold bg-foreground text-background hover:opacity-80 transition-opacity disabled:opacity-40">
+                    <Upload className="w-3.5 h-3.5" strokeWidth={2} />
+                    {uploadingPhoto ? 'Uploading…' : 'Select Photo'}
+                  </button>
+                </div>
+                <div className="mt-2 text-[9px] text-muted-foreground">
+                  Photos upload instantly to this client's Progress Photos tab in the client portal, grouped by phase.
+                </div>
+              </div>
+
+              {/* Photo grid */}
+              {photos.length === 0 ? (
+                <div className="pd-panel py-16 flex flex-col items-center justify-center text-center">
+                  <div className="w-12 h-12 border border-border flex items-center justify-center mb-4">
+                    <Camera className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
+                  </div>
+                  <div className="text-sm font-semibold tracking-tight mb-1">No progress photos yet</div>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    Upload the first site photo above — it'll appear in the client's portal immediately.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {Object.entries(
+                    photos.reduce((acc: Record<string, any[]>, p) => {
+                      const key = p.phase_label || 'General';
+                      (acc[key] ??= []).push(p);
+                      return acc;
+                    }, {})
+                  ).map(([phase, group]) => (
+                    <div key={phase} className="pd-panel overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-border bg-secondary/40 text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold flex items-center justify-between">
+                        <span>{phase}</span>
+                        <span>{group.length} photo{group.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-3">
+                        {group.map((p: any) => (
+                          <div key={p.id} className="relative group border border-border overflow-hidden">
+                            <img src={p.url} alt={p.caption || phase} className="w-full h-32 object-cover" />
+                            <button
+                              onClick={() => deletePhoto(p)}
+                              className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center bg-background/90 border border-border opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive">
+                              <Trash2 className="w-3 h-3" strokeWidth={1.5} />
+                            </button>
+                            {(p.caption || p.taken_at) && (
+                              <div className="absolute inset-x-0 bottom-0 bg-background/85 px-2 py-1">
+                                {p.caption && <div className="text-[9px] text-foreground truncate">{p.caption}</div>}
+                                {p.taken_at && <div className="text-[8px] text-muted-foreground">{fmtDate(p.taken_at)}</div>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1012,134 +1342,10 @@ export default function ProjectDetail() {
         <ProjectBreakdown
           project={project}
           enriched={enriched}
+          projectDocs={projectDocs}
         />
       )}
 
-      {/* ══════════════════════════════════════════════════════════
-          DRAWS TAB
-      ══════════════════════════════════════════════════════════ */}
-      {tab === 'draws' && (
-        <div className="pd-section">
-          <div className="pd-panel overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border bg-secondary/40 flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Draw Schedule</div>
-              <Dialog open={drawOpen} onOpenChange={setDrawOpen}>
-                <DialogTrigger asChild>
-                  <button className="flex items-center gap-1 text-[10px] text-accent hover:opacity-80 transition-opacity font-bold">
-                    <Plus className="w-3 h-3" /> Add Draw
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="rounded-none sm:max-w-md w-[calc(100%-2rem)]">
-                  <DialogHeader><DialogTitle>Add Draw Entry</DialogTitle></DialogHeader>
-                  <form onSubmit={saveDrawEntry} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Milestone</Label>
-                      <Input className="rounded-none h-10" required placeholder="e.g. Foundation Complete"
-                        value={drawForm.milestone_name} onChange={e => setDrawForm(f => ({ ...f, milestone_name: e.target.value }))} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label className="micro-label">Draw Amount</Label>
-                        <CurrencyInput required value={drawForm.draw_amount} onValueChange={v => setDrawForm(f => ({ ...f, draw_amount: v }))} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="micro-label">Scheduled Date</Label>
-                        <DateInput className="h-10" value={drawForm.scheduled_date} onChange={e => setDrawForm(f => ({ ...f, scheduled_date: e.target.value }))} />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Status</Label>
-                      <Select value={drawForm.status} onValueChange={v => setDrawForm(f => ({ ...f, status: v }))}>
-                        <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="requested">Requested</SelectItem>
-                          <SelectItem value="funded">Funded</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button type="submit" disabled={drawSaving} className="rounded-none w-full h-10">
-                      {drawSaving ? 'Saving…' : 'Save Draw Entry'}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            {draws.length === 0 ? (
-              <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-                No draw entries yet — add milestones to track lender disbursements.
-              </div>
-            ) : (
-              <>
-                {/* Mobile card view */}
-                <div className="sm:hidden divide-y divide-border">
-                  {draws.map((d: any) => (
-                    <div key={d.id} className="px-4 py-3 space-y-2 hover:bg-secondary/10">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="font-medium text-sm flex-1 min-w-0">{d.milestone_name}</div>
-                        <div className="font-semibold font-mono-tab text-sm shrink-0">{fmtUSD(d.draw_amount)}</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : 'No date'}</span>
-                        <div className="flex-1">
-                          <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
-                            <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="requested">Requested</SelectItem>
-                              <SelectItem value="funded">Funded</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
-                    <span className="text-muted-foreground font-medium">Total Draws</span>
-                    <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
-                  </div>
-                </div>
-
-                {/* Desktop table */}
-                <div className="hidden sm:block">
-                  <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-border bg-secondary/20 text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
-                    <div className="col-span-4">Milestone</div>
-                    <div className="col-span-2">Date</div>
-                    <div className="col-span-2 text-right">Amount</div>
-                    <div className="col-span-4">Status</div>
-                  </div>
-                  {draws.map((d: any) => (
-                    <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border last:border-b-0 text-sm items-center hover:bg-secondary/10">
-                      <div className="col-span-4 font-medium truncate">{d.milestone_name}</div>
-                      <div className="col-span-2 text-xs text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : '—'}</div>
-                      <div className="col-span-2 text-right font-semibold font-mono-tab">{fmtUSD(d.draw_amount)}</div>
-                      <div className="col-span-4">
-                        <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
-                          <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="requested">Requested</SelectItem>
-                            <SelectItem value="funded">Funded</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
-                    <span className="text-muted-foreground font-medium">Total Draws</span>
-                    <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </AppShell>
   );
 }

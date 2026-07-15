@@ -1,19 +1,9 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Invoice, invoiceSubtotal, invoiceTax, invoiceTotal } from '@/hooks/useInvoices';
+import { C, tblCfg, addDecorations, fmtUSD as fmtUSDShared } from '@/lib/reports';
 
-const C = {
-  black:    [18, 18, 18]   as [number, number, number],
-  accent:   [164, 30, 30]  as [number, number, number],
-  muted:    [97, 97, 97]   as [number, number, number],
-  border:   [220, 220, 220] as [number, number, number],
-  bg:       [250, 250, 250] as [number, number, number],
-  white:    [255, 255, 255] as [number, number, number],
-  positive: [30, 120, 60]  as [number, number, number],
-};
-
-const fmtUSD = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(n);
+const fmtUSD = (n: number) => fmtUSDShared(n);
 
 const fmtDate = (s: string) => {
   const d = new Date(s);
@@ -21,14 +11,10 @@ const fmtDate = (s: string) => {
 };
 
 export function generateInvoicePDF(inv: Invoice): jsPDF {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210, M = 20;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const W = 215.9, M = 20;
 
-  // ── Background ──
-  doc.setFillColor(...C.white);
-  doc.rect(0, 0, W, 297, 'F');
-
-  // ── Top accent stripe ──
+  // ── Top accent stripe (shared brand color) ──
   doc.setFillColor(...C.accent);
   doc.rect(0, 0, W, 1.5, 'F');
 
@@ -42,7 +28,7 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.muted);
-  doc.text('Private Bookkeeping System', M, y + 5);
+  doc.text('Houston Enterprise Financial Records', M, y + 5);
   doc.text('Operating Account · All Rights Reserved', M, y + 9);
 
   // ── Invoice badge (top-right) ──
@@ -113,7 +99,7 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
     doc.text(inv.client_address, M, y);
   }
 
-  // ── Line items table ──
+  // ── Line items table (shared table styling — same as every other export) ──
   y += 12;
   const subtotal = invoiceSubtotal(inv);
   const tax = invoiceTax(inv);
@@ -127,35 +113,28 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
   ]);
 
   autoTable(doc, {
-    startY: y,
-    margin: { left: M, right: M },
+    ...tblCfg(y),
+    margin: { left: M, right: M, top: 14, bottom: 20 },
     head: [['Description', 'Qty', 'Rate', 'Amount']],
     body: tableRows,
-    headStyles: {
-      fillColor: C.black,
-      textColor: C.white,
-      fontSize: 7,
-      fontStyle: 'bold',
-      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
-    },
-    bodyStyles: {
-      fontSize: 8,
-      textColor: C.black,
-      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
-    },
-    alternateRowStyles: { fillColor: C.bg },
     columnStyles: {
       0: { halign: 'left', cellWidth: 'auto' },
       1: { halign: 'center', cellWidth: 18 },
       2: { halign: 'right', cellWidth: 32 },
       3: { halign: 'right', cellWidth: 36 },
     },
-    tableLineColor: C.border,
-    tableLineWidth: 0.2,
   });
 
   // ── Totals ──
+  // A page break here (long invoices) previously ran the totals/notes/terms
+  // block straight into the fixed-position footer with no page-break check at
+  // all — ensureSpace keeps every block clear of the footer zone instead.
   let fy = (doc as any).lastAutoTable.finalY + 6;
+  const pageH = doc.internal.pageSize.getHeight();
+  const FOOTER_ZONE = pageH - 24;
+  const ensureSpace = (needed: number) => {
+    if (fy + needed > FOOTER_ZONE) { doc.addPage(); fy = 24; }
+  };
 
   const drawTotLine = (label: string, val: string, bold = false, color: [number, number, number] = C.black) => {
     doc.setFontSize(bold ? 9 : 8);
@@ -167,6 +146,7 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
     fy += bold ? 7 : 5.5;
   };
 
+  ensureSpace(24);
   drawTotLine('Subtotal', fmtUSD(subtotal));
   if (inv.tax_rate > 0) drawTotLine(`Tax (${inv.tax_rate}%)`, fmtUSD(tax));
   doc.setDrawColor(...C.border);
@@ -175,6 +155,7 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
 
   // ── Stripe payment link ──
   if (inv.stripe_payment_link) {
+    ensureSpace(10);
     fy += 2;
     doc.setFillColor(99, 91, 255, 10);
     doc.setFontSize(7);
@@ -186,6 +167,8 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
   // ── Notes + Terms ──
   fy += 4;
   if (inv.notes) {
+    const notesLines = doc.splitTextToSize(inv.notes, W - 2 * M - 70);
+    ensureSpace(8 + notesLines.length * 4);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...C.muted);
@@ -193,11 +176,12 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
     fy += 4;
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.black);
-    const notesLines = doc.splitTextToSize(inv.notes, W - 2 * M - 70);
     doc.text(notesLines, M, fy);
     fy += notesLines.length * 4 + 4;
   }
   if (inv.terms) {
+    const termLines = doc.splitTextToSize(inv.terms, W - 2 * M - 70);
+    ensureSpace(8 + termLines.length * 4);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...C.muted);
@@ -205,23 +189,14 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
     fy += 4;
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.black);
-    const termLines = doc.splitTextToSize(inv.terms, W - 2 * M - 70);
     doc.text(termLines, M, fy);
   }
 
-  // ── Footer ──
-  const footerY = 284;
-  doc.setDrawColor(...C.border);
-  doc.line(M, footerY, W - M, footerY);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...C.muted);
-  doc.text('HOU INC · Private Bookkeeping System', M, footerY + 4);
-  doc.text(`Generated ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, W - M, footerY + 4, { align: 'right' });
+  // Real footer + page numbers on every page — including overflow pages the
+  // old hardcoded-position footer never accounted for.
+  addDecorations(doc, `Invoice ${inv.invoice_number}`);
 
   return doc;
 }
 
-export function savePDF(doc: jsPDF, filename: string) {
-  doc.save(filename);
-}
+export { savePDF } from '@/lib/reports';
