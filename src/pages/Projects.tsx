@@ -260,41 +260,43 @@ export default function Projects() {
       </div>
 
       {/* ── Controls Row ── */}
-      <div className="px-4 sm:px-8 py-2.5 border-b border-border flex flex-wrap items-center gap-2">
-        {/* Status filter tabs */}
-        <div className="flex border border-border overflow-hidden shrink-0">
+      <div className="px-4 sm:px-8 py-2.5 border-b border-border space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+        {/* Top row on mobile: search + view toggle */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 sm:flex-none sm:min-w-[160px] sm:max-w-[240px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search projects…"
+              className="w-full pl-7 pr-3 h-8 text-xs border border-border bg-background placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/30 transition-colors"
+            />
+          </div>
+          {/* View toggle */}
+          <div className="ml-auto sm:ml-0 flex border border-border overflow-hidden shrink-0">
+            {([
+              { mode: 'grid'  as const, Icon: Grid3X3,  title: 'Card View'  },
+              { mode: 'table' as const, Icon: List,      title: 'Table View' },
+              { mode: 'wip'   as const, Icon: BarChart2, title: 'WIP Report' },
+            ]).map(({ mode, Icon, title }) => (
+              <button key={mode} onClick={() => setView(mode)} title={title}
+                className={`w-9 h-8 flex items-center justify-center border-r border-border last:border-r-0 transition-all ${
+                  view === mode ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}>
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status filter tabs — scrollable on mobile */}
+        <div className="flex overflow-x-auto gap-0 border border-border shrink-0 sm:ml-auto scrollbar-none">
           {(['all', 'active', 'on_hold', 'completed', 'archived'] as const).map(s => (
             <button key={s} onClick={() => setFilter(s)}
-              className={`px-2.5 sm:px-3 py-1.5 text-[8px] sm:text-[9px] uppercase tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap ${
+              className={`px-3 py-1.5 text-[9px] uppercase tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap ${
                 filter === s ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground hover:bg-secondary/50'
               }`}>
               {s === 'all' ? `All (${counts.all})` : s === 'on_hold' ? `Hold (${counts.on_hold})` : `${S[s].label} (${counts[s]})`}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative flex-1 min-w-[140px] max-w-[240px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name or code…"
-            className="w-full pl-7 pr-3 h-8 text-xs border border-border bg-background placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/30 transition-colors"
-          />
-        </div>
-
-        {/* View toggle */}
-        <div className="ml-auto flex border border-border overflow-hidden">
-          {([
-            { mode: 'grid'  as const, Icon: Grid3X3, title: 'Card View'  },
-            { mode: 'table' as const, Icon: List,    title: 'Table View' },
-            { mode: 'wip'   as const, Icon: BarChart2, title: 'WIP Report' },
-          ]).map(({ mode, Icon, title }) => (
-            <button key={mode} onClick={() => setView(mode)} title={title}
-              className={`w-8 h-8 flex items-center justify-center border-r border-border last:border-r-0 transition-all ${
-                view === mode ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-              }`}>
-              <Icon className="w-3.5 h-3.5" />
             </button>
           ))}
         </div>
@@ -336,7 +338,7 @@ export default function Projects() {
           GRID VIEW
       ══════════════════════════════════════════════════════════ */}
       {view === 'grid' && displayed.length > 0 && (
-        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {displayed.map((p: any, idx: number) => {
             const meta = getMeta(p.status);
             const overBudget = p.used >= 100;
@@ -344,51 +346,56 @@ export default function Projects() {
             return (
               <motion.div
                 key={p.id}
-                initial={{ opacity: 0, y: 6 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, delay: idx * 0.04 }}
-                className="bg-background border border-border flex flex-col group hover:border-foreground/25 hover:shadow-sm transition-all duration-200"
+                transition={{ duration: 0.24, delay: idx * 0.04 }}
+                className="bg-background border border-border flex flex-col group hover:border-foreground/30 hover:shadow-md transition-all duration-200 cursor-pointer"
+                onClick={() => navigate(`/projects/${p.id}`)}
               >
                 {/* Status accent bar */}
-                <div className="h-[3px] w-full flex-shrink-0" style={{ backgroundColor: meta.color }} />
+                <div className="h-[4px] w-full flex-shrink-0" style={{ backgroundColor: meta.color }} />
 
-                <div className="p-5 flex-1 flex flex-col">
-                  {/* Header: code + badges */}
-                  <div className="flex items-start gap-2 mb-3 flex-wrap">
+                <div className="p-5 sm:p-6 flex-1 flex flex-col">
+                  {/* Header: badges row */}
+                  <div className="flex items-center gap-1.5 mb-3 flex-wrap">
                     {p.code && (
-                      <span className="text-[8px] font-black uppercase tracking-[0.24em] text-muted-foreground font-mono-tab bg-secondary px-1.5 py-0.5">
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground font-mono-tab bg-secondary px-2 py-0.5">
                         {p.code}
                       </span>
                     )}
-                    <span className={`text-[7px] uppercase tracking-[0.24em] font-bold px-1.5 py-0.5 border ${meta.cls}`}>
+                    <span className={`text-[8px] uppercase tracking-[0.2em] font-bold px-2 py-0.5 border ${meta.cls}`}>
                       {meta.label}
                     </span>
                     {overBudget && (
-                      <span className="text-[7px] uppercase tracking-[0.2em] font-bold px-1.5 py-0.5 border bg-accent/10 text-accent border-accent/30">
+                      <span className="text-[8px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 border bg-accent/10 text-accent border-accent/30">
                         Over Budget
                       </span>
                     )}
                     {nearLimit && (
-                      <span className="text-[7px] uppercase tracking-[0.2em] font-bold px-1.5 py-0.5 border bg-warning/10 text-warning border-warning/30">
+                      <span className="text-[8px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 border bg-warning/10 text-warning border-warning/30">
                         Near Limit
                       </span>
                     )}
                   </div>
 
-                  {/* Project name */}
-                  <h3 className="text-[15px] font-semibold tracking-tight leading-snug mb-4">
+                  {/* Project name — large and prominent */}
+                  <h3 className="text-xl font-bold tracking-tight leading-tight mb-1 group-hover:text-accent transition-colors">
                     {p.name}
                   </h3>
+                  {p.notes && (
+                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-4">{p.notes}</p>
+                  )}
+                  {!p.notes && <div className="mb-4" />}
 
                   {/* Budget utilization bar */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[8px] uppercase tracking-[0.18em] font-bold text-muted-foreground">Budget Used</span>
-                      <span className={`text-[11px] font-black font-mono-tab ${overBudget ? 'text-accent' : nearLimit ? 'text-warning' : ''}`}>
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-muted-foreground">Budget Utilization</span>
+                      <span className={`text-sm font-black font-mono-tab ${overBudget ? 'text-accent' : nearLimit ? 'text-warning' : 'text-foreground'}`}>
                         {Math.min(p.used, 150).toFixed(1)}%
                       </span>
                     </div>
-                    <div className="h-1.5 bg-secondary overflow-hidden">
+                    <div className="h-2 bg-secondary overflow-hidden">
                       <motion.div
                         className="h-full"
                         style={{ backgroundColor: overBudget ? 'var(--accent)' : nearLimit ? 'var(--warning)' : meta.hex }}
@@ -397,7 +404,7 @@ export default function Projects() {
                         transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.05 + idx * 0.03 }}
                       />
                     </div>
-                    <div className="flex justify-between text-[9px] text-muted-foreground mt-1.5 font-mono-tab">
+                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5 font-mono-tab">
                       <span>{fmtUSD(p.spent)} deployed</span>
                       <span>of {fmtUSD(p.budget)}</span>
                     </div>
@@ -406,43 +413,41 @@ export default function Projects() {
                   {/* 4-metric grid */}
                   <div className="grid grid-cols-2 gap-px bg-border border border-border mt-auto">
                     {[
-                      { label: 'Budget',   value: fmtUSD(p.budget),   cls: '' },
-                      { label: 'Deployed', value: fmtUSD(p.spent),    cls: '' },
-                      { label: 'Revenue',  value: fmtUSD(p.incoming), cls: 'text-positive' },
-                      { label: 'Net',      value: fmtUSD(p.net),      cls: p.net >= 0 ? 'text-positive' : 'text-accent' },
+                      { label: 'Contract',  value: fmtUSD(p.budget),   cls: '' },
+                      { label: 'Deployed',  value: fmtUSD(p.spent),    cls: '' },
+                      { label: 'Revenue',   value: fmtUSD(p.incoming), cls: 'text-positive' },
+                      { label: 'Net',       value: fmtUSD(p.net),      cls: p.net >= 0 ? 'text-positive' : 'text-accent' },
                     ].map(m => (
-                      <div key={m.label} className="bg-background px-3 py-2.5">
+                      <div key={m.label} className="bg-background px-3 py-3">
                         <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1">{m.label}</div>
-                        <div className={`text-[12px] font-bold font-mono-tab leading-tight ${m.cls}`}>{m.value}</div>
+                        <div className={`text-sm font-bold font-mono-tab leading-tight ${m.cls}`}>{m.value}</div>
                       </div>
                     ))}
                   </div>
-
-                  {/* Notes preview */}
-                  {p.notes && (
-                    <p className="mt-3 text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{p.notes}</p>
-                  )}
                 </div>
 
-                {/* Card footer — actions */}
-                <div className="border-t border-border px-4 py-2.5 flex items-center justify-between bg-secondary/20">
+                {/* Card footer */}
+                <div
+                  className="border-t border-border px-5 py-3 flex items-center justify-between bg-secondary/20"
+                  onClick={e => e.stopPropagation()}
+                >
                   <button
                     onClick={() => navigate(`/projects/${p.id}`)}
-                    className="text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                    className="text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
                   >
-                    Details <ChevronRight className="w-3 h-3" />
+                    Open Project <ChevronRight className="w-3 h-3" />
                   </button>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEdit(p)}
-                      className="h-6 px-2.5 text-[8px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-transparent hover:border-border hover:bg-background transition-all"
+                      className="h-7 px-3 text-[9px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-transparent hover:border-border hover:bg-background transition-all"
                     >
                       Edit
                     </button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <button className="h-6 w-6 flex items-center justify-center text-muted-foreground/60 hover:text-accent transition-colors">
-                          <Trash2 className="w-3 h-3" />
+                        <button className="h-7 w-7 flex items-center justify-center text-muted-foreground/50 hover:text-accent transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </AlertDialogTrigger>
                       <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
@@ -454,7 +459,7 @@ export default function Projects() {
                         </AlertDialogHeader>
                         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                           <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                          <AlertDialogAction className="rounded-none bg-accent hover:bg-accent/90" onClick={() => del.mutate(p.id)}>
+                          <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => del.mutate(p.id)}>
                             Archive Project
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -560,7 +565,7 @@ export default function Projects() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                                   <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                                  <AlertDialogAction className="rounded-none bg-accent hover:bg-accent/90" onClick={() => del.mutate(p.id)}>Archive</AlertDialogAction>
+                                  <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => del.mutate(p.id)}>Archive</AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>

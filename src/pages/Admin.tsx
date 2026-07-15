@@ -18,7 +18,7 @@ import {
   Receipt, FilePlus, FileUp,
   Filter, MoreVertical, Copy, Archive, RotateCcw,
   Building2, Zap, Landmark, FolderKanban, Bell, CheckSquare,
-  History, FileDown,
+  History, FileDown, Menu,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS, BUILDER } from '@/hooks/usePortal';
@@ -700,8 +700,83 @@ export default function Admin() {
         </div>
       </aside>
 
-      {/* Mobile nav drawer */}
-      {mobileNavOpen && (
+      {/* Mobile full-screen nav overlay */}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 md:hidden flex flex-col"
+            style={{ backgroundColor: B }}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {/* Gold top bar */}
+            <div style={{ height: 3, background: `linear-gradient(90deg, ${AC} 0%, ${AC}88 100%)`, flexShrink: 0 }} />
+
+            {/* Header */}
+            <div style={{ flexShrink: 0, padding: '16px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 2, height: 24, backgroundColor: AC, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontFamily: SERIF, fontSize: 9, fontWeight: 800, letterSpacing: '0.34em', textTransform: 'uppercase', color: W }}>Houston Enterprise</div>
+                  <div style={{ fontSize: 7, letterSpacing: '0.3em', textTransform: 'uppercase', color: AC, marginTop: 1 }}>Admin Dashboard · All Sections</div>
+                </div>
+              </div>
+              <button onClick={() => setMobileNavOpen(false)}
+                style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', background: 'transparent', cursor: 'pointer' }}>
+                <X className="w-4 h-4" strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Nav items — scrollable */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {NAV_ITEMS.map(({ key, label, icon: Icon, badge, urgent }) => {
+                const active = tab === key;
+                return (
+                  <button key={key}
+                    onClick={() => { setTab(key); setSelectedClientId(null); setMobileNavOpen(false); }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '12px 20px', textAlign: 'left', cursor: 'pointer',
+                      background: active ? `${AC}12` : 'transparent',
+                      border: 'none',
+                      borderLeft: `3px solid ${active ? AC : 'transparent'}`,
+                      transition: 'background 0.15s ease, border-color 0.15s ease',
+                    }}>
+                    <div style={{ width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: active ? `${AC}20` : 'rgba(255,255,255,0.05)', border: `1px solid ${active ? AC + '55' : 'rgba(255,255,255,0.08)'}`, flexShrink: 0 }}>
+                      <Icon className="w-4 h-4" style={{ color: active ? AC : urgent ? '#f59e0b' : 'rgba(255,255,255,0.45)' }} strokeWidth={1.5} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: active ? AC : urgent ? '#f59e0b' : 'rgba(255,255,255,0.8)', lineHeight: 1.25 }}>{label}</div>
+                    </div>
+                    {badge ? (
+                      <span style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', backgroundColor: urgent ? 'rgba(245,158,11,0.22)' : `${AC}22`, color: urgent ? '#f59e0b' : AC, letterSpacing: '0.1em', flexShrink: 0 }}>
+                        {badge}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)', padding: '12px 16px', paddingBottom: 'calc(76px + env(safe-area-inset-bottom))', display: 'flex', gap: 8 }}>
+              <Link to="/" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none' }}
+                onClick={() => setMobileNavOpen(false)}>
+                <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.5} /> Website
+              </Link>
+              <button onClick={() => { setMobileNavOpen(false); handleLogout(); }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', border: '1px solid rgba(239,68,68,0.22)', backgroundColor: 'rgba(239,68,68,0.06)', color: 'rgba(239,68,68,0.7)', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer' }}>
+                <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} /> Lock
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── OLD MOBILE DRAWER BODY (REPLACED) — this block closes the old structure */}
+      {false && mobileNavOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-[240px] flex flex-col"
@@ -3117,7 +3192,68 @@ export default function Admin() {
           })()}
 
         </div>}
+
+        {/* Mobile bottom spacer */}
+        <div className="md:hidden h-16 shrink-0" />
       </main>
+
+      {/* Mobile bottom toolbar */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch"
+        style={{ height: 60, backgroundColor: B, borderTop: '1px solid rgba(255,255,255,0.06)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/* Overview */}
+        <button onClick={() => setTab('overview')}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+          style={{ color: tab === 'overview' ? AC : 'rgba(255,255,255,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          <BarChart3 className="w-4 h-4" strokeWidth={tab === 'overview' ? 2 : 1.5} />
+          <span style={{ fontSize: 7, fontWeight: tab === 'overview' ? 700 : 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Overview</span>
+        </button>
+
+        {/* Approvals */}
+        <button onClick={() => { setTab('approvals'); setSelectedClientId(null); }}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors"
+          style={{ color: tab === 'approvals' ? AC : pendingApprovals.length > 0 ? '#f59e0b' : 'rgba(255,255,255,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          <div className="relative">
+            <ShieldCheck className="w-4 h-4" strokeWidth={tab === 'approvals' ? 2 : 1.5} />
+            {pendingApprovals.length > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -5, minWidth: 13, height: 13, borderRadius: '50%', backgroundColor: '#f59e0b', color: B, fontSize: 7, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {pendingApprovals.length > 9 ? '9+' : pendingApprovals.length}
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: 7, fontWeight: tab === 'approvals' ? 700 : 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Approvals</span>
+        </button>
+
+        {/* Clients */}
+        <button onClick={() => { setTab('clients'); setSelectedClientId(null); }}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+          style={{ color: tab === 'clients' ? AC : 'rgba(255,255,255,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          <Users className="w-4 h-4" strokeWidth={tab === 'clients' ? 2 : 1.5} />
+          <span style={{ fontSize: 7, fontWeight: tab === 'clients' ? 700 : 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Clients</span>
+        </button>
+
+        {/* Notifications */}
+        <button onClick={() => { setTab('notifications'); setSelectedClientId(null); }}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors"
+          style={{ color: tab === 'notifications' ? AC : openHelpCount > 0 ? '#f59e0b' : 'rgba(255,255,255,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          <div className="relative">
+            <Bell className="w-4 h-4" strokeWidth={tab === 'notifications' ? 2 : 1.5} />
+            {openHelpCount > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -5, minWidth: 13, height: 13, borderRadius: '50%', backgroundColor: '#f59e0b', color: B, fontSize: 7, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {openHelpCount > 9 ? '9+' : openHelpCount}
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: 7, fontWeight: tab === 'notifications' ? 700 : 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Alerts</span>
+        </button>
+
+        {/* Menu */}
+        <button onClick={() => setMobileNavOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+          style={{ color: 'rgba(255,255,255,0.4)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+          <Menu className="w-4 h-4" strokeWidth={1.5} />
+          <span style={{ fontSize: 7, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Menu</span>
+        </button>
+      </nav>
     </div>
   );
 }

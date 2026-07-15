@@ -224,7 +224,7 @@ function DocumentDrawer({ doc, onClose }: { doc: Document; onClose: () => void }
               </AlertDialogHeader>
               <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                 <AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel>
-                <AlertDialogAction className="rounded-none bg-accent w-full sm:w-auto" onClick={handleDelete}>Delete</AlertDialogAction>
+                <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground w-full sm:w-auto" onClick={handleDelete}>Delete</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

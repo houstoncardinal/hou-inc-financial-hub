@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import ProjectBreakdown from '@/components/ProjectBreakdown';
 
 /* ── Status config ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
@@ -71,7 +72,7 @@ function fmtBytes(bytes: number | null) {
 }
 
 /* ── Tab type ── */
-type Tab = 'overview' | 'documents' | 'activity' | 'draws';
+type Tab = 'overview' | 'documents' | 'activity' | 'draws' | 'breakdown';
 
 export default function ProjectDetail() {
   const { id }     = useParams<{ id: string }>();
@@ -317,10 +318,11 @@ export default function ProjectDetail() {
 
   const statusMeta = STATUS_META[enriched.status as StatusKey] ?? STATUS_META.archived;
   const TABS: { key: Tab; label: string; count?: number }[] = [
-    { key: 'overview',  label: 'Overview' },
-    { key: 'documents', label: 'Documents', count: projectDocs.length },
-    { key: 'activity',  label: 'Activity',  count: sortedActivity.length },
-    { key: 'draws',     label: 'Draws',     count: draws.length },
+    { key: 'overview',   label: 'Overview' },
+    { key: 'breakdown',  label: 'Breakdown' },
+    { key: 'documents',  label: 'Documents', count: projectDocs.length },
+    { key: 'activity',   label: 'Activity',  count: sortedActivity.length },
+    { key: 'draws',      label: 'Draws',     count: draws.length },
   ];
 
   return (
@@ -425,26 +427,8 @@ export default function ProjectDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Snapshot KPIs ── */}
-      <div className="border-b border-border">
-        <div className="h-[3px]" style={{ backgroundColor: statusMeta.color }} />
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
-          {[
-            { label: 'Contract Budget',  value: fmtUSD(enriched.budget),      c: '' },
-            { label: 'Deployed',         value: fmtUSD(enriched.spent),       c: '' },
-            { label: 'Revenue',          value: fmtUSD(enriched.incoming),    c: 'text-positive' },
-            { label: 'Pending Checks',   value: fmtUSD(enriched.outstanding), c: enriched.outstanding > 0 ? 'text-warning' : '' },
-            { label: 'Retainage Held',   value: fmtUSD(retainageHeld),        c: retainageHeld > 0 ? 'text-blue-400' : 'text-muted-foreground' },
-          ].map(s => (
-            <div key={s.label} className="bg-background px-4 sm:px-5 py-3.5">
-              <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1 leading-tight">{s.label}</div>
-              <div className={`text-base sm:text-[17px] font-bold font-mono-tab leading-tight ${s.c}`}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Tabs ── */}
+      {/* ── Status color bar + Tabs ── */}
+      <div className="h-[3px]" style={{ backgroundColor: statusMeta.color }} />
       <div className="px-4 sm:px-8 border-b border-border flex gap-0 overflow-x-auto">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -465,7 +449,26 @@ export default function ProjectDetail() {
           OVERVIEW TAB
       ══════════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
-        <div className="p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="p-4 sm:p-8 space-y-6">
+          {/* ── Snapshot KPIs ── */}
+          <div className="border border-border overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
+              {[
+                { label: 'Contract Budget',  value: fmtUSD(enriched.budget),      c: '' },
+                { label: 'Deployed',         value: fmtUSD(enriched.spent),       c: '' },
+                { label: 'Revenue',          value: fmtUSD(enriched.incoming),    c: 'text-positive' },
+                { label: 'Pending Checks',   value: fmtUSD(enriched.outstanding), c: enriched.outstanding > 0 ? 'text-warning' : '' },
+                { label: 'Retainage Held',   value: fmtUSD(retainageHeld),        c: retainageHeld > 0 ? 'text-blue-400' : 'text-muted-foreground' },
+              ].map(s => (
+                <div key={s.label} className="bg-background px-4 sm:px-5 py-4">
+                  <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1.5 leading-tight">{s.label}</div>
+                  <div className={`text-lg sm:text-xl font-bold font-mono-tab leading-tight ${s.c}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
 
             {/* Budget utilization */}
@@ -645,6 +648,7 @@ export default function ProjectDetail() {
               </div>
             </div>
           </div>
+          </div>{/* end inner grid */}
         </div>
       )}
 
@@ -784,33 +788,68 @@ export default function ProjectDetail() {
             </div>
           ) : (
             <div className="border border-border">
-              <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold">
-                <div className="col-span-3">Date</div>
-                <div className="col-span-2">Type</div>
-                <div className="col-span-5">Reference</div>
-                <div className="col-span-2 text-right">Amount</div>
-              </div>
-              {sortedActivity.map((a: any) => (
-                <div key={a.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab pd-row items-center">
-                  <div className="col-span-3 text-muted-foreground text-[11px]">{fmtDate(a.date)}</div>
-                  <div className="col-span-2"><span className="text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{a.type}</span></div>
-                  <div className="col-span-5 truncate text-[12px]">{a.ref}</div>
-                  <div className={`col-span-2 text-right font-semibold text-[12px] ${a.amount >= 0 ? 'text-positive' : ''}`}>
-                    {a.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(a.amount))}
+              {/* Mobile card view */}
+              <div className="sm:hidden divide-y divide-border">
+                {sortedActivity.map((a: any) => (
+                  <div key={a.id} className="px-4 py-3 pd-row space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border text-muted-foreground">{a.type}</span>
+                      <span className={`text-sm font-semibold font-mono-tab ${a.amount >= 0 ? 'text-positive' : ''}`}>
+                        {a.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(a.amount))}
+                      </span>
+                    </div>
+                    <div className="text-sm text-foreground truncate">{a.ref}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono-tab">{fmtDate(a.date)}</div>
                   </div>
+                ))}
+                <div className="px-4 py-3 border-t-2 border-border bg-secondary/40 flex items-center justify-between font-mono-tab text-sm">
+                  <span className="text-muted-foreground text-[10px] uppercase tracking-wider font-bold">Net · {sortedActivity.length} entries</span>
+                  <span className={`font-bold ${enriched.net >= 0 ? 'text-positive' : 'text-accent'}`}>
+                    {enriched.net >= 0 ? '+' : '−'}{fmtUSD(Math.abs(enriched.net))}
+                  </span>
                 </div>
-              ))}
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 border-t-2 border-border bg-secondary/40 text-sm font-mono-tab">
-                <div className="col-span-10 font-bold text-[11px] uppercase tracking-wider">
-                  Net · {sortedActivity.length} entries
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden sm:block">
+                <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold">
+                  <div className="col-span-3">Date</div>
+                  <div className="col-span-2">Type</div>
+                  <div className="col-span-5">Reference</div>
+                  <div className="col-span-2 text-right">Amount</div>
                 </div>
-                <div className={`col-span-2 text-right font-bold text-[12px] ${enriched.net >= 0 ? 'text-positive' : 'text-accent'}`}>
-                  {enriched.net >= 0 ? '+' : '−'}{fmtUSD(Math.abs(enriched.net))}
+                {sortedActivity.map((a: any) => (
+                  <div key={a.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab pd-row items-center">
+                    <div className="col-span-3 text-muted-foreground text-[11px]">{fmtDate(a.date)}</div>
+                    <div className="col-span-2"><span className="text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{a.type}</span></div>
+                    <div className="col-span-5 truncate text-[12px]">{a.ref}</div>
+                    <div className={`col-span-2 text-right font-semibold text-[12px] ${a.amount >= 0 ? 'text-positive' : ''}`}>
+                      {a.amount >= 0 ? '+' : '−'}{fmtUSD(Math.abs(a.amount))}
+                    </div>
+                  </div>
+                ))}
+                <div className="grid grid-cols-12 gap-4 px-4 py-3 border-t-2 border-border bg-secondary/40 text-sm font-mono-tab">
+                  <div className="col-span-10 font-bold text-[11px] uppercase tracking-wider">
+                    Net · {sortedActivity.length} entries
+                  </div>
+                  <div className={`col-span-2 text-right font-bold text-[12px] ${enriched.net >= 0 ? 'text-positive' : 'text-accent'}`}>
+                    {enriched.net >= 0 ? '+' : '−'}{fmtUSD(Math.abs(enriched.net))}
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          BREAKDOWN TAB
+      ══════════════════════════════════════════════════════════ */}
+      {tab === 'breakdown' && (
+        <ProjectBreakdown
+          project={project}
+          enriched={enriched}
+        />
       )}
 
       {/* ══════════════════════════════════════════════════════════
@@ -875,34 +914,68 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-border bg-secondary/20 text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
-                  <div className="col-span-4">Milestone</div>
-                  <div className="col-span-2">Date</div>
-                  <div className="col-span-2 text-right">Amount</div>
-                  <div className="col-span-4">Status</div>
-                </div>
-                {draws.map((d: any) => (
-                  <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border last:border-b-0 text-sm items-center hover:bg-secondary/10">
-                    <div className="col-span-4 font-medium truncate">{d.milestone_name}</div>
-                    <div className="col-span-2 text-xs text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : '—'}</div>
-                    <div className="col-span-2 text-right font-semibold font-mono-tab">{fmtUSD(d.draw_amount)}</div>
-                    <div className="col-span-4">
-                      <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
-                        <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="requested">Requested</SelectItem>
-                          <SelectItem value="funded">Funded</SelectItem>
-                        </SelectContent>
-                      </Select>
+                {/* Mobile card view */}
+                <div className="sm:hidden divide-y divide-border">
+                  {draws.map((d: any) => (
+                    <div key={d.id} className="px-4 py-3 space-y-2 hover:bg-secondary/10">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-medium text-sm flex-1 min-w-0">{d.milestone_name}</div>
+                        <div className="font-semibold font-mono-tab text-sm shrink-0">{fmtUSD(d.draw_amount)}</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : 'No date'}</span>
+                        <div className="flex-1">
+                          <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
+                            <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="requested">Requested</SelectItem>
+                              <SelectItem value="funded">Funded</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
+                  ))}
+                  <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
+                    <span className="text-muted-foreground font-medium">Total Draws</span>
+                    <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
                   </div>
-                ))}
-                <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
-                  <span className="text-muted-foreground font-medium">Total Draws</span>
-                  <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block">
+                  <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-border bg-secondary/20 text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
+                    <div className="col-span-4">Milestone</div>
+                    <div className="col-span-2">Date</div>
+                    <div className="col-span-2 text-right">Amount</div>
+                    <div className="col-span-4">Status</div>
+                  </div>
+                  {draws.map((d: any) => (
+                    <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-border last:border-b-0 text-sm items-center hover:bg-secondary/10">
+                      <div className="col-span-4 font-medium truncate">{d.milestone_name}</div>
+                      <div className="col-span-2 text-xs text-muted-foreground font-mono-tab">{d.scheduled_date ? fmtDate(d.scheduled_date) : '—'}</div>
+                      <div className="col-span-2 text-right font-semibold font-mono-tab">{fmtUSD(d.draw_amount)}</div>
+                      <div className="col-span-4">
+                        <Select value={d.status} onValueChange={v => updateDrawStatus(d.id, v)}>
+                          <SelectTrigger className={`rounded-none h-7 text-[9px] uppercase tracking-wider px-2 ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="requested">Requested</SelectItem>
+                            <SelectItem value="funded">Funded</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="px-4 py-3 border-t-2 border-border bg-secondary/20 flex justify-between text-sm font-mono-tab">
+                    <span className="text-muted-foreground font-medium">Total Draws</span>
+                    <span className="font-bold">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
+                  </div>
                 </div>
               </>
             )}

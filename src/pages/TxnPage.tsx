@@ -12,7 +12,7 @@ import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
-import { Trash2, FileText, Table2, Plus, Upload, Camera, X, CheckCircle2, Sparkles, ScanLine } from 'lucide-react';
+import { Trash2, FileText, Table2, Plus, Camera, X, Sparkles } from 'lucide-react';
 import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
@@ -119,7 +119,7 @@ function CategorySelect({ value, onChange, options }: { value: string; onChange:
   );
 }
 
-function AutoLabel({ label, filled }: { label: string; filled: boolean }) {
+function FieldLabel({ label, filled }: { label: string; filled?: boolean }) {
   return (
     <div className="flex items-center gap-2 mb-1.5">
       <span className="micro-label">{label}</span>
@@ -132,78 +132,46 @@ function AutoLabel({ label, filled }: { label: string; filled: boolean }) {
   );
 }
 
-/* ── Receipt Scanner ─────────────────────────────────────────────────────── */
-
-interface ReceiptScannerProps {
-  preview: string | null;
-  scanning: boolean;
-  scanned: boolean;
-  scanError: string | null;
-  onCamera: () => void;
-  onUpload: () => void;
-  onClear: () => void;
+/* ── Step indicator ──────────────────────────────────────────────────────── */
+function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
+  return (
+    <div className="flex items-start my-5">
+      {labels.map((label, i) => (
+        <div key={i} className={`flex items-start ${i < labels.length - 1 ? 'flex-1' : ''}`}>
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+            <div className={`w-7 h-7 flex items-center justify-center text-[11px] font-bold border-2 transition-all
+              ${i + 1 < current ? 'bg-foreground border-foreground text-background' :
+                i + 1 === current ? 'border-foreground text-foreground bg-transparent' :
+                'border-border text-muted-foreground bg-transparent'}`}>
+              {i + 1 < current ? '✓' : i + 1}
+            </div>
+            <span className={`text-[9px] uppercase tracking-[0.1em] font-medium text-center leading-tight max-w-[52px]
+              ${i + 1 === current ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+          </div>
+          {i < labels.length - 1 && (
+            <div className={`flex-1 h-px mx-2 mt-3.5 transition-colors ${current > i + 1 ? 'bg-foreground/40' : 'bg-border'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function ReceiptScanner({ preview, scanning, scanned, scanError, onCamera, onUpload, onClear }: ReceiptScannerProps) {
-  if (!preview) {
-    return (
-      <div className="border-2 border-dashed border-border hover:border-accent/40 transition-colors rounded-none">
-        <div className="flex flex-col items-center justify-center py-7 px-4 gap-3">
-          <div className="w-11 h-11 flex items-center justify-center bg-accent/8 rounded-full">
-            <ScanLine className="w-5 h-5 text-accent" strokeWidth={1.5} />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium leading-tight">Scan a receipt</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">AI reads amount, date, merchant & category</p>
-          </div>
-          <div className="flex gap-2 w-full max-w-[260px]">
-            <Button type="button" onClick={onCamera} className="flex-1 rounded-none h-9 gap-1.5 text-xs">
-              <Camera className="w-3.5 h-3.5" /> Camera
-            </Button>
-            <Button type="button" variant="outline" onClick={onUpload} className="flex-1 rounded-none h-9 gap-1.5 text-xs">
-              <Upload className="w-3.5 h-3.5" /> Upload
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+/* ── Form nav ────────────────────────────────────────────────────────────── */
+function FormNav({ step, total, onBack, onNext, submitLabel, isPending }: {
+  step: number; total: number; onBack: () => void; onNext: () => void; submitLabel: string; isPending: boolean;
+}) {
   return (
-    <div className="relative border border-border overflow-hidden">
-      <img src={preview} alt="Receipt" className="w-full max-h-44 object-contain bg-secondary/10" />
-
-      {/* Scanning overlay */}
-      {scanning && (
-        <div className="absolute inset-0 bg-background/85 flex flex-col items-center justify-center gap-2.5">
-          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-muted-foreground font-medium">Reading receipt…</span>
-        </div>
-      )}
-
-      {/* Success badge */}
-      {scanned && !scanning && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-semibold px-2 py-1">
-          <CheckCircle2 className="w-3 h-3" /> Fields filled
-        </div>
-      )}
-
-      {/* Error badge */}
-      {scanError && !scanning && (
-        <div className="absolute top-2 right-8 bg-destructive text-destructive-foreground text-[9px] px-2 py-1 max-w-[65%] text-right leading-tight">
-          {scanError}
-        </div>
-      )}
-
-      {/* Clear button */}
-      {!scanning && (
-        <button
-          type="button"
-          onClick={onClear}
-          className="absolute top-2 left-2 w-6 h-6 bg-background/90 border border-border flex items-center justify-center hover:bg-secondary transition-colors"
-        >
-          <X className="w-3 h-3" />
-        </button>
+    <div className="flex items-center gap-3 pt-5 mt-5 border-t border-border">
+      {step > 1 ? (
+        <Button type="button" variant="outline" className="rounded-none h-10 flex-1" onClick={onBack}>← Back</Button>
+      ) : <div className="flex-1" />}
+      {step < total ? (
+        <Button type="button" className="rounded-none h-10 flex-1 bg-foreground text-background hover:bg-foreground/90" onClick={onNext}>Next →</Button>
+      ) : (
+        <Button type="submit" className="rounded-none h-10 flex-1 bg-foreground text-background hover:bg-foreground/90" disabled={isPending}>
+          {isPending ? 'Saving…' : submitLabel}
+        </Button>
       )}
     </div>
   );
@@ -218,6 +186,9 @@ const TXN_CSS = `
 .dark .txn-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
 `;
 
+const INCOME_STEPS  = ['Core Details', 'Payment', 'Classification'];
+const EXPENSE_STEPS = ['Core Details', 'Payment', 'Classification'];
+
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const { entity } = useEntity();
   const { data: txns = [] } = useTransactions(kind);
@@ -231,112 +202,85 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const isIncome = kind === 'income';
   const { invoices } = useInvoices();
 
+  const STEP_LABELS = isIncome ? INCOME_STEPS : EXPENSE_STEPS;
+  const TOTAL_STEPS = 3;
+
   /* ── Dialog + form state ── */
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(1);
   const [detailRow, setDetailRow] = useState<any>(null);
+
   const blankForm = {
     amount: '', transaction_date: new Date().toISOString().slice(0, 10),
     vendor_id: '', source_name: '', project_id: '',
     category: '', notes: '', payment_method: '',
     check_reference: '', retainage_percent: '', retainage_amount: '',
-    invoice_id: '', cost_phase: '',
+    invoice_id: '', cost_phase: '', cost_type: '',
   };
   const [form, setForm] = useState(blankForm);
   const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
 
-  /* ── Receipt scanner state ── */
-  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  /* ── Receipt scanner state (external scan only) ── */
   const [scanning, setScanning] = useState(false);
-  const [scanned, setScanned] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
-
-  /* Hidden inputs */
-  const dialogCamRef = useRef<HTMLInputElement>(null);
-  const dialogUploadRef = useRef<HTMLInputElement>(null);
-  const quickCamRef = useRef<HTMLInputElement>(null);
+  const quickCamRef    = useRef<HTMLInputElement>(null);
   const quickUploadRef = useRef<HTMLInputElement>(null);
 
-  const applyResult = useCallback((result: ScannedReceipt, previewDataUrl: string) => {
+  const applyResult = useCallback((result: ScannedReceipt) => {
     const filled = new Set<string>();
     const patch: Partial<typeof blankForm> = {};
-
     if (result.amount)   { patch.amount = result.amount;               filled.add('amount'); }
     if (result.date)     { patch.transaction_date = result.date;       filled.add('transaction_date'); }
     if (result.category) { patch.category = result.category;           filled.add('category'); }
     if (result.notes)    { patch.notes = result.notes;                 filled.add('notes'); }
-    if (result.merchant && isIncome) {
-      patch.source_name = result.merchant;
-      filled.add('source_name');
-    }
-    if (result.merchant && !isIncome && !patch.notes) {
-      patch.notes = result.merchant;
-      filled.add('notes');
-    }
-
+    if (result.merchant && isIncome)  { patch.source_name = result.merchant; filled.add('source_name'); }
+    if (result.merchant && !isIncome && !patch.notes) { patch.notes = result.merchant; filled.add('notes'); }
     setForm(f => ({ ...f, ...patch }));
     setAutoFilled(filled);
-    setReceiptPreview(previewDataUrl);
-    setScanned(true);
   }, [isIncome]);
 
-  const processImage = useCallback(async (file: File, context: 'dialog' | 'quick') => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-
+  const processImage = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
     const dataUrl: string = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = ev => resolve(ev.target!.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-
-    if (context === 'quick') {
-      // Pre-fill then open dialog
-      setReceiptPreview(dataUrl);
-      setScanning(true);
-      setScanError(null);
-      setScanned(false);
-      if (!open) setOpen(true);
-    } else {
-      setReceiptPreview(dataUrl);
-      setScanning(true);
-      setScanError(null);
-      setScanned(false);
-    }
-
+    setScanning(true);
+    if (!open) { setOpen(true); setStep(1); }
     try {
       const result = await scanReceipt(dataUrl);
-      applyResult(result, dataUrl);
+      applyResult(result);
       toast.success('Receipt scanned — review and save');
     } catch (e: any) {
       const msg = e.message === 'OPENAI_API_KEY_MISSING'
         ? 'Add VITE_OPENAI_API_KEY to .env to enable AI scanning'
         : (e.message || 'Could not read receipt');
-      setScanError(msg);
       toast.error(msg);
     } finally {
       setScanning(false);
     }
   }, [open, applyResult]);
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, context: 'dialog' | 'quick') => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) processImage(f, context);
+    if (f) processImage(f);
     e.target.value = '';
-  };
-
-  const clearReceipt = () => {
-    setReceiptPreview(null);
-    setScanned(false);
-    setScanError(null);
   };
 
   const resetDialog = () => {
     setForm(blankForm);
     setAutoFilled(new Set());
-    clearReceipt();
+    setStep(1);
+  };
+
+  /* ── Validation per step ── */
+  const validateStep = () => {
+    if (step === 1 && (!form.amount || !parseFloat(form.amount))) {
+      toast.error('Amount is required');
+      return false;
+    }
+    return true;
   };
 
   /* ── Submit ── */
@@ -364,6 +308,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       } else {
         payload.source_name = null;
         payload.vendor_id = form.vendor_id || null;
+        payload.cost_type = form.cost_type || null;
       }
       await upsert.mutateAsync(payload as any);
       toast.success(isIncome ? 'Income saved' : 'Expense saved');
@@ -389,13 +334,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   return (
     <AppShell>
       <style>{TXN_CSS}</style>
-      {/* Hidden inputs for quick-scan (page-level) */}
-      <input ref={quickCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFileInput(e, 'quick')} />
-      <input ref={quickUploadRef} type="file" accept="image/*"                       className="hidden" onChange={e => handleFileInput(e, 'quick')} />
-
-      {/* Hidden inputs for in-dialog scanner */}
-      <input ref={dialogCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleFileInput(e, 'dialog')} />
-      <input ref={dialogUploadRef} type="file" accept="image/*"                       className="hidden" onChange={e => handleFileInput(e, 'dialog')} />
+      {/* Hidden inputs for quick-scan */}
+      <input ref={quickCamRef}    type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileInput} />
+      <input ref={quickUploadRef} type="file" accept="image/*"                       className="hidden" onChange={handleFileInput} />
 
       <PageHeader
         eyebrow={isIncome ? 'Capital Inflow' : 'Capital Outflow'}
@@ -426,215 +367,233 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               }
             </Button>
 
-            {/* Manual entry dialog */}
+            {/* Log Income / Record Expense dialog */}
             <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetDialog(); }}>
               <DialogTrigger asChild>
-                <Button className="rounded-none">{isIncome ? 'Log Income' : 'Record Expense'}</Button>
+                <Button className="rounded-none h-9 text-sm">{isIncome ? 'Log Income' : 'Record Expense'}</Button>
               </DialogTrigger>
-              <DialogContent className="rounded-none sm:max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="text-lg">{isIncome ? 'Log Income' : 'Record Expense'}</DialogTitle>
+              <DialogContent className="rounded-none sm:max-w-xl w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto p-6">
+                <DialogHeader className="pb-0">
+                  <DialogTitle className="text-base font-semibold">
+                    {isIncome ? 'Log Income' : 'Record Expense'}
+                  </DialogTitle>
                   {entity && (
-                    <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="flex items-center gap-1.5 mt-1">
                       <div className="w-2 h-2 rounded-full" style={{ background: entity.color }} />
                       <span className="text-[11px] text-muted-foreground">{entity.shortName} · {entity.name}</span>
                     </div>
                   )}
                 </DialogHeader>
 
-                <form onSubmit={submit} className="space-y-4">
+                <StepIndicator current={step} labels={STEP_LABELS} />
 
-                  {/* ── Receipt scanner — top of form ── */}
-                  <div className="space-y-1.5">
-                    <Label className="micro-label">Receipt (optional · AI extracts fields)</Label>
-                    <ReceiptScanner
-                      preview={receiptPreview}
-                      scanning={scanning}
-                      scanned={scanned}
-                      scanError={scanError}
-                      onCamera={() => dialogCamRef.current?.click()}
-                      onUpload={() => dialogUploadRef.current?.click()}
-                      onClear={clearReceipt}
-                    />
-                  </div>
+                <form onSubmit={submit}>
 
-                  {/* Divider */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px bg-border" />
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                      {autoFilled.size > 0 ? 'Review & confirm' : 'Or fill manually'}
-                    </span>
-                    <div className="flex-1 h-px bg-border" />
-                  </div>
-
-                  {/* ── Form fields ── */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <AutoLabel label="Amount" filled={autoFilled.has('amount')} />
-                      <CurrencyInput value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} />
-                    </div>
-                    <div>
-                      <AutoLabel label="Date" filled={autoFilled.has('transaction_date')} />
-                      <Input type="date" className="rounded-none h-10" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} />
-                    </div>
-                  </div>
-
-                  {/* Source / Vendor */}
-                  {isIncome ? (
-                    <div>
-                      <AutoLabel label="Source / Client" filled={autoFilled.has('source_name')} />
-                      <Input placeholder="Client or source name" className="rounded-none h-10" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} />
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Vendor</Label>
-                      <QuickCreateSelect
-                        value={form.vendor_id}
-                        onValueChange={v => setForm(f => ({ ...f, vendor_id: v }))}
-                        options={vendors}
-                        placeholder="Select vendor"
-                        entityLabel="Vendor"
-                        onCreateNew={async (name) => {
-                          const result = await createVendor.mutateAsync({ name });
-                          toast.success(`Vendor "${name}" created`);
-                          return result;
-                        }}
-                      />
+                  {/* ── Step 1: Core Details ── */}
+                  {step === 1 && (
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <FieldLabel label="Amount *" filled={autoFilled.has('amount')} />
+                          <CurrencyInput value={form.amount} onChange={v => setForm(f => ({ ...f, amount: v }))} />
+                        </div>
+                        <div>
+                          <FieldLabel label="Date" filled={autoFilled.has('transaction_date')} />
+                          <Input type="date" className="rounded-none h-10" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} />
+                        </div>
+                      </div>
+                      {isIncome ? (
+                        <div>
+                          <FieldLabel label="Source / Client" filled={autoFilled.has('source_name')} />
+                          <Input placeholder="Client name or funding source" className="rounded-none h-10" value={form.source_name} onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))} />
+                        </div>
+                      ) : (
+                        <div>
+                          <Label className="micro-label mb-1.5 block">Vendor</Label>
+                          <QuickCreateSelect
+                            value={form.vendor_id}
+                            onValueChange={v => setForm(f => ({ ...f, vendor_id: v }))}
+                            options={vendors}
+                            placeholder="Select vendor"
+                            entityLabel="Vendor"
+                            onCreateNew={async (name) => {
+                              const result = await createVendor.mutateAsync({ name });
+                              toast.success(`Vendor "${name}" created`);
+                              return result;
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className="bg-secondary/30 border border-border px-4 py-3">
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          {isIncome
+                            ? 'Enter the gross amount received. Retainage and holdback amounts can be recorded on the final step.'
+                            : 'Enter the total amount of this expense. Vendor, category, and project details follow in the next steps.'}
+                        </p>
+                      </div>
                     </div>
                   )}
 
-                  {/* Payment Method + Check/Reference # */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Payment Method</Label>
-                      <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v, check_reference: '' }))}>
-                        <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
-                        <SelectContent>
-                          {(isIncome ? INCOME_PAYMENT_METHODS : EXPENSE_PAYMENT_METHODS).map(m => (
-                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  {/* ── Step 2: Payment ── */}
+                  {step === 2 && (
+                    <div className="space-y-5">
+                      <div>
+                        <Label className="micro-label mb-1.5 block">Payment Method</Label>
+                        <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v, check_reference: '' }))}>
+                          <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select method" /></SelectTrigger>
+                          <SelectContent>
+                            {(isIncome ? INCOME_PAYMENT_METHODS : EXPENSE_PAYMENT_METHODS).map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {REF_REQUIRED_METHODS.has(form.payment_method) && (
+                        <div>
+                          <Label className="micro-label mb-1.5 block">
+                            {form.payment_method === 'check' ? 'Check Number' : 'Reference / Trace #'}
+                          </Label>
+                          <Input
+                            className="rounded-none h-10"
+                            placeholder={form.payment_method === 'check' ? 'e.g. 1042' : 'Wire / ACH trace #'}
+                            value={form.check_reference}
+                            onChange={e => setForm(f => ({ ...f, check_reference: e.target.value }))}
+                          />
+                        </div>
+                      )}
+                      {isIncome && (
+                        <div>
+                          <Label className="micro-label mb-1.5 block">Link to Invoice <span className="text-muted-foreground font-normal normal-case">(marks it paid)</span></Label>
+                          <Select value={form.invoice_id} onValueChange={v => setForm(f => ({ ...f, invoice_id: v }))}>
+                            <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select invoice (optional)" /></SelectTrigger>
+                            <SelectContent>
+                              {invoices.filter((inv: any) => inv.status !== 'paid').map((inv: any) => (
+                                <SelectItem key={inv.id} value={inv.id}>
+                                  {inv.invoice_number} — {inv.client_name} ({inv.status})
+                                </SelectItem>
+                              ))}
+                              {invoices.filter((inv: any) => inv.status !== 'paid').length === 0 && (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">No open invoices</div>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {!form.payment_method && (
+                        <div className="bg-secondary/30 border border-border px-4 py-3">
+                          <p className="text-[11px] text-muted-foreground">Payment method is optional — you can skip this step if not applicable.</p>
+                        </div>
+                      )}
                     </div>
-                    {REF_REQUIRED_METHODS.has(form.payment_method) && (
-                      <div className="space-y-1.5">
-                        <Label className="micro-label">
-                          {form.payment_method === 'check' ? 'Check Number' : 'Reference / Trace #'}
-                        </Label>
-                        <Input
-                          className="rounded-none h-10"
-                          placeholder={form.payment_method === 'check' ? 'e.g. 1042' : 'Wire / ACH trace #'}
-                          value={form.check_reference}
-                          onChange={e => setForm(f => ({ ...f, check_reference: e.target.value }))}
+                  )}
+
+                  {/* ── Step 3: Classification ── */}
+                  {step === 3 && (
+                    <div className="space-y-5">
+                      <div>
+                        <FieldLabel label="Category" filled={autoFilled.has('category')} />
+                        <CategorySelect
+                          value={form.category}
+                          onChange={v => setForm(f => ({ ...f, category: v }))}
+                          options={isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES}
                         />
                       </div>
-                    )}
-                  </div>
 
-                  {/* Retainage — income only */}
-                  {isIncome && (
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Retainage / Holdback <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="relative">
-                          <Input
-                            type="number" min="0" max="100" step="0.1"
-                            className="rounded-none h-10 pr-7"
-                            placeholder="e.g. 10"
-                            value={form.retainage_percent}
-                            onChange={e => {
-                              const pct = e.target.value;
-                              const computed = pct && form.amount ? String(Math.round(parseFloat(form.amount) * parseFloat(pct) / 100 * 100) / 100) : '';
-                              setForm(f => ({ ...f, retainage_percent: pct, retainage_amount: computed }));
-                            }}
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                      {!isIncome && (
+                        <div>
+                          <Label className="micro-label mb-1.5 block">Cost Type</Label>
+                          <Select value={form.cost_type} onValueChange={v => setForm(f => ({ ...f, cost_type: v }))}>
+                            <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Labor / Material / …" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="labor">Labor</SelectItem>
+                              <SelectItem value="material">Materials</SelectItem>
+                              <SelectItem value="subcontract">Subcontract</SelectItem>
+                              <SelectItem value="permit">Permits & Fees</SelectItem>
+                              <SelectItem value="equipment">Equipment</SelectItem>
+                              <SelectItem value="overhead">Overhead</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
-                          <Input
-                            type="number" min="0" step="0.01"
-                            className="rounded-none h-10 pl-6"
-                            placeholder="e.g. 10,000"
-                            value={form.retainage_amount}
-                            onChange={e => {
-                              const amt = e.target.value;
-                              const computed = amt && form.amount ? String(Math.round(parseFloat(amt) / parseFloat(form.amount) * 100 * 100) / 100) : '';
-                              setForm(f => ({ ...f, retainage_amount: amt, retainage_percent: computed }));
-                            }}
-                          />
-                        </div>
+                      )}
+
+                      <div>
+                        <Label className="micro-label mb-1.5 block">Cost Phase / Code <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                        <Select value={form.cost_phase} onValueChange={v => setForm(f => ({ ...f, cost_phase: v }))}>
+                          <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select phase (optional)" /></SelectTrigger>
+                          <SelectContent>
+                            {COST_PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <p className="text-[10px] text-muted-foreground">Enter % or $ — the other calculates automatically. Tracks the holdback portion not yet receivable.</p>
+
+                      <div>
+                        <Label className="micro-label mb-1.5 block">Project</Label>
+                        <QuickCreateSelect
+                          value={form.project_id}
+                          onValueChange={v => setForm(f => ({ ...f, project_id: v }))}
+                          options={projects}
+                          placeholder="Assign to project (optional)"
+                          entityLabel="Project"
+                          onCreateNew={async (name) => {
+                            const result = await createProject.mutateAsync({ name });
+                            toast.success(`Project "${name}" created`);
+                            return result;
+                          }}
+                        />
+                      </div>
+
+                      {isIncome && (
+                        <div>
+                          <Label className="micro-label mb-1.5 block">Retainage / Holdback <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="relative">
+                              <Input
+                                type="number" min="0" max="100" step="0.1"
+                                className="rounded-none h-10 pr-7"
+                                placeholder="e.g. 10"
+                                value={form.retainage_percent}
+                                onChange={e => {
+                                  const pct = e.target.value;
+                                  const computed = pct && form.amount ? String(Math.round(parseFloat(form.amount) * parseFloat(pct) / 100 * 100) / 100) : '';
+                                  setForm(f => ({ ...f, retainage_percent: pct, retainage_amount: computed }));
+                                }}
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                              <Input
+                                type="number" min="0" step="0.01"
+                                className="rounded-none h-10 pl-6"
+                                placeholder="e.g. 10,000"
+                                value={form.retainage_amount}
+                                onChange={e => {
+                                  const amt = e.target.value;
+                                  const computed = amt && form.amount ? String(Math.round(parseFloat(amt) / parseFloat(form.amount) * 100 * 100) / 100) : '';
+                                  setForm(f => ({ ...f, retainage_amount: amt, retainage_percent: computed }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-1.5">Enter % or $ — the other calculates automatically.</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <FieldLabel label="Notes" filled={autoFilled.has('notes')} />
+                        <Textarea className="rounded-none" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                      </div>
                     </div>
                   )}
 
-                  {/* Category */}
-                  <div>
-                    <AutoLabel label="Category" filled={autoFilled.has('category')} />
-                    <CategorySelect
-                      value={form.category}
-                      onChange={v => setForm(f => ({ ...f, category: v }))}
-                      options={isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES}
-                    />
-                  </div>
-
-                  {/* Invoice link — income only */}
-                  {isIncome && (
-                    <div className="space-y-1.5">
-                      <Label className="micro-label">Link to Invoice <span className="text-muted-foreground font-normal normal-case">(marks it paid)</span></Label>
-                      <Select value={form.invoice_id} onValueChange={v => setForm(f => ({ ...f, invoice_id: v }))}>
-                        <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select invoice (optional)" /></SelectTrigger>
-                        <SelectContent>
-                          {invoices.filter((inv: any) => inv.status !== 'paid').map((inv: any) => (
-                            <SelectItem key={inv.id} value={inv.id}>
-                              {inv.invoice_number} — {inv.client_name} ({inv.status})
-                            </SelectItem>
-                          ))}
-                          {invoices.filter((inv: any) => inv.status !== 'paid').length === 0 && (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">No open invoices</div>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Cost Phase */}
-                  <div className="space-y-1.5">
-                    <Label className="micro-label">Cost Phase / Code <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
-                    <Select value={form.cost_phase} onValueChange={v => setForm(f => ({ ...f, cost_phase: v }))}>
-                      <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select phase (optional)" /></SelectTrigger>
-                      <SelectContent>
-                        {COST_PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Project */}
-                  <div className="space-y-1.5">
-                    <Label className="micro-label">Project</Label>
-                    <QuickCreateSelect
-                      value={form.project_id}
-                      onValueChange={v => setForm(f => ({ ...f, project_id: v }))}
-                      options={projects}
-                      placeholder="Assign to project"
-                      entityLabel="Project"
-                      onCreateNew={async (name) => {
-                        const result = await createProject.mutateAsync({ name });
-                        toast.success(`Project "${name}" created`);
-                        return result;
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <AutoLabel label="Notes" filled={autoFilled.has('notes')} />
-                    <Textarea className="rounded-none" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-                  </div>
-
-                  <Button type="submit" className="rounded-none w-full h-10" disabled={upsert.isPending}>
-                    {upsert.isPending ? 'Saving…' : (isIncome ? 'Save Income' : 'Save Expense')}
-                  </Button>
+                  <FormNav
+                    step={step}
+                    total={TOTAL_STEPS}
+                    onBack={() => setStep(s => s - 1)}
+                    onNext={() => { if (validateStep()) setStep(s => s + 1); }}
+                    submitLabel={isIncome ? 'Save Income' : 'Save Expense'}
+                    isPending={upsert.isPending}
+                  />
                 </form>
               </DialogContent>
             </Dialog>
@@ -677,7 +636,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
             <div key={t.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
-                <span className={`text-sm font-semibold font-mono-tab ${isIncome ? 'text-positive' : ''}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</span>
+                <span className={`text-sm font-semibold font-mono-tab ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</span>
               </div>
               <div className="text-sm font-medium">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -687,7 +646,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-muted-foreground hover:text-accent">
+                    <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-3.5 h-3.5 mr-1" />Delete
                     </Button>
                   </AlertDialogTrigger>
@@ -695,7 +654,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                     <AlertDialogHeader><AlertDialogTitle>Delete record?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                     <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                       <AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel>
-                      <AlertDialogAction className="rounded-none bg-accent w-full sm:w-auto" onClick={() => del.mutate(t.id)}>Confirm</AlertDialogAction>
+                      <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground w-full sm:w-auto" onClick={() => del.mutate(t.id)}>Confirm</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -722,11 +681,11 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
               <div className="col-span-3 truncate text-muted-foreground">{t.projects?.name || '—'}</div>
               <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : (t.category || '—')}</div>
-              <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : ''}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</div>
+              <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</div>
               <div className="col-span-1 flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </AlertDialogTrigger>
@@ -734,7 +693,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                     <AlertDialogHeader><AlertDialogTitle>Delete record?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                      <AlertDialogAction className="rounded-none bg-accent" onClick={() => del.mutate(t.id)}>Confirm</AlertDialogAction>
+                      <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={() => del.mutate(t.id)}>Confirm</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

@@ -209,7 +209,7 @@ export default function Invoices() {
                     <AlertDialogHeader><AlertDialogTitle>Delete {inv.invoice_number}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                      <AlertDialogAction className="rounded-none bg-accent" onClick={() => { remove(inv.id); toast.success('Invoice deleted'); }}>Delete</AlertDialogAction>
+                      <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={() => { remove(inv.id); toast.success('Invoice deleted'); }}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -266,7 +266,7 @@ function InvoiceCard({ inv, onEdit, onDelete, onStatusChange }: { inv: Invoice; 
             <AlertDialogHeader><AlertDialogTitle>Delete {inv.invoice_number}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
             <AlertDialogFooter className="flex-col sm:flex-row gap-2">
               <AlertDialogCancel className="rounded-none w-full">Cancel</AlertDialogCancel>
-              <AlertDialogAction className="rounded-none bg-accent w-full" onClick={onDelete}>Delete</AlertDialogAction>
+              <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground w-full" onClick={onDelete}>Delete</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

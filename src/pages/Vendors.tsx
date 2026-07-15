@@ -182,7 +182,7 @@ export default function Vendors() {
                     <AlertDialogTrigger asChild><Button variant="ghost" size="sm" className="rounded-none h-7 w-7 text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                     <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
                       <AlertDialogHeader><AlertDialogTitle>Remove vendor?</AlertDialogTitle><AlertDialogDescription>Linked transactions will retain their amounts but lose vendor reference.</AlertDialogDescription></AlertDialogHeader>
-                      <AlertDialogFooter className="flex-col sm:flex-row gap-2"><AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-accent w-full sm:w-auto" onClick={() => del.mutate(v.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
+                      <AlertDialogFooter className="flex-col sm:flex-row gap-2"><AlertDialogCancel className="rounded-none w-full sm:w-auto">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground w-full sm:w-auto" onClick={() => del.mutate(v.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
@@ -220,7 +220,7 @@ export default function Vendors() {
                     <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 rounded-none text-muted-foreground hover:text-accent"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
                     <AlertDialogContent className="rounded-none">
                       <AlertDialogHeader><AlertDialogTitle>Remove vendor?</AlertDialogTitle><AlertDialogDescription>Linked transactions will retain their amounts but lose vendor reference.</AlertDialogDescription></AlertDialogHeader>
-                      <AlertDialogFooter><AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-accent" onClick={() => del.mutate(v.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
+                      <AlertDialogFooter><AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel><AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={() => del.mutate(v.id)}>Confirm</AlertDialogAction></AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
