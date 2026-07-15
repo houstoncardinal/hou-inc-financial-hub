@@ -22,11 +22,16 @@ import { fmtUSD } from '@/lib/format';
 import {
   Trash2, Table2, FileText, ChevronRight, BarChart2,
   Search, Plus, Grid3X3, List, ExternalLink,
-  FolderKanban, Download,
+  FolderKanban, Download, Home, Building2, BriefcaseBusiness,
+  Activity, CircleDollarSign, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { generateProjectReport, savePDF, downloadProjectExcel } from '@/lib/reports';
+import {
+  Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip, XAxis, YAxis,
+} from 'recharts';
 
 /* ── Status metadata ─────────────────────────────────────────────────────── */
 const S = {
@@ -38,11 +43,66 @@ const S = {
 type StatusKey = keyof typeof S;
 const getMeta = (status: string) => S[status as StatusKey] ?? S.archived;
 
-const blank = { name: '', code: '', budget: '', status: 'active' as StatusKey, notes: '' };
+const PROJECT_CATEGORIES = [
+  { id: 'all', label: 'All Work', short: 'All', icon: FolderKanban, color: '#9D7E3F' },
+  { id: 'residential', label: 'Residential Construction', short: 'Residential', icon: Home, color: '#0f766e' },
+  { id: 'commercial', label: 'Commercial Construction', short: 'Commercial', icon: Building2, color: '#2563eb' },
+  { id: 'management', label: 'Project Management', short: 'Management', icon: BriefcaseBusiness, color: '#7c3aed' },
+] as const;
+type ProjectCategory = typeof PROJECT_CATEGORIES[number]['id'];
+type WorkCategory = Exclude<ProjectCategory, 'all'>;
+
+const categoryById = (id: ProjectCategory) => PROJECT_CATEGORIES.find(c => c.id === id) ?? PROJECT_CATEGORIES[0];
+
+const inferProjectCategory = (p: any): WorkCategory => {
+  const haystack = [
+    p.department, p.project_type, p.service_type, p.category, p.type, p.name, p.notes, p.location,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (/management|owner rep|owner's rep|project management|consult|coordination|\bpm\b/.test(haystack)) return 'management';
+  if (/commercial|tenant|retail|restaurant|office|industrial|warehouse|medical|buildout|build-out/.test(haystack)) return 'commercial';
+  return 'residential';
+};
+
+const healthTone = (score: number) => (
+  score >= 82 ? { label: 'Strong', color: '#10b981' }
+    : score >= 64 ? { label: 'Stable', color: '#9D7E3F' }
+      : score >= 45 ? { label: 'Watch', color: '#f59e0b' }
+        : { label: 'At Risk', color: '#ef4444' }
+);
+
+const blank = {
+  name: '',
+  code: '',
+  budget: '',
+  department: 'Residential Construction',
+  status: 'active' as StatusKey,
+  notes: '',
+};
 
 const PROJ_CSS = `
+.proj-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.22),transparent 220px);}
+.proj-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.proj-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;background-image:linear-gradient(145deg,rgba(157,126,63,0.045),transparent 42%);}
+.proj-card:hover{box-shadow:0 7px 22px rgba(10,10,10,0.085),0 2px 6px rgba(10,10,10,0.04),0 1px 0 rgba(255,255,255,0.45) inset;transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
+.proj-kpi{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);position:relative;overflow:hidden;}
+.proj-kpi:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(157,126,63,0.08),transparent 42%);pointer-events:none;}
+.proj-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;position:relative;overflow:visible;}
+.proj-intel-card:hover{box-shadow:0 8px 22px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);z-index:30;}
+.proj-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
+.proj-spark{height:46px;min-width:96px;}
+.proj-category{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
+.proj-category:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
+.proj-category-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
+.proj-health-card{background:hsl(var(--secondary)/0.2);border:1px solid hsl(var(--border));}
+.proj-meter{height:3px;background:hsl(var(--secondary));overflow:hidden;}
+.proj-meter>span{display:block;height:100%;border-radius:999px;}
+.proj-table-shell{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.proj-export{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.45) inset;transition:background .16s,border-color .16s,transform .16s;}
+.proj-export:hover{background:hsl(var(--secondary)/0.62);border-color:hsl(var(--foreground)/0.24);transform:translateY(-1px);}
 .proj-row:hover td{background-color:rgba(157,126,63,0.032)!important;}
 .proj-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+.dark .proj-card,.dark .proj-panel,.dark .proj-kpi,.dark .proj-export,.dark .proj-category,.dark .proj-table-shell,.dark .proj-intel-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
 export default function Projects() {
@@ -65,6 +125,7 @@ export default function Projects() {
   const [view,       setView]       = useState<'grid' | 'table' | 'wip'>('grid');
   const [search,     setSearch]     = useState('');
   const [filter,     setFilter]     = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<ProjectCategory>('all');
   const [sortBy,     setSortBy]     = useState<'name' | 'budget' | 'spent' | 'net' | 'used'>('name');
   const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc');
 
@@ -77,7 +138,32 @@ export default function Projects() {
     const outstanding = pChecks.filter((c: any) => c.status === 'pending').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const spent     = pExp + cleared;
     const budget    = Number(p.budget);
-    return { ...p, incoming: pIn, spent, outstanding, net: pIn - spent, used: budget > 0 ? Math.min(150, (spent / budget) * 100) : 0 };
+    const used      = budget > 0 ? Math.min(150, (spent / budget) * 100) : 0;
+    const collectionPct = budget > 0 ? Math.min(150, (pIn / budget) * 100) : 0;
+    const outstandingRatio = budget > 0 ? outstanding / budget : 0;
+    const cashRatio = pIn > 0 ? (pIn - spent) / Math.max(pIn, 1) : 0;
+    const statusPenalty = p.status === 'on_hold' ? 12 : p.status === 'archived' ? 22 : 0;
+    const healthScore = Math.max(0, Math.min(100,
+      92
+      - Math.max(0, (spent / Math.max(budget, 1)) - 0.78) * 95
+      - outstandingRatio * 28
+      - statusPenalty
+      + (cashRatio > 0.12 ? 5 : 0)
+    ));
+    const category = inferProjectCategory(p);
+    return {
+      ...p,
+      projectCategory: category,
+      projectCategoryLabel: categoryById(category).label,
+      incoming: pIn,
+      spent,
+      outstanding,
+      net: pIn - spent,
+      used,
+      collectionPct,
+      healthScore,
+      healthLabel: healthTone(healthScore).label,
+    };
   }), [projects, checks, income, expenses]);
 
   /* ── Portfolio KPIs ── */
@@ -88,7 +174,50 @@ export default function Projects() {
     totalSpent:   enriched.reduce((s: number, p: any) => s + p.spent, 0),
     totalIncoming:enriched.reduce((s: number, p: any) => s + p.incoming, 0),
     totalNet:     enriched.reduce((s: number, p: any) => s + p.net, 0),
+    avgHealth:    enriched.length ? enriched.reduce((s: number, p: any) => s + p.healthScore, 0) / enriched.length : 0,
+    atRisk:       enriched.filter((p: any) => p.healthScore < 64).length,
+    overBudget:   enriched.filter((p: any) => p.used >= 100).length,
+    outstanding:  enriched.reduce((s: number, p: any) => s + p.outstanding, 0),
   }), [enriched]);
+
+  const categoryStats = useMemo(() => PROJECT_CATEGORIES.map(category => {
+    const list = category.id === 'all' ? enriched : enriched.filter((p: any) => p.projectCategory === category.id);
+    return {
+      ...category,
+      count: list.length,
+      budget: list.reduce((s: number, p: any) => s + Number(p.budget || 0), 0),
+      net: list.reduce((s: number, p: any) => s + p.net, 0),
+      health: list.length ? list.reduce((s: number, p: any) => s + p.healthScore, 0) / list.length : 0,
+    };
+  }), [enriched]);
+
+  const portfolioTrend = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, idx) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
+      const month = d.getMonth();
+      const year = d.getFullYear();
+      const label = d.toLocaleDateString('en-US', { month: 'short' });
+      const revenue = income
+        .filter((t: any) => {
+          const td = new Date(t.transaction_date || t.date || t.created_at);
+          return td.getMonth() === month && td.getFullYear() === year;
+        })
+        .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+      const cost = expenses
+        .filter((t: any) => {
+          const td = new Date(t.transaction_date || t.date || t.created_at);
+          return td.getMonth() === month && td.getFullYear() === year;
+        })
+        .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+      return { label, revenue, cost, net: revenue - cost };
+    });
+  }, [income, expenses]);
+
+  const categoryChart = useMemo(
+    () => categoryStats.filter(c => c.id !== 'all').map(c => ({ name: c.short, value: c.count, budget: c.budget, color: c.color })),
+    [categoryStats],
+  );
 
   /* ── Status counts ── */
   const counts = useMemo(() => ({
@@ -104,6 +233,7 @@ export default function Projects() {
     const q = search.toLowerCase();
     return enriched
       .filter((p: any) => filter === 'all' || p.status === filter)
+      .filter((p: any) => categoryFilter === 'all' || p.projectCategory === categoryFilter)
       .filter((p: any) => !q || p.name.toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q))
       .sort((a: any, b: any) => {
         const va = sortBy === 'name' ? a.name : sortBy === 'budget' ? Number(a.budget) : sortBy === 'spent' ? a.spent : sortBy === 'net' ? a.net : a.used;
@@ -111,7 +241,7 @@ export default function Projects() {
         if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
         return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number);
       });
-  }, [enriched, filter, search, sortBy, sortDir]);
+  }, [enriched, filter, categoryFilter, search, sortBy, sortDir]);
 
   /* ── Exports ── */
   const exportPDF   = () => { const doc = generateProjectReport(enriched); savePDF(doc, `hou-projects-${new Date().toISOString().slice(0, 10)}.pdf`); toast.success('Portfolio exported'); };
@@ -125,7 +255,18 @@ export default function Projects() {
     toast.success(form.id ? 'Project updated' : 'Project created');
     setOpen(false); setForm(blank);
   };
-  const openEdit = (p: any) => { setForm({ id: p.id, name: p.name, code: p.code || '', budget: p.budget, status: p.status, notes: p.notes || '' }); setOpen(true); };
+  const openEdit = (p: any) => {
+    setForm({
+      id: p.id,
+      name: p.name,
+      code: p.code || '',
+      budget: p.budget,
+      department: p.department || p.projectCategoryLabel || categoryById(inferProjectCategory(p)).label,
+      status: p.status,
+      notes: p.notes || '',
+    });
+    setOpen(true);
+  };
   const cycleSort = (col: typeof sortBy) => { if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortBy(col); setSortDir('asc'); } };
 
   /* ── Totals helper for footer ── */
@@ -189,6 +330,17 @@ export default function Projects() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label className="micro-label">Project Category</Label>
+              <Select value={form.department || 'Residential Construction'} onValueChange={(v: any) => setForm({ ...form, department: v })}>
+                <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Residential Construction">Residential Construction</SelectItem>
+                  <SelectItem value="Commercial Construction">Commercial Construction</SelectItem>
+                  <SelectItem value="Project Management">Project Management</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label className="micro-label">Notes / Scope</Label>
               <Textarea className="rounded-none text-sm" rows={3} value={form.notes}
                 onChange={e => setForm({ ...form, notes: e.target.value })}
@@ -223,12 +375,14 @@ export default function Projects() {
             )}
             <div className="hidden sm:flex items-center gap-1">
               <button onClick={exportPDF} title="Export PDF"
-                className="w-8 h-8 flex items-center justify-center border border-border text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all">
+                className="proj-export h-9 px-3 flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] font-bold text-foreground transition-all">
                 <FileText className="w-3.5 h-3.5" />
+                PDF
               </button>
               <button onClick={exportExcel} title="Export Excel"
-                className="w-8 h-8 flex items-center justify-center border border-border text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all">
+                className="proj-export h-9 px-3 flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] font-bold text-foreground transition-all">
                 <Table2 className="w-3.5 h-3.5" />
+                Excel
               </button>
             </div>
             <Button onClick={() => setShowWizard(true)} className="rounded-none h-8 text-[10px] uppercase tracking-wider">
@@ -238,35 +392,187 @@ export default function Projects() {
         }
       />
 
-      {/* ── Portfolio KPI Bar ── */}
-      <div className="border-b border-border">
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-px bg-border">
-          {[
-            { label: `${portfolio.active} Active · ${portfolio.total} Total`,  value: portfolio.total === 1 ? '1 Job' : `${portfolio.total} Jobs`, color: '' },
-            { label: 'Total Contract Budget',  value: fmtUSD(portfolio.totalBudget),   color: '' },
-            { label: 'Total Deployed',         value: fmtUSD(portfolio.totalSpent),    color: '' },
-            { label: 'Total Revenue',          value: fmtUSD(portfolio.totalIncoming), color: 'text-positive' },
-            { label: 'Portfolio Net',          value: fmtUSD(portfolio.totalNet),      color: portfolio.totalNet >= 0 ? 'text-positive' : 'text-accent' },
-          ].map((k, i) => (
-            <div key={i} className="bg-background px-4 sm:px-5 py-3.5">
-              <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1 leading-tight">{k.label}</div>
-              <div className={`text-base sm:text-[17px] font-bold font-mono-tab leading-tight ${k.color}`}>{k.value}</div>
+      <div className="proj-shell border-t border-border/50">
+      {/* ── Portfolio Intelligence ── */}
+      <div className="px-4 sm:px-8 py-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#9D7E3F]" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                  <FolderKanban className="w-3 h-3" /> Portfolio Health
+                </div>
+                <div className="text-xl font-bold font-mono-tab leading-none">{Math.round(portfolio.avgHealth)}</div>
+                <div className="text-[9px] text-foreground/60 mt-1">{portfolio.active} active · {portfolio.atRisk} watch-list</div>
+              </div>
+              <div className="proj-spark">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, health: p.healthScore }))}>
+                    <RechartsTooltip
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
+                      cursor={{ fill: 'rgba(157,126,63,0.08)' }}
+                      formatter={(value: number) => [`${Math.round(value)}`, 'Health']}
+                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+                    />
+                    <Bar dataKey="health" radius={[3, 3, 0, 0]}>
+                      {enriched.slice(0, 8).map((p: any) => <Cell key={p.id} fill={healthTone(p.healthScore).color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#2563eb]" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                  <CircleDollarSign className="w-3 h-3" /> Contract Value
+                </div>
+                <div className="text-lg font-bold font-mono-tab leading-tight truncate">{fmtUSD(portfolio.totalBudget)}</div>
+                <div className="text-[9px] text-foreground/60 mt-1">{portfolio.total} total projects under management</div>
+              </div>
+              <div className="proj-spark">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryChart}>
+                    <RechartsTooltip
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
+                      cursor={{ fill: 'rgba(37,99,235,0.08)' }}
+                      formatter={(value: number) => [fmtUSD(value), 'Budget']}
+                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+                    />
+                    <Bar dataKey="budget" radius={[3, 3, 0, 0]}>
+                      {categoryChart.map((c) => <Cell key={c.name} fill={c.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
+            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#ef4444]" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                  <Activity className="w-3 h-3" /> Capital Deployed
+                </div>
+                <div className="text-lg font-bold font-mono-tab leading-tight truncate">{fmtUSD(portfolio.totalSpent)}</div>
+                <div className="text-[9px] text-foreground/60 mt-1">
+                  {portfolio.totalBudget > 0 ? ((portfolio.totalSpent / portfolio.totalBudget) * 100).toFixed(1) : '0.0'}% of approved budgets
+                </div>
+              </div>
+              <div className="proj-spark">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={portfolioTrend}>
+                    <defs>
+                      <linearGradient id="projectCost" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.32} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" hide />
+                    <YAxis hide />
+                    <RechartsTooltip
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
+                      formatter={(value: number) => [fmtUSD(value), 'Costs']}
+                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+                    />
+                    <Area type="monotone" dataKey="cost" stroke="#ef4444" fill="url(#projectCost)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
+            <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: portfolio.totalNet >= 0 ? '#10b981' : '#ef4444' }} />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                  <ShieldCheck className="w-3 h-3" /> Cash Position
+                </div>
+                <div className={`text-lg font-bold font-mono-tab leading-tight truncate ${portfolio.totalNet >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(portfolio.totalNet)}</div>
+                <div className="text-[9px] text-foreground/60 mt-1">{fmtUSD(portfolio.outstanding)} outstanding checks</div>
+              </div>
+              <div className="proj-spark">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={portfolioTrend}>
+                    <defs>
+                      <linearGradient id="projectNet" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" hide />
+                    <YAxis hide />
+                    <RechartsTooltip
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
+                      formatter={(value: number) => [fmtUSD(value), 'Net']}
+                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+                    />
+                    <Area type="monotone" dataKey="net" stroke="#10b981" fill="url(#projectNet)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Category Intelligence ── */}
+      <div className="px-4 sm:px-8 pb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+          {categoryStats.map((category) => {
+            const Icon = category.icon;
+            const active = categoryFilter === category.id;
+            return (
+              <button
+                key={category.id}
+                onClick={() => setCategoryFilter(category.id)}
+                className={`proj-intel-card ${active ? 'proj-category-active' : ''} p-2.5 text-left min-w-0`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: category.color }}>
+                        <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold tracking-tight truncate text-foreground">{category.label}</div>
+                        <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/55">{category.count} project{category.count === 1 ? '' : 's'}</div>
+                      </div>
+                    </div>
+                    <div className="text-[13px] font-mono-tab font-bold truncate">{fmtUSD(category.budget)}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[9px] uppercase tracking-[0.16em] font-bold text-foreground/55">Health</div>
+                    <div className="text-sm font-mono-tab font-black" style={{ color: healthTone(category.health).color }}>{Math.round(category.health || 0)}</div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* ── Controls Row ── */}
-      <div className="px-4 sm:px-8 py-2.5 border-b border-border space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+      <div className="px-4 sm:px-8 pb-4 space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
         {/* Top row on mobile: search + view toggle */}
         <div className="flex items-center gap-2">
           {/* Search */}
-          <div className="relative flex-1 sm:flex-none sm:min-w-[160px] sm:max-w-[240px]">
+          <div className="relative flex-1 sm:flex-none sm:min-w-[220px] sm:max-w-[300px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
             <input
               value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search projects…"
-              className="w-full pl-7 pr-3 h-8 text-xs border border-border bg-background placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/30 transition-colors"
+              className="w-full pl-7 pr-3 h-10 text-xs border border-border bg-background placeholder:text-muted-foreground/60 focus:outline-none focus:border-foreground/30 transition-colors"
             />
           </div>
           {/* View toggle */}
@@ -277,7 +583,7 @@ export default function Projects() {
               { mode: 'wip'   as const, Icon: BarChart2, title: 'WIP Report' },
             ]).map(({ mode, Icon, title }) => (
               <button key={mode} onClick={() => setView(mode)} title={title}
-                className={`w-9 h-8 flex items-center justify-center border-r border-border last:border-r-0 transition-all ${
+                className={`w-10 h-10 flex items-center justify-center border-r border-border last:border-r-0 transition-all ${
                   view === mode ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}>
                 <Icon className="w-3.5 h-3.5" />
@@ -290,7 +596,7 @@ export default function Projects() {
         <div className="flex overflow-x-auto gap-0 border border-border shrink-0 sm:ml-auto scrollbar-none">
           {(['all', 'active', 'on_hold', 'completed', 'archived'] as const).map(s => (
             <button key={s} onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 text-[9px] uppercase tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap ${
+              className={`px-3 py-2.5 text-[9px] uppercase tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap ${
                 filter === s ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground hover:bg-secondary/50'
               }`}>
               {s === 'all' ? `All (${counts.all})` : s === 'on_hold' ? `Hold (${counts.on_hold})` : `${S[s].label} (${counts[s]})`}
@@ -316,14 +622,14 @@ export default function Projects() {
             <FolderKanban className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
           </div>
           <div className="text-sm font-semibold tracking-tight mb-1.5">
-            {search || filter !== 'all' ? 'No matching projects' : 'No projects yet'}
+            {search || filter !== 'all' || categoryFilter !== 'all' ? 'No matching projects' : 'No projects yet'}
           </div>
           <div className="text-xs text-muted-foreground max-w-xs mb-6">
-            {search || filter !== 'all'
+            {search || filter !== 'all' || categoryFilter !== 'all'
               ? 'Try adjusting your search or filter criteria.'
               : 'Create your first project to start tracking budgets, costs, and revenue across all active jobs.'}
           </div>
-          {!search && filter === 'all' && (
+          {!search && filter === 'all' && categoryFilter === 'all' && (
             <Button onClick={() => setShowWizard(true)} className="rounded-none h-9 text-xs uppercase tracking-wider">
               <Plus className="w-3.5 h-3.5 mr-1.5" /> Create First Project
             </Button>
@@ -335,9 +641,12 @@ export default function Projects() {
           GRID VIEW
       ══════════════════════════════════════════════════════════ */}
       {view === 'grid' && displayed.length > 0 && (
-        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
           {displayed.map((p: any, idx: number) => {
             const meta = getMeta(p.status);
+            const category = categoryById(p.projectCategory);
+            const CategoryIcon = category.icon;
+            const health = healthTone(p.healthScore);
             const overBudget = p.used >= 100;
             const nearLimit  = p.used >= 80 && p.used < 100;
             return (
@@ -346,15 +655,15 @@ export default function Projects() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.24, delay: idx * 0.04 }}
-                className="bg-background border border-border flex flex-col group hover:border-foreground/30 hover:shadow-md transition-all duration-200 cursor-pointer"
+                className="proj-card flex flex-col group cursor-pointer overflow-hidden"
                 onClick={() => navigate(`/projects/${p.id}`)}
               >
                 {/* Status accent bar */}
-                <div className="h-[4px] w-full flex-shrink-0" style={{ backgroundColor: meta.color }} />
+                <div className="h-[3px] w-full flex-shrink-0" style={{ backgroundColor: meta.color }} />
 
-                <div className="p-5 sm:p-6 flex-1 flex flex-col">
+                <div className="p-3 flex-1 flex flex-col">
                   {/* Header: badges row */}
-                  <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     {p.code && (
                       <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground font-mono-tab bg-secondary px-2 py-0.5">
                         {p.code}
@@ -362,6 +671,10 @@ export default function Projects() {
                     )}
                     <span className={`text-[8px] uppercase tracking-[0.2em] font-bold px-2 py-0.5 border ${meta.cls}`}>
                       {meta.label}
+                    </span>
+                    <span className="text-[8px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 border border-border bg-secondary/45 text-foreground/70 inline-flex items-center gap-1">
+                      <CategoryIcon className="w-2.5 h-2.5" style={{ color: category.color }} />
+                      {category.short}
                     </span>
                     {overBudget && (
                       <span className="text-[8px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 border bg-accent/10 text-accent border-accent/30">
@@ -376,48 +689,68 @@ export default function Projects() {
                   </div>
 
                   {/* Project name — large and prominent */}
-                  <h3 className="text-xl font-bold tracking-tight leading-tight mb-1 group-hover:text-accent transition-colors">
+                  <h3 className="text-[15px] font-bold tracking-tight leading-tight mb-1 group-hover:text-accent transition-colors line-clamp-1">
                     {p.name}
                   </h3>
-                  {p.notes && (
-                    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-4">{p.notes}</p>
+                  {(p.client_name_snapshot || p.location) && (
+                    <div className="text-[9px] text-foreground/55 font-mono-tab truncate mb-1.5">
+                      {[p.client_name_snapshot, p.location].filter(Boolean).join(' · ')}
+                    </div>
                   )}
-                  {!p.notes && <div className="mb-4" />}
+                  {p.notes && (
+                    <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2 mb-2">{p.notes}</p>
+                  )}
+                  {!p.notes && <div className="mb-2" />}
 
-                  {/* Budget utilization bar */}
-                  <div className="mb-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-muted-foreground">Budget Utilization</span>
-                      <span className={`text-sm font-black font-mono-tab ${overBudget ? 'text-accent' : nearLimit ? 'text-warning' : 'text-foreground'}`}>
-                        {Math.min(p.used, 150).toFixed(1)}%
-                      </span>
+                  <div className="proj-health-card p-2 mb-2.5">
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <div>
+                        <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/55">Project Health</div>
+                        <div className="text-[15px] font-black font-mono-tab leading-tight" style={{ color: health.color }}>{Math.round(p.healthScore)}</div>
+                      </div>
+                      <div className="text-right min-w-[86px]">
+                        <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/55">Signal</div>
+                        <div className="text-[11px] font-bold text-foreground">{health.label}</div>
+                        <div className="text-[9px] text-foreground/55">{p.outstanding > 0 ? `${fmtUSD(p.outstanding)} open` : 'No open checks'}</div>
+                      </div>
                     </div>
-                    <div className="h-2 bg-secondary overflow-hidden">
-                      <motion.div
-                        className="h-full"
-                        style={{ backgroundColor: overBudget ? 'var(--accent)' : nearLimit ? 'var(--warning)' : meta.hex }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${Math.min(p.used, 100)}%` }}
-                        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.05 + idx * 0.03 }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5 font-mono-tab">
-                      <span>{fmtUSD(p.spent)} deployed</span>
-                      <span>of {fmtUSD(p.budget)}</span>
+                    <div className="space-y-1">
+                      {[
+                        { label: 'Budget Used', value: p.used, color: overBudget ? '#ef4444' : nearLimit ? '#f59e0b' : category.color },
+                        { label: 'Collections', value: p.collectionPct, color: '#10b981' },
+                        { label: 'Health', value: p.healthScore, color: health.color },
+                      ].map((m) => (
+                        <div key={m.label}>
+                          <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.13em] text-foreground/55 mb-1">
+                            <span>{m.label}</span>
+                            <span className="font-mono-tab text-foreground">{Math.min(m.value, 150).toFixed(0)}%</span>
+                          </div>
+                          <div className="proj-meter">
+                            <motion.span
+                              style={{ backgroundColor: m.color }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(m.value, 100)}%` }}
+                              transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1], delay: 0.04 + idx * 0.025 }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* 4-metric grid */}
-                  <div className="grid grid-cols-2 gap-px bg-border border border-border mt-auto">
+                  {/* project financial grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border border border-border mt-auto">
                     {[
                       { label: 'Contract',  value: fmtUSD(p.budget),   cls: '' },
                       { label: 'Deployed',  value: fmtUSD(p.spent),    cls: '' },
                       { label: 'Revenue',   value: fmtUSD(p.incoming), cls: 'text-positive' },
-                      { label: 'Net',       value: fmtUSD(p.net),      cls: p.net >= 0 ? 'text-positive' : 'text-accent' },
+                      { label: 'Net Cash',  value: fmtUSD(p.net),      cls: p.net >= 0 ? 'text-positive' : 'text-accent' },
+                      { label: 'Open Checks', value: fmtUSD(p.outstanding), cls: p.outstanding > 0 ? 'text-warning' : '' },
+                      { label: 'Category', value: category.short, cls: '' },
                     ].map(m => (
-                      <div key={m.label} className="bg-background px-3 py-3">
-                        <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1">{m.label}</div>
-                        <div className={`text-sm font-bold font-mono-tab leading-tight ${m.cls}`}>{m.value}</div>
+                      <div key={m.label} className="bg-background/95 px-2 py-1.5 min-w-0">
+                        <div className="text-[7px] uppercase tracking-[0.15em] font-bold text-foreground/55 mb-0.5">{m.label}</div>
+                        <div className={`text-[11px] font-bold font-mono-tab leading-tight truncate ${m.cls}`}>{m.value}</div>
                       </div>
                     ))}
                   </div>
@@ -425,7 +758,7 @@ export default function Projects() {
 
                 {/* Card footer */}
                 <div
-                  className="border-t border-border px-5 py-3 flex items-center justify-between bg-secondary/20"
+                  className="border-t border-border px-3 py-2 flex items-center justify-between bg-secondary/20"
                   onClick={e => e.stopPropagation()}
                 >
                   <button
@@ -475,18 +808,21 @@ export default function Projects() {
       ══════════════════════════════════════════════════════════ */}
       {view === 'table' && displayed.length > 0 && (
         <div className="p-4 sm:p-6">
-          <div className="border border-border overflow-hidden">
+          <div className="proj-panel overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[820px]">
+              <table className="w-full text-sm min-w-[1120px]">
                 <thead>
                   <tr className="border-b border-border bg-secondary/40">
                     {([
                       { label: 'Project',  col: 'name'   },
+                      { label: 'Category', col: null      },
                       { label: 'Status',   col: null      },
                       { label: 'Budget',   col: 'budget'  },
                       { label: 'Deployed', col: 'spent'   },
                       { label: '% Used',   col: 'used'    },
+                      { label: 'Health',   col: null      },
                       { label: 'Revenue',  col: null      },
+                      { label: 'Open Checks', col: null   },
                       { label: 'Net',      col: 'net'     },
                       { label: '',         col: null      },
                     ] as const).map(({ label, col }) => (
@@ -506,6 +842,9 @@ export default function Projects() {
                 <tbody>
                   {displayed.map((p: any) => {
                     const meta = getMeta(p.status);
+                    const category = categoryById(p.projectCategory);
+                    const CategoryIcon = category.icon;
+                    const health = healthTone(p.healthScore);
                     return (
                       <tr key={p.id} className="border-b border-border last:border-b-0 proj-row group">
                         <td className="px-4 py-3">
@@ -516,9 +855,17 @@ export default function Projects() {
                                 className="font-semibold hover:text-accent transition-colors text-left block text-[13px] leading-tight">
                                 {p.name}
                               </button>
-                              {p.code && <div className="text-[9px] text-muted-foreground font-mono-tab mt-0.5">{p.code}</div>}
+                              <div className="text-[9px] text-muted-foreground font-mono-tab mt-0.5 truncate max-w-[210px]">
+                                {[p.code, p.client_name_snapshot || p.location].filter(Boolean).join(' · ') || 'No project code'}
+                              </div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/70">
+                            <CategoryIcon className="w-3 h-3" style={{ color: category.color }} />
+                            {category.short}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-[7px] uppercase tracking-[0.22em] font-bold px-1.5 py-0.5 border ${meta.cls}`}>
@@ -537,7 +884,18 @@ export default function Projects() {
                             </span>
                           </div>
                         </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-14 h-1 bg-secondary flex-shrink-0 overflow-hidden">
+                              <div className="h-full" style={{ width: `${Math.min(p.healthScore, 100)}%`, backgroundColor: health.color }} />
+                            </div>
+                            <span className="font-mono-tab text-[11px] font-bold whitespace-nowrap" style={{ color: health.color }}>
+                              {Math.round(p.healthScore)}
+                            </span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 font-mono-tab text-right text-positive font-semibold text-[12px]">{fmtUSD(p.incoming)}</td>
+                        <td className={`px-4 py-3 font-mono-tab text-right font-semibold text-[12px] ${p.outstanding > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{fmtUSD(p.outstanding)}</td>
                         <td className={`px-4 py-3 font-mono-tab font-bold text-right text-[12px] ${p.net >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(p.net)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
@@ -574,13 +932,15 @@ export default function Projects() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-secondary/40">
-                    <td className="px-4 py-3 font-bold text-[9px] uppercase tracking-wider" colSpan={2}>
+                    <td className="px-4 py-3 font-bold text-[9px] uppercase tracking-wider" colSpan={3}>
                       Portfolio Total · {displayed.length} project{displayed.length !== 1 ? 's' : ''}
                     </td>
                     <td className="px-4 py-3 font-bold font-mono-tab text-right text-[12px]">{fmtUSD(tot('budget'))}</td>
                     <td className="px-4 py-3 font-bold font-mono-tab text-right text-[12px]">{fmtUSD(tot('spent'))}</td>
                     <td className="px-4 py-3 text-muted-foreground text-[10px]">—</td>
+                    <td className="px-4 py-3 text-muted-foreground text-[10px]">—</td>
                     <td className="px-4 py-3 font-bold font-mono-tab text-right text-positive text-[12px]">{fmtUSD(tot('incoming'))}</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab text-right text-[12px]">{fmtUSD(tot('outstanding'))}</td>
                     <td className={`px-4 py-3 font-bold font-mono-tab text-right text-[12px] ${tot('net') >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(tot('net'))}</td>
                     <td />
                   </tr>
@@ -596,7 +956,7 @@ export default function Projects() {
       ══════════════════════════════════════════════════════════ */}
       {view === 'wip' && displayed.length > 0 && (
         <div className="p-4 sm:p-6">
-          <div className="border border-border">
+          <div className="proj-panel">
             <div className="px-5 py-3 border-b border-border bg-secondary/40 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <BarChart2 className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
@@ -609,10 +969,10 @@ export default function Projects() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[760px]">
+              <table className="w-full text-sm min-w-[1080px]">
                 <thead>
                   <tr className="border-b border-border">
-                    {['Project', 'Contract Value', 'Costs Incurred', '% Complete', 'Revenue Earned', 'Billed to Date', 'Over / Under'].map(h => (
+                    {['Project', 'Category', 'Contract Value', 'Costs Incurred', '% Complete', 'Health', 'Open Checks', 'Revenue Earned', 'Billed to Date', 'Over / Under'].map(h => (
                       <th key={h} className="px-4 py-2.5 text-left text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -620,6 +980,9 @@ export default function Projects() {
                 <tbody>
                   {displayed.map((p: any) => {
                     const meta        = getMeta(p.status);
+                    const category    = categoryById(p.projectCategory);
+                    const CategoryIcon = category.icon;
+                    const health      = healthTone(p.healthScore);
                     const pct         = p.budget > 0 ? Math.min(100, (p.spent / p.budget) * 100) : 0;
                     const revEarned   = p.budget > 0 ? p.incoming * (pct / 100) : p.incoming;
                     const billed      = p.incoming;
@@ -634,9 +997,17 @@ export default function Projects() {
                                 className="font-semibold hover:text-accent transition-colors text-left block">
                                 {p.name}
                               </button>
-                              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">{p.code || meta.label}</div>
+                              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5 truncate max-w-[220px]">
+                                {[p.code || meta.label, p.client_name_snapshot || p.location].filter(Boolean).join(' · ')}
+                              </div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/70">
+                            <CategoryIcon className="w-3 h-3" style={{ color: category.color }} />
+                            {category.short}
+                          </span>
                         </td>
                         <td className="px-4 py-3 font-mono-tab font-semibold">{fmtUSD(p.budget)}</td>
                         <td className="px-4 py-3 font-mono-tab">{fmtUSD(p.spent)}</td>
@@ -648,6 +1019,11 @@ export default function Projects() {
                             <span className="font-mono-tab text-xs font-bold">{pct.toFixed(1)}%</span>
                           </div>
                         </td>
+                        <td className="px-4 py-3">
+                          <div className="font-mono-tab text-xs font-black" style={{ color: health.color }}>{Math.round(p.healthScore)}</div>
+                          <div className="text-[8px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{health.label}</div>
+                        </td>
+                        <td className={`px-4 py-3 font-mono-tab font-semibold ${p.outstanding > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{fmtUSD(p.outstanding)}</td>
                         <td className="px-4 py-3 font-mono-tab text-positive font-semibold">{fmtUSD(revEarned)}</td>
                         <td className="px-4 py-3 font-mono-tab">{fmtUSD(billed)}</td>
                         <td className={`px-4 py-3 font-mono-tab font-bold ${delta > 0 ? 'text-positive' : delta < 0 ? 'text-accent' : ''}`}>
@@ -662,10 +1038,12 @@ export default function Projects() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-secondary/40">
-                    <td className="px-4 py-3 font-bold text-[9px] uppercase tracking-wider">Portfolio Totals</td>
+                    <td className="px-4 py-3 font-bold text-[9px] uppercase tracking-wider" colSpan={2}>Portfolio Totals</td>
                     <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(tot('budget'))}</td>
                     <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(tot('spent'))}</td>
                     <td className="px-4 py-3 text-muted-foreground text-[10px]">—</td>
+                    <td className="px-4 py-3 text-muted-foreground text-[10px]">—</td>
+                    <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(tot('outstanding'))}</td>
                     <td className="px-4 py-3 font-bold font-mono-tab text-positive">{fmtUSD(tot('incoming'))}</td>
                     <td className="px-4 py-3 font-bold font-mono-tab">{fmtUSD(tot('incoming'))}</td>
                     <td className="px-4 py-3 text-muted-foreground text-[10px]">—</td>
@@ -676,6 +1054,7 @@ export default function Projects() {
           </div>
         </div>
       )}
+      </div>
     </AppShell>
   );
 }

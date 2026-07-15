@@ -23,6 +23,7 @@ import {
   ArrowLeft, Download, FileText, ArrowUpRight, Plus, ExternalLink,
   Users, LayoutDashboard, Upload, Trash2, File, Image, Eye,
   ChevronRight, Pencil, Check, X, FolderOpen, Link2,
+  BarChart3, Receipt, ClipboardList, ShieldCheck, Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -57,8 +58,17 @@ const DOC_TYPES: { value: DocType; label: string }[] = [
 ];
 
 const PD_CSS = `
+.pd-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.2),transparent 220px);}
+.pd-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;position:relative;overflow:hidden;transition:box-shadow .18s,transform .18s,border-color .18s;}
+.pd-intel-card:hover{box-shadow:0 8px 24px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
+.pd-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
+.pd-tab-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
+.pd-tab-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
+.pd-tab-card-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
+.pd-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
 .pd-row:hover td,.pd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .pd-doc-row:hover{background-color:rgba(157,126,63,0.025)!important;}
+.dark .pd-intel-card,.dark .pd-tab-card,.dark .pd-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
 function FileIcon({ mimeType, className = 'w-4 h-4' }: { mimeType: string | null; className?: string }) {
@@ -322,13 +332,26 @@ export default function ProjectDetail() {
 
   const statusMeta = STATUS_META[enriched.status as StatusKey] ?? STATUS_META.archived;
   const projectSummary = financeSummary;
-  const TABS: { key: Tab; label: string; count?: number }[] = [
-    { key: 'overview',   label: 'Overview' },
-    { key: 'breakdown',  label: 'Breakdown' },
-    { key: 'documents',  label: 'Documents', count: projectDocs.length },
-    { key: 'activity',   label: 'Activity',  count: sortedActivity.length },
-    { key: 'draws',      label: 'Draws',     count: draws.length },
+  const healthScore = Math.max(0, Math.min(100,
+    92
+    - Math.max(0, (enriched.spent / Math.max(Number(enriched.budget || 0), 1)) - 0.78) * 95
+    - (enriched.outstanding / Math.max(Number(enriched.budget || 0), 1)) * 28
+    - (enriched.status === 'on_hold' ? 12 : enriched.status === 'archived' ? 22 : 0)
+    + (enriched.net > 0 ? 5 : 0)
+  ));
+  const healthTone = healthScore >= 82 ? { label: 'Strong', color: '#10b981' }
+    : healthScore >= 64 ? { label: 'Stable', color: '#9D7E3F' }
+      : healthScore >= 45 ? { label: 'Watch', color: '#f59e0b' }
+        : { label: 'At Risk', color: '#ef4444' };
+  const TABS: { key: Tab; label: string; short: string; desc: string; count?: number; icon: any }[] = [
+    { key: 'overview',   label: 'Overview', short: 'Overview', desc: 'Health, cash, budget, and project controls', icon: LayoutDashboard },
+    { key: 'breakdown',  label: 'Houston Enterprise Reconciliation', short: 'Reconciliation', desc: 'SOV, draws, COs, payments, and audit', icon: ShieldCheck },
+    { key: 'documents',  label: 'Documents', short: 'Documents', desc: 'Contracts, permits, photos, receipts', count: projectDocs.length, icon: FolderOpen },
+    { key: 'activity',   label: 'Activity', short: 'Activity', desc: 'Income, expenses, and check movement', count: sortedActivity.length, icon: Receipt },
+    { key: 'draws',      label: 'Draws', short: 'Draws', desc: 'Milestone draw schedule and funding status', count: draws.length, icon: BarChart3 },
   ];
+  const activeTabMeta = TABS.find(t => t.key === tab) ?? TABS[0];
+  const ActiveTabIcon = activeTabMeta.icon;
 
   return (
     <AppShell>
@@ -429,22 +452,81 @@ export default function ProjectDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Status color bar + Tabs ── */}
       <div className="h-[3px]" style={{ backgroundColor: statusMeta.color }} />
-      <div className="px-4 sm:px-8 border-b border-border flex gap-0 overflow-x-auto">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-[10px] uppercase tracking-[0.2em] font-bold whitespace-nowrap border-b-2 transition-all ${
-              tab === t.key ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}>
-            {t.label}
-            {t.count !== undefined && t.count > 0 && (
-              <span className={`text-[8px] px-1.5 py-0.5 font-black ${tab === t.key ? 'bg-foreground text-background' : 'bg-secondary text-muted-foreground'}`}>
-                {t.count}
+
+      {/* ── Project command center + navigation ── */}
+      <div className="pd-shell border-b border-border/70">
+        <div className="px-4 sm:px-8 py-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            {[
+              { label: 'Project Health', value: `${Math.round(healthScore)}`, sub: healthTone.label, color: healthTone.color, Icon: ShieldCheck },
+              { label: 'Budget Used', value: `${enriched.used.toFixed(1)}%`, sub: `${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`, color: enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F', Icon: BarChart3 },
+              { label: 'Cash Position', value: fmtUSD(enriched.net), sub: `${fmtUSD(enriched.outstanding)} open checks`, color: enriched.net >= 0 ? '#10b981' : '#ef4444', Icon: Receipt },
+              { label: 'Project Files', value: String(projectDocs.length), sub: `${sortedActivity.length} ledger movements`, color: '#2563eb', Icon: FolderOpen },
+            ].map(card => (
+              <div key={card.label} className="pd-intel-card p-3 min-w-0">
+                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                      <card.Icon className="w-3 h-3" style={{ color: card.color }} />
+                      {card.label}
+                    </div>
+                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
+                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pd-panel p-2.5">
+            <div className="sm:hidden relative">
+              <select
+                value={tab}
+                onChange={e => setTab(e.target.value as Tab)}
+                className="w-full h-10 px-3 pr-9 text-xs font-bold uppercase tracking-[0.12em] border border-border bg-background text-foreground appearance-none focus:outline-none focus:border-foreground/35"
+              >
+                {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+
+            <div className="hidden sm:flex flex-wrap gap-1.5">
+              {TABS.map(t => {
+                const Icon = t.icon;
+                const active = tab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`h-9 px-3 border text-[9px] uppercase tracking-[0.14em] font-bold flex items-center gap-2 transition-all ${
+                      active ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary/45'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
+                    {t.short}
+                    {t.count !== undefined && t.count > 0 && (
+                      <span className={`text-[8px] px-1.5 py-0.5 font-black ${active ? 'bg-background/15 text-background' : 'bg-secondary text-muted-foreground'}`}>
+                        {t.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-2.5 pt-2.5 border-t border-border flex items-start gap-2.5">
+              <span className="w-8 h-8 border border-border bg-secondary/35 flex items-center justify-center shrink-0">
+                <ActiveTabIcon className="w-4 h-4" strokeWidth={1.7} style={{ color: '#9D7E3F' }} />
               </span>
-            )}
-          </button>
-        ))}
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.16em] font-black text-foreground">{activeTabMeta.label}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{activeTabMeta.desc}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════
@@ -453,7 +535,7 @@ export default function ProjectDetail() {
       {tab === 'overview' && (
         <div className="p-4 sm:p-8 space-y-6">
           {projectSummary && (
-            <div className="border border-border bg-secondary/20">
+            <div className="pd-panel bg-secondary/20 overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">Construction Finance Intelligence</div>
@@ -516,7 +598,7 @@ export default function ProjectDetail() {
           )}
 
           {/* ── Snapshot KPIs ── */}
-          <div className="border border-border overflow-hidden">
+          <div className="pd-panel overflow-hidden">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-px bg-border">
               {[
                 { label: 'Contract Budget',  value: fmtUSD(enriched.budget),      c: '' },
@@ -537,7 +619,7 @@ export default function ProjectDetail() {
           <div className="lg:col-span-2 space-y-6">
 
             {/* Budget utilization */}
-            <div className="border border-border p-5">
+            <div className="pd-panel p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="micro-label">Budget Utilization</div>
                 {enriched.used >= 100 && (
@@ -586,7 +668,7 @@ export default function ProjectDetail() {
 
             {/* Cost breakdown */}
             {costBreakdown.length > 0 && (
-              <div className="border border-border">
+              <div className="pd-panel overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
                   Budget vs. Actuals — Line Item Breakdown
                 </div>
@@ -632,7 +714,7 @@ export default function ProjectDetail() {
           {/* Sidebar */}
           <div className="space-y-4">
             {/* Details card */}
-            <div className="border border-border p-5">
+            <div className="pd-panel p-4 sm:p-5">
               <div className="micro-label mb-3">Details</div>
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd className="font-medium uppercase tracking-wider text-[10px]">{enriched.status}</dd></div>
@@ -646,7 +728,7 @@ export default function ProjectDetail() {
 
             {/* Portal client bridge */}
             {(portalClient || portalBrief) && (
-              <div className="border border-border p-5">
+              <div className="pd-panel p-4 sm:p-5">
                 <div className="micro-label mb-3 flex items-center gap-1.5">
                   <Link2 className="w-3 h-3" strokeWidth={2} /> Portal Bridge
                 </div>
@@ -660,11 +742,21 @@ export default function ProjectDetail() {
                       ● {portalClient.status?.replace('_', ' ')}
                     </div>
                     {isAdmin && (
-                      <button
-                        onClick={() => navigate('/admin')}
-                        className="mt-2 flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors">
-                        <ExternalLink className="w-2.5 h-2.5" /> View in Admin
-                      </button>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => navigate('/admin')}
+                          className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors">
+                          <ExternalLink className="w-2.5 h-2.5" /> View in Admin
+                        </button>
+                        {portalClient.email && (
+                          <a
+                            href={`mailto:${portalClient.email}?subject=${encodeURIComponent('Your Houston Enterprise Client Portal')}&body=${encodeURIComponent(`Hi ${portalClient.name?.split(' ')[0] || 'there'},\n\nYour Houston Enterprise client portal is ready. You can review project updates, invoices, documents, milestones, and messages here:\n\n${window.location.origin}/portal\n\nPlease sign in or register with this email address so we can connect your project record securely.\n\nBest,\nHouston Enterprise`)}`}
+                            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Mail className="w-2.5 h-2.5" /> Invite
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -693,7 +785,7 @@ export default function ProjectDetail() {
             )}
 
             {/* Quick links */}
-            <div className="border border-border p-5">
+            <div className="pd-panel p-4 sm:p-5">
               <div className="micro-label mb-3">Quick Actions</div>
               <div className="space-y-1.5">
                 {[
@@ -723,7 +815,7 @@ export default function ProjectDetail() {
       {tab === 'documents' && (
         <div className="p-4 sm:p-8">
           {/* Upload bar */}
-          <div className="border border-border p-4 mb-5 bg-secondary/20">
+          <div className="pd-panel p-4 mb-5 bg-secondary/20">
             <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground mb-3">Upload Document</div>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[160px]">
@@ -765,7 +857,7 @@ export default function ProjectDetail() {
 
           {/* Document list */}
           {projectDocs.length === 0 ? (
-            <div className="border border-border py-16 flex flex-col items-center justify-center text-center">
+            <div className="pd-panel py-16 flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 border border-border flex items-center justify-center mb-4">
                 <FolderOpen className="w-5 h-5 text-muted-foreground" strokeWidth={1.5} />
               </div>
@@ -775,7 +867,7 @@ export default function ProjectDetail() {
               </p>
             </div>
           ) : (
-            <div className="border border-border">
+            <div className="pd-panel overflow-hidden">
               {/* Header */}
               <div className="grid grid-cols-12 gap-3 px-4 py-2.5 border-b border-border bg-secondary/40 text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold">
                 <div className="col-span-5">Document</div>
@@ -848,11 +940,11 @@ export default function ProjectDetail() {
       {tab === 'activity' && (
         <div className="p-4 sm:p-8">
           {sortedActivity.length === 0 ? (
-            <div className="border border-border py-16 text-center text-sm text-muted-foreground">
+            <div className="pd-panel py-16 text-center text-sm text-muted-foreground">
               No activity recorded for this project yet.
             </div>
           ) : (
-            <div className="border border-border">
+            <div className="pd-panel overflow-hidden">
               {/* Mobile card view */}
               <div className="sm:hidden divide-y divide-border">
                 {sortedActivity.map((a: any) => (
@@ -922,7 +1014,7 @@ export default function ProjectDetail() {
       ══════════════════════════════════════════════════════════ */}
       {tab === 'draws' && (
         <div className="p-4 sm:p-8">
-          <div className="border border-border">
+          <div className="pd-panel overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-secondary/40 flex items-center justify-between">
               <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Draw Schedule</div>
               <Dialog open={drawOpen} onOpenChange={setDrawOpen}>

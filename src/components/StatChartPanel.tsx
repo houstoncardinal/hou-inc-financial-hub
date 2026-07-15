@@ -42,7 +42,7 @@ export function BalanceTrendChart({ data, color }: { data: { month: string; bala
           <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" strokeOpacity={0.3} vertical={false} />
           <XAxis dataKey="month" hide />
           <YAxis hide domain={['dataMin - 500', 'dataMax + 500']} />
-          <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
+          <Tooltip content={<ChartTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
           <Area
             type="monotone" dataKey="balance" name="Balance"
             stroke={color} strokeWidth={2} fill={`url(#${gradientId})`}
@@ -51,7 +51,7 @@ export function BalanceTrendChart({ data, color }: { data: { month: string; bala
           />
         </AreaChart>
       </ResponsiveContainer>
-      <div className="flex justify-between text-[8px] text-muted-foreground/60 mt-0.5 px-0.5 font-mono-tab">
+      <div className="hidden sm:flex justify-between text-[8px] text-foreground/65 mt-0.5 px-0.5 font-mono-tab">
         <span>Low {fmtUSD(minVal)}</span>
         <span>High {fmtUSD(maxVal)}</span>
       </div>
@@ -77,7 +77,7 @@ export function InflowChart({
           <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" strokeOpacity={0.2} vertical={false} />
           <XAxis dataKey="month" hide />
           <YAxis hide />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.15 }} />
+          <Tooltip content={<ChartTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ fill: 'var(--border)', fillOpacity: 0.15 }} />
           <Bar dataKey="inflow" name="Inflow" radius={[1, 1, 0, 0]} maxBarSize={20}>
             {monthlyData.map((_, i) => (
               <Cell key={i} fill={`hsl(150, 60%, ${35 + i * 2}%)`} fillOpacity={0.7 + (i / monthlyData.length) * 0.3} />
@@ -87,15 +87,16 @@ export function InflowChart({
       </ResponsiveContainer>
       {/* Category breakdown as inline tags */}
       {categoryData.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
+        <div className="hidden sm:flex absolute inset-x-3 bottom-1.5 gap-1 justify-center overflow-hidden">
           {categoryData.slice(0, 4).map((c, i) => (
-            <span key={c.name} className="text-[7px] px-1 py-0.5 rounded-sm font-mono-tab flex items-center gap-1" style={{ backgroundColor: `${colors[i % colors.length]}15`, color: colors[i % colors.length] }}>
+            <span key={c.name} className="text-[7px] px-1.5 py-0.5 rounded-sm font-mono-tab flex items-center gap-1 border border-border/50 text-foreground/75 min-w-0 max-w-[24%]" style={{ backgroundColor: `${colors[i % colors.length]}12` }}>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-              {c.name} {total > 0 ? `${((c.value / total) * 100).toFixed(0)}%` : ''}
+              <span className="truncate">{c.name}</span>
+              <span className="shrink-0">{total > 0 ? `${((c.value / total) * 100).toFixed(0)}%` : ''}</span>
             </span>
           ))}
           {categoryData.length > 4 && (
-            <span className="text-[7px] text-muted-foreground px-1">+{categoryData.length - 4} more</span>
+            <span className="text-[7px] text-foreground/65 px-1 shrink-0">+{categoryData.length - 4}</span>
           )}
         </div>
       )}
@@ -120,7 +121,7 @@ export function OutflowChart({
           <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" strokeOpacity={0.2} vertical={false} />
           <XAxis dataKey="month" hide />
           <YAxis hide />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.15 }} />
+          <Tooltip content={<ChartTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ fill: 'var(--border)', fillOpacity: 0.15 }} />
           <defs>
             <linearGradient id="outflowGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
@@ -132,15 +133,16 @@ export function OutflowChart({
         </ComposedChart>
       </ResponsiveContainer>
       {categoryData.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
+        <div className="hidden sm:flex absolute inset-x-3 bottom-1.5 gap-1 justify-center overflow-hidden">
           {categoryData.slice(0, 4).map((c, i) => (
-            <span key={c.name} className="text-[7px] px-1 py-0.5 rounded-sm font-mono-tab flex items-center gap-1" style={{ backgroundColor: `${colors[i % colors.length]}15`, color: colors[i % colors.length] }}>
+            <span key={c.name} className="text-[7px] px-1.5 py-0.5 rounded-sm font-mono-tab flex items-center gap-1 border border-border/50 text-foreground/75 min-w-0 max-w-[24%]" style={{ backgroundColor: `${colors[i % colors.length]}12` }}>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-              {c.name} {total > 0 ? `${((c.value / total) * 100).toFixed(0)}%` : ''}
+              <span className="truncate">{c.name}</span>
+              <span className="shrink-0">{total > 0 ? `${((c.value / total) * 100).toFixed(0)}%` : ''}</span>
             </span>
           ))}
           {categoryData.length > 4 && (
-            <span className="text-[7px] text-muted-foreground px-1">+{categoryData.length - 4} more</span>
+            <span className="text-[7px] text-foreground/65 px-1 shrink-0">+{categoryData.length - 4}</span>
           )}
         </div>
       )}
@@ -164,6 +166,8 @@ export function PendingAgingChart({
           <XAxis type="number" hide />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
+            allowEscapeViewBox={{ x: true, y: true }}
+            wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
@@ -185,9 +189,9 @@ export function PendingAgingChart({
         </BarChart>
       </ResponsiveContainer>
       {agingBuckets.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-1">
+        <div className="hidden sm:flex flex-wrap gap-1 mt-1">
           {agingBuckets.map((b) => (
-            <span key={b.label} className="text-[7px] px-1 py-0.5 rounded-sm font-mono-tab flex items-center gap-1" style={{ backgroundColor: `${b.color}15`, color: b.color }}>
+            <span key={b.label} className="text-[7px] px-1 py-0.5 rounded-sm font-mono-tab flex items-center gap-1 border border-border/50 text-foreground/75" style={{ backgroundColor: `${b.color}12` }}>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: b.color }} />
               {b.label}: {b.count}
             </span>
@@ -195,7 +199,7 @@ export function PendingAgingChart({
         </div>
       )}
       {totalValue > 0 && (
-        <div className="text-[8px] text-muted-foreground mt-1 font-mono-tab flex justify-between">
+        <div className="hidden sm:flex text-[8px] text-foreground/65 mt-1 font-mono-tab justify-between">
           <span>Total held</span>
           <span className="font-semibold text-foreground">{fmtUSD(totalValue)}</span>
         </div>

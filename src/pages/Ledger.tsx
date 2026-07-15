@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -11,12 +12,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
+import { useAuth } from '@/hooks/useAuth';
 import { fmtDate, fmtUSD } from '@/lib/format';
-import { generateLedgerReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
-import { FileText, Table2, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
+import { generateLedgerReport, generateLedgerRecordReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
+import { useEntity } from '@/contexts/EntityContext';
+import { supabase } from '@/integrations/supabase/client';
+import { buildFinanceBuckets, FinanceRangePicker, financeRangeLabel, isInFinanceRange, parseFinanceDate } from '@/lib/financeTime';
+import {
+  FileText, Table2, Trash2, CheckSquare, Square,
+  Search, SlidersHorizontal, ArrowDownToLine, ArrowUpFromLine,
+  Activity, Eye, ChevronRight, CircleDollarSign,
+  AlertTriangle, Receipt, Layers, X, Copy as CopyIcon, PencilLine,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
-import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
+import {
+  AreaChart, Area, BarChart, Bar, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip, XAxis, YAxis,
+} from 'recharts';
 
 const EXPENSE_CATEGORIES = [
   'Materials & Supplies', 'Labor & Subcontractors', 'Permits & Fees',
@@ -40,6 +53,8 @@ const COST_PHASES = [
 const INCOME_METHODS  = [{ v:'check',label:'Check' },{ v:'ach_wire',label:'ACH / Wire' },{ v:'credit_card',label:'Credit Card' },{ v:'financing_draw',label:'Financing Draw' },{ v:'cash',label:'Cash' },{ v:'other',label:'Other' }];
 const EXPENSE_METHODS = [{ v:'check',label:'Check' },{ v:'credit_card',label:'Credit Card' },{ v:'ach',label:'ACH' },{ v:'net_30',label:'NET 30' },{ v:'net_60',label:'NET 60' },{ v:'net_90',label:'NET 90' },{ v:'cash',label:'Cash' },{ v:'wire',label:'Wire' },{ v:'other',label:'Other' }];
 const REF_METHODS = new Set(['check','ach_wire','ach','wire']);
+const PAGE_SIZE_OPTIONS = [7, 10, 15, 25, 50] as const;
+type LedgerQueueKey = 'all' | 'needs_review' | 'missing_receipts' | 'uncategorized' | 'duplicates' | 'pending_approval' | 'large_transactions' | 'imported_today' | 'open_checks';
 
 function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
   return (
@@ -85,21 +100,605 @@ function FormNav({ step, total, onBack, onNext, submitLabel, isPending }: {
 }
 
 const LDG_CSS = `
-.ldg-stat{background:rgba(255,255,255,0.86)!important;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:background 0.22s,box-shadow 0.22s;}
-.ldg-stat:hover{background:rgba(255,255,255,0.97)!important;box-shadow:0 4px 22px rgba(10,10,10,0.08);}
-.ldg-row:hover{background-color:rgba(157,126,63,0.032)!important;}
-.ldg-badge{border-radius:9999px!important;padding:2px 9px!important;font-weight:700!important;letter-spacing:.18em!important;}
-.ldg-type-check{background:rgba(157,126,63,0.07)!important;border-color:rgba(157,126,63,0.28)!important;color:#9D7E3F!important;}
-.ldg-type-income{background:rgba(34,197,94,0.07)!important;border-color:rgba(34,197,94,0.28)!important;color:rgb(21,128,61)!important;}
-.ldg-type-expense{background:rgba(239,68,68,0.07)!important;border-color:rgba(239,68,68,0.28)!important;color:rgb(185,28,28)!important;}
-.dark .ldg-stat{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.ldg-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.22),transparent 170px);}
+.ldg-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.ldg-panel:hover{box-shadow:0 5px 20px rgba(10,10,10,0.07),0 2px 5px rgba(10,10,10,0.04);}
+.ldg-stat{background:hsl(var(--background))!important;transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s;box-shadow:0 1px 3px rgba(10,10,10,0.05);position:relative;overflow:visible;}
+.ldg-stat:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(157,126,63,0.075),transparent 46%);pointer-events:none;}
+.ldg-stat:hover{box-shadow:0 6px 20px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.18);z-index:30;}
+.ldg-row{transition:background-color 0.16s,box-shadow 0.16s;}
+.ldg-row:hover{background-color:hsl(var(--secondary)/0.45)!important;box-shadow:inset 2px 0 0 rgba(90,90,90,0.22);}
+.ldg-badge{border-radius:0!important;padding:2px 7px!important;font-weight:800!important;letter-spacing:.15em!important;}
+.ldg-type-check,.ldg-type-income,.ldg-type-expense{background:hsl(var(--secondary)/0.42)!important;border-color:hsl(var(--border))!important;color:hsl(var(--foreground)/0.74)!important;}
+.ldg-action{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.45) inset,0 1px 3px rgba(10,10,10,0.035);transition:background 0.16s,border-color 0.16s,transform 0.16s,box-shadow 0.16s;}
+.ldg-action:hover{background:hsl(var(--secondary)/0.56);border-color:hsl(var(--foreground)/0.22);transform:translateY(-1px);box-shadow:0 6px 18px rgba(10,10,10,0.075),0 1px 0 rgba(255,255,255,0.45) inset;}
+.ldg-export{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.45) inset,0 1px 3px rgba(10,10,10,0.04);transition:background 0.16s,border-color 0.16s,transform 0.16s,box-shadow 0.16s;}
+.ldg-export:hover{background:hsl(var(--secondary)/0.62);border-color:hsl(var(--foreground)/0.24);transform:translateY(-1px);box-shadow:0 6px 18px rgba(10,10,10,0.08),0 1px 0 rgba(255,255,255,0.45) inset;}
+.ldg-recon-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;position:relative;overflow:hidden;}
+.ldg-recon-panel:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,#10b981,#34d399,#10b981);}
+.ldg-recon-panel:after{content:"";position:absolute;inset:3px 0 auto 0;height:52px;background:linear-gradient(180deg,rgba(16,185,129,0.08),transparent);pointer-events:none;}
+.ldg-op-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045);transition:background .16s,border-color .16s,box-shadow .16s;}
+.ldg-op-card:hover{background:hsl(var(--secondary)/0.22);border-color:hsl(var(--foreground)/0.18);box-shadow:0 4px 14px rgba(10,10,10,0.06);}
+.ldg-op-card.active{background:hsl(var(--secondary)/0.45);border-color:hsl(var(--foreground)/0.26);box-shadow:inset 0 0 0 1px hsl(var(--foreground)/0.08),0 4px 14px rgba(10,10,10,0.07);}
+.ldg-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}
+.ldg-inspector{background:#fff;border:1px solid #e2e2e2;box-shadow:0 18px 54px rgba(10,10,10,0.16);position:fixed;right:18px;top:86px;bottom:18px;width:min(420px,calc(100vw - 36px));z-index:60;color:#111;overflow:hidden;}
+.ldg-inspector-body{padding:10px;display:grid;gap:8px;max-height:calc(100vh - 190px);overflow-y:auto;}
+.ldg-inspector-section{border:1px solid #e4e4e4;background:#fff;padding:8px;}
+.ldg-inspector-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;}
+.ldg-inspector-kv{min-width:0;border-bottom:1px solid #efefef;padding-bottom:4px;}
+.ldg-inspector-kv dt{font-size:7px;line-height:1.1;text-transform:uppercase;letter-spacing:.16em;color:#777;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-inspector-kv dd{font-size:10px;line-height:1.25;color:#141414;font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
+.ldg-table-head{position:sticky;top:0;z-index:10;}
+.ldg-status-badge{border:1px solid hsl(var(--border));background:hsl(var(--secondary)/0.36);color:hsl(var(--foreground)/0.72);}
+.ldg-record-card{border:1px solid #e2e2e2;background:#fff;box-shadow:0 1px 3px rgba(10,10,10,0.04);}
+.ldg-record-band{background:linear-gradient(180deg,#fff,#fafafa);color:#111;border-bottom:1px solid #dedede;position:relative;}
+.ldg-record-band:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:#9D7E3F;}
+.ldg-record-modal{background:#fff;color:#111;}
+.ldg-record-summary{border:1px solid #dedede;background:#fafafa;padding:9px 10px;min-width:0;}
+.ldg-record-row{display:grid;grid-template-columns:minmax(86px,.75fr) minmax(0,1fr);gap:10px;align-items:start;border-bottom:1px solid #ededed;padding:7px 0;}
+.ldg-record-row:last-child{border-bottom:0;}
+.ldg-record-label{font-size:7px;line-height:1.2;text-transform:uppercase;letter-spacing:.18em;color:#777;font-weight:800;}
+.ldg-record-value{font-size:11px;line-height:1.35;color:#151515;font-weight:650;min-width:0;overflow-wrap:anywhere;}
+.ldg-record-note{border:1px solid #e3e3e3;background:#fafafa;color:#242424;padding:10px 12px;font-size:11px;line-height:1.55;}
+.ldg-page-btn{height:34px;min-width:34px;border:1px solid hsl(var(--border));background:hsl(var(--background));font-size:10px;font-weight:800;letter-spacing:.08em;transition:background .16s,border-color .16s,color .16s;}
+.ldg-page-btn:hover:not(:disabled){background:hsl(var(--secondary)/0.6);border-color:hsl(var(--foreground)/0.22);}
+.ldg-page-btn:disabled{opacity:.38;cursor:not-allowed;}
+.ldg-mobile-sheet{border-radius:18px 18px 0 0;}
+.ldg-mobile-chip{border:1px solid #e0e0e0;background:#fafafa;padding:7px 8px;min-width:0;}
+.ldg-mobile-chip-label{font-size:7px;text-transform:uppercase;letter-spacing:.16em;color:#777;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-mobile-chip-value{font-size:11px;color:#111;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+.dark .ldg-panel,.dark .ldg-stat,.dark .ldg-action{background:hsl(var(--card))!important;box-shadow:0 1px 4px rgba(0,0,0,0.28);}
+.dark .ldg-export{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
+.dark .ldg-recon-panel{background:hsl(var(--card));}
+.dark .ldg-record-card{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,0.10),0 1px 0 rgba(255,255,255,0.6) inset;}
 .dark .ldg-stat:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 22px rgba(0,0,0,0.25);}
 .dark .ldg-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
-.dark .ldg-type-income{color:hsl(142 72% 55%)!important;}
-.dark .ldg-type-expense{color:hsl(0 84% 70%)!important;}
 `;
 
+function LedgerMiniTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background/95 border border-border px-2.5 py-1.5 text-[10px] shadow-md">
+      <div className="text-foreground/55 mb-1">{label}</div>
+      {payload.map((p: any, i: number) => (
+        <div key={i} className="flex items-center gap-1.5 font-mono-tab">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+          <span className="font-semibold">{p.name}: {fmtUSD(Number(p.value || 0))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LedgerSparkline({
+  data, dataKey, color, gradientId,
+}: { data: any[]; dataKey: string; color: string; gradientId: string }) {
+  return (
+    <div className="h-10 sm:h-11 mt-1.5 -mx-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip content={<LedgerMiniTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
+          <Area type="monotone" dataKey={dataKey} name={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: color, stroke: 'var(--background)', strokeWidth: 1.5 }} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ReconcileBars({ open, done }: { open: number; done: number }) {
+  const data = [
+    { label: 'Done', value: done, color: '#10b981' },
+    { label: 'Open', value: open, color: '#f59e0b' },
+  ];
+  return (
+    <div className="h-10 sm:h-11 mt-1.5 -mx-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} content={({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const d = payload[0].payload;
+            return (
+              <div className="bg-background/95 border border-border px-2.5 py-1.5 text-[10px] shadow-md">
+                <div className="font-semibold">{d.label}: {d.value}</div>
+              </div>
+            );
+          }} cursor={{ fill: 'var(--border)', fillOpacity: 0.12 }} />
+          <Bar dataKey="value" radius={[1, 1, 0, 0]} maxBarSize={18}>
+            {data.map((d) => <Cell key={d.label} fill={d.color} fillOpacity={0.85} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function LedgerMetric({
+  label, value, detail, tone, icon: Icon, chart, accent,
+}: { label: string; value: string; detail: string; tone: string; icon: ComponentType<any>; chart?: ReactNode; accent: string }) {
+  return (
+    <div className="ldg-stat border border-border p-2.5 sm:p-3 min-w-0 overflow-visible">
+      <div className="absolute inset-x-0 top-0 h-[2px]" style={{ backgroundColor: accent }} />
+      <div className="relative flex items-start justify-between gap-2.5">
+        <div className="min-w-0">
+          <div className="text-[8px] sm:text-[9px] uppercase tracking-[0.18em] text-foreground/60 font-bold truncate">{label}</div>
+          <div className={`text-[15px] sm:text-lg font-bold font-mono-tab mt-1 leading-tight truncate ${tone}`}>{value}</div>
+          <div className="text-[9px] text-foreground/58 mt-1 font-mono-tab truncate">{detail}</div>
+        </div>
+        <div className="w-7 h-7 flex items-center justify-center border border-border bg-secondary/35 shrink-0">
+          <Icon className="w-3.5 h-3.5 text-foreground/70" strokeWidth={1.5} />
+        </div>
+      </div>
+      <div className="relative">{chart}</div>
+    </div>
+  );
+}
+
+function LedgerQuickAction({
+  label, detail, icon: Icon, color, onClick,
+}: { label: string; detail: string; icon: ComponentType<any>; color: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="ldg-action group relative overflow-hidden flex items-center gap-2 p-2.5 text-left min-w-0">
+      <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: color }} />
+      <span className="w-8 h-8 flex items-center justify-center border border-border bg-secondary/35 shrink-0">
+        <Icon className="w-4 h-4 transition-transform group-hover:scale-105" style={{ color }} strokeWidth={1.6} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[11px] font-bold truncate">{label}</span>
+        <span className="block text-[8px] text-foreground/55 font-mono-tab truncate mt-0.5">{detail}</span>
+      </span>
+      <ChevronRight className="w-3.5 h-3.5 text-foreground/35 ml-auto shrink-0" strokeWidth={1.5} />
+    </button>
+  );
+}
+
+function ExportButton({
+  label, detail, icon: Icon, color, onClick,
+}: { label: string; detail: string; icon: ComponentType<any>; color: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="ldg-export relative overflow-hidden flex items-center gap-2 px-3 h-10 text-left min-w-[126px]">
+      <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: color }} />
+      <span className="w-7 h-7 flex items-center justify-center border border-border bg-secondary/35 shrink-0">
+        <Icon className="w-3.5 h-3.5" style={{ color }} strokeWidth={1.6} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10px] uppercase tracking-[0.14em] font-bold leading-tight">{label}</span>
+        <span className="block text-[8px] text-foreground/55 font-mono-tab truncate mt-0.5">{detail}</span>
+      </span>
+    </button>
+  );
+}
+
+function OperationalMetric({
+  label, value, detail, icon: Icon, tone = 'text-foreground', active, onClick,
+}: { label: string; value: string; detail: string; icon: ComponentType<any>; tone?: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={`ldg-op-card p-2.5 min-w-0 w-full text-left ${active ? 'active' : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[8px] uppercase tracking-[0.18em] text-foreground/55 font-bold truncate">{label}</div>
+          <div className={`text-base font-bold font-mono-tab leading-tight mt-1 ${tone}`}>{value}</div>
+          <div className="text-[9px] text-foreground/48 mt-1 truncate">{detail}</div>
+        </div>
+        <div className="w-7 h-7 flex items-center justify-center border border-border bg-secondary/35 shrink-0">
+          <Icon className="w-3.5 h-3.5 text-foreground/62" strokeWidth={1.55} />
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function SummaryTile({ label, value, tone }: { label: string; value?: ReactNode; tone?: string }) {
+  if (value === undefined || value === null || value === '' || value === '—') return null;
+  return (
+    <div className="ldg-record-summary">
+      <div className="text-[7px] uppercase tracking-[0.18em] text-[#777] font-bold mb-1 truncate">{label}</div>
+      <div className={`text-[11px] sm:text-xs font-semibold truncate ${tone ?? 'text-[#151515]'}`}>{value}</div>
+    </div>
+  );
+}
+
+function RecordPair({ label, value, tone }: { label: string; value?: ReactNode; tone?: string }) {
+  if (value === undefined || value === null || value === '' || value === '—') return null;
+  return (
+    <div className="ldg-record-row">
+      <div className="ldg-record-label">{label}</div>
+      <div className={`ldg-record-value ${tone ?? ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function RecordGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="ldg-record-card p-3 sm:p-4 min-w-0">
+      <div className="text-[8px] uppercase tracking-[0.24em] text-[#9D7E3F] font-bold mb-2.5">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function LedgerDetailDialog({
+  row, onClose, onToggleReconcile, onExport,
+}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void }) {
+  const raw = row?.raw ?? {};
+  const isCredit = Number(row?.amount ?? 0) >= 0;
+  const amountColor = isCredit ? 'text-positive' : 'text-destructive';
+  const status = row?.reconciled ? 'Reconciled' : 'Open';
+  const date = row?.date || raw.transaction_date || raw.issue_date;
+  const displayAmount = `${isCredit ? '+' : '−'}${fmtUSD(Math.abs(Number(row?.amount || 0)))}`;
+  const ref = row?.ref || raw.check_reference || raw.external_reference || raw.check_number;
+  const method = raw.payment_method?.replace?.(/_/g, ' ') || raw.delivery_status?.replace?.(/_/g, ' ');
+  const memo = raw.description || raw.notes || raw.memo || raw.internal_memo || raw.public_memo;
+  const paymentIdentifierLabel = raw.payment_method === 'check' || row?.type === 'Check'
+    ? 'Check Number'
+    : raw.payment_method === 'ach' || raw.payment_method === 'ach_wire'
+      ? 'ACH / Wire Confirmation'
+      : raw.payment_method === 'wire'
+        ? 'Wire Confirmation'
+        : raw.payment_method === 'credit_card'
+          ? 'Card / Processor Reference'
+          : 'Payment Reference';
+  const externalInvoiceUrl = raw.external_invoice_url || raw.stripe_payment_link || raw.invoice_url;
+  const externalInvoiceProvider = raw.external_invoice_provider?.replace?.(/_/g, ' ') || (externalInvoiceUrl?.includes?.('stripe') ? 'Stripe' : externalInvoiceUrl?.includes?.('quickbooks') ? 'QuickBooks' : undefined);
+  const invoiceLink = externalInvoiceUrl ? (
+    <a href={externalInvoiceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[#9D7E3F]">
+      {externalInvoiceProvider ? `${externalInvoiceProvider} invoice` : 'Open invoice link'}
+    </a>
+  ) : raw.invoice_id ? (
+    <a href={`/invoices/${raw.invoice_id}`} className="underline underline-offset-2 hover:text-[#9D7E3F]">
+      Open linked invoice
+    </a>
+  ) : undefined;
+
+  return (
+    <Dialog open={!!row} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="ldg-record-modal rounded-none w-[calc(100%-0.75rem)] sm:max-w-4xl max-h-[calc(100vh-0.75rem)] overflow-hidden p-0 border-[#d9d9d9]">
+        <div className="ldg-record-band px-3 sm:px-5 py-4">
+          <DialogHeader>
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-px w-8 bg-[#9D7E3F]" />
+                  <div className="text-[8px] uppercase tracking-[0.3em] text-[#777] font-bold">Houston Enterprise Ledger Record</div>
+                </div>
+                <DialogTitle className="text-lg sm:text-2xl font-bold tracking-tight truncate text-[#111]">{row?.party || 'Ledger entry'}</DialogTitle>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className={`ldg-badge border ${row?.type==='Check'?'ldg-type-check':row?.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{row?.type}</span>
+                  <span className="text-[8px] uppercase tracking-[0.14em] font-bold px-2 py-1 border border-[#d8d8d8] bg-[#f8f8f8] text-[#444]">{status}</span>
+                  <span className="text-[10px] font-mono-tab text-[#666]">{fmtDate(date)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-[1fr_auto] lg:block gap-3 items-end">
+                <div className={`text-2xl sm:text-3xl font-bold font-mono-tab whitespace-nowrap ${isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}`}>
+                  {displayAmount}
+                </div>
+                <button
+                  onClick={() => onExport(row)}
+                  className="mt-0 lg:mt-2 h-9 px-3 border border-[#cfcfcf] bg-[#111] text-white hover:bg-[#2a2a2a] text-[9px] uppercase tracking-[0.16em] font-bold transition-colors whitespace-nowrap"
+                >
+                  Export Record PDF
+                </button>
+              </div>
+            </div>
+          </DialogHeader>
+        </div>
+
+        <div className="p-3 sm:p-5 space-y-3 bg-white text-[#111] overflow-y-auto max-h-[calc(100vh-180px)]">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <SummaryTile label="Project" value={row?.project || raw.projects?.name || 'Unassigned'} />
+            <SummaryTile label="Reference" value={ref} />
+            <SummaryTile label="Entry Date" value={fmtDate(date)} />
+            <SummaryTile label="Reconciliation" value={status} tone={row?.reconciled ? 'text-[#12643a]' : 'text-[#6f5b16]'} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <RecordGroup title="Financial Control">
+              <RecordPair label="Signed Amount" value={<span className={isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}>{displayAmount}</span>} />
+              <RecordPair label="Amount Before Tax" value={raw.amount_before_tax !== undefined ? fmtUSD(Number(raw.amount_before_tax)) : undefined} />
+              <RecordPair label="Tax Amount" value={raw.tax_amount !== undefined ? fmtUSD(Number(raw.tax_amount)) : undefined} />
+              <RecordPair label="Total Amount" value={raw.total_amount !== undefined ? fmtUSD(Number(raw.total_amount)) : fmtUSD(Math.abs(Number(row?.amount || 0)))} />
+              <RecordPair label="Net Amount" value={raw.net_amount !== undefined ? fmtUSD(Number(raw.net_amount)) : undefined} />
+              <RecordPair label="Currency" value={raw.currency || 'USD'} />
+            </RecordGroup>
+
+            <RecordGroup title="Workflow & Payment">
+              <RecordPair label="Payment Method" value={method} />
+              <RecordPair label={paymentIdentifierLabel} value={raw.check_reference || raw.external_reference || raw.check_number || ref} />
+              <RecordPair label="External Reference" value={raw.external_reference} />
+              <RecordPair label="Invoice Link" value={invoiceLink} />
+              <RecordPair label="Invoice Number" value={raw.external_invoice_number || raw.invoice_number} />
+              <RecordPair label="Payment Status" value={raw.payment_status?.replace?.(/_/g, ' ')} />
+              <RecordPair label="Approval Status" value={raw.approval_status?.replace?.(/_/g, ' ')} />
+              <RecordPair label="Record Status" value={raw.status || row?.status || status} />
+              <RecordPair label="Posting Date" value={raw.posting_date ? fmtDate(raw.posting_date) : undefined} />
+              <RecordPair label="Cleared Date" value={raw.cleared_date ? fmtDate(raw.cleared_date) : undefined} />
+            </RecordGroup>
+          </div>
+
+          <RecordGroup title="Construction & Accounting Context">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
+              <RecordPair label="Category" value={raw.category || row?.ref} />
+              <RecordPair label="Cost Type" value={raw.cost_type?.replace?.(/_/g, ' ')} />
+              <RecordPair label="Cost Phase" value={raw.cost_phase} />
+              <RecordPair label="Due Date" value={raw.due_date ? fmtDate(raw.due_date) : undefined} />
+              <RecordPair label="Accounting Period" value={raw.accounting_period} />
+              <RecordPair label="Fiscal Year" value={raw.fiscal_year} />
+              <RecordPair label="Attachment Count" value={raw.attachment_count} />
+              <RecordPair label="Database ID" value={row?.id} />
+            </div>
+          </RecordGroup>
+
+          {memo && (
+            <RecordGroup title="Memo & Record Notes">
+              <div className="ldg-record-note">{memo}</div>
+            </RecordGroup>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+            <button
+              onClick={() => onToggleReconcile(row)}
+              className="h-9 border border-[#d8d8d8] bg-[#f8f8f8] text-[#222] hover:bg-[#f0f0f0] text-[9px] uppercase tracking-[0.15em] font-bold transition-colors"
+            >
+              {row?.reconciled ? 'Mark As Open' : 'Mark Reconciled'}
+            </button>
+            <button
+              onClick={() => onExport(row)}
+              className="h-9 border border-[#111] bg-[#111] text-white hover:bg-[#2a2a2a] text-[9px] uppercase tracking-[0.15em] font-bold transition-colors"
+            >
+              Export PDF
+            </button>
+            <Button variant="outline" className="rounded-none h-9 text-[9px] uppercase tracking-[0.15em] font-bold border-[#d8d8d8] text-[#222] hover:bg-[#f5f5f5]" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LedgerInspector({
+  row, onClose, onToggleReconcile, onExport, onEdit,
+}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onEdit: (r: any) => void }) {
+  if (!row) return null;
+
+  const raw = row.raw ?? {};
+  const isCredit = Number(row.amount ?? 0) >= 0;
+  const amount = `${isCredit ? '+' : '-'}${fmtUSD(Math.abs(Number(row.amount || 0)))}`;
+  const date = row.date || raw.transaction_date || raw.issue_date;
+  const method = raw.payment_method?.replace?.(/_/g, ' ') || raw.delivery_status?.replace?.(/_/g, ' ') || '—';
+  const ref = row.ref || raw.check_reference || raw.external_reference || raw.check_number || '—';
+  const memo = raw.description || raw.notes || raw.memo || raw.internal_memo || raw.public_memo;
+  const paymentIdentifierLabel = raw.payment_method === 'check' || row.type === 'Check'
+    ? 'Check #'
+    : raw.payment_method === 'ach' || raw.payment_method === 'ach_wire'
+      ? 'ACH / Wire'
+      : 'Payment Ref';
+  const detailGroups = [
+    {
+      title: 'Record',
+      items: [
+        ['Project', row.project || raw.projects?.name || 'Unassigned'],
+        ['Reference', ref],
+        ['Date', date ? fmtDate(date) : '—'],
+        ['Status', row.reconciled ? 'Reconciled' : (row.status || 'Open')],
+        ['Type', row.type],
+        ['Category', raw.category || 'Uncategorized'],
+      ],
+    },
+    {
+      title: 'Payment',
+      items: [
+        ['Method', method],
+        [paymentIdentifierLabel, raw.check_reference || raw.external_reference || raw.check_number || ref],
+        ['Payment', raw.payment_status?.replace?.(/_/g, ' ') || row.status],
+        ['Approval', raw.approval_status?.replace?.(/_/g, ' ') || 'approved'],
+        ['Posting', raw.posting_date ? fmtDate(raw.posting_date) : date ? fmtDate(date) : '—'],
+        ['Cleared', raw.cleared_date ? fmtDate(raw.cleared_date) : row.reconciled ? 'Cleared' : 'Open'],
+      ],
+    },
+    {
+      title: 'Job Cost',
+      items: [
+        ['Cost Phase', raw.cost_phase],
+        ['Cost Type', raw.cost_type?.replace?.(/_/g, ' ')],
+        ['Budget Cat.', raw.budget_category],
+        ['Cost Code', raw.cost_code_id],
+        ['Invoice', raw.external_invoice_number || raw.invoice_number || raw.invoice_id],
+        ['Attachments', raw.attachment_count],
+      ],
+    },
+  ];
+
+  return (
+    <aside className="hidden xl:block ldg-inspector">
+      <div className="px-3 py-2.5 border-b border-[#e4e4e4] bg-[#fafafa]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[8px] uppercase tracking-[0.24em] font-bold text-[#9D7E3F]">Transaction Inspector</div>
+            <div className="text-sm font-bold text-[#111] truncate mt-1">{row.party || 'Ledger Entry'}</div>
+            <div className="text-[9px] text-[#777] font-mono-tab mt-0.5">{row.type} · {date ? fmtDate(date) : '—'}</div>
+          </div>
+          <button onClick={onClose} className="w-6 h-6 flex items-center justify-center border border-[#ddd] bg-white text-[#555] hover:text-[#111]">
+            <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+          </button>
+        </div>
+        <div className={`text-xl font-bold font-mono-tab mt-2 ${isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}`}>{amount}</div>
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          <span className="text-[8px] uppercase tracking-[0.14em] font-bold px-2 py-1 border border-[#ddd] bg-white text-[#555]">{row.type}</span>
+          <span className={`text-[8px] uppercase tracking-[0.14em] font-bold px-2 py-1 border ${row.reconciled ? 'border-[#b9d8c6] bg-[#f0f8f3] text-[#12643a]' : 'border-[#e2d5a8] bg-[#fbf7e8] text-[#6f5b16]'}`}>{row.reconciled ? 'Reconciled' : 'Open'}</span>
+        </div>
+      </div>
+
+      <div className="ldg-inspector-body">
+        {detailGroups.map(group => (
+          <section key={group.title} className="ldg-inspector-section">
+            <div className="text-[7px] uppercase tracking-[0.22em] font-bold text-[#9D7E3F] mb-2">{group.title}</div>
+            <div className="ldg-inspector-grid">
+              {group.items.map(([label, value]) => value ? (
+                <dl key={String(label)} className="ldg-inspector-kv">
+                  <dt>{label}</dt>
+                  <dd title={String(value)}>{value}</dd>
+                </dl>
+              ) : null)}
+            </div>
+          </section>
+        ))}
+
+        <section className="ldg-inspector-section">
+          <div className="text-[7px] uppercase tracking-[0.22em] font-bold text-[#9D7E3F] mb-2">Memo</div>
+          <p className="text-[10px] leading-snug text-[#333] line-clamp-3">{memo || 'No memo recorded for this ledger entry.'}</p>
+        </section>
+
+        <section className="ldg-inspector-section">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-[7px] uppercase tracking-[0.16em] text-[#777] font-bold">Created</div>
+              <div className="text-[10px] font-semibold text-[#111] mt-0.5">{raw.created_at ? fmtDate(raw.created_at) : 'Captured'}</div>
+            </div>
+            <div>
+              <div className="text-[7px] uppercase tracking-[0.16em] text-[#777] font-bold">Updated</div>
+              <div className="text-[10px] font-semibold text-[#111] mt-0.5">{raw.updated_at ? fmtDate(raw.updated_at) : 'No update'}</div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => onEdit(row)} className="h-8 border border-[#d8d8d8] bg-[#fff] text-[#222] hover:bg-[#f0f0f0] text-[8px] uppercase tracking-[0.15em] font-bold">
+            Edit
+          </button>
+          <button onClick={() => onToggleReconcile(row)} className="h-8 border border-[#d8d8d8] bg-[#f8f8f8] text-[#222] hover:bg-[#f0f0f0] text-[8px] uppercase tracking-[0.15em] font-bold">
+            {row.reconciled ? 'Reopen' : 'Reconcile'}
+          </button>
+          <button onClick={() => onExport(row)} className="h-8 border border-[#111] bg-[#111] text-white hover:bg-[#2a2a2a] text-[8px] uppercase tracking-[0.15em] font-bold">
+            Export PDF
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function LedgerMobileSheet({
+  row, onClose, onToggleReconcile, onExport, onEdit,
+}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onEdit: (r: any) => void }) {
+  if (!row) return null;
+
+  const raw = row.raw ?? {};
+  const isCredit = Number(row.amount ?? 0) >= 0;
+  const date = row.date || raw.transaction_date || raw.issue_date;
+  const method = raw.payment_method?.replace?.(/_/g, ' ') || raw.delivery_status?.replace?.(/_/g, ' ') || '—';
+  const ref = row.ref || raw.check_reference || raw.external_reference || raw.check_number || '—';
+  const memo = raw.description || raw.notes || raw.memo || raw.internal_memo || raw.public_memo;
+  const paymentIdentifierLabel = raw.payment_method === 'check' || row.type === 'Check'
+    ? 'Check #'
+    : raw.payment_method === 'ach' || raw.payment_method === 'ach_wire'
+      ? 'ACH / Wire'
+      : 'Payment Ref';
+  const detailGroups = [
+    {
+      title: 'Record',
+      items: [
+        ['Project', row.project || raw.projects?.name || 'Unassigned'],
+        ['Reference', ref],
+        ['Date', date ? fmtDate(date) : '—'],
+        ['Status', row.reconciled ? 'Reconciled' : (row.status || 'Open')],
+      ],
+    },
+    {
+      title: 'Payment',
+      items: [
+        ['Method', method],
+        [paymentIdentifierLabel, raw.check_reference || raw.external_reference || raw.check_number || ref],
+        ['Payment', raw.payment_status?.replace?.(/_/g, ' ') || row.status || '—'],
+        ['Approval', raw.approval_status?.replace?.(/_/g, ' ') || 'approved'],
+      ],
+    },
+    {
+      title: 'Job Cost',
+      items: [
+        ['Category', raw.category || 'Uncategorized'],
+        ['Cost Phase', raw.cost_phase || '—'],
+        ['Cost Type', raw.cost_type?.replace?.(/_/g, ' ') || '—'],
+        ['Invoice', raw.external_invoice_number || raw.invoice_number || raw.invoice_id || '—'],
+      ],
+    },
+  ];
+
+  return (
+    <div className="xl:hidden fixed inset-0 z-[70] bg-black/35 backdrop-blur-[2px]" onClick={onClose}>
+      <section
+        className="ldg-mobile-sheet absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto bg-white text-[#111] border-t border-[#d9d9d9] shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 bg-white border-b border-[#e5e5e5] px-4 py-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[8px] uppercase tracking-[0.24em] font-bold text-[#9D7E3F]">Transaction Inspector</div>
+              <div className="text-base font-bold truncate mt-1">{row.party || 'Ledger Entry'}</div>
+              <div className="text-[10px] text-[#777] font-mono-tab mt-0.5">{row.type} · {date ? fmtDate(date) : '—'}</div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 border border-[#ddd] bg-[#fafafa] flex items-center justify-center">
+              <X className="w-4 h-4" strokeWidth={1.5} />
+            </button>
+          </div>
+          <div className={`text-2xl font-bold font-mono-tab mt-3 ${isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}`}>
+            {isCredit ? '+' : '-'}{fmtUSD(Math.abs(Number(row.amount || 0)))}
+          </div>
+        </div>
+
+        <div className="p-3 space-y-2.5">
+          {detailGroups.map(group => (
+            <section key={group.title} className="ldg-inspector-section">
+              <div className="text-[7px] uppercase tracking-[0.22em] font-bold text-[#9D7E3F] mb-2">{group.title}</div>
+              <div className="ldg-inspector-grid">
+                {group.items.map(([label, value]) => (
+                  <dl key={String(label)} className="ldg-inspector-kv">
+                    <dt>{label}</dt>
+                    <dd title={String(value)}>{value}</dd>
+                  </dl>
+                ))}
+              </div>
+            </section>
+          ))}
+          {memo && <div className="ldg-record-note text-[10px] leading-snug line-clamp-3">{memo}</div>}
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <button
+              onClick={() => onEdit(row)}
+              className="h-10 border border-[#d8d8d8] bg-white text-[9px] uppercase tracking-[0.15em] font-bold"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => onToggleReconcile(row)}
+              className="h-10 border border-[#d8d8d8] bg-[#f8f8f8] text-[9px] uppercase tracking-[0.15em] font-bold"
+            >
+              {row.reconciled ? 'Mark Open' : 'Reconcile'}
+            </button>
+            <button
+              onClick={() => onExport(row)}
+              className="h-10 border border-[#111] bg-[#111] text-white text-[9px] uppercase tracking-[0.15em] font-bold"
+            >
+              Export PDF
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function Ledger() {
+  const navigate = useNavigate();
+  const { entity } = useEntity();
+  const { user } = useAuth();
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
@@ -115,8 +714,21 @@ export default function Ledger() {
   const [q, setQ] = useState('');
   const [project, setProject] = useState('all');
   const [type, setType] = useState('all');
+  const [timePeriod, setTimePeriod] = useState('all');
+  const [queueFilter, setQueueFilter] = useState<LedgerQueueKey>('all');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState<'income' | 'expense' | 'check' | null>(null);
   const [detailRow, setDetailRow] = useState<any>(null);
+  const [editRow, setEditRow] = useState<any>(null);
+  const [editSignature, setEditSignature] = useState('');
+  const [editForm, setEditForm] = useState({
+    amount: '', amount_before_tax: '', tax_amount: '', date: '', posting_date: '', due_date: '', cleared_date: '',
+    party: '', ref: '', category: '', project_id: '', vendor_id: '', payment_method: '', cost_phase: '', cost_type: '',
+    status: '', payment_status: '', approval_status: '', reconciliation_status: '', receipt_status: '',
+    billable_status: '', reimbursable_status: '', external_invoice_url: '', external_invoice_provider: '',
+    external_invoice_number: '', currency: 'USD', notes: '',
+  });
   const [reconcileMode, setReconcileMode] = useState(false);
 
   /* ── Per-form step state ── */
@@ -141,34 +753,253 @@ export default function Ledger() {
 
   const closeAdd = () => setAddOpen(null);
 
-  const rows = useMemo(() => {
+  const openEdit = (row: any) => {
+    const raw = row?.raw ?? {};
+    const amount = Math.abs(Number(row?.amount || raw.total_amount || raw.amount || 0));
+    setDetailRow(null);
+    setEditRow(row);
+    setEditSignature('');
+    setEditForm({
+      amount: String(amount),
+      amount_before_tax: raw.amount_before_tax != null ? String(raw.amount_before_tax) : String(amount),
+      tax_amount: raw.tax_amount != null ? String(raw.tax_amount) : '0',
+      date: row?._kind === 'check' ? (raw.issue_date || row?.date || '') : (raw.transaction_date || row?.date || ''),
+      posting_date: raw.posting_date || raw.issue_date || row?.date || '',
+      due_date: raw.due_date || '',
+      cleared_date: raw.cleared_date || '',
+      party: row?._kind === 'check' ? (raw.payee_name || row?.party || '') : (raw.source_name || row?.party || ''),
+      ref: raw.check_reference || raw.external_reference || raw.check_number || row?.ref || '',
+      category: raw.category || '',
+      project_id: row?.project_id || raw.project_id || '',
+      vendor_id: raw.vendor_id || '',
+      payment_method: raw.payment_method || '',
+      cost_type: raw.cost_type || '',
+      cost_phase: raw.cost_phase || '',
+      status: row?.status || raw.status || '',
+      payment_status: raw.payment_status || '',
+      approval_status: raw.approval_status || '',
+      reconciliation_status: raw.reconciliation_status || '',
+      receipt_status: raw.receipt_status || '',
+      billable_status: raw.billable_status || '',
+      reimbursable_status: raw.reimbursable_status || '',
+      external_invoice_url: raw.external_invoice_url || '',
+      external_invoice_provider: raw.external_invoice_provider || '',
+      external_invoice_number: raw.external_invoice_number || raw.invoice_number || '',
+      currency: raw.currency || 'USD',
+      notes: raw.description || raw.notes || raw.memo || raw.internal_memo || '',
+    });
+  };
+
+  const writeAuditSignature = async (row: any, action: string, before: any, after: Record<string, unknown>, signature: string) => {
+    await supabase.from('admin_changelog' as any).insert({
+      action,
+      entity: row?._kind || 'ledger',
+      dashboard: 'finance',
+      entity_id: row?.id,
+      entity_label: `${row?.type || 'Ledger'} ${row?.ref || row?.party || row?.id || ''}`.trim(),
+      changed_by: user?.email || user?.id || 'finance_admin',
+      details: {
+        source: 'ledger_screen',
+        signature,
+        signed_at: new Date().toISOString(),
+        before,
+        after,
+      },
+    });
+  };
+
+  const duplicateRefs = useMemo(() => {
+    const refs = new Map<string, number>();
+    [...checks, ...income, ...expenses].forEach((item: any) => {
+      const ref = String(item.check_number || item.check_reference || item.external_reference || item.transaction_number || '').trim().toLowerCase();
+      if (ref && ref !== '—') refs.set(ref, (refs.get(ref) ?? 0) + 1);
+    });
+    return refs;
+  }, [checks, income, expenses]);
+
+  const queueMatches = (r: any, key: LedgerQueueKey) => {
+    if (key === 'all') return true;
+    const status = String(r.raw?.approval_status || r.status || '').toLowerCase();
+    const refKey = String(r.ref || '').trim().toLowerCase();
+    if (key === 'needs_review') return !r.reconciled || ['draft', 'submitted', 'under_review', 'pending_approval'].includes(status);
+    if (key === 'missing_receipts') return r._kind === 'expense' && !['attached', 'verified'].includes(String(r.raw?.receipt_status || '').toLowerCase());
+    if (key === 'uncategorized') return r._kind !== 'check' && !r.raw?.category;
+    if (key === 'duplicates') return refKey && refKey !== '—' && (duplicateRefs.get(refKey) ?? 0) > 1;
+    if (key === 'pending_approval') return ['draft', 'submitted', 'under_review', 'pending_approval'].includes(status);
+    if (key === 'large_transactions') return Math.abs(Number(r.amount || 0)) >= 10000;
+    if (key === 'imported_today') return String(r.raw?.created_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10) && r.raw?.import_batch_id;
+    if (key === 'open_checks') return r._kind === 'check' && !r.reconciled && r.status !== 'voided';
+    return true;
+  };
+
+  const scopedRows = useMemo(() => {
     const a = [
-      ...checks.map((c: any) => ({ id: c.id, rowId: 'c'+c.id, date: c.issue_date, type: 'Check',   ref: c.check_number,   party: c.payee_name,                     project: c.projects?.name, project_id: c.project_id, amount: -Number(c.amount), status: c.status, reconciled: c.reconciled, _kind: 'check' as const })),
-      ...income.map((t: any) => ({ id: t.id, rowId: 'i'+t.id, date: t.transaction_date, type: 'Income',  ref: '—',             party: t.source_name || t.vendors?.name || '—', project: t.projects?.name, project_id: t.project_id, amount:  Number(t.amount), status: '—', reconciled: t.reconciled, _kind: 'income' as const })),
-      ...expenses.map((t: any) => ({ id: t.id, rowId: 'e'+t.id, date: t.transaction_date, type: 'Expense', ref: t.category || '—', party: t.vendors?.name || '—',         project: t.projects?.name, project_id: t.project_id, amount: -Number(t.amount), status: '—', reconciled: t.reconciled, _kind: 'expense' as const })),
+      ...checks.map((c: any) => ({
+        id: c.id, rowId: 'c'+c.id, date: c.issue_date, type: 'Check',
+        ref: c.check_number || c.external_reference || '—',
+        party: c.payee_name, project: c.projects?.name, project_id: c.project_id,
+        amount: -Number(c.amount), status: c.status, reconciled: c.reconciled || c.reconciliation_status === 'reconciled',
+        _kind: 'check' as const, raw: c,
+      })),
+      ...income.map((t: any) => ({
+        id: t.id, rowId: 'i'+t.id, date: t.transaction_date, type: 'Income',
+        ref: t.check_reference || t.external_reference || t.transaction_number || '—',
+        party: t.source_name || t.vendors?.name || '—', project: t.projects?.name, project_id: t.project_id,
+        amount: Number(t.total_amount ?? t.amount), status: t.status || t.payment_status || 'posted',
+        reconciled: t.reconciled || t.reconciliation_status === 'reconciled',
+        _kind: 'income' as const, raw: t,
+      })),
+      ...expenses.map((t: any) => ({
+        id: t.id, rowId: 'e'+t.id, date: t.transaction_date, type: 'Expense',
+        ref: t.check_reference || t.external_reference || t.transaction_number || t.category || '—',
+        party: t.vendors?.name || t.source_name || '—', project: t.projects?.name, project_id: t.project_id,
+        amount: -Number(t.total_amount ?? t.amount), status: t.status || t.payment_status || 'posted',
+        reconciled: t.reconciled || t.reconciliation_status === 'reconciled',
+        _kind: 'expense' as const, raw: t,
+      })),
     ];
     return a.filter(r => {
+      if (!isInFinanceRange(r.date, timePeriod)) return false;
       if (project !== 'all' && r.project_id !== project) return false;
       if (type !== 'all' && r.type.toLowerCase() !== type) return false;
-      if (q && !(r.party?.toLowerCase().includes(q.toLowerCase()) || r.ref?.toString().toLowerCase().includes(q.toLowerCase()))) return false;
+      if (q) {
+        const haystack = [
+          r.party, r.ref, r.project, r.status, r.raw?.category,
+          r.raw?.description, r.raw?.notes, r.raw?.memo, r.raw?.cost_phase,
+          r.raw?.transaction_number, r.raw?.external_reference,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!haystack.includes(q.toLowerCase())) return false;
+      }
       return true;
-    }).sort((x, y) => y.date.localeCompare(x.date));
-  }, [checks, income, expenses, project, type, q]);
+    }).sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
+  }, [checks, income, expenses, project, type, q, timePeriod]);
+
+  const rows = useMemo(() => scopedRows.filter(r => queueMatches(r, queueFilter)), [scopedRows, queueFilter, duplicateRefs]);
 
   const totals = useMemo(() => {
     const inflow  = rows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
     const outflow = rows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0);
-    return { inflow, outflow, net: inflow - outflow };
+    const reconciled = rows.filter(r => r.reconciled);
+    const unreconciled = rows.filter(r => !r.reconciled);
+    const largest = rows.reduce((max, r) => Math.abs(r.amount) > Math.abs(max.amount) ? r : max, rows[0] ?? { amount: 0, party: '—', type: '—' });
+    const incomeCount = rows.filter(r => r._kind === 'income').length;
+    const expenseCount = rows.filter(r => r._kind === 'expense').length;
+    const checkCount = rows.filter(r => r._kind === 'check').length;
+    const unreconciledAmount = unreconciled.reduce((s, r) => s + Math.abs(r.amount), 0);
+    const reconciledAmount = reconciled.reduce((s, r) => s + Math.abs(r.amount), 0);
+    return {
+      inflow,
+      outflow,
+      net: inflow - outflow,
+      reconciledCount: reconciled.length,
+      unreconciledCount: unreconciled.length,
+      reconcilePct: rows.length ? (reconciled.length / rows.length) * 100 : 0,
+      largest,
+      incomeCount,
+      expenseCount,
+      checkCount,
+      unreconciledAmount,
+      reconciledAmount,
+    };
   }, [rows]);
+
+  const operationalMetrics = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const duplicateCount = scopedRows.filter(r => {
+      const key = String(r.ref || '').trim().toLowerCase();
+      return key && key !== '—' && (duplicateRefs.get(key) ?? 0) > 1;
+    }).length;
+    const openRecon = scopedRows.filter(r => !r.reconciled).length;
+    const missingReceipts = scopedRows.filter(r => r._kind === 'expense' && !['attached', 'verified'].includes(String(r.raw?.receipt_status || '').toLowerCase())).length;
+    const uncategorized = scopedRows.filter(r => !r.raw?.category && r._kind !== 'check').length;
+    const pendingApproval = scopedRows.filter(r => ['draft', 'submitted', 'under_review', 'pending_approval'].includes(String(r.raw?.approval_status || r.status || '').toLowerCase())).length;
+    const largeTransactions = scopedRows.filter(r => Math.abs(Number(r.amount || 0)) >= 10000).length;
+    const importedToday = scopedRows.filter(r => String(r.raw?.created_at || '').slice(0, 10) === today && r.raw?.import_batch_id).length;
+    const openChecks = scopedRows.filter(r => r._kind === 'check' && !r.reconciled && r.status !== 'voided').length;
+    return [
+      { key: 'needs_review' as LedgerQueueKey, label: 'Needs Review', value: String(openRecon + pendingApproval), detail: 'Open, draft, or submitted records', icon: AlertTriangle, tone: openRecon ? 'text-warning' : 'text-positive' },
+      { key: 'missing_receipts' as LedgerQueueKey, label: 'Missing Docs', value: String(missingReceipts), detail: 'Receipts or invoices needed', icon: Receipt, tone: missingReceipts ? 'text-warning' : 'text-foreground' },
+      { key: 'uncategorized' as LedgerQueueKey, label: 'Job-Cost Coding', value: String(uncategorized), detail: 'Needs category or cost code', icon: Layers, tone: uncategorized ? 'text-warning' : 'text-foreground' },
+      { key: 'duplicates' as LedgerQueueKey, label: 'Duplicate Refs', value: String(duplicateCount), detail: 'Possible duplicate entries', icon: CopyIcon, tone: duplicateCount ? 'text-destructive' : 'text-foreground' },
+      { key: 'large_transactions' as LedgerQueueKey, label: 'High Value', value: String(largeTransactions), detail: '$10k+ audit review', icon: CircleDollarSign, tone: largeTransactions ? 'text-foreground' : 'text-foreground' },
+      { key: 'open_checks' as LedgerQueueKey, label: 'Open Checks', value: String(openChecks), detail: 'Uncleared instruments', icon: FileText, tone: openChecks ? 'text-warning' : 'text-foreground' },
+    ];
+  }, [scopedRows, duplicateRefs]);
+
+  const selectedProjectName = project === 'all'
+    ? 'All projects'
+    : projects.find((p: any) => p.id === project)?.name ?? 'Selected project';
+  const selectedTypeLabel = type === 'all' ? 'All types' : type.charAt(0).toUpperCase() + type.slice(1);
+  const selectedRangeLabel = financeRangeLabel(timePeriod);
+  const selectedQueueLabel = queueFilter === 'all'
+    ? 'All Ledger'
+    : operationalMetrics.find(m => m.key === queueFilter)?.label ?? 'Filtered Queue';
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = rows.length ? (safePage - 1) * pageSize + 1 : 0;
+  const pageEnd = Math.min(rows.length, safePage * pageSize);
+  const pagedRows = useMemo(() => rows.slice((safePage - 1) * pageSize, safePage * pageSize), [rows, safePage, pageSize]);
+
+  const activateQueue = (metricKey: LedgerQueueKey) => {
+    const next = queueFilter === metricKey ? 'all' : metricKey;
+    setQueueFilter(next);
+    setDetailRow(null);
+    if (next !== 'all') {
+      const matches = scopedRows.filter(r => queueMatches(r, next));
+      if (matches.length === 1) setDetailRow(matches[0]);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, project, type, pageSize, timePeriod, queueFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const ledgerTrend = useMemo(() => {
+    const allDates = [...checks.map((c: any) => c.issue_date), ...income.map((t: any) => t.transaction_date), ...expenses.map((t: any) => t.transaction_date)];
+    const buckets = buildFinanceBuckets(timePeriod, allDates);
+    return buckets.map(({ label, start, end }) => {
+      const bucketRows = rows.filter(r => {
+        const dt = parseFinanceDate(r.date);
+        return dt && dt >= start && dt < end;
+      });
+      const inflow = bucketRows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+      const outflow = bucketRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0);
+      return { label, Inflow: inflow, Outflow: outflow, Net: inflow - outflow };
+    });
+  }, [rows, checks, income, expenses, timePeriod]);
 
   const exportPDF = () => {
     const proj = project !== 'all' ? projects.find((p: any) => p.id === project)?.name : undefined;
-    const doc = generateLedgerReport(income, expenses, checks, proj, type !== 'all' ? type : undefined);
+    const visibleIncome = rows.filter(r => r._kind === 'income').map(r => r.raw);
+    const visibleExpenses = rows.filter(r => r._kind === 'expense').map(r => r.raw);
+    const visibleChecks = rows.filter(r => r._kind === 'check').map(r => r.raw);
+    const doc = generateLedgerReport(visibleIncome, visibleExpenses, visibleChecks, proj, `${type !== 'all' ? type : 'all'} · ${selectedRangeLabel}`);
     savePDF(doc, `hou-general-ledger-${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success('Ledger exported as PDF');
   };
 
-  const exportExcel = () => { downloadLedgerExcel(income, expenses, checks); toast.success('Ledger exported as Excel (4 sheets)'); };
+  const exportExcel = () => {
+    const visibleIncome = rows.filter(r => r._kind === 'income').map(r => r.raw);
+    const visibleExpenses = rows.filter(r => r._kind === 'expense').map(r => r.raw);
+    const visibleChecks = rows.filter(r => r._kind === 'check').map(r => r.raw);
+    downloadLedgerExcel(visibleIncome, visibleExpenses, visibleChecks);
+    toast.success(`Ledger exported as Excel · ${selectedRangeLabel}`);
+  };
+
+  const exportLedgerRecord = (row: any) => {
+    if (!row) return;
+    const doc = generateLedgerRecordReport(row);
+    const label = `${row.type || 'ledger'}-${row.ref || row.id || 'record'}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    savePDF(doc, `hou-ledger-record-${label}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success('Ledger record PDF exported');
+  };
 
   const submitIncome = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,12 +1056,129 @@ export default function Ledger() {
 
   const toggleReconcile = async (r: any) => {
     const now = new Date().toISOString();
-    const payload = { id: r.id, reconciled: !r.reconciled, reconciled_at: !r.reconciled ? now : null };
+    const nextReconciled = !r.reconciled;
+    const payload = {
+      id: r.id,
+      reconciled: nextReconciled,
+      reconciled_at: nextReconciled ? now : null,
+      reconciliation_status: nextReconciled ? 'reconciled' : 'unreconciled',
+      cleared_date: nextReconciled ? now.slice(0, 10) : null,
+    };
     try {
       if (r._kind === 'check') await checkUpsert.mutateAsync(payload as any);
-      else await txnUpsert.mutateAsync({ ...payload, type: r.type.toLowerCase() } as any);
-      toast.success(payload.reconciled ? 'Marked reconciled' : 'Unmarked');
+      else await txnUpsert.mutateAsync({ ...payload, type: r.type.toLowerCase(), __mode: 'update' } as any);
+      await writeAuditSignature(r, nextReconciled ? 'reconciled' : 'reopened', r.raw, payload, 'Ledger reconciliation control');
+      toast.success(nextReconciled ? 'Marked reconciled' : 'Marked open');
     } catch { toast.error('Failed to update'); }
+  };
+
+  const submitLedgerEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRow) return;
+    if (!editSignature.trim()) {
+      toast.error('Digital signature required before updating this ledger record');
+      return;
+    }
+    const amount = Number(editForm.amount || 0);
+    const amountBeforeTax = Number(editForm.amount_before_tax || amount);
+    const taxAmount = Number(editForm.tax_amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+
+    const common = {
+      id: editRow.id,
+      __mode: 'update' as const,
+      project_id: editForm.project_id || null,
+      status: editForm.status || null,
+    };
+    try {
+      if (editRow._kind === 'check') {
+        const payload = {
+          id: editRow.id,
+          amount,
+          issue_date: editForm.date || editRow.date,
+          posting_date: editForm.posting_date || editForm.date || editRow.date,
+          cleared_date: editForm.cleared_date || null,
+          payee_name: editForm.party || null,
+          check_number: editForm.ref || null,
+          memo: editForm.notes || null,
+          project_id: editForm.project_id || null,
+          status: editForm.status || editRow.status || 'pending',
+          __mode: 'update' as const,
+        };
+        await checkUpsert.mutateAsync(payload as any);
+        await writeAuditSignature(editRow, 'signature_edit', editRow.raw, payload, editSignature.trim());
+      } else {
+        const payload = {
+          ...common,
+          type: editRow._kind,
+          amount,
+          amount_before_tax: Number.isFinite(amountBeforeTax) ? amountBeforeTax : amount,
+          tax_amount: Number.isFinite(taxAmount) ? taxAmount : 0,
+          total_amount: amount,
+          net_amount: amount - (Number.isFinite(taxAmount) ? 0 : 0),
+          currency: editForm.currency || 'USD',
+          transaction_date: editForm.date || editRow.date,
+          posting_date: editForm.posting_date || editForm.date || editRow.date,
+          due_date: editForm.due_date || null,
+          cleared_date: editForm.cleared_date || null,
+          source_name: editRow._kind === 'income' ? (editForm.party || null) : undefined,
+          vendor_id: editRow._kind === 'expense' ? (editForm.vendor_id || null) : undefined,
+          check_reference: editForm.ref || null,
+          category: editForm.category || null,
+          description: editForm.notes || editForm.category || editForm.party || null,
+          notes: editForm.notes || null,
+          payment_method: editForm.payment_method || null,
+          cost_phase: editForm.cost_phase || null,
+          cost_type: editForm.cost_type || undefined,
+          payment_status: editForm.payment_status || undefined,
+          approval_status: editForm.approval_status || undefined,
+          reconciliation_status: editForm.reconciliation_status || undefined,
+          receipt_status: editForm.receipt_status || undefined,
+          billable_status: editForm.billable_status || undefined,
+          reimbursable_status: editForm.reimbursable_status || undefined,
+          external_invoice_url: editForm.external_invoice_url || undefined,
+          external_invoice_provider: editForm.external_invoice_provider || undefined,
+          external_invoice_number: editForm.external_invoice_number || undefined,
+          accounting_period: (editForm.date || editRow.date || '').slice(0, 7) || undefined,
+          fiscal_year: editForm.date ? new Date(editForm.date).getFullYear() : undefined,
+        };
+        await txnUpsert.mutateAsync(payload as any);
+        await writeAuditSignature(editRow, 'signature_edit', editRow.raw, payload, editSignature.trim());
+      }
+      toast.success('Ledger record updated and signed');
+      setEditRow(null);
+      setDetailRow(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to update ledger record');
+    }
+  };
+
+  const bulkReconcileVisible = async (nextReconciled: boolean) => {
+    const targetRows = pagedRows.filter(r => Boolean(r.reconciled) !== nextReconciled);
+    if (!targetRows.length) {
+      toast.info(nextReconciled ? 'All visible entries are already reconciled' : 'All visible entries are already open');
+      return;
+    }
+    const now = new Date().toISOString();
+    const payload = {
+      reconciled: nextReconciled,
+      reconciled_at: nextReconciled ? now : null,
+      reconciliation_status: nextReconciled ? 'reconciled' : 'unreconciled',
+      cleared_date: nextReconciled ? now.slice(0, 10) : null,
+    };
+    try {
+      await Promise.all(targetRows.map(r => (
+        r._kind === 'check'
+          ? checkUpsert.mutateAsync({ id: r.id, ...payload } as any)
+          : txnUpsert.mutateAsync({ id: r.id, type: r.type.toLowerCase(), __mode: 'update', ...payload } as any)
+      )));
+      toast.success(nextReconciled ? `Reconciled ${targetRows.length} visible entries` : `Reopened ${targetRows.length} visible entries`);
+    } catch {
+      toast.error('Bulk reconciliation failed');
+    }
   };
 
   const fld = (label: string) => <Label className="micro-label mb-1.5 block">{label}</Label>;
@@ -238,64 +1186,154 @@ export default function Ledger() {
   return (
     <AppShell>
       <style>{LDG_CSS}</style>
-      <PageHeader eyebrow="Unified Ledger" title="Transaction Ledger" description="Complete chronological record of all capital movement."
+      <PageHeader eyebrow="Financial Operations" title="Transaction Ledger" description="Complete chronological record of every financial movement within the company."
         actions={
-          <div className="hidden sm:flex items-center gap-2">
-            <div className="flex items-center gap-1 mr-1 border-r border-border pr-3">
-              <button onClick={() => openAdd('income')}  className="flex items-center gap-1 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] bg-positive/10 text-positive hover:bg-positive/20 transition-colors font-medium"><Plus className="w-3 h-3" /> Income</button>
-              <button onClick={() => openAdd('expense')} className="flex items-center gap-1 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"><Plus className="w-3 h-3" /> Expense</button>
-              <button onClick={() => openAdd('check')}   className="flex items-center gap-1 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] bg-foreground/10 text-foreground hover:bg-foreground/20 transition-colors font-medium"><Plus className="w-3 h-3" /> Check</button>
+          <div className="flex items-center gap-2">
+            <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} className="w-[9.25rem] sm:w-auto" />
+            <div className="hidden sm:flex items-center gap-2">
+              <button className="h-10 px-3 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold text-foreground/70 hover:text-foreground">Import</button>
+              <ExportButton label="PDF" detail="Audit report" icon={FileText} color="#9D7E3F" onClick={exportPDF} />
+              <ExportButton label="Excel" detail="Workbook" icon={Table2} color="#0891b2" onClick={exportExcel} />
+              <button onClick={() => navigate('/concierge')} className="h-10 px-3 border border-foreground bg-foreground text-background text-[10px] uppercase tracking-[0.14em] font-bold">New Transaction</button>
             </div>
-            <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportPDF}><FileText className="w-3.5 h-3.5" /></Button>
-            <Button variant="outline" size="icon" className="rounded-none h-8 w-8" onClick={exportExcel}><Table2 className="w-3.5 h-3.5" /></Button>
-            <button onClick={() => setReconcileMode(m => !m)} className={`flex items-center gap-1.5 px-2.5 h-8 text-[10px] uppercase tracking-[0.1em] font-medium border transition-colors ${reconcileMode ? 'bg-positive/10 text-positive border-positive/30' : 'border-border text-muted-foreground hover:text-foreground'}`}>
-              <CheckSquare className="w-3 h-3" /> Reconcile
-            </button>
           </div>
         } />
 
-      {/* Mobile add + export */}
-      <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2 flex-wrap">
-        <button onClick={() => openAdd('income')}  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-[0.1em] bg-positive/10 text-positive font-medium"><Plus className="w-3 h-3" /> Income</button>
-        <button onClick={() => openAdd('expense')} className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-[0.1em] bg-accent/10 text-accent font-medium"><Plus className="w-3 h-3" /> Expense</button>
-        <button onClick={() => openAdd('check')}   className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-[0.1em] bg-foreground/10 text-foreground font-medium"><Plus className="w-3 h-3" /> Check</button>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportPDF}><FileText className="w-3 h-3 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" className="rounded-none h-8 text-[10px] px-2" onClick={exportExcel}><Table2 className="w-3 h-3 mr-1" />Excel</Button>
-      </div>
+      <div className="ldg-shell border-t border-border/50">
+        {/* Mobile export controls */}
+        <div className="sm:hidden px-4 py-2.5 border-b border-border bg-background/95">
+          <div className="grid grid-cols-2 gap-2">
+          <ExportButton label="PDF" detail="Audit report" icon={FileText} color="#7c3aed" onClick={exportPDF} />
+          <ExportButton label="Excel" detail="Workbook" icon={Table2} color="#0891b2" onClick={exportExcel} />
+          </div>
+        </div>
 
-      <div className="px-4 sm:px-8 py-4 border-b border-border grid grid-cols-3 gap-px bg-border/50">
-        {[{ l:'Inflow', v:fmtUSD(totals.inflow), c:'text-positive' },{ l:'Outflow', v:fmtUSD(totals.outflow), c:'text-destructive' },{ l:'Net Position', v:fmtUSD(totals.net), c:totals.net>=0?'text-positive':'text-destructive' }].map(s => (
-          <div key={s.l} className="ldg-stat px-4 sm:px-5 py-3"><div className="micro-label">{s.l}</div><div className={`text-base sm:text-xl font-semibold font-mono-tab mt-1 ${s.c}`}>{s.v}</div></div>
-        ))}
-      </div>
+        <div className="px-4 sm:px-8 pt-4 pb-3 border-b border-border/60">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.22em] text-foreground/60 font-bold">Operational Queue</div>
+              <div className="text-[10px] text-foreground/48 hidden sm:block">Accounting work signals for review, classification, documentation, and reconciliation.</div>
+            </div>
+            <div className="text-[10px] text-foreground/50 font-mono-tab hidden sm:block">{selectedRangeLabel}</div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+            {operationalMetrics.map(({ key: metricKey, ...metric }) => (
+              <OperationalMetric
+                key={metricKey}
+                {...metric}
+                active={queueFilter === metricKey}
+                onClick={() => activateQueue(metricKey)}
+              />
+            ))}
+          </div>
+        </div>
 
-      <div className="px-4 sm:px-8 py-3 border-b border-border flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
-        <Input placeholder="Search counterparty or reference…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none max-w-xs h-9 w-full sm:w-auto text-sm" />
-        <Select value={type} onValueChange={setType}>
-          <SelectTrigger className="rounded-none w-full sm:w-32 h-9 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="check">Checks</SelectItem><SelectItem value="income">Income</SelectItem><SelectItem value="expense">Expenses</SelectItem></SelectContent>
-        </Select>
-        <Select value={project} onValueChange={setProject}>
-          <SelectTrigger className="rounded-none w-full sm:w-44 h-9 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All projects</SelectItem>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-        </Select>
-        <div className="sm:ml-auto text-[10px] text-muted-foreground font-mono-tab">{rows.length} entries</div>
-      </div>
+        <div className="px-4 sm:px-8 pt-3 pb-3 border-b border-border/60">
+          <div className="ldg-panel p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[9px] uppercase tracking-[0.2em] text-foreground/60 font-bold">Search Toolbar</div>
+              <div className="hidden lg:flex items-center gap-1.5 text-[9px] text-foreground/45 font-mono-tab">
+                <span className="px-2 py-1 border border-border bg-secondary/25">Saved View: {selectedQueueLabel}</span>
+                <span className="px-2 py-1 border border-border bg-secondary/25">Density: Comfortable</span>
+                <span className="px-2 py-1 border border-border bg-secondary/25">Columns: Core</span>
+              </div>
+            </div>
+            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/45" strokeWidth={1.5} />
+                <Input placeholder="Search description, counterparty, reference, project, category…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none h-10 w-full text-sm pl-9 bg-background" />
+              </div>
+              <div className="grid grid-cols-2 lg:flex gap-2">
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="rounded-none w-full lg:w-36 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="check">Checks</SelectItem><SelectItem value="income">Income</SelectItem><SelectItem value="expense">Expenses</SelectItem></SelectContent>
+                </Select>
+                <Select value={project} onValueChange={setProject}>
+                  <SelectTrigger className="rounded-none w-full lg:w-56 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">All projects</SelectItem>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                  <SelectTrigger className="rounded-none w-full lg:w-32 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{PAGE_SIZE_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} / page</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between lg:justify-end gap-2 lg:ml-auto">
+                <div className="flex items-center gap-1.5 text-[10px] text-foreground/60 font-mono-tab">
+                  <SlidersHorizontal className="w-3 h-3" />
+                  {pageStart}-{pageEnd} of {rows.length}
+                </div>
+                {(q || type !== 'all' || project !== 'all' || queueFilter !== 'all') && (
+                  <button onClick={() => { setQ(''); setType('all'); setProject('all'); setQueueFilter('all'); }} className="text-[10px] uppercase tracking-[0.14em] text-foreground/60 hover:text-foreground font-bold">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <div className="px-4 sm:px-8 py-6">
+        <div className="px-4 sm:px-8 pt-3 pb-3 border-b border-border/60">
+          <div className="ldg-recon-panel p-3 sm:p-4">
+            <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-10 h-10 flex items-center justify-center border border-border bg-secondary/35 text-foreground/70 shrink-0">
+                    <CheckSquare className="w-4.5 h-4.5" strokeWidth={1.6} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[9px] uppercase tracking-[0.22em] text-foreground/60 font-bold">Reconciliation Center</div>
+                    <div className="text-xs sm:text-sm font-semibold truncate">{totals.unreconciledCount} open entries · {fmtUSD(totals.unreconciledAmount)} requiring review</div>
+                    <div className="text-[10px] text-foreground/50 mt-0.5 hidden sm:block">Review the current page, clear matched bank activity, or reopen entries that need correction.</div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono-tab">
+                <div className="border border-border bg-background/65 px-2 py-2">
+                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Cleared</div>
+                  <div className="text-sm font-bold text-positive">{totals.reconciledCount}</div>
+                </div>
+                <div className="border border-border bg-background/65 px-2 py-2">
+                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Open</div>
+                  <div className="text-sm font-bold text-warning">{totals.unreconciledCount}</div>
+                </div>
+                <div className="border border-border bg-background/65 px-2 py-2">
+                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Rate</div>
+                  <div className={totals.reconcilePct > 85 ? 'text-sm font-bold text-positive' : 'text-sm font-bold text-warning'}>{totals.reconcilePct.toFixed(0)}%</div>
+                </div>
+                <div className="border border-border bg-background/65 px-2 py-2">
+                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Cleared $</div>
+                  <div className="text-sm font-bold text-foreground">{fmtUSD(totals.reconciledAmount)}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:flex gap-2">
+                <button onClick={() => setReconcileMode(m => !m)} className={`h-10 px-3 border text-[10px] uppercase tracking-[0.14em] font-bold ${reconcileMode ? 'bg-foreground text-background border-foreground' : 'bg-background/70 text-foreground/75 border-border hover:text-foreground'}`}>
+                  {reconcileMode ? 'Exit Review' : 'Review Entries'}
+                </button>
+                <button onClick={() => bulkReconcileVisible(true)} className="h-10 px-3 border border-border bg-background/70 text-foreground/75 text-[10px] uppercase tracking-[0.14em] font-bold hover:text-foreground hover:bg-secondary/40">
+                  Clear Page
+                </button>
+                <button onClick={() => bulkReconcileVisible(false)} className="h-10 px-3 border border-border bg-background/70 text-foreground/75 text-[10px] uppercase tracking-[0.14em] font-bold hover:text-foreground hover:bg-secondary/40 col-span-2 sm:col-span-1">
+                  Reopen Page
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      <div className="px-4 sm:px-8 py-4 ldg-workspace">
+        <div className="min-w-0">
         {/* Mobile card view */}
-        <div className="sm:hidden space-y-3">
+        <div className="sm:hidden space-y-2.5">
           {rows.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No entries match.</div>
-          ) : rows.map(r => (
-            <div key={r.rowId} className="border border-border p-4 space-y-2">
+          ) : pagedRows.map(r => (
+            <div key={r.rowId} role="button" tabIndex={0} onClick={() => setDetailRow(r)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setDetailRow(r); }} className={`ldg-panel relative w-full p-2.5 space-y-1.5 text-left cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-75' : ''}`}>
               <div className="flex items-center justify-between">
                 <span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-semibold font-mono-tab ${r.amount>=0?'text-positive':'text-destructive'}`}>{r.amount>=0?'+':'−'}{fmtUSD(Math.abs(r.amount))}</span>
                   <AlertDialog>
-                    <AlertDialogTrigger asChild><button className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button></AlertDialogTrigger>
+                    <AlertDialogTrigger asChild><button type="button" onClick={e => e.stopPropagation()} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button></AlertDialogTrigger>
                     <AlertDialogContent className="rounded-none w-[calc(100%-2rem)]">
                       <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                       <AlertDialogFooter className="flex-col sm:flex-row gap-2">
@@ -306,56 +1344,335 @@ export default function Ledger() {
                   </AlertDialog>
                 </div>
               </div>
-              <div className="text-sm font-medium">{r.party}</div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{r.project||'—'}</span><span className="font-mono-tab">{fmtDate(r.date)}</span>
+              <div className="text-sm font-semibold truncate">{r.party}</div>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono-tab">
+                <div className="border border-border/70 bg-secondary/25 px-2 py-1 min-w-0">
+                  <div className="text-foreground/45 uppercase tracking-[0.14em]">Project</div>
+                  <div className="truncate text-foreground/75">{r.project || 'Unassigned'}</div>
+                </div>
+                <div className="border border-border/70 bg-secondary/25 px-2 py-1 min-w-0">
+                  <div className="text-foreground/45 uppercase tracking-[0.14em]">Date</div>
+                  <div className="text-foreground/75">{fmtDate(r.date)}</div>
+                </div>
+                <div className="border border-border/70 bg-secondary/25 px-2 py-1 min-w-0">
+                  <div className="text-foreground/45 uppercase tracking-[0.14em]">Method</div>
+                  <div className="truncate text-foreground/75">{r.raw?.payment_method?.replace?.(/_/g, ' ') || r.raw?.delivery_status?.replace?.(/_/g, ' ') || '—'}</div>
+                </div>
+                <div className="border border-border/70 bg-secondary/25 px-2 py-1 min-w-0">
+                  <div className="text-foreground/45 uppercase tracking-[0.14em]">Recon</div>
+                  <div className={r.reconciled ? 'truncate text-positive font-bold' : 'truncate text-warning font-bold'}>{r.reconciled ? 'Reconciled' : 'Open'}</div>
+                </div>
               </div>
-              <div className="text-[10px] text-muted-foreground">Ref: {r.ref}</div>
+              <div className="flex items-center justify-between gap-2 text-[10px] text-foreground/55">
+                <span className="truncate">Ref: {r.ref}</span>
+                <span className="flex items-center gap-1 uppercase tracking-[0.14em] font-bold">Details <ChevronRight className="w-3 h-3" /></span>
+              </div>
+              {reconcileMode && (
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); toggleReconcile(r); }}
+                  className={`w-full h-9 border text-[10px] uppercase tracking-[0.14em] font-bold ${r.reconciled ? 'border-warning/30 bg-warning/10 text-warning' : 'border-positive/30 bg-positive/10 text-positive'}`}
+                >
+                  {r.reconciled ? 'Mark Open' : 'Mark Reconciled'}
+                </button>
+              )}
             </div>
           ))}
         </div>
 
         {/* Desktop table */}
-        <div className="hidden sm:block border border-border">
+        <div className="hidden sm:block ldg-panel overflow-x-auto">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-secondary/20">
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.2em] text-foreground/60 font-bold">Ledger Register</div>
+              <div className="text-[10px] text-foreground/50 mt-0.5 font-mono-tab">
+                {selectedQueueLabel} · Click any row to inspect the full finance record.
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-mono-tab text-foreground/60">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-positive" />In</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-destructive" />Out</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-500" />Check</span>
+            </div>
+          </div>
           {reconcileMode && (
-            <div className="px-4 py-2 border-b border-border bg-positive/5 text-[10px] font-medium text-positive flex items-center gap-2">
+            <div className="px-4 py-2 border-b border-border bg-positive/5 text-[10px] font-bold text-positive flex items-center gap-2 uppercase tracking-[0.14em]">
               <CheckSquare className="w-3 h-3" /> Reconcile mode — click the checkbox to mark entries as reconciled
             </div>
           )}
-          <div className="grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium items-center">
-            <div>Date</div><div>Type</div><div>Ref</div><div>Counterparty</div><div>Project</div><div className="text-right">Amount</div><div />
+          {queueFilter !== 'all' && (
+            <div className="px-4 py-1.5 border-b border-border bg-secondary/30 flex items-center justify-between gap-3">
+              <div className="text-[9px] uppercase tracking-[0.16em] font-bold text-foreground/60">Work view: <span className="text-foreground">{selectedQueueLabel}</span></div>
+              <button onClick={() => setQueueFilter('all')} className="text-[9px] uppercase tracking-[0.14em] font-bold text-foreground/50 hover:text-foreground">Show all</button>
+            </div>
+          )}
+          <div className="min-w-[1180px] grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_54px] gap-2 px-4 py-2 border-b border-border bg-secondary/45 text-[9px] uppercase tracking-[0.14em] text-foreground/55 font-bold items-center">
+            <div>Date</div><div>Type</div><div>Reference</div><div>Counterparty</div><div>Project</div><div>Method</div><div>Status</div><div className="text-right">Debit</div><div className="text-right">Credit</div><div className="text-right">Balance</div><div className="text-right">Action</div>
           </div>
           {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
-            rows.map(r => (
-              <div key={r.rowId} className={`grid grid-cols-[2fr_1fr_1.5fr_2.5fr_2fr_1.5fr_36px] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer ${r.reconciled ? 'opacity-50' : ''}`} onClick={() => setDetailRow(r)}>
-                <div className="text-muted-foreground">{fmtDate(r.date)}</div>
-                <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span></div>
-                <div className="truncate text-muted-foreground">{r.ref}</div>
-                <div className="truncate">{r.party}</div>
-                <div className="truncate text-muted-foreground">{r.project||'—'}</div>
-                <div className={`text-right font-semibold ${r.amount>=0?'text-positive':'text-destructive'}`}>{r.amount>=0?'+':'−'}{fmtUSD(Math.abs(r.amount))}</div>
-                <div className="flex justify-end" onClick={e => e.stopPropagation()}>
-                  {reconcileMode ? (
-                    <button onClick={() => toggleReconcile(r)} className="text-muted-foreground hover:text-positive transition-colors">
-                      {r.reconciled ? <CheckSquare className="w-3.5 h-3.5 text-positive" /> : <Square className="w-3.5 h-3.5" />}
+            pagedRows.map((r, index) => {
+              const absoluteIndex = (safePage - 1) * pageSize + index;
+              const runningBalance = rows.slice(absoluteIndex).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+              const debit = r.amount < 0 ? Math.abs(r.amount) : 0;
+              const credit = r.amount >= 0 ? r.amount : 0;
+              return (
+                <div key={r.rowId} className={`min-w-[1180px] relative grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_54px] gap-2 px-4 py-2 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-70' : ''}`} onClick={() => setDetailRow(r)}>
+                <div className="text-foreground/62 text-[11px]">{r.date ? fmtDate(r.date) : '—'}</div>
+                  <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span></div>
+                  <div className="truncate text-foreground/55 text-[11px]">{r.ref}</div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-semibold text-foreground">{r.party}</div>
+                    <div className="text-[9px] text-foreground/45 mt-0.5 truncate">{r.status && r.status !== '—' ? `Status: ${r.status}` : r.reconciled ? 'Reconciled' : 'Open ledger entry'}</div>
+                  </div>
+                  <div className="truncate text-foreground/58 text-[11px]">{r.project||'Unassigned'}</div>
+                  <div className="truncate text-foreground/58 text-[11px] capitalize">{r.raw?.payment_method?.replace?.(/_/g, ' ') || r.raw?.delivery_status?.replace?.(/_/g, ' ') || '—'}</div>
+                  <div className={r.reconciled ? 'truncate text-positive text-[10px] font-bold uppercase tracking-[0.08em]' : 'truncate text-warning text-[10px] font-bold uppercase tracking-[0.08em]'}>
+                    {r.reconciled ? 'Reconciled' : (r.status || 'Open')}
+                  </div>
+                  <div className="text-right font-bold text-[12px] text-destructive">{debit ? fmtUSD(debit) : '—'}</div>
+                  <div className="text-right font-bold text-[12px] text-positive">{credit ? fmtUSD(credit) : '—'}</div>
+                  <div className={`text-right font-bold text-[12px] ${runningBalance >= 0 ? 'text-foreground' : 'text-destructive'}`}>{fmtUSD(runningBalance)}</div>
+                  <div className="flex justify-end items-center gap-2" onClick={e => e.stopPropagation()}>
+                    {reconcileMode ? (
+                      <button onClick={() => toggleReconcile(r)} className="text-muted-foreground hover:text-positive transition-colors">
+                        {r.reconciled ? <CheckSquare className="w-3.5 h-3.5 text-positive" /> : <Square className="w-3.5 h-3.5" />}
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setDetailRow(r)} className="text-foreground/45 group-hover:text-foreground transition-colors" title="View details">
+                          <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        </button>
+                        <button onClick={() => openEdit(r)} className="text-foreground/45 group-hover:text-foreground transition-colors" title="Edit with signature">
+                          <PencilLine className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        </button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild><button className="text-foreground/0 group-hover:text-foreground/45 hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-none">
+                            <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
+                              <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={async () => { try { if (r._kind==='check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch(err:any){toast.error(err.message);} }}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+
+        {rows.length > 0 && (
+          <div className="ldg-panel mt-3 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
+              <div className="text-[10px] font-mono-tab text-foreground/60">
+                Showing <span className="font-bold text-foreground">{pageStart}-{pageEnd}</span> of <span className="font-bold text-foreground">{rows.length}</span>
+              </div>
+              <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                <SelectTrigger className="rounded-none w-28 h-8 text-[10px]"><SelectValue /></SelectTrigger>
+                <SelectContent>{PAGE_SIZE_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} / page</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-[34px_1fr_34px] sm:flex sm:items-center gap-2">
+              <button className="ldg-page-btn" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
+              <div className="h-[34px] border border-border bg-secondary/25 px-3 flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.14em] text-foreground/65">
+                Page {safePage} / {totalPages}
+              </div>
+              <button className="ldg-page-btn" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const start = Math.max(1, Math.min(safePage - 2, totalPages - 4));
+                  const pageNumber = start + i;
+                  return (
+                    <button
+                      key={pageNumber}
+                      className={`ldg-page-btn ${pageNumber === safePage ? 'bg-foreground text-background border-foreground' : ''}`}
+                      onClick={() => setPage(pageNumber)}
+                    >
+                      {pageNumber}
                     </button>
-                  ) : (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild><button className="text-muted-foreground/0 group-hover:text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
-                      <AlertDialogContent className="rounded-none">
-                        <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                          <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={async () => { try { if (r._kind==='check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch(err:any){toast.error(err.message);} }}>Confirm</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
+        <LedgerInspector row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onEdit={openEdit} />
+      </div>
+      </div>
+
+      <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null); }}>
+        <DialogContent className="z-[100] rounded-none sm:max-w-4xl w-[calc(100%-2rem)] max-h-[92vh] overflow-y-auto p-0">
+          <div className="bg-white text-[#111]">
+            <div className="px-5 py-4 border-b border-[#dedede] bg-[#fafafa]">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold">Signed Ledger Correction</DialogTitle>
+              </DialogHeader>
+              <p className="text-[11px] text-[#666] mt-1">Every saved correction requires a digital signature and writes to the finance changelog.</p>
+            </div>
+            <form onSubmit={submitLedgerEdit} className="p-5 space-y-4">
+              {editRow && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                  {[
+                    ['Record Type', editRow.type],
+                    ['Existing Ref', editRow.ref],
+                    ['Existing Project', editRow.project || 'Unassigned'],
+                    ['Database ID', editRow.id],
+                  ].map(([label, value]) => (
+                    <div key={label} className="border border-[#dedede] bg-[#fafafa] px-3 py-2 min-w-0">
+                      <div className="text-[7px] uppercase tracking-[0.18em] text-[#777] font-bold">{label}</div>
+                      <div className="text-[11px] font-semibold truncate mt-1" title={String(value)}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  {fld('Total Amount')}
+                  <CurrencyInput value={editForm.amount} onValueChange={v => setEditForm(f => ({ ...f, amount: v }))} />
+                </div>
+                <div>
+                  {fld('Before Tax')}
+                  <CurrencyInput value={editForm.amount_before_tax} onValueChange={v => setEditForm(f => ({ ...f, amount_before_tax: v }))} />
+                </div>
+                <div>
+                  {fld('Tax')}
+                  <CurrencyInput value={editForm.tax_amount} onValueChange={v => setEditForm(f => ({ ...f, tax_amount: v }))} />
+                </div>
+                <div>
+                  {fld('Currency')}
+                  <Input className="rounded-none h-10" value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value.toUpperCase() }))} />
                 </div>
               </div>
-            ))}
-        </div>
-      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  {fld(editRow?._kind === 'check' ? 'Issue Date' : 'Transaction Date')}
+                  <DateInput className="h-10" value={editForm.date} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))} />
+                </div>
+                <div>
+                  {fld('Posting Date')}
+                  <DateInput className="h-10" value={editForm.posting_date} onChange={e => setEditForm(f => ({ ...f, posting_date: e.target.value }))} />
+                </div>
+                <div>
+                  {fld('Due Date')}
+                  <DateInput className="h-10" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                </div>
+                <div>
+                  {fld('Cleared / Paid Date')}
+                  <DateInput className="h-10" value={editForm.cleared_date} onChange={e => setEditForm(f => ({ ...f, cleared_date: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  {fld('Status')}
+                  <Input className="rounded-none h-10" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} />
+                </div>
+                <div>
+                  {fld('Payment Status')}
+                  <Input className="rounded-none h-10" value={editForm.payment_status} onChange={e => setEditForm(f => ({ ...f, payment_status: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                </div>
+                <div>
+                  {fld('Approval Status')}
+                  <Input className="rounded-none h-10" value={editForm.approval_status} onChange={e => setEditForm(f => ({ ...f, approval_status: e.target.value }))} />
+                </div>
+              </div>
+              <div className={`grid grid-cols-1 ${editRow?._kind === 'expense' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+                <div>
+                  {fld(editRow?._kind === 'check' ? 'Payee' : 'Counterparty / Source')}
+                  <Input className="rounded-none h-10" value={editForm.party} onChange={e => setEditForm(f => ({ ...f, party: e.target.value }))} />
+                </div>
+                {editRow?._kind === 'expense' && (
+                  <div>
+                    {fld('Vendor')}
+                    <Select value={editForm.vendor_id || 'none'} onValueChange={v => setEditForm(f => ({ ...f, vendor_id: v === 'none' ? '' : v }))}>
+                      <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="none">No linked vendor</SelectItem>{vendors.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div>
+                  {fld(editRow?._kind === 'check' ? 'Check / Reference #' : 'Payment Reference')}
+                  <Input className="rounded-none h-10" value={editForm.ref} onChange={e => setEditForm(f => ({ ...f, ref: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  {fld('Project')}
+                  <Select value={editForm.project_id || 'none'} onValueChange={v => setEditForm(f => ({ ...f, project_id: v === 'none' ? '' : v }))}>
+                    <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="none">Unassigned</SelectItem>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  {fld('Category')}
+                  <Input className="rounded-none h-10" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                </div>
+                <div>
+                  {fld('Payment Method')}
+                  <Input className="rounded-none h-10" value={editForm.payment_method} onChange={e => setEditForm(f => ({ ...f, payment_method: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                </div>
+                <div>
+                  {fld('Cost Type')}
+                  <Input className="rounded-none h-10" value={editForm.cost_type} onChange={e => setEditForm(f => ({ ...f, cost_type: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                </div>
+              </div>
+              <div>
+                {fld('Cost Phase / Memo')}
+                <div className="grid grid-cols-1 sm:grid-cols-[0.8fr_1.2fr] gap-3">
+                  <Input className="rounded-none h-10" value={editForm.cost_phase} onChange={e => setEditForm(f => ({ ...f, cost_phase: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                  <Input className="rounded-none h-10" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+              </div>
+              {editRow?._kind !== 'check' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      {fld('Receipt Status')}
+                      <Input className="rounded-none h-10" value={editForm.receipt_status} onChange={e => setEditForm(f => ({ ...f, receipt_status: e.target.value }))} />
+                    </div>
+                    <div>
+                      {fld('Billable Status')}
+                      <Input className="rounded-none h-10" value={editForm.billable_status} onChange={e => setEditForm(f => ({ ...f, billable_status: e.target.value }))} />
+                    </div>
+                    <div>
+                      {fld('Reimbursable Status')}
+                      <Input className="rounded-none h-10" value={editForm.reimbursable_status} onChange={e => setEditForm(f => ({ ...f, reimbursable_status: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      {fld('External Invoice URL')}
+                      <Input className="rounded-none h-10" value={editForm.external_invoice_url} onChange={e => setEditForm(f => ({ ...f, external_invoice_url: e.target.value }))} placeholder="Stripe, QuickBooks, or external invoice link" />
+                    </div>
+                    <div>
+                      {fld('Invoice Provider')}
+                      <Input className="rounded-none h-10" value={editForm.external_invoice_provider} onChange={e => setEditForm(f => ({ ...f, external_invoice_provider: e.target.value }))} />
+                    </div>
+                    <div>
+                      {fld('Invoice Number')}
+                      <Input className="rounded-none h-10" value={editForm.external_invoice_number} onChange={e => setEditForm(f => ({ ...f, external_invoice_number: e.target.value }))} />
+                    </div>
+                  </div>
+                </>
+              )}
+              <div className="border border-[#dedede] bg-[#fafafa] p-3">
+                {fld('Digital Signature Required')}
+                <Input className="rounded-none h-10 bg-white" placeholder="Type your full name to approve this correction" value={editSignature} onChange={e => setEditSignature(e.target.value)} />
+                <p className="text-[10px] text-[#666] mt-2">Signature timestamp will be recorded as {new Date().toLocaleString()}.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" className="rounded-none" onClick={() => setEditRow(null)}>Cancel</Button>
+                <Button type="submit" className="rounded-none bg-foreground text-background" disabled={txnUpsert.isPending || checkUpsert.isPending || !editSignature.trim()}>
+                  Save Signed Correction
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Add dialogs ── */}
       <Dialog open={!!addOpen} onOpenChange={o => { if (!o) closeAdd(); }}>
@@ -601,7 +1918,7 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind="ledger" data={detailRow} />
+      <LedgerMobileSheet row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onEdit={openEdit} />
     </AppShell>
   );
 }

@@ -6,7 +6,8 @@ import { useEntity } from '@/contexts/EntityContext';
 import { toast } from 'sonner';
 import {
   X, ChevronLeft, ChevronRight, Plus, Wand2, Loader2,
-  AlertTriangle, MapPin, UserCheck,
+  AlertTriangle, MapPin, UserCheck, Home, Building2, BriefcaseBusiness,
+  ClipboardList,
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -26,8 +27,12 @@ const PROJECT_STATUSES = [
 ];
 
 const PROJECT_TYPES = [
-  'Custom Estate', 'Family Home', 'Multi-Family', 'Commercial',
-  'Renovation', 'Investment Property', 'Real Estate Development', 'Other',
+  { value: 'Residential Construction', label: 'Residential Construction', sub: 'Custom homes, additions, renovations', icon: Home, color: '#0f766e' },
+  { value: 'Commercial Construction', label: 'Commercial Construction', sub: 'Build-outs, offices, retail, facilities', icon: Building2, color: '#2563eb' },
+  { value: 'Project Management', label: 'Project Management', sub: 'Owner rep, PM, coordination services', icon: BriefcaseBusiness, color: '#7c3aed' },
+  { value: 'Residential Renovation', label: 'Residential Renovation', sub: 'Kitchen, bath, interior and exterior upgrades', icon: Home, color: '#0f766e' },
+  { value: 'Commercial Tenant Improvement', label: 'Tenant Improvement', sub: 'Interior commercial improvements', icon: Building2, color: '#2563eb' },
+  { value: 'Other', label: 'Other', sub: 'Special project or internal work', icon: ClipboardList, color: '#9D7E3F' },
 ];
 
 const WIZARD_STEPS = [
@@ -43,7 +48,7 @@ const WIZARD_STEPS = [
 type WizardKey = typeof WIZARD_STEPS[number]['key'];
 
 const BLANK: Record<string, string> = {
-  title: '', project_code: '', type: 'Custom Estate', status: 'active',
+  title: '', project_code: '', type: 'Residential Construction', status: 'active',
   address: '', city: '', state: 'TX', zipcode: '',
   client_name: '', client_email: '',
   start_date: '', estimated_completion: '',
@@ -94,6 +99,41 @@ function PillPicker({ options, value, onChange }: {
   );
 }
 
+function ProjectTypePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {PROJECT_TYPES.map(o => {
+        const Icon = o.icon;
+        const sel = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`group text-left border px-3 py-2.5 transition-all ${sel ? 'bg-secondary/70 border-foreground/45 shadow-sm' : 'bg-background border-border hover:border-foreground/35 hover:bg-secondary/25'}`}
+          >
+            <div className="flex items-start gap-2.5">
+              <span className={`w-8 h-8 border flex items-center justify-center shrink-0 ${sel ? 'border-foreground/20 bg-background' : 'border-border bg-secondary/35'}`}>
+                <Icon className="w-4 h-4" style={{ color: o.color }} strokeWidth={1.7} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-black uppercase tracking-[0.14em] leading-tight text-foreground">{o.label}</span>
+                <span className="block text-[10px] mt-1 leading-snug text-muted-foreground">{o.sub}</span>
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function categoryForType(type: string) {
+  if (/commercial|tenant/i.test(type)) return 'Commercial Construction';
+  if (/management|owner|coordination/i.test(type)) return 'Project Management';
+  return 'Residential Construction';
+}
+
 /* ── Address autocomplete (Texas-biased Nominatim) ──────────────── */
 interface NominatimResult {
   place_id: number; display_name: string;
@@ -127,15 +167,19 @@ function AddressAutocomplete({
     setLoading(true);
     try {
       const url =
-        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8` +
-        `&countrycodes=us&viewbox=-107.0,36.5,-93.5,25.5&bounded=0` +
-        `&q=${encodeURIComponent(q)}`;
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10` +
+        `&countrycodes=us&viewbox=-106.6456,36.5007,-93.5083,25.8371&bounded=1` +
+        `&q=${encodeURIComponent(`${q}, Texas`)}`;
       const res = await fetch(url, {
         headers: { 'Accept-Language': 'en-US' },
         signal: abortRef.current.signal,
       });
       const data: NominatimResult[] = await res.json();
-      setResults(data); setOpen(data.length > 0);
+      const texasOnly = data.filter(r => {
+        const st = (r.address?.state || '').toLowerCase();
+        return st === 'texas' || st === 'tx' || /,\s*texas\b/i.test(r.display_name);
+      });
+      setResults(texasOnly); setOpen(texasOnly.length > 0);
     } catch (e: any) {
       if (e.name !== 'AbortError') setResults([]);
     } finally { setLoading(false); }
@@ -256,7 +300,6 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
 
   const handleContractChange = (v: string) => {
     set('contract_amount', v);
-    if (!form.budget) set('budget', v);
   };
 
   const addCustomField    = () => setCustomFields(p => [...p, { id: Date.now(), key: '', value: '' }]);
@@ -323,7 +366,24 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
       return;
     }
 
-    // Sync trigger already wrote to the finance `projects` table — just refresh cache
+    // Sync trigger writes to the finance `projects` table; enrich the finance row with dashboard-critical fields.
+    const location = [form.address, form.city, [form.state, form.zipcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const contractValue = form.contract_amount ? parseFloat(form.contract_amount) : (form.budget ? parseFloat(form.budget) : 0);
+    await supabase
+      .from('projects')
+      .update({
+        department: categoryForType(form.type),
+        location: location || null,
+        client_name_snapshot: form.client_name.trim() || null,
+        original_contract_value: contractValue,
+        current_contract_value: contractValue,
+        notes: form.description.trim() || `${form.type}${form.internal_notes ? ` · ${form.internal_notes.trim()}` : ''}`,
+      })
+      .eq('user_id', user.id)
+      .eq('entity_id', entityId)
+      .eq('name', form.title.trim())
+      .is('deleted_at', null);
+
     await qc.invalidateQueries({ queryKey: ['projects'] });
 
     toast.success(`${data.title} created`, { description: 'Synced to finance portfolio' });
@@ -338,7 +398,6 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
   const isReview    = step === WIZARD_STEPS.length - 1;
   const isOptional  = currentStep.optional;
   const statusOpts  = PROJECT_STATUSES.map(s => ({ value: s.value, label: s.label, color: s.color }));
-  const typeOpts    = PROJECT_TYPES.map(t => ({ value: t, label: t }));
 
   const optionalFilled = [
     form.address.trim() || form.city.trim(),
@@ -393,8 +452,8 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
             )}
           </div>
           <div>
-            <MicroLabel>Project Type</MicroLabel>
-            <PillPicker options={typeOpts} value={form.type} onChange={v => set('type', v)} />
+            <MicroLabel>Project Category</MicroLabel>
+            <ProjectTypePicker value={form.type} onChange={v => set('type', v)} />
           </div>
           <div>
             <MicroLabel>Status</MicroLabel>
@@ -517,20 +576,54 @@ export default function FinanceProjectWizard({ open, onClose, onCreated, existin
             <p className="text-[9px] text-muted-foreground mt-1.5">The total contract value — appears in the finance portfolio.</p>
           </div>
           <div>
-            <MicroLabel>Budget <span className="font-normal text-muted-foreground/60 normal-case tracking-normal">(auto-fills from contract)</span></MicroLabel>
+            <MicroLabel>Project Budget <span className="font-normal text-muted-foreground/60 normal-case tracking-normal">(estimated cost basis)</span></MicroLabel>
             <div className="relative">
               <CurrencyInput value={form.budget}
                 onValueChange={v => set('budget', v)}
                 placeholder="0"
                 className="h-12 text-[15px] border-border focus-visible:ring-0 focus-visible:ring-offset-0" />
             </div>
+            <p className="text-[9px] text-muted-foreground mt-1.5">Enter manually so margin forecasting reflects your actual planned cost.</p>
           </div>
+
+          {form.contract_amount && form.budget && (() => {
+            const contract = parseFloat(form.contract_amount) || 0;
+            const budget = parseFloat(form.budget) || 0;
+            const profit = contract - budget;
+            const margin = contract > 0 ? (profit / contract) * 100 : 0;
+            const good = profit >= 0;
+            return (
+              <div className="border border-border bg-secondary/20 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[9px] uppercase tracking-[0.2em] font-black text-muted-foreground">Projected Gross Margin</div>
+                    <div className={`mt-1 text-lg font-black font-mono-tab ${good ? 'text-positive' : 'text-red-600'}`}>
+                      {margin.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] uppercase tracking-[0.16em] font-bold text-muted-foreground">Projected Profit</div>
+                    <div className={`text-sm font-bold font-mono-tab ${good ? 'text-positive' : 'text-red-600'}`}>
+                      {profit < 0 ? '-' : ''}${Math.abs(profit).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
+                  </div>
+                </div>
+                <div className="h-1.5 bg-border overflow-hidden mt-2.5">
+                  <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, margin))}%`, backgroundColor: good ? '#10b981' : '#dc2626' }} />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-2">
+                  Contract minus budget. This is an estimate for planning and can be refined later with actual job-cost data.
+                </p>
+              </div>
+            );
+          })()}
+
           {form.contract_amount && form.budget &&
-           parseFloat(form.budget) < parseFloat(form.contract_amount) && (
-            <div className="flex items-center gap-2 p-2.5 border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-              <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
-              <p className="text-[10px] text-amber-700 dark:text-amber-400">
-                Budget is below contract value — confirm this is intentional.
+           parseFloat(form.budget) > parseFloat(form.contract_amount) && (
+            <div className="flex items-center gap-2 p-2.5 border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900">
+              <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0" />
+              <p className="text-[10px] text-red-700 dark:text-red-400">
+                Budget is above contract value. Confirm this project is intentionally projected at a loss or revise the numbers.
               </p>
             </div>
           )}

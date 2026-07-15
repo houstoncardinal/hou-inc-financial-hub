@@ -27,6 +27,11 @@ export interface Invoice {
   notes: string;
   terms: string;
   stripe_payment_link?: string;
+  external_invoice_url?: string;
+  external_invoice_provider?: string;
+  external_invoice_number?: string;
+  client_visible?: boolean;
+  portal_client_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -75,6 +80,11 @@ function mapRow(row: Record<string, unknown>): Invoice {
     notes:               (row.notes as string) ?? '',
     terms:               (row.terms as string) ?? '',
     stripe_payment_link: row.stripe_payment_link as string | undefined,
+    external_invoice_url: row.external_invoice_url as string | undefined,
+    external_invoice_provider: row.external_invoice_provider as string | undefined,
+    external_invoice_number: row.external_invoice_number as string | undefined,
+    client_visible:       row.client_visible as boolean | undefined,
+    portal_client_id:     row.portal_client_id as string | undefined,
     created_at:          row.created_at as string,
     updated_at:          row.updated_at as string,
   };

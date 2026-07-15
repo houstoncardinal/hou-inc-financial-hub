@@ -10,6 +10,7 @@ import {
   FolderKanban, Users, BookOpen, LogOut, ConciergeBell, BarChart3,
   Settings, Sun, Moon, Receipt, BookMarked, Globe,
   Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, Check,
+  MoreHorizontal, History,
 } from 'lucide-react';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
@@ -44,6 +45,7 @@ const navGroups = [
     label: 'Analysis',
     items: [
       { to: '/charts',    label: 'Charts',    icon: BarChart3,   desc: 'Visual analytics' },
+      { to: '/changelog', label: 'Changelog', icon: History,     desc: 'Finance audit trail' },
       { to: '/concierge', label: 'Concierge', icon: ConciergeBell, desc: 'Guided entry assistant' },
       { to: '/glossary',  label: 'Glossary',  icon: BookMarked,  desc: 'Terms & definitions' },
     ],
@@ -59,8 +61,7 @@ const navGroups = [
 const mobileQuickNav = [
   { to: '/finance/dashboard', label: 'Overview', icon: LayoutGrid, end: true },
   { to: '/ledger',            label: 'Ledger',   icon: BookOpen },
-  { to: '/income',            label: 'Income',   icon: ArrowDownToLine },
-  { to: '/expenses',          label: 'Expenses', icon: ArrowUpFromLine },
+  { to: '/projects',          label: 'Projects', icon: FolderKanban },
 ];
 
 const ENTITY_ICONS: Record<string, React.ComponentType<any>> = {
@@ -90,26 +91,26 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`group w-full min-w-0 border transition-all hover:bg-secondary/40 active:opacity-80 ${
+        className={`group w-full min-w-0 border transition-all hover:bg-secondary/40 active:opacity-80 shadow-[0_1px_0_rgba(255,255,255,0.35)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] ${
           compact
-            ? 'h-9 px-2.5 flex items-center gap-2'
-            : 'h-11 px-3 flex items-center gap-3'
+            ? 'h-10 px-2.5 flex items-center gap-2'
+            : 'h-12 px-3 flex items-center gap-2.5'
         }`}
         style={{ borderColor: `${active.color}45`, backgroundColor: active.colorMuted }}
         aria-label="Switch finance entity"
       >
         <div
-          className={`${compact ? 'w-6 h-6' : 'w-8 h-8'} flex items-center justify-center shrink-0`}
+          className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} flex items-center justify-center shrink-0`}
           style={{ backgroundColor: `${active.color}18`, border: `1px solid ${active.color}45` }}
         >
-          <ActiveIcon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} style={{ color: active.color }} strokeWidth={1.7} />
+          <ActiveIcon className={compact ? 'w-3.5 h-3.5' : 'w-3.5 h-3.5'} style={{ color: active.color }} strokeWidth={1.7} />
         </div>
         <div className="min-w-0 flex-1 text-left">
-          <div className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-bold uppercase tracking-[0.12em] truncate`} style={{ color: active.color }}>
-            {compact ? active.shortName : active.name}
+          <div className={`${compact ? 'text-[10px]' : 'text-[12px]'} font-bold uppercase tracking-[0.08em] truncate leading-tight`} style={{ color: active.color }}>
+            {active.name}
           </div>
-          <div className={`${compact ? 'text-[7px]' : 'text-[8px]'} uppercase tracking-[0.18em] text-muted-foreground truncate`}>
-            {compact ? active.name : `${active.category} · Est. ${active.since}`}
+          <div className={`${compact ? 'text-[7px]' : 'text-[8px]'} uppercase tracking-[0.18em] text-muted-foreground truncate mt-0.5`}>
+            {active.category} · Est. {active.since}
           </div>
         </div>
         <ChevronDown className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: active.color }} strokeWidth={2} />
@@ -122,14 +123,15 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.13, ease: [0.16, 1, 0.3, 1] }}
-            className={`absolute left-0 top-full mt-1.5 border border-border bg-background shadow-2xl z-50 overflow-hidden ${
-              compact ? 'w-[min(92vw,22rem)]' : 'w-full min-w-[18rem]'
+            className={`absolute left-0 top-full mt-2 border border-border bg-background shadow-[0_22px_70px_rgba(0,0,0,0.20)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.55)] z-50 overflow-hidden ${
+              compact ? 'w-[min(94vw,24rem)]' : 'w-full min-w-[20rem]'
             }`}
           >
-            <div className="px-3 py-2 border-b border-border/60">
+            <div className="px-3.5 py-3 border-b border-border/60" style={{ background: `linear-gradient(135deg, ${active.color}12, transparent 64%)` }}>
               <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Finance Entity</div>
+              <div className="text-[11px] text-foreground/80 mt-1 truncate">Select the operating company for this dashboard.</div>
             </div>
-            <div className="p-1.5 space-y-1">
+            <div className="p-2 space-y-1.5">
               {ENTITIES.map(e => {
                 const EIcon = ENTITY_ICONS[e.id] ?? Building2;
                 const selected = e.id === active.id;
@@ -138,15 +140,15 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
                     key={e.id}
                     type="button"
                     onClick={() => choose(e.id)}
-                    className="w-full flex items-center gap-3 px-2.5 py-2.5 text-left transition-all hover:bg-secondary/60"
-                    style={{ backgroundColor: selected ? e.colorMuted : undefined, borderLeft: selected ? `2px solid ${e.color}` : '2px solid transparent' }}
+                    className="w-full flex items-center gap-3 px-2.5 py-2.5 text-left transition-all hover:bg-secondary/60 border"
+                    style={{ backgroundColor: selected ? e.colorMuted : undefined, borderColor: selected ? `${e.color}55` : 'hsl(var(--border))', borderLeft: selected ? `3px solid ${e.color}` : '3px solid transparent' }}
                   >
-                    <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: `${e.color}14`, border: `1px solid ${e.color}35` }}>
-                      <EIcon className="w-4 h-4" style={{ color: e.color }} strokeWidth={1.6} />
+                    <div className="w-7 h-7 flex items-center justify-center shrink-0" style={{ backgroundColor: `${e.color}14`, border: `1px solid ${e.color}35` }}>
+                      <EIcon className="w-3.5 h-3.5" style={{ color: e.color }} strokeWidth={1.6} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-semibold truncate">{e.name}</div>
-                      <div className="text-[9px] text-muted-foreground truncate">{e.category} · {e.tagline}</div>
+                      <div className="text-[12px] font-semibold truncate">{e.name}</div>
+                      <div className="text-[9px] text-muted-foreground truncate mt-0.5">{e.category} · {e.tagline}</div>
                     </div>
                     {selected && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: e.color }} strokeWidth={2.3} />}
                   </button>
@@ -172,6 +174,7 @@ function FullscreenMobileMenu({
   const navigate = useNavigate();
   const overdueCount = invoices.filter((i: any) => i.status === 'overdue').length;
   const accentColor = entity?.color ?? '#9D7E3F';
+  const allNavItems = navGroups.flatMap(group => group.items.map(item => ({ ...item, group: group.label })));
 
   const go = (to: string) => {
     sounds.tap();
@@ -189,18 +192,16 @@ function FullscreenMobileMenu({
       {open && (
         <motion.div
           className="fixed inset-0 z-50 flex flex-col overflow-hidden"
-          style={{ backgroundColor: '#0A0A0A' }}
+          style={{ backgroundColor: '#F8F7F3', color: '#171717' }}
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Gold accent bar */}
           <div style={{ height: 3, background: `linear-gradient(90deg, ${accentColor} 0%, ${accentColor}88 100%)`, flexShrink: 0 }} />
 
-          {/* Header */}
           <div
-            style={{ flexShrink: 0, padding: '16px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            style={{ flexShrink: 0, padding: '12px 14px 10px', borderBottom: '1px solid #E6E1D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFFFFF' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 2, height: 24, backgroundColor: accentColor, flexShrink: 0 }} />
@@ -208,7 +209,7 @@ function FullscreenMobileMenu({
                 <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.34em', textTransform: 'uppercase', color: accentColor }}>
                   HOU INC
                 </div>
-                <div style={{ fontSize: 7, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)', marginTop: 1 }}>
+                <div style={{ fontSize: 7, letterSpacing: '0.24em', textTransform: 'uppercase', color: '#777', marginTop: 1 }}>
                   Finance Sector · {entity?.shortName ?? 'Select Entity'}
                 </div>
               </div>
@@ -216,14 +217,14 @@ function FullscreenMobileMenu({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <button
                 onClick={() => { toggle(); sounds.tap(); }}
-                style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', background: 'transparent', cursor: 'pointer' }}
+                style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E1DED6', color: '#555', background: '#FAFAFA', cursor: 'pointer' }}
                 aria-label="Toggle theme"
               >
                 {isDark ? <Sun className="w-4 h-4" strokeWidth={1.5} /> : <Moon className="w-4 h-4" strokeWidth={1.5} />}
               </button>
               <button
                 onClick={() => { sounds.close(); onClose(); }}
-                style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid rgba(255,255,255,0.12)`, color: 'rgba(255,255,255,0.7)', background: 'transparent', cursor: 'pointer' }}
+                style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E1DED6', color: '#333', background: '#FFFFFF', cursor: 'pointer' }}
                 aria-label="Close menu"
               >
                 <X className="w-4 h-4" strokeWidth={1.5} />
@@ -231,12 +232,11 @@ function FullscreenMobileMenu({
             </div>
           </div>
 
-          {/* Entity switcher */}
-          <div style={{ flexShrink: 0, padding: '12px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.36em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 8 }}>
+          <div style={{ flexShrink: 0, padding: '9px 12px 8px', borderBottom: '1px solid #E6E1D8', background: '#FBFAF7' }}>
+            <div style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#777', marginBottom: 6 }}>
               Active Entity
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 5 }}>
               {ENTITIES.map(e => {
                 const EIcon = ENTITY_ICONS[e.id] ?? Building2;
                 const active = entity?.id === e.id;
@@ -245,129 +245,125 @@ function FullscreenMobileMenu({
                     key={e.id}
                     onClick={() => switchEntity(e.id)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 12px',
-                      border: `1px solid ${active ? e.color : 'rgba(255,255,255,0.06)'}`,
-                      backgroundColor: active ? `${e.color}14` : 'transparent',
-                      cursor: 'pointer', transition: 'all 0.18s ease',
-                      borderLeft: active ? `3px solid ${e.color}` : '3px solid transparent',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 7px',
+                      border: `1px solid ${active ? `${e.color}66` : '#E1DED6'}`,
+                      backgroundColor: active ? `${e.color}12` : '#FFFFFF',
+                      cursor: 'pointer',
+                      minWidth: 0,
                     }}
                   >
-                    <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: active ? `${e.color}20` : 'rgba(255,255,255,0.05)', flexShrink: 0 }}>
-                      <EIcon className="w-3.5 h-3.5" style={{ color: active ? e.color : 'rgba(255,255,255,0.4)' }} strokeWidth={1.5} />
+                    <div style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: active ? `${e.color}18` : '#F4F2ED', flexShrink: 0 }}>
+                      <EIcon className="w-3 h-3" style={{ color: active ? e.color : '#777' }} strokeWidth={1.5} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: active ? e.color : 'rgba(255,255,255,0.6)', lineHeight: 1.2 }}>{e.shortName}</div>
-                      <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>{e.category}</div>
+                      <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: active ? e.color : '#333', lineHeight: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.shortName}</div>
+                      <div style={{ fontSize: 6.5, color: '#777', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.category}</div>
                     </div>
-                    {active && <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: e.color, flexShrink: 0 }} />}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Navigation — scrollable */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-            {navGroups.map(group => (
-              <div key={group.label} style={{ marginBottom: 4 }}>
-                <div style={{ padding: '8px 20px 4px', fontSize: 7, fontWeight: 700, letterSpacing: '0.36em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.24)' }}>
-                  {group.label}
-                </div>
-                {group.items.map(item => (
-                  <button
-                    key={item.to}
-                    onClick={() => go(item.to)}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-                      padding: '11px 20px', textAlign: 'left', cursor: 'pointer',
-                      background: 'transparent', border: 'none', borderLeft: '2px solid transparent',
-                      transition: 'background 0.15s ease, border-color 0.15s ease',
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.04)';
-                      (e.currentTarget as HTMLElement).style.borderLeftColor = accentColor;
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                      (e.currentTarget as HTMLElement).style.borderLeftColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}12`, border: `1px solid ${accentColor}22`, flexShrink: 0 }}>
-                      <item.icon className="w-4 h-4" style={{ color: accentColor }} strokeWidth={1.5} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', lineHeight: 1.25 }}>
-                        {item.label}
-                        {item.to === '/invoices' && overdueCount > 0 && (
-                          <span style={{ marginLeft: 8, fontSize: 8, fontWeight: 800, padding: '2px 6px', backgroundColor: accentColor, color: '#fff', letterSpacing: '0.1em' }}>
-                            {overdueCount} OVERDUE
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginTop: 2 }}>{(item as any).desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ))}
-
-            {/* Entity selector link */}
-            <div style={{ padding: '8px 20px 4px', fontSize: 7, fontWeight: 700, letterSpacing: '0.36em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.24)' }}>
-              Navigation
+          <div style={{ flex: 1, overflow: 'hidden', padding: '8px 12px 7px', background: '#F8F7F3' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#777' }}>Finance Navigation</div>
+              <div style={{ fontSize: 8, color: '#777' }}>{allNavItems.length + 2} destinations</div>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 7 }}>
+              {navGroups.map(group => (
+                <div key={group.label} style={{ minWidth: 0, background: '#FFFFFF', border: '1px solid #E1DED6', boxShadow: '0 1px 4px rgba(10,10,10,0.035)' }}>
+                  <div style={{ height: 2, background: group.label === 'Daily' ? accentColor : '#D8D2C4' }} />
+                  <div style={{ padding: '6px 7px 2px', fontSize: 7, fontWeight: 850, letterSpacing: '0.22em', textTransform: 'uppercase', color: group.label === 'Daily' ? accentColor : '#777' }}>{group.label}</div>
+                  <div style={{ padding: '0 5px 5px', display: 'grid', gap: 3 }}>
+                    {group.items.map(item => (
+                      <button
+                        key={item.to}
+                        onClick={() => go(item.to)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          minWidth: 0,
+                          minHeight: 28,
+                          padding: '4px 5px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          background: '#FBFAF7',
+                          border: '1px solid #EEE9DF',
+                        }}
+                      >
+                        <div style={{ width: 21, height: 21, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}0F`, border: `1px solid ${accentColor}22`, flexShrink: 0 }}>
+                          <item.icon className="w-3 h-3" style={{ color: accentColor }} strokeWidth={1.55} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 9.5, fontWeight: 780, color: '#1F1F1F', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.label}
+                            {item.to === '/invoices' && overdueCount > 0 && (
+                              <span style={{ marginLeft: 4, fontSize: 6.5, fontWeight: 800, padding: '1px 3px', backgroundColor: accentColor, color: '#fff', letterSpacing: '0.08em' }}>
+                                {overdueCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
             <button onClick={() => go('/finance')}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '11px 20px', textAlign: 'left', cursor: 'pointer', background: 'transparent', border: 'none', borderLeft: '2px solid transparent' }}>
-              <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}12`, border: `1px solid ${accentColor}22`, flexShrink: 0 }}>
-                <Layers className="w-4 h-4" style={{ color: accentColor }} strokeWidth={1.5} />
+              style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '7px 8px', textAlign: 'left', cursor: 'pointer', background: '#F2EFE7', border: '1px solid #DED8CA' }}>
+              <div style={{ width: 27, height: 27, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}12`, border: `1px solid ${accentColor}24`, flexShrink: 0 }}>
+                <Layers className="w-3.5 h-3.5" style={{ color: accentColor }} strokeWidth={1.5} />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>Switch Entity</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginTop: 2 }}>Change active business entity</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#1F1F1F' }}>Switch Entity</div>
+                <div style={{ fontSize: 7, color: '#777', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Business</div>
               </div>
             </button>
             <button onClick={() => go('/')}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '11px 20px', textAlign: 'left', cursor: 'pointer', background: 'transparent', border: 'none', borderLeft: '2px solid transparent' }}>
-              <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-                <Globe className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.4)' }} strokeWidth={1.5} />
+              style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '7px 8px', textAlign: 'left', cursor: 'pointer', background: '#FFFFFF', border: '1px solid #E1DED6' }}>
+              <div style={{ width: 27, height: 27, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F2ED', border: '1px solid #E1DED6', flexShrink: 0 }}>
+                <Globe className="w-3.5 h-3.5" style={{ color: '#777' }} strokeWidth={1.5} />
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>HOU INC Website</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.24)', marginTop: 2 }}>Return to public site</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#1F1F1F' }}>Website</div>
+                <div style={{ fontSize: 7, color: '#777', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Public site</div>
               </div>
             </button>
+            </div>
           </div>
 
-          {/* Footer — user + sign out */}
-          <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.07)', padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: `${accentColor}22`, border: `1px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: accentColor, flexShrink: 0 }}>
+          <div style={{ flexShrink: 0, borderTop: '1px solid #E6E1D8', padding: '8px 12px', paddingBottom: 'calc(8px + env(safe-area-inset-bottom))', background: '#FFFFFF' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: `${accentColor}18`, border: `1px solid ${accentColor}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: accentColor, flexShrink: 0 }}>
                 {(user?.user_metadata?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.8)', truncate: 'true' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#222', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user?.user_metadata?.full_name || 'User'}
                   {role !== 'admin' && (
-                    <span style={{ marginLeft: 6, fontSize: 7, fontWeight: 800, letterSpacing: '0.18em', padding: '1px 5px', backgroundColor: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}44` }}>
+                    <span style={{ marginLeft: 6, fontSize: 7, fontWeight: 800, letterSpacing: '0.14em', padding: '1px 5px', backgroundColor: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}35` }}>
                       {ROLE_LABELS[role]}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>{user?.email}</div>
+                <div style={{ fontSize: 8.5, color: '#777', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={() => go('/settings')}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer' }}
+                style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E1DED6', backgroundColor: '#FAFAFA', color: '#555', cursor: 'pointer', flexShrink: 0 }}
+                aria-label="Settings"
               >
-                <Settings className="w-3.5 h-3.5" strokeWidth={1.5} /> Settings
+                <Settings className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
               <button
                 onClick={async () => { sounds.click(); await signOut(); navigate('/auth'); onClose(); }}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', border: '1px solid rgba(239,68,68,0.22)', backgroundColor: 'rgba(239,68,68,0.06)', color: 'rgba(239,68,68,0.7)', fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', cursor: 'pointer' }}
+                style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(164,30,30,0.22)', backgroundColor: 'rgba(164,30,30,0.05)', color: '#8b1e1e', cursor: 'pointer', flexShrink: 0 }}
+                aria-label="Sign out"
               >
-                <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} /> Sign Out
+                <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -520,12 +516,12 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
   const handleSettings = () => { navigate('/settings'); onNavigate?.(); sounds.tap(); };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      <div className="px-3 h-16 flex items-center gap-2 border-b border-border shrink-0">
+    <div className="flex flex-col h-full bg-background/98">
+      <div className="px-3 h-16 flex items-center gap-2 border-b border-border shrink-0 bg-gradient-to-b from-secondary/30 to-background">
         <ShellEntitySelector />
         <button
           onClick={() => { toggle(); sounds.tap(); }}
-          className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded-sm transition-all shrink-0"
+          className="w-8 h-8 border border-border/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded-sm transition-all shrink-0"
           style={{ marginRight: isMobileSheet ? 40 : 0 }}
           aria-label="Toggle theme"
         >
@@ -533,11 +529,11 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
         </button>
       </div>
 
-      <nav className="flex-1 py-2 overflow-y-auto">
+      <nav className="flex-1 py-2 overflow-hidden">
         {navGroups.map(group => (
-          <div key={group.label} className="mb-2">
-            <div className="px-5 py-1.5">
-              <span className="text-[7px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">{group.label}</span>
+          <div key={group.label} className="mb-1.5">
+            <div className="px-4 py-1">
+              <span className="text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold">{group.label}</span>
             </div>
             {group.items.map(n => (
               <NavLink
@@ -546,13 +542,33 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
                 end={n.end}
                 onClick={() => { onNavigate?.(); sounds.tap(); }}
                 className={({ isActive }) =>
-                  `relative flex items-center gap-3 px-5 py-2 text-xs transition-all duration-150 ${isActive ? 'text-foreground bg-secondary font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'}`
+                  `relative mx-2.5 flex items-center gap-2 px-2.5 py-1.5 text-[12px] transition-all duration-150 border ${
+                    isActive
+                      ? 'text-foreground bg-secondary/80 font-semibold border-border shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset]'
+                      : 'text-foreground/78 border-transparent hover:text-foreground hover:bg-secondary/45 hover:border-border/70'
+                  }`
                 }
               >
-                <n.icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
-                <span className="flex-1">{n.label}</span>
-                {n.to === '/invoices' && overdueCount > 0 && (
-                  <span className="text-[8px] font-bold px-1 py-0.5 min-w-[16px] text-center bg-accent text-background leading-none">{overdueCount > 9 ? '9+' : overdueCount}</span>
+                {({ isActive }) => (
+                  <>
+                    <span
+                      className="absolute left-0 top-2 bottom-2 w-[2px]"
+                      style={{ backgroundColor: isActive ? (entity?.color ?? '#9D7E3F') : 'transparent' }}
+                    />
+                    <span
+                      className={`w-6 h-6 flex items-center justify-center shrink-0 border ${isActive ? 'bg-background border-border' : 'bg-secondary/30 border-border/40'}`}
+                      style={{ color: isActive ? (entity?.color ?? undefined) : undefined }}
+                    >
+                      <n.icon className="w-3.5 h-3.5" strokeWidth={1.6} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate leading-tight">{n.label}</span>
+                      <span className="block text-[8px] text-foreground/45 truncate mt-px leading-tight">{n.desc}</span>
+                    </span>
+                    {n.to === '/invoices' && overdueCount > 0 && (
+                      <span className="text-[8px] font-bold px-1 py-0.5 min-w-[16px] text-center bg-accent text-background leading-none">{overdueCount > 9 ? '9+' : overdueCount}</span>
+                    )}
+                  </>
                 )}
               </NavLink>
             ))}
@@ -560,12 +576,12 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
         ))}
       </nav>
 
-      <div className="border-t border-border shrink-0">
+      <div className="border-t border-border shrink-0 bg-secondary/20">
         <button
           onClick={handleSettings}
-          className={`w-full flex items-center gap-3 px-5 py-2.5 text-xs transition-colors hover:bg-secondary/40 ${location.pathname === '/settings' ? 'bg-secondary' : ''}`}
+          className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors hover:bg-secondary/45 ${location.pathname === '/settings' ? 'bg-secondary' : ''}`}
         >
-          <div className="w-6 h-6 rounded-full bg-foreground/10 flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">{initials}</div>
+          <div className="w-6 h-6 bg-foreground/10 border border-border/70 flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">{initials}</div>
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5">
               <span className="truncate text-foreground text-[11px]">{displayName || 'User'}</span>
@@ -573,18 +589,18 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
                 <span className="shrink-0 text-[7px] uppercase tracking-[0.16em] px-1 py-0.5 font-bold bg-accent/10 text-accent border border-accent/30">{ROLE_LABELS[role]}</span>
               )}
             </div>
-            <div className="truncate text-muted-foreground text-[9px]">{user?.email}</div>
+            <div className="truncate text-foreground/50 text-[8px]">{user?.email}</div>
           </div>
-          <Settings className="w-3 h-3 text-muted-foreground shrink-0" strokeWidth={1.5} />
+          <Settings className="w-3 h-3 text-foreground/55 shrink-0" strokeWidth={1.5} />
         </button>
         <NavLink to="/" end onClick={() => { onNavigate?.(); sounds.tap(); }}
-          className="w-full flex items-center gap-3 px-5 py-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors">
+          className="w-full flex items-center gap-2.5 px-4 py-1.5 text-[10px] text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-colors">
           <Globe className="w-3 h-3 shrink-0" strokeWidth={1.5} />
           <span>HOU INC Website</span>
         </NavLink>
         <button
           onClick={async () => { sounds.click(); await signOut(); navigate('/auth'); onNavigate?.(); }}
-          className="w-full flex items-center gap-3 px-5 py-2 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"
+          className="w-full flex items-center gap-2.5 px-4 py-1.5 text-[10px] text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-colors"
         >
           <LogOut className="w-3 h-3 shrink-0" strokeWidth={1.5} />
           <span>Sign out</span>
@@ -613,7 +629,7 @@ export default function AppShell({
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 w-52 border-r border-border flex-col z-30">
+      <aside className="hidden md:flex fixed inset-y-0 left-0 w-64 border-r border-border flex-col z-30">
         <NavContent />
       </aside>
 
@@ -649,31 +665,32 @@ export default function AppShell({
       <ElevenLabsAgent />
 
       {/* Main */}
-      <main className="md:ml-52 min-h-screen flex flex-col">
+      <main className="md:ml-64 min-h-screen flex flex-col">
         <div className="md:hidden h-14 shrink-0" />
         <div className="flex-1 page-enter">{children}</div>
-        <div className="md:hidden h-16 shrink-0" />
+        <div className="md:hidden h-[72px] shrink-0" />
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 h-16 bg-background border-t border-border z-30 flex items-stretch"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 h-[72px] bg-white border-t border-[#E6E1D8] z-30 grid grid-cols-5 items-stretch shadow-[0_-12px_34px_rgba(10,10,10,0.10),0_-1px_0_rgba(255,255,255,0.9)_inset]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {mobileQuickNav.map(n => (
+        {mobileQuickNav.slice(0, 2).map(n => (
           <NavLink
             key={n.to}
             to={n.to}
             end={n.end}
             onClick={() => sounds.tap()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
+              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777]'}`
             }
           >
             {({ isActive }) => (
               <>
-                <div className={`p-1 transition-colors ${isActive ? 'bg-secondary' : ''}`}>
+                <div className={`p-1.5 transition-colors ${isActive ? 'bg-[#F5F2EA] border border-[#E2DACD] shadow-[0_1px_2px_rgba(10,10,10,0.04)]' : ''}`}>
                   <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
                 </div>
                 <span className={`text-[8px] uppercase tracking-[0.08em] ${isActive ? 'font-semibold' : ''}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-[#111]" />}
               </>
             )}
           </NavLink>
@@ -682,28 +699,50 @@ export default function AppShell({
         {/* Add Entry slot */}
         <button
           onClick={() => { sounds.open(); setAddSheetOpen(true); }}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors text-background relative"
+          className="flex flex-col items-center justify-center gap-0.5 transition-colors text-background relative border-r border-[#EFEAE1]"
           aria-label="Add Entry"
         >
           <div
-            className="w-9 h-9 flex items-center justify-center rounded-full shadow-md transition-transform active:scale-95"
-            style={{ backgroundColor: accentColor }}
+            className="w-12 h-12 -mt-7 flex items-center justify-center rounded-full shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_0_5px_rgba(255,255,255,0.92)] transition-transform active:scale-95 border border-white/20"
+            style={{ backgroundColor: '#050505' }}
           >
-            <Plus className="w-4.5 h-4.5" strokeWidth={2.5} style={{ color: '#fff' }} />
+            <Plus className="w-5 h-5" strokeWidth={2.6} style={{ color: '#fff' }} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold" style={{ color: accentColor }}>Add</span>
+          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold -mt-0.5" style={{ color: '#111' }}>Add</span>
         </button>
 
-        {/* Hub slot */}
+        {mobileQuickNav.slice(2).map(n => (
+          <NavLink
+            key={n.to}
+            to={n.to}
+            end={n.end}
+            onClick={() => sounds.tap()}
+            className={({ isActive }) =>
+              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777]'}`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <div className={`p-1.5 transition-colors ${isActive ? 'bg-[#F5F2EA] border border-[#E2DACD] shadow-[0_1px_2px_rgba(10,10,10,0.04)]' : ''}`}>
+                  <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
+                </div>
+                <span className={`text-[8px] uppercase tracking-[0.08em] ${isActive ? 'font-semibold' : ''}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-[#111]" />}
+              </>
+            )}
+          </NavLink>
+        ))}
+
+        {/* More slot */}
         <button
           onClick={() => { sounds.open(); setFullMenuOpen(true); }}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted-foreground transition-colors"
+          className="flex flex-col items-center justify-center gap-0.5 text-[#777] hover:text-[#111] transition-colors"
           aria-label="All sections"
         >
-          <div className="p-1">
-            <Layers className="w-4 h-4" strokeWidth={1.5} />
+          <div className="p-1.5">
+            <MoreHorizontal className="w-4 h-4" strokeWidth={1.7} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.08em]">Hub</span>
+          <span className="text-[8px] uppercase tracking-[0.08em]">More</span>
         </button>
       </nav>
 

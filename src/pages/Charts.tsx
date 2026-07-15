@@ -16,9 +16,13 @@ const parseLocalDate = (d: string): Date => {
 
 /* ─── Constants ─── */
 const PIE_COLORS_LIGHT = [
-  '#121212', '#a4221e', '#555555', '#888888', '#2d2d2d',
-  '#c44a46', '#666666', '#999999', '#333333', '#bb5555',
+  '#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#7c3aed',
+  '#0891b2', '#db2777', '#475569', '#65a30d', '#ea580c',
 ];
+const GOLD = '#9D7E3F';
+const INCOME_GREEN = '#16a34a';
+const EXPENSE_RED = '#dc2626';
+const BLUE = '#2563eb';
 
 /* ─── Shared tooltip ─── */
 function ChartTooltip({ active, payload, label }: any) {
@@ -40,11 +44,12 @@ function ChartTooltip({ active, payload, label }: any) {
 /* ─── Chart card wrapper ─── */
 function ChartCard({ title, subtitle, children, className = '' }: { title: string; subtitle?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`border border-border bg-background/50 hover:shadow-sm transition-shadow duration-300 ${className}`}>
-      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+    <div className={`relative overflow-hidden border border-border bg-background shadow-[0_1px_3px_rgba(10,10,10,0.05)] hover:shadow-[0_10px_30px_rgba(10,10,10,0.08)] transition-all duration-300 ${className}`}>
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#9D7E3F] via-[#d7bd76] to-[#2563eb]" />
+      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between bg-gradient-to-b from-secondary/25 to-transparent">
         <div>
-          <div className="micro-label">{title}</div>
-          {subtitle && <div className="text-[9px] text-muted-foreground mt-0.5">{subtitle}</div>}
+          <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-foreground/70">{title}</div>
+          {subtitle && <div className="text-[10px] text-muted-foreground mt-0.5 font-mono-tab">{subtitle}</div>}
         </div>
       </div>
       <div className="p-4">
@@ -63,12 +68,12 @@ function CashFlowTrendChart({ data }: { data: { label: string; inflow: number; o
           <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="cfInflow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--positive)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="var(--positive)" stopOpacity={0.02} />
+                <stop offset="5%" stopColor={INCOME_GREEN} stopOpacity={0.28} />
+                <stop offset="95%" stopColor={INCOME_GREEN} stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="cfOutflow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.02} />
+                <stop offset="5%" stopColor={EXPENSE_RED} stopOpacity={0.24} />
+                <stop offset="95%" stopColor={EXPENSE_RED} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
@@ -81,9 +86,9 @@ function CashFlowTrendChart({ data }: { data: { label: string; inflow: number; o
               iconSize={8}
               formatter={(value: string) => <span className="text-muted-foreground">{value}</span>}
             />
-            <Area type="monotone" dataKey="inflow" name="Inflow" stroke="var(--positive)" strokeWidth={2.5} fill="url(#cfInflow)" dot={{ r: 3, fill: 'var(--positive)' }} activeDot={{ r: 5, strokeWidth: 0 }} />
-            <Area type="monotone" dataKey="outflow" name="Outflow" stroke="var(--accent)" strokeWidth={2.5} fill="url(#cfOutflow)" dot={{ r: 3, fill: 'var(--accent)' }} activeDot={{ r: 5, strokeWidth: 0 }} />
-            <Line type="monotone" dataKey="net" name="Net Position" stroke="var(--foreground)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+            <Area type="monotone" dataKey="inflow" name="Inflow" stroke={INCOME_GREEN} strokeWidth={2.5} fill="url(#cfInflow)" dot={{ r: 3, fill: INCOME_GREEN }} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive animationDuration={900} />
+            <Area type="monotone" dataKey="outflow" name="Outflow" stroke={EXPENSE_RED} strokeWidth={2.5} fill="url(#cfOutflow)" dot={{ r: 3, fill: EXPENSE_RED }} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive animationDuration={900} />
+            <Line type="monotone" dataKey="net" name="Net Position" stroke={BLUE} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive animationDuration={900} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -108,10 +113,10 @@ function InflowOutflowChart({ data }: { data: { label: string; inflow: number; o
               iconSize={8}
               formatter={(value: string) => <span className="text-muted-foreground">{value}</span>}
             />
-            <Bar dataKey="inflow" name="Inflow" fill="var(--positive)" radius={[3, 3, 0, 0]} maxBarSize={32} />
-            <Bar dataKey="outflow" name="Outflow" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={32} />
-            <Line type="monotone" dataKey="inflow" name="Inflow Trend" stroke="var(--positive)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-            <Line type="monotone" dataKey="outflow" name="Outflow Trend" stroke="var(--accent)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            <Bar dataKey="inflow" name="Inflow" fill={INCOME_GREEN} radius={[3, 3, 0, 0]} maxBarSize={32} isAnimationActive animationDuration={850} />
+            <Bar dataKey="outflow" name="Outflow" fill={EXPENSE_RED} radius={[3, 3, 0, 0]} maxBarSize={32} isAnimationActive animationDuration={850} />
+            <Line type="monotone" dataKey="inflow" name="Inflow Trend" stroke={INCOME_GREEN} strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive animationDuration={850} />
+            <Line type="monotone" dataKey="outflow" name="Outflow Trend" stroke={EXPENSE_RED} strokeWidth={2} dot={false} strokeDasharray="4 2" isAnimationActive animationDuration={850} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -129,15 +134,15 @@ function NetPositionChart({ data }: { data: { label: string; net: number }[] }) 
           <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="cumNetGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--foreground)" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="var(--foreground)" stopOpacity={0.02} />
+                <stop offset="5%" stopColor={BLUE} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={BLUE} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.4} vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmtUSD(v)} width={60} />
             <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }} />
-            <Area type="monotone" dataKey="net" name="Net Position" stroke="var(--foreground)" strokeWidth={2.5} fill="url(#cumNetGrad)" dot={{ r: 3, fill: 'var(--foreground)', stroke: 'var(--background)', strokeWidth: 1 }} activeDot={{ r: 5, strokeWidth: 0 }} />
+            <Area type="monotone" dataKey="net" name="Net Position" stroke={BLUE} strokeWidth={2.5} fill="url(#cumNetGrad)" dot={{ r: 3, fill: BLUE, stroke: 'var(--background)', strokeWidth: 1 }} activeDot={{ r: 5, strokeWidth: 0 }} isAnimationActive animationDuration={900} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -157,7 +162,7 @@ function CategoryPieChart({ data }: { data: { name: string; value: number }[] })
         <div className="h-48 w-48 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={data} cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0}>
+              <Pie data={data} cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0} isAnimationActive animationDuration={850}>
                 {data.map((_, i) => <Cell key={i} fill={PIE_COLORS_LIGHT[i % PIE_COLORS_LIGHT.length]} />)}
               </Pie>
               <Tooltip content={({ active, payload }) => {
@@ -197,7 +202,7 @@ function CategoryPieChart({ data }: { data: { name: string; value: number }[] })
 
 /* ─── 5. Income Sources Pie ─── */
 function IncomeSourceChart({ data }: { data: { name: string; value: number }[] }) {
-  const INC_COLORS = ['var(--positive)', '#2d6b42', '#555555', '#888888', '#3a8a5a', '#666666', '#999999'];
+  const INC_COLORS = [INCOME_GREEN, '#0f766e', BLUE, GOLD, '#65a30d', '#0891b2', '#7c3aed'];
   const total = data.reduce((s, d) => s + d.value, 0);
   if (data.length === 0) {
     return <ChartCard title="Income Sources"><div className="h-56 flex items-center justify-center text-sm text-muted-foreground">No income data</div></ChartCard>;
@@ -208,7 +213,7 @@ function IncomeSourceChart({ data }: { data: { name: string; value: number }[] }
         <div className="h-48 w-48 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={data} cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0}>
+              <Pie data={data} cx="50%" cy="50%" innerRadius={42} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0} isAnimationActive animationDuration={850}>
                 {data.map((_, i) => <Cell key={i} fill={INC_COLORS[i % INC_COLORS.length]} />)}
               </Pie>
               <Tooltip content={({ active, payload }) => {
@@ -269,9 +274,9 @@ function VendorSpendChart({ data }: { data: { name: string; total: number }[] })
                 </div>
               );
             }} cursor={{ fill: 'var(--border)', fillOpacity: 0.1 }} />
-            <Bar dataKey="total" name="Spend" fill="var(--accent)" radius={[0, 3, 3, 0]} maxBarSize={16}>
+            <Bar dataKey="total" name="Spend" fill={EXPENSE_RED} radius={[0, 3, 3, 0]} maxBarSize={16} isAnimationActive animationDuration={850}>
               {data.map((_, i) => (
-                <Cell key={i} fill={`hsl(0 72% ${38 + (i / data.length) * 15}%)`} fillOpacity={0.85 - (i / data.length) * 0.3} />
+                <Cell key={i} fill={PIE_COLORS_LIGHT[(i + 2) % PIE_COLORS_LIGHT.length]} fillOpacity={0.92 - (i / data.length) * 0.22} />
               ))}
             </Bar>
           </BarChart>
@@ -287,9 +292,9 @@ function CheckInsightChart({ cleared, pending, voided, volumeData }: {
   volumeData: { label: string; count: number }[];
 }) {
   const statusData = [
-    { name: 'Cleared', value: cleared, color: 'var(--positive)' },
-    { name: 'Pending', value: pending, color: 'var(--accent)' },
-    { name: 'Voided', value: voided, color: 'var(--muted-foreground)' },
+    { name: 'Cleared', value: cleared, color: INCOME_GREEN },
+    { name: 'Pending', value: pending, color: GOLD },
+    { name: 'Voided', value: voided, color: '#64748b' },
   ].filter(d => d.value > 0);
   const totalChecks = cleared + pending + voided;
 
@@ -303,7 +308,7 @@ function CheckInsightChart({ cleared, pending, voided, volumeData }: {
               <div className="h-36 w-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={statusData} cx="50%" cy="50%" innerRadius={30} outerRadius={55} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                    <Pie data={statusData} cx="50%" cy="50%" innerRadius={30} outerRadius={55} paddingAngle={3} dataKey="value" strokeWidth={0} isAnimationActive animationDuration={850}>
                       {statusData.map((_, i) => <Cell key={i} fill={statusData[i].color} />)}
                     </Pie>
                   </PieChart>
@@ -341,7 +346,7 @@ function CheckInsightChart({ cleared, pending, voided, volumeData }: {
                     </div>
                   );
                 }} cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }} />
-                <Line type="monotone" dataKey="count" name="Checks" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 2.5, fill: 'var(--foreground)' }} activeDot={{ r: 4, strokeWidth: 0 }} />
+                <Line type="monotone" dataKey="count" name="Checks" stroke={BLUE} strokeWidth={2} dot={{ r: 2.5, fill: BLUE }} activeDot={{ r: 4, strokeWidth: 0 }} isAnimationActive animationDuration={850} />
               </LineChart>
             </ResponsiveContainer>
           </div>

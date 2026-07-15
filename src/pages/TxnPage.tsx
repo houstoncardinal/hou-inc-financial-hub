@@ -36,6 +36,7 @@ import { generateTransactionReport, savePDF, downloadTransactionExcel } from '@/
 import { scanReceipt, type ScannedReceipt } from '@/lib/receiptScan';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 
 const EXPENSE_CATEGORIES = [
   'Materials', 'Labor', 'Subcontractor', 'Equipment', 'Equipment rental',
@@ -61,6 +62,12 @@ const INCOME_PAYMENT_METHODS = [
   { value: 'financing_draw',  label: 'Financing Draw' },
   { value: 'cash',            label: 'Cash' },
   { value: 'other',           label: 'Other' },
+];
+
+const INVOICE_LINK_PROVIDERS = [
+  { value: 'stripe', label: 'Stripe' },
+  { value: 'quickbooks', label: 'QuickBooks' },
+  { value: 'other', label: 'Other Link' },
 ];
 
 const EXPENSE_PAYMENT_METHODS = [
@@ -229,7 +236,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const createClient = useCreatePortalClient();
 
   const isIncome = kind === 'income';
-  const { invoices } = useInvoices();
+  const { invoices, update: updateInvoice } = useInvoices();
 
   const STEP_LABELS = isIncome ? INCOME_STEPS : EXPENSE_STEPS;
   const TOTAL_STEPS = 3;
@@ -238,6 +245,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [detailRow, setDetailRow] = useState<any>(null);
+  const [timePeriod, setTimePeriod] = useState('all');
 
   const blankForm = {
     amount: '', transaction_date: new Date().toISOString().slice(0, 10),
@@ -246,7 +254,8 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     vendor_id: '', source_name: '', portal_client_id: '', project_id: '',
     category: '', notes: '', payment_method: '',
     check_reference: '', retainage_percent: '', retainage_amount: '',
-    invoice_id: '', cost_phase: '', cost_type: '', bank_account_id: '',
+    invoice_id: '', external_invoice_provider: '', external_invoice_url: '', external_invoice_number: '',
+    cost_phase: '', cost_type: '', bank_account_id: '',
     payment_status: 'paid', approval_status: 'approved', reconciliation_status: 'unreconciled',
     receipt_status: 'not_provided', billable_status: 'not_billable', reimbursable_status: 'not_reimbursable',
     expense_type: '', description: '', internal_memo: '', approval_notes: '', rejection_reason: '',
@@ -411,6 +420,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         payload.client_id = form.portal_client_id || null;
         payload.vendor_id = null;
         payload.invoice_id = form.invoice_id || null;
+        payload.external_invoice_provider = form.external_invoice_provider || null;
+        payload.external_invoice_url = form.external_invoice_url || null;
+        payload.external_invoice_number = form.external_invoice_number || null;
         payload.retainage_percent = form.retainage_percent ? parseFloat(form.retainage_percent) : null;
         payload.retainage_amount  = form.retainage_amount  ? parseFloat(form.retainage_amount)  : null;
         if (payload.retainage_amount) payload.net_amount = Math.max(0, payload.total_amount - payload.retainage_amount);
@@ -443,6 +455,16 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         payload.subcontractor_retainage_released = num(form.subcontractor_retainage_released);
       }
       const saved = await upsert.mutateAsync(payload as any);
+      if (isIncome && form.invoice_id && (form.external_invoice_url || form.external_invoice_provider || form.external_invoice_number || form.portal_client_id)) {
+        await updateInvoice(form.invoice_id, {
+          stripe_payment_link: form.external_invoice_provider === 'stripe' && form.external_invoice_url ? form.external_invoice_url : undefined,
+          external_invoice_url: form.external_invoice_url || undefined,
+          external_invoice_provider: form.external_invoice_provider || undefined,
+          external_invoice_number: form.external_invoice_number || undefined,
+          portal_client_id: form.portal_client_id || undefined,
+          client_visible: true,
+        } as any);
+      }
       if (!isIncome) {
         const expenseId = (saved as any)?.id || payload.id;
         const preparedAllocations = allocations
@@ -491,16 +513,22 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     }
   };
 
+  const filteredTxns = useMemo(
+    () => txns.filter((t: any) => isInFinanceRange(t.transaction_date, timePeriod)),
+    [txns, timePeriod]
+  );
+  const selectedRangeLabel = financeRangeLabel(timePeriod);
+
   /* ── Exports ── */
-  const total = txns.reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const total = filteredTxns.reduce((s: number, t: any) => s + Number(t.amount), 0);
   const exportPDF = () => {
-    const doc = generateTransactionReport(txns, kind);
+    const doc = generateTransactionReport(filteredTxns, kind, selectedRangeLabel);
     savePDF(doc, `hou-${kind}-${new Date().toISOString().slice(0, 10)}.pdf`);
-    toast.success(`${isIncome ? 'Income' : 'Expense'} report exported`);
+    toast.success(`${isIncome ? 'Income' : 'Expense'} report exported · ${selectedRangeLabel}`);
   };
   const exportExcel = () => {
-    downloadTransactionExcel(txns, kind);
-    toast.success(`${isIncome ? 'Income' : 'Expense'} exported as Excel`);
+    downloadTransactionExcel(filteredTxns, kind);
+    toast.success(`${isIncome ? 'Income' : 'Expense'} exported as Excel · ${selectedRangeLabel}`);
   };
 
   return (
@@ -517,6 +545,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
+              <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
               <Button variant="outline" size="sm" className="rounded-none h-9 text-xs" onClick={exportPDF}>
                 <FileText className="w-3.5 h-3.5 mr-1.5" />PDF
               </Button>
@@ -823,21 +852,64 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                           </>
                         )}
 	                      {isIncome && (
-	                        <div>
-                          <Label className="micro-label mb-1.5 block">Link to Invoice <span className="text-muted-foreground font-normal normal-case">(marks it paid)</span></Label>
-                          <Select value={form.invoice_id} onValueChange={v => setForm(f => ({ ...f, invoice_id: v }))}>
-                            <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select invoice (optional)" /></SelectTrigger>
-                            <SelectContent>
-                              {invoices.filter((inv: any) => inv.status !== 'paid').map((inv: any) => (
-                                <SelectItem key={inv.id} value={inv.id}>
-                                  {inv.invoice_number} — {inv.client_name} ({inv.status})
-                                </SelectItem>
-                              ))}
-                              {invoices.filter((inv: any) => inv.status !== 'paid').length === 0 && (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">No open invoices</div>
-                              )}
-                            </SelectContent>
-                          </Select>
+	                        <div className="border border-border bg-secondary/15 p-3 space-y-3">
+                          <div>
+                            <Label className="micro-label mb-1.5 block">Attach invoice record <span className="text-muted-foreground font-normal normal-case">(optional)</span></Label>
+                            <Select value={form.invoice_id} onValueChange={v => {
+                              const invoice = invoices.find((inv: any) => inv.id === v);
+                              setForm(f => ({
+                                ...f,
+                                invoice_id: v,
+                                external_invoice_url: invoice?.external_invoice_url || invoice?.stripe_payment_link || f.external_invoice_url,
+                                external_invoice_number: invoice?.external_invoice_number || invoice?.invoice_number || f.external_invoice_number,
+                                external_invoice_provider: invoice?.external_invoice_provider || (invoice?.stripe_payment_link ? 'stripe' : f.external_invoice_provider),
+                              }));
+                            }}>
+                              <SelectTrigger className="rounded-none h-10 bg-background"><SelectValue placeholder="Select invoice (optional)" /></SelectTrigger>
+                              <SelectContent>
+                                {invoices.filter((inv: any) => inv.status !== 'paid').map((inv: any) => (
+                                  <SelectItem key={inv.id} value={inv.id}>
+                                    {inv.invoice_number} — {inv.client_name} ({inv.status})
+                                  </SelectItem>
+                                ))}
+                                {invoices.filter((inv: any) => inv.status !== 'paid').length === 0 && (
+                                  <div className="px-3 py-2 text-sm text-muted-foreground">No open invoices</div>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-[0.75fr_1.25fr] gap-3">
+                            <div>
+                              <Label className="micro-label mb-1.5 block">Invoice source</Label>
+                              <Select value={form.external_invoice_provider} onValueChange={v => setForm(f => ({ ...f, external_invoice_provider: v }))}>
+                                <SelectTrigger className="rounded-none h-10 bg-background"><SelectValue placeholder="Stripe, QuickBooks..." /></SelectTrigger>
+                                <SelectContent>
+                                  {INVOICE_LINK_PROVIDERS.map(provider => <SelectItem key={provider.value} value={provider.value}>{provider.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="micro-label mb-1.5 block">Invoice / payment link</Label>
+                              <Input
+                                className="rounded-none h-10 bg-background"
+                                placeholder="https://invoice.stripe.com/... or QuickBooks invoice URL"
+                                value={form.external_invoice_url}
+                                onChange={e => setForm(f => ({ ...f, external_invoice_url: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="micro-label mb-1.5 block">Invoice number / confirmation</Label>
+                            <Input
+                              className="rounded-none h-10 bg-background"
+                              placeholder="INV-1042, Stripe invoice ID, QuickBooks invoice number..."
+                              value={form.external_invoice_number}
+                              onChange={e => setForm(f => ({ ...f, external_invoice_number: e.target.value }))}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-relaxed">
+                            Add a Stripe or QuickBooks invoice link here and it will stay attached to this income record. If you choose an invoice above, the link is also saved to that invoice for portal visibility.
+                          </p>
                         </div>
                       )}
                       {!form.payment_method && (
@@ -1145,7 +1217,8 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       />
 
       {/* Mobile export bar */}
-      <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
+      <div className="sm:hidden px-4 py-3 border-b border-border grid grid-cols-2 gap-2">
+        <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} className="col-span-2" />
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}><Table2 className="w-3.5 h-3.5 mr-1.5" />Excel</Button>
       </div>
@@ -1167,15 +1240,16 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
       <div className="px-4 sm:px-8 py-5 border-b border-border flex items-center gap-6 overflow-x-auto txn-stat">
         <div className="shrink-0"><div className="micro-label">Total</div><div className="stat-value mt-1 text-lg sm:text-2xl">{fmtUSD(total)}</div></div>
-        <div className="shrink-0"><div className="micro-label">Records</div><div className="stat-value mt-1 text-lg sm:text-2xl">{txns.length}</div></div>
+        <div className="shrink-0"><div className="micro-label">Records</div><div className="stat-value mt-1 text-lg sm:text-2xl">{filteredTxns.length}</div></div>
+        <div className="shrink-0"><div className="micro-label">Range</div><div className="stat-value mt-1 text-lg sm:text-2xl">{selectedRangeLabel}</div></div>
       </div>
 
       <div className="px-4 sm:px-8 py-6">
         {/* Mobile cards */}
         <div className="sm:hidden space-y-3">
-          {txns.length === 0 ? (
+          {filteredTxns.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No records.</div>
-          ) : txns.map((t: any) => (
+          ) : filteredTxns.map((t: any) => (
             <div key={t.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
@@ -1216,9 +1290,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
             <div className="col-span-1 text-right">Amount</div>
             <div className="col-span-1 text-right">—</div>
           </div>
-          {txns.length === 0 ? (
+          {filteredTxns.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No records.</div>
-          ) : txns.map((t: any) => (
+          ) : filteredTxns.map((t: any) => (
             <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
               <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>

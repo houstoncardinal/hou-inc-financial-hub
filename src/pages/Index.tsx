@@ -11,7 +11,7 @@ import {
   ConciergeBell, FolderKanban, Users, Receipt, AlertTriangle,
   X, Camera, BookOpen, Grid3X3, BookMarked, FolderOpen,
   Upload, ChevronRight, Layers, ChevronDown, Settings2,
-  Plus, Check as CheckIcon, Calendar, BarChart3,
+  Check as CheckIcon, Calendar, BarChart3,
 } from 'lucide-react';
 import { getDateRange } from '@/components/TimeFilter';
 import { CashFlowChart } from '@/components/FinancialChartPanel';
@@ -19,13 +19,62 @@ import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from 
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
-  Tooltip as RechartsTooltip, ResponsiveContainer,
+  Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
 const parseLocalDate = (d: string): Date => {
   const [y, m, day] = d.split('-').map(Number);
   return new Date(y, m - 1, day);
 };
+
+type ChartBucket = { label: string; start: Date; end: Date };
+
+const atStartOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d: Date, days: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+const addMonths = (d: Date, months: number) => new Date(d.getFullYear(), d.getMonth() + months, 1);
+
+function buildAdaptiveBuckets(start: Date, end: Date, earliest?: Date): ChartBucket[] {
+  const rangeEnd = atStartOfDay(end);
+  const rawStart = atStartOfDay(start);
+  const effectiveStart = earliest && earliest > rawStart ? atStartOfDay(earliest) : rawStart;
+  const daySpan = Math.max(1, Math.ceil((rangeEnd.getTime() - effectiveStart.getTime()) / 86400000) + 1);
+
+  if (daySpan <= 45) {
+    return Array.from({ length: daySpan }, (_, i) => {
+      const s = addDays(effectiveStart, i);
+      return {
+        label: s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        start: s,
+        end: addDays(s, 1),
+      };
+    });
+  }
+
+  if (daySpan <= 180) {
+    const buckets: ChartBucket[] = [];
+    for (let s = effectiveStart; s <= rangeEnd; s = addDays(s, 7)) {
+      buckets.push({
+        label: s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        start: s,
+        end: addDays(s, 7),
+      });
+    }
+    return buckets;
+  }
+
+  const monthStart = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth(), 1);
+  const months = Math.max(1, (rangeEnd.getFullYear() - monthStart.getFullYear()) * 12 + rangeEnd.getMonth() - monthStart.getMonth() + 1);
+  const visibleMonths = Math.min(months, 18);
+  const first = addMonths(monthStart, months - visibleMonths);
+  return Array.from({ length: visibleMonths }, (_, i) => {
+    const s = addMonths(first, i);
+    return {
+      label: s.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      start: s,
+      end: addMonths(s, 1),
+    };
+  });
+}
 
 /* ── Period options ───────────────────────────────────────────────────────── */
 const PERIOD_OPTS = [
@@ -59,15 +108,20 @@ function CompactPeriodPicker({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`group flex items-center justify-center gap-1.5 min-w-[8.25rem] sm:min-w-0 px-3 sm:px-2.5 py-2 sm:py-1.5 border text-[11px] font-semibold transition-all duration-150 whitespace-nowrap ${
+        className={`group flex items-center justify-center gap-2 min-w-[9.75rem] sm:min-w-[10.5rem] px-3.5 py-2 sm:py-2 border text-[11px] font-semibold transition-all duration-150 whitespace-nowrap shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] ${
           open
             ? 'border-foreground/30 bg-secondary text-foreground'
             : 'border-border bg-background hover:border-foreground/25 hover:bg-secondary/60 text-foreground/80'
         }`}
       >
-        <Calendar className="w-3 h-3 opacity-50" strokeWidth={1.5} />
-        <span className="hidden sm:inline">{current.label}</span>
-        <span className="sm:hidden">{current.short}</span>
+        <span className="w-5 h-5 flex items-center justify-center" style={{ backgroundColor: `${color}14`, color }}>
+          <Calendar className="w-3 h-3" strokeWidth={1.5} />
+        </span>
+        <span className="min-w-0 flex-1 text-left">
+          <span className="block text-[7px] uppercase tracking-[0.22em] text-muted-foreground leading-none mb-0.5">Range</span>
+          <span className="hidden sm:block truncate">{current.label}</span>
+          <span className="sm:hidden block truncate">{current.label}</span>
+        </span>
         <ChevronDown
           className={`w-3 h-3 opacity-60 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
           strokeWidth={2}
@@ -81,25 +135,29 @@ function CompactPeriodPicker({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.96 }}
             transition={{ duration: 0.11, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-1.5 w-56 sm:w-44 border border-border bg-background shadow-2xl z-50 overflow-hidden"
+            className="absolute right-0 top-full mt-2 w-64 sm:w-60 border border-border bg-background shadow-[0_22px_70px_rgba(0,0,0,0.18)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.55)] z-50 overflow-hidden"
           >
-            <div className="px-3 pt-2 pb-1.5 border-b border-border/50">
+            <div className="px-3.5 pt-3 pb-2 border-b border-border/50" style={{ background: `linear-gradient(135deg, ${color}12, transparent 70%)` }}>
               <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Time Range</div>
+              <div className="text-[10px] text-muted-foreground mt-1">Filters dashboard cards, charts, activity, and intelligence.</div>
             </div>
-            <div className="py-1">
+            <div className="p-1.5">
               {PERIOD_OPTS.map(o => {
                 const active = o.id === value;
                 return (
                   <button
                     key={o.id}
                     onClick={() => { onChange(o.id); setOpen(false); }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-[11px] transition-colors ${
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left text-[11px] transition-colors border ${
                       active
-                        ? 'bg-secondary/60 font-semibold text-foreground'
-                        : 'hover:bg-secondary/40 text-muted-foreground hover:text-foreground'
+                        ? 'bg-secondary/60 font-semibold text-foreground border-border'
+                        : 'hover:bg-secondary/40 text-muted-foreground hover:text-foreground border-transparent'
                     }`}
                   >
-                    <span>{o.label}</span>
+                    <span>
+                      <span className="block">{o.label}</span>
+                      <span className="block text-[8px] uppercase tracking-[0.16em] text-muted-foreground/70 mt-0.5">{o.short}</span>
+                    </span>
                     {active && (
                       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                     )}
@@ -246,16 +304,21 @@ function UserAvatar({ name, email }: { name?: string; email?: string }) {
   );
 }
 
-function MiniTooltip({ active, payload, label }: any) {
+function MiniTooltip({
+  active,
+  payload,
+  label,
+  formatter = (value: any) => (typeof value === 'number' ? fmtUSD(value) : value),
+}: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-background/95 border border-border px-2.5 py-1.5 text-[10px] shadow-md">
-      <div className="text-muted-foreground mb-1">{label}</div>
+      <div className="text-muted-foreground mb-1">{label ?? 'Current point'}</div>
       {payload.map((p: any, i: number) => (
         <div key={i} className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.color }} />
           <span className="font-mono-tab font-semibold">
-            {p.name}: {typeof p.value === 'number' ? fmtUSD(p.value) : p.value}
+            {p.name}: {formatter(p.value, p)}
           </span>
         </div>
       ))}
@@ -264,12 +327,12 @@ function MiniTooltip({ active, payload, label }: any) {
 }
 
 function MiniArea({
-  data, dataKey, color, gid, height = 52,
+  data, dataKey, color, gid, height = 52, name, formatter,
 }: {
-  data: any[]; dataKey: string; color: string; gid: string; height?: number;
+  data: any[]; dataKey: string; color: string; gid: string; height?: number; name?: string; formatter?: (value: any, payload?: any) => string;
 }) {
   return (
-    <div style={{ height }}>
+    <div className="w-full min-w-0" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
           <defs>
@@ -280,40 +343,85 @@ function MiniArea({
           </defs>
           <XAxis dataKey="label" hide />
           <YAxis hide />
-          <RechartsTooltip content={<MiniTooltip />} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
-          <Area type="monotone" dataKey={dataKey} name={dataKey} stroke={color} fill={`url(#${gid})`} strokeWidth={1.6} dot={false} />
+          <RechartsTooltip content={<MiniTooltip formatter={formatter} />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
+          <Area type="monotone" dataKey={dataKey} name={name ?? dataKey} stroke={color} fill={`url(#${gid})`} strokeWidth={1.8} dot={false} activeDot={{ r: 3, fill: color, stroke: 'var(--background)', strokeWidth: 1.5 }} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function ReceivablesMiniChart({ data }: {
-  data: { label: string; outstanding: number; overdue: number; collected: number }[];
+function NetCashFlowMiniChart({ data, positive }: {
+  data: { label: string; net: number; inflow: number; outflow: number }[]; positive: boolean;
 }) {
+  const color = positive ? '#10b981' : '#ef4444';
   return (
-    <div className="w-full">
-      <ResponsiveContainer width="100%" height={58}>
-        <BarChart data={data} margin={{ top: 3, right: 0, left: 0, bottom: 0 }}>
+    <div className="w-full min-w-0" style={{ height: 62 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data.map(d => ({ label: d.label, net: d.net, inflow: d.inflow, outflow: d.outflow }))} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+          <defs>
+            <linearGradient id="net-cash-flow-g" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.34} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <XAxis dataKey="label" hide />
-          <YAxis hide />
-          <RechartsTooltip content={<MiniTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.12 }} />
-          <Bar dataKey="collected" name="Collected" stackId="a" fill="var(--positive)" fillOpacity={0.55} radius={[0, 0, 1, 1]} maxBarSize={18} />
-          <Bar dataKey="outstanding" name="Open" stackId="a" fill="var(--warning)" fillOpacity={0.75} maxBarSize={18} />
-          <Bar dataKey="overdue" name="Overdue" stackId="a" fill="var(--destructive)" fillOpacity={0.75} radius={[1, 1, 0, 0]} maxBarSize={18} />
-        </BarChart>
+          <YAxis hide domain={['dataMin', 'dataMax']} />
+          <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="2 2" ifOverflow="extendDomain" />
+          <RechartsTooltip
+            content={<MiniTooltip formatter={(value: number, p: any) => {
+              if (p?.dataKey === 'net') return `${Number(value || 0) >= 0 ? '+' : '-'}${fmtUSD(Math.abs(Number(value || 0)))}`;
+              return fmtUSD(Number(value || 0));
+            }} />}
+            allowEscapeViewBox={{ x: true, y: true }}
+            wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }}
+            cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }}
+          />
+          <Area
+            type="monotone"
+            dataKey="net"
+            name="Net cash flow"
+            stroke={color}
+            fill="url(#net-cash-flow-g)"
+            strokeWidth={2.1}
+            dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
+            activeDot={{ r: 3.5, fill: color, stroke: 'var(--background)', strokeWidth: 1.5 }}
+          />
+        </AreaChart>
       </ResponsiveContainer>
-      <div className="flex flex-wrap gap-1 mt-1">
-        <span className="text-[7px] px-1 py-0.5 bg-positive/10 text-positive font-mono-tab">paid</span>
-        <span className="text-[7px] px-1 py-0.5 bg-warning/10 text-warning font-mono-tab">open</span>
-        <span className="text-[7px] px-1 py-0.5 bg-destructive/10 text-destructive font-mono-tab">overdue</span>
-      </div>
     </div>
   );
 }
 
-function ProjectsMiniChart({ data }: {
-  data: { name: string; budget: number; spent: number; remaining: number; pct: number; revenue?: number }[];
+function ReceivablesMiniChart({ data, height = 58, showLegend = true }: {
+  data: { label: string; outstanding: number; overdue: number; collected: number }[]; height?: number; showLegend?: boolean;
+}) {
+  const paidColor = '#10b981';
+  const openColor = '#f59e0b';
+  const overdueColor = '#ef4444';
+  return (
+    <div className="w-full">
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} margin={{ top: 3, right: 0, left: 0, bottom: 0 }}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip content={<MiniTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ fill: 'var(--border)', fillOpacity: 0.12 }} />
+          <Bar dataKey="collected" name="Collected" stackId="a" fill={paidColor} fillOpacity={0.62} radius={[0, 0, 1, 1]} maxBarSize={18} />
+          <Bar dataKey="outstanding" name="Open" stackId="a" fill={openColor} fillOpacity={0.8} maxBarSize={18} />
+          <Bar dataKey="overdue" name="Overdue" stackId="a" fill={overdueColor} fillOpacity={0.88} radius={[1, 1, 0, 0]} maxBarSize={18} />
+        </BarChart>
+      </ResponsiveContainer>
+      {showLegend && <div className="hidden sm:flex flex-wrap gap-1 mt-1">
+        <span className="text-[7px] px-1 py-0.5 text-foreground/75 font-mono-tab border border-border/50" style={{ backgroundColor: `${paidColor}14` }}>paid</span>
+        <span className="text-[7px] px-1 py-0.5 text-foreground/75 font-mono-tab border border-border/50" style={{ backgroundColor: `${openColor}14` }}>open</span>
+        <span className="text-[7px] px-1 py-0.5 text-foreground/75 font-mono-tab border border-border/50" style={{ backgroundColor: `${overdueColor}14` }}>overdue</span>
+      </div>}
+    </div>
+  );
+}
+
+function ProjectsMiniChart({ data, compact = false }: {
+  data: { name: string; budget: number; spent: number; remaining: number; pct: number; revenue?: number }[]; compact?: boolean;
 }) {
   const totalBudget = data.reduce((s, p) => s + p.budget, 0);
   const totalSpent = data.reduce((s, p) => s + p.spent, 0);
@@ -321,28 +429,28 @@ function ProjectsMiniChart({ data }: {
   const atRisk = data.filter(p => p.budget > 0 && p.pct >= 85).length;
 
   if (data.length === 0) {
-    return <div className="h-[58px] flex items-center text-[9px] text-muted-foreground">No active project budget data</div>;
+    return <div className={compact ? 'h-[40px] flex items-center text-[9px] text-muted-foreground' : 'h-[58px] flex items-center text-[9px] text-muted-foreground'}>No active project budget data</div>;
   }
   return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-3 gap-1 text-[8px] font-mono-tab">
+    <div className="space-y-1 sm:space-y-1.5 min-w-0">
+      {!compact && <div className="hidden sm:grid grid-cols-3 gap-1 text-[8px] font-mono-tab">
         <div className="bg-background/45 border border-border/50 px-1.5 py-1">
-          <div className="text-muted-foreground">Burn</div>
+          <div className="text-foreground/55">Burn</div>
           <div className={burn > 90 ? 'text-destructive font-semibold' : burn > 72 ? 'text-warning font-semibold' : 'font-semibold'}>{Math.round(burn)}%</div>
         </div>
         <div className="bg-background/45 border border-border/50 px-1.5 py-1">
-          <div className="text-muted-foreground">At Risk</div>
+          <div className="text-foreground/55">At Risk</div>
           <div className={atRisk > 0 ? 'text-warning font-semibold' : 'font-semibold'}>{atRisk}</div>
         </div>
         <div className="bg-background/45 border border-border/50 px-1.5 py-1">
-          <div className="text-muted-foreground">Jobs</div>
+          <div className="text-foreground/55">Jobs</div>
           <div className="font-semibold">{data.length}</div>
         </div>
-      </div>
-      {data.slice(0, 3).map(p => (
-        <div key={p.name} className="min-w-0">
+      </div>}
+      {data.slice(0, compact ? 2 : 3).map((p, index) => (
+        <div key={p.name} className={`min-w-0 ${!compact && index === 2 ? 'hidden sm:block' : ''}`}>
           <div className="flex items-center justify-between gap-2 text-[8px] mb-0.5">
-            <span className="truncate text-muted-foreground">{p.name}</span>
+            <span className="truncate text-foreground/60">{p.name}</span>
             <span className="font-mono-tab font-semibold">{p.budget > 0 ? `${Math.round(p.pct)}%` : fmtUSD(p.revenue)}</span>
           </div>
           <div className="h-1.5 bg-border/50 overflow-hidden">
@@ -374,35 +482,48 @@ const DEFAULT_KPI_MAX  = 4;
 
 /* ── Quick action catalog (static) ───────────────────────────────────────── */
 const QA_CATALOG = [
-  { id: 'income',    label: 'Log Income',     icon: ArrowDownToLine, desc: 'Guided revenue',       colorCls: 'bg-positive/12 text-positive',       dest: '/concierge?start=income' },
-  { id: 'expense',   label: 'Record Expense', icon: ArrowUpFromLine, desc: 'Guided payment',       colorCls: 'bg-destructive/10 text-destructive',  dest: '/concierge?start=expense' },
-  { id: 'check',     label: 'New Check',      icon: FileText,        desc: 'Guided check',         colorCls: 'bg-warning/10 text-warning',          dest: '/concierge?start=check' },
-  { id: 'projects',  label: 'Projects',       icon: FolderKanban,    desc: 'Manage jobs',          colorCls: 'bg-blue-500/10 text-blue-500',        dest: '/projects' },
-  { id: 'scan',      label: 'Scan Receipt',   icon: Camera,          desc: 'Capture photo',        colorCls: 'bg-violet-500/10 text-violet-500',    dest: '_camera' },
-  { id: 'concierge', label: 'Concierge',      icon: ConciergeBell,   desc: 'AI assistant',         colorCls: 'bg-foreground/8 text-foreground',     dest: '/concierge' },
-  { id: 'ledger',    label: 'Ledger',         icon: BookOpen,        desc: 'Transaction log',      colorCls: 'bg-slate-500/10 text-slate-500',      dest: '/ledger' },
-  { id: 'invoices',  label: 'Invoices',       icon: Receipt,         desc: 'Billing & collections', colorCls: 'bg-indigo-500/10 text-indigo-500',  dest: '/invoices' },
-  { id: 'vendors',   label: 'Vendors',        icon: Users,           desc: 'Vendor directory',     colorCls: 'bg-cyan-600/10 text-cyan-600',        dest: '/vendors' },
-  { id: 'upload',    label: 'Upload Doc',     icon: Upload,          desc: 'Store document',       colorCls: 'bg-orange-500/10 text-orange-500',    dest: '/documents' },
+  { id: 'income',    label: 'Log Income',     icon: ArrowDownToLine, desc: 'Guided revenue',        color: '#10b981', dest: '/concierge?start=income' },
+  { id: 'expense',   label: 'Record Expense', icon: ArrowUpFromLine, desc: 'Guided cost entry',     color: '#ef4444', dest: '/concierge?start=expense' },
+  { id: 'check',     label: 'New Check',      icon: FileText,        desc: 'Guided check issue',    color: '#2563eb', dest: '/concierge?start=check' },
+  { id: 'projects',  label: 'Projects',       icon: FolderKanban,    desc: 'Job performance',       color: '#3b82f6', dest: '/projects' },
+  { id: 'scan',      label: 'Scan Receipt',   icon: Camera,          desc: 'Capture document',      color: '#8b5cf6', dest: '_camera' },
+  { id: 'concierge', label: 'Concierge',      icon: ConciergeBell,   desc: 'Guided finance hub',    color: '#9D7E3F', dest: '/concierge' },
+  { id: 'ledger',    label: 'Ledger',         icon: BookOpen,        desc: 'Audit register',        color: '#64748b', dest: '/ledger' },
+  { id: 'invoices',  label: 'Invoices',       icon: Receipt,         desc: 'Billing pipeline',      color: '#6366f1', dest: '/invoices' },
+  { id: 'vendors',   label: 'Vendors',        icon: Users,           desc: 'Payee controls',        color: '#0891b2', dest: '/vendors' },
+  { id: 'upload',    label: 'Upload Doc',     icon: Upload,          desc: 'Store evidence',        color: '#f97316', dest: '/documents' },
 ] as const;
 
 const DEFAULT_QA_IDS = ['income', 'expense', 'check', 'projects', 'scan', 'concierge'];
 
+/* ── Construction intelligence customization ─────────────────────────────── */
+const CI_OPTIONS = [
+  { id: 'margin',      label: 'Margin Control' },
+  { id: 'receivables', label: 'Receivables Risk' },
+  { id: 'projectBurn', label: 'Project Burn' },
+  { id: 'vendors',     label: 'Vendor Concentration' },
+  { id: 'unlinked',    label: 'Unlinked Costs' },
+  { id: 'clearance',   label: 'Check Clearance' },
+] as const;
+
+const DEFAULT_CI_IDS = ['margin', 'receivables', 'projectBurn', 'vendors'];
+const DEFAULT_CI_MAX = 4;
+
 /* ── Styles ───────────────────────────────────────────────────────────────── */
 const IDX_CSS = `
 .stat-card{border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
-.stat-card:hover{box-shadow:0 6px 22px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04);}
-.qa-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.06),0 1px 2px rgba(10,10,10,0.03);transition:box-shadow 0.18s,transform 0.18s;}
-.qa-card:hover{box-shadow:0 5px 18px rgba(10,10,10,0.09),0 2px 5px rgba(10,10,10,0.04);transform:translateY(-1px);}
-.ci-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);transition:box-shadow 0.18s;}
-.ci-card:hover{box-shadow:0 4px 14px rgba(10,10,10,0.08);}
+.stat-card:hover{box-shadow:0 6px 22px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04);z-index:30;}
+.qa-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s,background 0.18s;}
+.qa-card:hover{box-shadow:0 5px 18px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04),0 1px 0 rgba(255,255,255,0.45) inset;transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);background:hsl(var(--secondary)/0.35);}
+.ci-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s;position:relative;overflow:visible;}
+.ci-card:hover{box-shadow:0 4px 14px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.18);z-index:30;}
 .idx-widget{background:hsl(var(--background));transition:box-shadow 0.18s;}
 .idx-widget:hover{box-shadow:0 3px 14px rgba(10,10,10,0.08);}
 .idx-row:hover{background-color:hsl(var(--secondary)/0.55);}
 .dark .stat-card{box-shadow:0 1px 5px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.04);}
 .dark .stat-card:hover{box-shadow:0 6px 24px rgba(0,0,0,0.48),inset 0 1px 0 rgba(255,255,255,0.05);}
-.dark .qa-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.30);}
-.dark .qa-card:hover{box-shadow:0 5px 18px rgba(0,0,0,0.42);transform:translateY(-1px);}
+.dark .qa-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.30),0 1px 0 rgba(255,255,255,0.05) inset;}
+.dark .qa-card:hover{box-shadow:0 5px 18px rgba(0,0,0,0.42),0 1px 0 rgba(255,255,255,0.05) inset;transform:translateY(-1px);}
 .dark .ci-card{background:hsl(var(--card));box-shadow:0 1px 3px rgba(0,0,0,0.25);}
 .dark .ci-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.38);}
 .dark .idx-widget{background:hsl(var(--card));}
@@ -448,10 +569,18 @@ export default function Index() {
     catch { return DEFAULT_QA_IDS; }
   });
 
+  // Construction intelligence customization
+  const [ciCustomOpen,    setCiCustomOpen]    = useState(false);
+  const [selectedCiIds,   setSelectedCiIds]   = useState<string[]>(() => {
+    try { const s = localStorage.getItem('hou-dash-ci'); return s ? JSON.parse(s) : DEFAULT_CI_IDS; }
+    catch { return DEFAULT_CI_IDS; }
+  });
+
   const cameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { localStorage.setItem('hou-dash-cards', JSON.stringify(selectedKpiIds)); }, [selectedKpiIds]);
   useEffect(() => { localStorage.setItem('hou-dash-qa', JSON.stringify(selectedQaIds)); },   [selectedQaIds]);
+  useEffect(() => { localStorage.setItem('hou-dash-ci', JSON.stringify(selectedCiIds)); },     [selectedCiIds]);
 
   /* ── Data hooks ─────────────────────────────────────────────────────────── */
   const filtered = useMemo(() => {
@@ -491,37 +620,41 @@ export default function Index() {
     return { income: pInc, outflow: pExp + pChk, net: pInc - pExp - pChk, label };
   }, [income, expenses, checks, timePeriod]);
 
+  const dashboardBuckets = useMemo(() => {
+    const { start, end } = getDateRange(timePeriod);
+    const dates = [
+      ...income.map((t: any) => t.transaction_date),
+      ...expenses.map((t: any) => t.transaction_date),
+      ...checks.map((c: any) => c.issue_date),
+      ...invoices.flatMap((i: any) => [i.issue_date, i.due_date].filter(Boolean)),
+    ].filter(Boolean).map(parseLocalDate).sort((a, b) => a.getTime() - b.getTime());
+    return buildAdaptiveBuckets(start, end, timePeriod === 'all' ? dates[0] : undefined);
+  }, [timePeriod, income, expenses, checks, invoices]);
+
   const cashFlowData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (5 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const inflow  = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const exp     = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const chk     = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
-      return { label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), inflow, outflow: exp + chk, net: inflow - exp - chk };
+      return { label, inflow, outflow: exp + chk, net: inflow - exp - chk };
     });
-  }, [income, expenses, checks]);
+  }, [dashboardBuckets, income, expenses, checks]);
 
   const ciTrendData = useMemo(() => {
-    const MO = 'JanFebMarAprMayJunJulAugSepOctNovDec'.match(/.{3}/g)!;
-    return Array.from({ length: 6 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (5 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const mInc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const mOut = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
       return {
-        month:   MO[d.getMonth()],
+        month:   label,
         revenue: mInc,
         outflow: mOut,
         margin:  mInc > 0 ? Math.round(((mInc - mOut) / mInc) * 100) : 0,
       };
     });
-  }, [income, expenses, checks]);
+  }, [dashboardBuckets, income, expenses, checks]);
 
   const periodInvoices = useMemo(() => {
     const { start, end } = getDateRange(timePeriod);
@@ -534,10 +667,7 @@ export default function Index() {
   }, [invoices, timePeriod]);
 
   const invoiceTrendData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (5 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt?: string) => {
         if (!dt) return false;
         const d2 = parseLocalDate(dt);
@@ -545,13 +675,13 @@ export default function Index() {
       };
       const monthInvoices = invoices.filter((inv: any) => inR(inv.issue_date) || inR(inv.due_date));
       return {
-        label:       d.toLocaleDateString('en-US', { month: 'short' }),
+        label,
         outstanding: monthInvoices.filter((inv: any) => inv.status === 'sent').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
         overdue:     monthInvoices.filter((inv: any) => inv.status === 'overdue').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
         collected:   monthInvoices.filter((inv: any) => inv.status === 'paid').reduce((s: number, inv: any) => s + invoiceTotal(inv), 0),
       };
     });
-  }, [invoices]);
+  }, [dashboardBuckets, invoices]);
 
   const invoicePeriodStats = useMemo(() => {
     const total = periodInvoices.reduce((s, i) => s + invoiceTotal(i), 0);
@@ -629,29 +759,21 @@ export default function Index() {
   ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10), [filtered]);
 
   const balanceTrendData = useMemo(() => {
-    const months = 'JanFebMarAprMayJunJulAugSepOctNovDec'.match(/.{3}/g) || [];
-    return Array.from({ length: 12 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (11 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       const inc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const out = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
-      return { month: months[d.getMonth()] || '', balance: inc - out };
+      return { month: label, label, balance: inc - out };
     });
-  }, [income, expenses, checks]);
+  }, [dashboardBuckets, income, expenses, checks]);
 
   const inflowMonthlyData = useMemo(() => {
-    const months = 'JanFebMarAprMayJunJulAugSepOctNovDec'.match(/.{3}/g) || [];
-    return Array.from({ length: 12 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (11 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      return { month: months[d.getMonth()] || '', inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) };
+      return { month: label, label, inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) };
     });
-  }, [income]);
+  }, [dashboardBuckets, income]);
 
   const inflowCategoryData = useMemo(() => {
     const m: Record<string, number> = {};
@@ -660,17 +782,13 @@ export default function Index() {
   }, [filtered.income]);
 
   const outflowMonthlyData = useMemo(() => {
-    const months = 'JanFebMarAprMayJunJulAugSepOctNovDec'.match(/.{3}/g) || [];
-    return Array.from({ length: 12 }, (_, i) => {
-      const d     = new Date(); d.setMonth(d.getMonth() - (11 - i));
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      return { month: months[d.getMonth()] || '', outflow:
+      return { month: label, label, outflow:
         expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0) };
     });
-  }, [expenses, checks]);
+  }, [dashboardBuckets, expenses, checks]);
 
   const outflowCategoryData = useMemo(() => {
     const m: Record<string, number> = {};
@@ -785,21 +903,7 @@ export default function Index() {
       bg: periodStats.net >= 0
         ? 'from-emerald-50/70 dark:from-emerald-950/25 to-emerald-50/30 dark:to-emerald-950/5'
         : 'from-rose-50/70 dark:from-rose-950/25 to-rose-50/30 dark:to-rose-950/5',
-      chart: (
-        <div style={{ height: 56 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={cashFlowData.map(d => ({ m: d.label, v: d.net }))} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="net-g" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={periodStats.net >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={periodStats.net >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="v" stroke={periodStats.net >= 0 ? '#10b981' : '#ef4444'} fill="url(#net-g)" strokeWidth={1.5} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ),
+      chart: <NetCashFlowMiniChart data={cashFlowData} positive={periodStats.net >= 0} />,
       onClick: () => navigate('/ledger'),
     },
     {
@@ -829,7 +933,8 @@ export default function Index() {
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey="v" stroke="#10b981" fill="url(#mg-g)" strokeWidth={1.5} dot={false} />
+              <RechartsTooltip content={<MiniTooltip formatter={(value: number) => `${Number(value || 0).toFixed(1)}%`} />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 80, pointerEvents: 'none' }} cursor={{ stroke: 'var(--border)', strokeDasharray: '2 2' }} />
+              <Area type="monotone" dataKey="v" name="Margin" stroke="#10b981" fill="url(#mg-g)" strokeWidth={1.7} dot={false} activeDot={{ r: 3, fill: '#10b981', stroke: 'var(--background)', strokeWidth: 1.5 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -899,41 +1004,77 @@ export default function Index() {
       : prev.length < 6 ? [...prev, id] : prev
   );
 
+  const toggleCi = (id: string) => setSelectedCiIds(prev =>
+    prev.includes(id)
+      ? prev.length > 1 ? prev.filter(i => i !== id) : prev
+      : prev.length < DEFAULT_CI_MAX ? [...prev, id] : prev
+  );
+
   /* ── Construction intelligence cards ───────────────────────────────────── */
+  const unlinkedExpenses = filtered.expenses.filter((t: any) => !t.project_id).length;
+  const unlinkedExpenseValue = filtered.expenses
+    .filter((t: any) => !t.project_id)
+    .reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const clearedChecks = filtered.checks.filter((c: any) => c.status === 'cleared').length;
+  const checkClearancePct = filtered.checks.length > 0 ? (clearedChecks / filtered.checks.length) * 100 : 100;
+
   const ciCards = [
     {
+      id:         'margin',
       label:      'Margin Control',
       value:      `${pMargin.toFixed(1)}%`,
       sub:        `${fmtUSD(periodStats.income)} in · ${fmtUSD(periodStats.outflow)} out`,
       detail:     pMargin >= 20 ? 'Healthy spread' : pMargin >= 0 ? 'Watch cost creep' : 'Negative margin',
       valueColor: pMargin >= 20 ? 'text-positive' : pMargin >= 0 ? 'text-warning' : 'text-destructive',
-      chart:      <MiniArea data={ciTrendData} dataKey="margin" color={pMargin >= 20 ? '#10b981' : pMargin >= 0 ? '#f59e0b' : '#ef4444'} gid="cig-margin" height={44} />,
+      chart:      <MiniArea data={ciTrendData.map(d => ({ ...d, label: d.month }))} dataKey="margin" name="Margin" color={pMargin >= 20 ? '#10b981' : pMargin >= 0 ? '#f59e0b' : '#ef4444'} gid="cig-margin" height={36} formatter={(v) => `${Number(v || 0).toFixed(1)}%`} />,
     },
     {
+      id:         'receivables',
       label:      'Receivables Risk',
       value:      fmtUSD(invoicePeriodStats.open || constructionKPIs.receivables),
       sub:        invoicePeriodStats.count > 0 ? `${invoicePeriodStats.openCount} open · ${invoicePeriodStats.overdueCount} overdue` : 'No invoices in range',
       detail:     invoicePeriodStats.collectionPct > 0 ? `${invoicePeriodStats.collectionPct.toFixed(0)}% collected` : 'Collections watch',
       valueColor: invoicePeriodStats.overdue > 0 ? 'text-destructive' : invoicePeriodStats.open > 0 ? 'text-warning' : 'text-positive',
-      chart:      <ReceivablesMiniChart data={invoiceTrendData} />,
+      chart:      <ReceivablesMiniChart data={invoiceTrendData} height={40} showLegend={false} />,
     },
     {
+      id:         'projectBurn',
       label:      'Project Burn',
       value:      `${Math.round(projectBurnPct)}%`,
       sub:        `${fmtUSD(projectSpentTotal)} of ${fmtUSD(projectBudgetTotal)} committed`,
       detail:     `${activeProjects.length} active job${activeProjects.length !== 1 ? 's' : ''}`,
       valueColor: projectBurnPct > 90 ? 'text-destructive' : projectBurnPct > 72 ? 'text-warning' : 'text-foreground',
-      chart:      <ProjectsMiniChart data={projectFinancialData} />,
+      chart:      <ProjectsMiniChart data={projectFinancialData} compact />,
     },
     {
+      id:         'vendors',
       label:      'Vendor Concentration',
       value:      topVendorShare > 0 ? `${topVendorShare.toFixed(0)}%` : '0%',
       sub:        vendorSpendData[0] ? `${vendorSpendData[0].name} leads spend` : 'No vendor spend this period',
       detail:     `${vendorSpendData.length} active vendor${vendorSpendData.length !== 1 ? 's' : ''}`,
       valueColor: topVendorShare > 45 ? 'text-warning' : 'text-foreground',
-      chart:      <MiniArea data={vendorSpendData.map(v => ({ label: v.name, value: v.value }))} dataKey="value" color="#0891b2" gid="cig-vendor" height={44} />,
+      chart:      <MiniArea data={vendorSpendData.map(v => ({ label: v.name, value: v.value }))} dataKey="value" name="Spend" color="#0891b2" gid="cig-vendor" height={36} formatter={(v) => fmtUSD(Number(v || 0))} />,
+    },
+    {
+      id:         'unlinked',
+      label:      'Unlinked Costs',
+      value:      `${unlinkedExpenses}`,
+      sub:        `${fmtUSD(unlinkedExpenseValue)} needs job-cost assignment`,
+      detail:     unlinkedExpenses === 0 ? 'Fully coded' : 'Review coding',
+      valueColor: unlinkedExpenses === 0 ? 'text-positive' : 'text-warning',
+      chart:      <MiniArea data={cashFlowData.map(d => ({ label: d.label, value: d.outflow }))} dataKey="value" name="Uncoded cost trend" color="#f59e0b" gid="cig-unlinked" height={36} formatter={(v) => fmtUSD(Number(v || 0))} />,
+    },
+    {
+      id:         'clearance',
+      label:      'Check Clearance',
+      value:      `${checkClearancePct.toFixed(0)}%`,
+      sub:        `${clearedChecks} cleared · ${filtered.checks.length - clearedChecks} open in range`,
+      detail:     checkClearancePct >= 80 ? 'Strong controls' : 'Follow up',
+      valueColor: checkClearancePct >= 80 ? 'text-positive' : checkClearancePct >= 50 ? 'text-warning' : 'text-destructive',
+      chart:      <PendingAgingChart agingBuckets={pendingAgingData} totalValue={stats.pendingValue} />,
     },
   ];
+  const displayCiCards = ciCards.filter(c => selectedCiIds.includes(c.id));
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
@@ -976,28 +1117,13 @@ export default function Index() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            <button onClick={() => navigate('/concierge?start=income')}
-              className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
-              <Plus className="w-3 h-3" strokeWidth={2.5} /> Income
-            </button>
-            <button onClick={() => navigate('/concierge?start=expense')}
-              className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
-              <Plus className="w-3 h-3" strokeWidth={2.5} /> Expense
-            </button>
-            <button onClick={() => navigate('/concierge?start=check')}
-              className="flex items-center gap-1 px-2.5 py-1.5 border border-border hover:bg-secondary text-[11px] font-semibold transition-colors">
-              <Plus className="w-3 h-3" strokeWidth={2.5} /> Check
-            </button>
-
-            <div className="w-px h-4 bg-border/70 mx-0.5" />
-
             <CompactPeriodPicker value={timePeriod} onChange={setTimePeriod} accentColor={entity.color} />
           </div>
         </div>
 
         {/* Mobile */}
         <div className="sm:hidden px-4 pt-3 pb-2.5">
-          <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entity.color }} />
@@ -1008,20 +1134,6 @@ export default function Index() {
               </h1>
             </div>
             <CompactPeriodPicker value={timePeriod} onChange={setTimePeriod} accentColor={entity.color} />
-          </div>
-
-          {/* Mobile quick-add row */}
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              { label: '+ Income',  dest: '/concierge?start=income' },
-              { label: '+ Expense', dest: '/concierge?start=expense' },
-              { label: '+ Check',   dest: '/concierge?start=check' },
-            ].map(b => (
-              <button key={b.label} onClick={() => navigate(b.dest)}
-                className="py-1.5 text-[11px] font-semibold border border-border hover:bg-secondary transition-colors text-center">
-                {b.label}
-              </button>
-            ))}
           </div>
         </div>
       </div>
@@ -1063,8 +1175,8 @@ export default function Index() {
       )}
 
       {/* ══ KPI CARDS ═══════════════════════════════════════════════════════ */}
-      <div className="px-4 sm:px-8 pt-4 pb-3 border-b border-border/60">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-4 sm:px-8 pt-3 pb-3 border-b border-border/60">
+        <div className="flex items-center justify-between mb-2">
           <div className="micro-label">Key Metrics · {periodStats.label}</div>
           <button
             onClick={() => setKpiCustomOpen(o => !o)}
@@ -1105,27 +1217,31 @@ export default function Index() {
           )}
         </AnimatePresence>
 
-        <div className={`grid gap-3 ${kpiGridCls}`}>
+        <div className={`grid gap-2.5 ${kpiGridCls}`}>
           {displayKpiCards.map((card, idx) => (
             <motion.button key={card.id} onClick={card.onClick}
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04 }}
-              className={`stat-card group relative text-left bg-gradient-to-br ${card.bg} overflow-hidden transition-all duration-200 hover:-translate-y-0.5 h-full flex flex-col`}
+              className={`stat-card group relative text-left bg-gradient-to-br ${card.bg} overflow-visible transition-all duration-200 hover:-translate-y-0.5 h-full flex flex-col`}
             >
               <div className="h-[2px] w-full" style={{ backgroundColor: card.color }} />
-              <div className="px-2.5 py-2 sm:px-3.5 sm:py-3 flex flex-row sm:flex-col gap-2 sm:gap-0 flex-1 min-h-[92px] sm:min-h-0">
-                <div className="min-w-0 flex-1 sm:flex-none">
-                  <div className="text-[8px] sm:text-[10px] uppercase tracking-[0.14em] sm:tracking-[0.16em] text-muted-foreground font-medium mb-1 sm:mb-1.5 leading-tight sm:min-h-[2.35em] flex items-start">
+              <div className="relative px-2.5 py-2 sm:px-3 sm:pt-2.5 sm:pb-6 grid grid-cols-[minmax(0,1fr)_minmax(82px,38%)] sm:grid-cols-[minmax(0,1fr)_minmax(88px,38%)] gap-2 sm:gap-3 flex-1 min-h-[86px] sm:min-h-[96px] items-center">
+                <div className="min-w-0 overflow-hidden flex flex-col justify-center">
+                  <div className="text-[8px] sm:text-[9px] uppercase tracking-[0.12em] sm:tracking-[0.15em] text-foreground/65 font-semibold mb-1 leading-tight sm:min-h-[2.1em] flex items-start break-words">
                     {card.label}
                   </div>
-                  <div className="text-[15px] sm:text-xl font-bold tracking-tight font-mono-tab leading-tight sm:min-h-[1.3em] flex items-center" style={{ color: card.color }}>
+                  <div
+                    className="text-[clamp(13px,4vw,15px)] sm:text-[clamp(15px,1.35vw,18px)] font-bold tracking-tight font-mono-tab leading-tight sm:min-h-[1.2em] flex items-center min-w-0 truncate"
+                    style={{ color: card.color }}
+                    title={String(card.value)}
+                  >
                     {card.value}
                   </div>
-                  <div className="text-[8px] sm:text-[9px] text-muted-foreground mt-0.5 font-mono-tab leading-snug sm:min-h-[2.25em]">
+                  <div className="text-[8px] sm:text-[9px] text-foreground/72 mt-1 font-mono-tab leading-snug line-clamp-2 break-words">
                     {card.sub || ''}
                   </div>
                 </div>
-                {card.chart && <div className="w-[42%] min-w-[120px] sm:w-full sm:min-w-0 mt-0 sm:mt-2.5 flex items-center sm:block">{card.chart}</div>}
+                {card.chart && <div className="min-w-0 w-full max-w-full mt-0 flex items-center justify-end">{card.chart}</div>}
               </div>
             </motion.button>
           ))}
@@ -1176,22 +1292,24 @@ export default function Index() {
           )}
         </AnimatePresence>
 
-        <div className={`grid gap-2.5 ${displayQaActions.length <= 3 ? 'grid-cols-3' : displayQaActions.length === 4 ? 'grid-cols-4' : displayQaActions.length === 5 ? 'grid-cols-5 sm:grid-cols-5' : 'grid-cols-3 sm:grid-cols-6'}`}>
+        <div className={`grid gap-2 grid-cols-2 ${displayQaActions.length <= 3 ? 'sm:grid-cols-3' : displayQaActions.length === 4 ? 'sm:grid-cols-4' : displayQaActions.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-6'}`}>
           {displayQaActions.map((a, idx) => (
             <motion.button
               key={a.id}
               onClick={() => handleQaClick(a.dest)}
               initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.03 }}
-              className="qa-card flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 group active:scale-[0.97] transition-transform"
+              className="qa-card relative overflow-hidden flex flex-row items-center justify-start gap-2 py-2 px-2.5 group active:scale-[0.98] transition-transform min-w-0"
             >
-              <div className={`w-9 h-9 flex items-center justify-center transition-transform duration-200 group-hover:scale-110 ${a.colorCls}`}>
-                <a.icon className="w-4 h-4" strokeWidth={1.5} />
+              <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: a.color }} />
+              <div className="w-7 h-7 flex items-center justify-center transition-transform duration-200 group-hover:scale-105 shrink-0 border border-border bg-secondary/35">
+                <a.icon className="w-3.5 h-3.5" style={{ color: a.color }} strokeWidth={1.6} />
               </div>
-              <div className="text-center">
-                <div className="text-[10px] sm:text-[11px] font-semibold tracking-tight leading-tight">{a.label}</div>
-                <div className="text-[8px] text-muted-foreground hidden sm:block mt-0.5 leading-snug">{a.desc}</div>
+              <div className="text-left min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-bold tracking-tight leading-tight truncate">{a.label}</div>
+                <div className="text-[8px] text-foreground/55 hidden sm:block mt-0.5 leading-snug truncate font-mono-tab">{a.desc}</div>
               </div>
+              <ChevronRight className="w-3.5 h-3.5 text-foreground/30 ml-auto shrink-0 hidden sm:block" strokeWidth={1.5} />
             </motion.button>
           ))}
         </div>
@@ -1199,21 +1317,66 @@ export default function Index() {
 
       {/* ══ CONSTRUCTION INTELLIGENCE ═══════════════════════════════════════ */}
       <div className="px-4 sm:px-8 pt-4 pb-3 border-b border-border/60">
-        <div className="micro-label mb-3">Construction Intelligence · {periodStats.label}</div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {ciCards.map((ci, idx) => (
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="micro-label">Construction Intelligence · {periodStats.label}</div>
+            <div className="text-[9px] text-muted-foreground mt-0.5 hidden sm:block">
+              Live job-cost, collection, vendor, and control signals from this entity.
+            </div>
+          </div>
+          <button
+            onClick={() => setCiCustomOpen(o => !o)}
+            className={`flex items-center gap-1 text-[10px] font-medium transition-colors ${ciCustomOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Settings2 className="w-3 h-3" strokeWidth={1.5} />
+            Customize
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {ciCustomOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="border border-border bg-secondary/20 p-3 mb-3">
+                <div className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground mb-2">Select up to 4 intelligence widgets</div>
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5">
+                  {CI_OPTIONS.map(opt => {
+                    const sel = selectedCiIds.includes(opt.id);
+                    const dis = !sel && selectedCiIds.length >= DEFAULT_CI_MAX;
+                    return (
+                      <button key={opt.id} onClick={() => toggleCi(opt.id)} disabled={dis}
+                        className={`flex items-center justify-between gap-2 px-2.5 py-2 border text-[10px] text-left transition-all ${
+                          sel ? 'border-foreground bg-foreground text-background'
+                             : dis ? 'border-border/40 text-muted-foreground/40 cursor-not-allowed'
+                             : 'border-border hover:border-foreground/40 text-foreground'}`}>
+                        <span className="font-medium truncate">{opt.label}</span>
+                        {sel && <CheckIcon className="w-3 h-3 shrink-0" strokeWidth={2.5} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+          {displayCiCards.map((ci, idx) => (
             <motion.div key={ci.label}
               initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04 }}
-              className="ci-card border border-border bg-background p-2.5 sm:p-3 transition-shadow duration-200 min-w-0"
+              className="ci-card border border-border bg-background p-2 sm:p-2.5 transition-shadow duration-200 min-w-0"
             >
-              <div className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-medium mb-1.5 leading-tight">{ci.label}</div>
-              <div className="flex items-end justify-between gap-2">
-                <div className={`text-base sm:text-lg font-bold font-mono-tab leading-tight ${ci.valueColor}`}>{ci.value}</div>
-                <div className="text-[8px] text-muted-foreground text-right leading-tight">{ci.detail}</div>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-medium leading-tight">{ci.label}</div>
+                <div className="text-[8px] text-muted-foreground text-right leading-tight border border-border/70 px-1.5 py-0.5 bg-secondary/30 shrink-0">{ci.detail}</div>
               </div>
+              <div className={`text-[15px] sm:text-base font-bold font-mono-tab leading-tight ${ci.valueColor}`}>{ci.value}</div>
+              <div className="text-[8px] text-muted-foreground mt-1 leading-snug font-mono-tab line-clamp-1">{ci.sub}</div>
               <div className="mt-1.5">{ci.chart}</div>
-              <div className="text-[8px] sm:text-[9px] text-muted-foreground mt-1.5 leading-snug font-mono-tab">{ci.sub}</div>
             </motion.div>
           ))}
         </div>
@@ -1280,11 +1443,11 @@ export default function Index() {
               {recent.length === 0 ? (
                 <div className="px-3.5 py-10 text-center text-sm text-muted-foreground">No activity this period.</div>
               ) : (
-                <div className="divide-y divide-border max-h-[330px] overflow-y-auto">
-                  {recent.map(r => (
+                <div className="divide-y divide-border">
+                  {recent.slice(0, 7).map(r => (
                     <button key={r.kind + r.id}
                       onClick={() => navigate(r.kind === 'Check' ? '/checks' : r.kind === 'Expense' ? '/expenses' : '/income')}
-                      className="w-full grid grid-cols-12 px-3.5 py-2.5 text-xs font-mono-tab idx-row items-center transition-colors text-left">
+                      className="w-full grid grid-cols-12 px-3.5 py-2 text-xs font-mono-tab idx-row items-center transition-colors text-left">
                       <div className="col-span-2 text-muted-foreground text-[10px]">{fmtDate(r.date)}</div>
                       <div className="col-span-2"><TypeBadge kind={r.kind} /></div>
                       <div className="col-span-4 truncate pr-2 text-[11px]">{r.label}</div>
@@ -1297,6 +1460,14 @@ export default function Index() {
                 </div>
               )}
             </div>
+            {recent.length > 7 && (
+              <button
+                onClick={() => navigate('/ledger')}
+                className="w-full border-t border-border px-3.5 py-2.5 text-[10px] uppercase tracking-[0.18em] font-bold text-foreground/70 hover:text-foreground hover:bg-secondary/45 transition-colors"
+              >
+                View all {recent.length} activity records
+              </button>
+            )}
           </div>
 
           <div className="xl:col-span-5 h-fit">

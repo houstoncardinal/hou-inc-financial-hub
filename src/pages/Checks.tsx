@@ -17,12 +17,15 @@ import { Trash2, Eye, Pencil, Table2, FileText, AlertTriangle } from 'lucide-rea
 import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
 import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
+import { useEntity } from '@/contexts/EntityContext';
+import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 
 const CHK_CSS = `
 .chk-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 `;
 
 export default function Checks() {
+  const { entity } = useEntity();
   const { data: checks = [] } = useChecks();
   const upsert = useUpsert('checks', [['checks']]);
   const del = useDelete('checks', [['checks']]);
@@ -36,6 +39,7 @@ export default function Checks() {
     }
   };
   const [q, setQ] = useState(''); const [statusFilter, setStatusFilter] = useState('all');
+  const [timePeriod, setTimePeriod] = useState('all');
   const [detailRow, setDetailRow] = useState<any>(null);
   const [editCheck, setEditCheck] = useState<any>(null);
   const [editForm, setEditForm] = useState<any>({});
@@ -55,23 +59,26 @@ export default function Checks() {
   };
 
   const filtered = useMemo(() => checks.filter((c: any) => {
+    if (!isInFinanceRange(c.issue_date, timePeriod)) return false;
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (!q) return true;
     const s = q.toLowerCase();
     return c.check_number?.toLowerCase().includes(s) || c.payee_name?.toLowerCase().includes(s) || c.projects?.name?.toLowerCase().includes(s);
-  }), [checks, q, statusFilter]);
+  }), [checks, q, statusFilter, timePeriod]);
+
+  const selectedRangeLabel = financeRangeLabel(timePeriod);
 
   /* ── PDF Export ── */
   const exportPDF = () => {
-    const doc = generateCheckRegisterReport(checks, statusFilter !== 'all' ? statusFilter : undefined);
+    const doc = generateCheckRegisterReport(filtered, statusFilter !== 'all' ? `${statusFilter} · ${selectedRangeLabel}` : selectedRangeLabel);
     savePDF(doc, `hou-check-register-${new Date().toISOString().slice(0, 10)}.pdf`);
-    toast.success('Check register exported as PDF');
+    toast.success(`Check register exported as PDF · ${selectedRangeLabel}`);
   };
 
   /* ── Excel Export ── */
   const exportExcel = () => {
-    downloadCheckExcel(checks);
-    toast.success('Check register exported as Excel');
+    downloadCheckExcel(filtered);
+    toast.success(`Check register exported as Excel · ${selectedRangeLabel}`);
   };
 
   return (
@@ -81,6 +88,7 @@ export default function Checks() {
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
+              <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportExcel}><Table2 className="w-4 h-4" /></Button>
             </div>
@@ -89,7 +97,8 @@ export default function Checks() {
         } />
 
       {/* Mobile export bar */}
-      <div className="sm:hidden px-4 py-3 border-b border-border flex gap-2">
+      <div className="sm:hidden px-4 py-3 border-b border-border grid grid-cols-2 gap-2">
+        <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} className="col-span-2" />
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportPDF}><FileText className="w-3.5 h-3.5 mr-1.5" />PDF</Button>
         <Button variant="outline" size="sm" className="rounded-none text-xs flex-1" onClick={exportExcel}><Table2 className="w-3.5 h-3.5 mr-1.5" />Excel</Button>
       </div>
@@ -100,7 +109,7 @@ export default function Checks() {
           <SelectTrigger className="rounded-none w-full sm:w-44 h-9"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="cleared">Cleared</SelectItem><SelectItem value="voided">Voided</SelectItem></SelectContent>
         </Select>
-        <div className="sm:ml-auto text-xs text-muted-foreground font-mono-tab">{filtered.length} of {checks.length}</div>
+        <div className="sm:ml-auto text-xs text-muted-foreground font-mono-tab">{filtered.length} of {checks.length} · {selectedRangeLabel}</div>
       </div>
 
       <div className="px-4 sm:px-8 py-6">

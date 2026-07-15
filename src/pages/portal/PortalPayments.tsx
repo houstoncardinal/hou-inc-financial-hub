@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Clock, DollarSign, Phone, Mail, TrendingUp } from 'lucide-react';
+import { CheckCircle, Clock, DollarSign, Phone, Mail, TrendingUp, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
 import { usePortal, BUILDER } from '@/hooks/usePortal';
@@ -26,6 +26,12 @@ interface Invoice {
   amount: number;
   due_date: string;
   status: InvoiceStatus;
+  line_items?: { qty?: number; rate?: number }[];
+  tax_rate?: number;
+  stripe_payment_link?: string;
+  external_invoice_url?: string;
+  external_invoice_provider?: string;
+  external_invoice_number?: string;
 }
 
 interface ChangeOrder {
@@ -51,6 +57,14 @@ const fmtDate = (d: string) => {
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   } catch { return d; }
 };
+
+const invoiceAmount = (inv: Invoice) => {
+  if (Number.isFinite(Number(inv.amount))) return Number(inv.amount);
+  const subtotal = (inv.line_items ?? []).reduce((s, item) => s + Number(item.qty ?? 0) * Number(item.rate ?? 0), 0);
+  return subtotal * (1 + Number(inv.tax_rate ?? 0) / 100);
+};
+
+const invoicePayUrl = (inv: Invoice) => inv.external_invoice_url || inv.stripe_payment_link;
 
 export default function PortalPayments() {
   const { client, loaded } = usePortal();
@@ -99,8 +113,8 @@ export default function PortalPayments() {
 
   if (!client) return null;
 
-  const totalContract = invoices.reduce((s, inv) => s + (inv.amount ?? 0), 0);
-  const paidToDate    = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.amount ?? 0), 0);
+  const totalContract = invoices.reduce((s, inv) => s + invoiceAmount(inv), 0);
+  const paidToDate    = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + invoiceAmount(i), 0);
   const balance       = totalContract - paidToDate;
   const paidPct       = totalContract > 0 ? Math.round((paidToDate / totalContract) * 100) : 0;
 
@@ -269,7 +283,7 @@ export default function PortalPayments() {
               {/* Table header */}
               <div
                 className="hidden md:grid px-7 py-3"
-                style={{ gridTemplateColumns: '1fr 2fr 1fr 1fr 100px', gap: '1rem', borderBottom: `1px solid ${BORDER}` }}
+                style={{ gridTemplateColumns: '1fr 2fr 1fr 1fr 160px', gap: '1rem', borderBottom: `1px solid ${BORDER}` }}
               >
                 {['Invoice', 'Description', 'Amount', 'Due Date', 'Status'].map(h => (
                   <div key={h} className="text-[9px] uppercase tracking-[0.24em] font-bold" style={{ color: MUTED }}>{h}</div>
@@ -279,7 +293,9 @@ export default function PortalPayments() {
               {invoices.map((inv, i) => {
                 const rawStatus = (inv.status ?? 'upcoming').toLowerCase() as InvoiceStatus;
                 const sc = STATUS_STYLE[rawStatus] ?? STATUS_STYLE.upcoming;
-                const invLabel = inv.invoice_number ?? inv.id.slice(0, 8).toUpperCase();
+                const invLabel = inv.external_invoice_number || inv.invoice_number || inv.id.slice(0, 8).toUpperCase();
+                const payUrl = invoicePayUrl(inv);
+                const amount = invoiceAmount(inv);
                 return (
                   <div
                     key={inv.id}
@@ -287,18 +303,23 @@ export default function PortalPayments() {
                     style={{ borderBottom: i < invoices.length - 1 ? `1px solid ${BORDER}` : 'none' }}
                   >
                     {/* Desktop grid */}
-                    <div className="hidden md:grid items-center" style={{ gridTemplateColumns: '1fr 2fr 1fr 1fr 100px', gap: '1rem' }}>
+                    <div className="hidden md:grid items-center" style={{ gridTemplateColumns: '1fr 2fr 1fr 1fr 160px', gap: '1rem' }}>
                       <div className="text-[11px] font-bold" style={{ color: DARK }}>{invLabel}</div>
                       <div className="text-[12px] font-light" style={{ color: DARK }}>{inv.description}</div>
-                      <div className="text-[12px] font-bold" style={{ color: DARK }}>{fmt(inv.amount)}</div>
+                      <div className="text-[12px] font-bold" style={{ color: DARK }}>{fmt(amount)}</div>
                       <div className="text-[11px] font-light" style={{ color: MUTED }}>{fmtDate(inv.due_date)}</div>
-                      <div>
+                      <div className="flex items-center gap-2 justify-between">
                         <span
                           className="text-[7px] uppercase tracking-[0.24em] font-bold px-2.5 py-1"
                           style={{ backgroundColor: sc.bg, color: sc.text }}
                         >
                           {sc.label}
                         </span>
+                        {payUrl && rawStatus !== 'paid' && (
+                          <a href={payUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[7px] uppercase tracking-[0.2em] font-bold px-2.5 py-1 transition-opacity hover:opacity-75" style={{ backgroundColor: DARK, color: WHITE }}>
+                            Pay <ExternalLink className="w-2.5 h-2.5" strokeWidth={2} />
+                          </a>
+                        )}
                       </div>
                     </div>
 
@@ -309,13 +330,18 @@ export default function PortalPayments() {
                         <div className="text-[9px]" style={{ color: MUTED }}>{invLabel} · Due {fmtDate(inv.due_date)}</div>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="text-[13px] font-bold" style={{ color: DARK }}>{fmt(inv.amount)}</div>
+                        <div className="text-[13px] font-bold" style={{ color: DARK }}>{fmt(amount)}</div>
                         <span
                           className="text-[7px] uppercase tracking-[0.24em] font-bold px-2 py-0.5"
                           style={{ backgroundColor: sc.bg, color: sc.text }}
                         >
                           {sc.label}
                         </span>
+                        {payUrl && rawStatus !== 'paid' && (
+                          <a href={payUrl} target="_blank" rel="noreferrer" className="text-[7px] uppercase tracking-[0.2em] font-bold px-2 py-1 mt-1" style={{ backgroundColor: DARK, color: WHITE }}>
+                            Pay Invoice
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>

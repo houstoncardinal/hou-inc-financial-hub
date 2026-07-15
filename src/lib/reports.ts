@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 /* ── Design tokens ── */
 const C = {
   black:    [18, 18, 18]    as [number, number, number],
-  accent:   [164, 30, 30]   as [number, number, number],
+  accent:   [157, 126, 63]  as [number, number, number],
   muted:    [97, 97, 97]    as [number, number, number],
   border:   [229, 229, 229] as [number, number, number],
   altRow:   [248, 248, 248] as [number, number, number],
@@ -28,27 +28,33 @@ const fmtUSD = (n: number | string | null | undefined): string => {
 function makeDoc(title: string, sub: string): { doc: jsPDF; y: number } {
   const doc = new jsPDF({ format: 'letter', unit: 'mm' });
 
-  // Red accent stripe
+  // Thin enterprise document header
   doc.setFillColor(...C.accent);
-  doc.rect(0, 0, PW, 2.5, 'F');
+  doc.rect(0, 0, PW, 1.4, 'F');
 
-  // Black header band
-  doc.setFillColor(...C.black);
-  doc.rect(0, 2.5, PW, 22, 'F');
+  doc.setDrawColor(...C.border);
+  doc.setLineWidth(0.25);
+  doc.line(M, 22, PW - M, 22);
 
-  // Brand — left side
-  doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
-  doc.text('HOU INC', M, 16.5);
-  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-  doc.text('Private Bookkeeping System', M, 21.5);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...C.black);
+  doc.text('HOU INC', M, 11.5);
+  doc.setFontSize(6.2);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...C.muted);
+  doc.text('Houston Enterprise Financial Records', M, 16);
 
-  // Report title — right side
-  doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-  doc.text(sub, PW - M, 14, { align: 'right' });
-  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
-  doc.text(title, PW - M, 21.5, { align: 'right' });
+  doc.setFontSize(6.4);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...C.muted);
+  doc.text(sub, PW - M, 10.5, { align: 'right', maxWidth: 82 });
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...C.black);
+  doc.text(title, PW - M, 17, { align: 'right', maxWidth: 92 });
 
-  return { doc, y: 31 };
+  return { doc, y: 28 };
 }
 
 interface Metric { label: string; value: string; color?: [number, number, number] }
@@ -62,16 +68,16 @@ function drawMetrics(doc: jsPDF, y: number, metrics: Metric[]): number {
     doc.setFillColor(248, 248, 248);
     doc.setDrawColor(...C.border);
     doc.setLineWidth(0.25);
-    doc.rect(x, y, bw, 17, 'FD');
+    doc.rect(x, y, bw, 15, 'FD');
     // Left accent edge
     doc.setFillColor(...(m.color ?? C.accent));
-    doc.rect(x, y, 2.5, 17, 'F');
-    doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-    doc.text(m.label.toUpperCase(), x + 5, y + 7);
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(m.color ?? C.black));
-    doc.text(m.value, x + 5, y + 14);
+    doc.rect(x, y, 1.4, 15, 'F');
+    doc.setFontSize(5.6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+    doc.text(m.label.toUpperCase(), x + 3.4, y + 6);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(m.color ?? C.black));
+    doc.text(m.value, x + 3.4, y + 12.2, { maxWidth: bw - 5 });
   });
-  return y + 22;
+  return y + 19;
 }
 
 function sectionLabel(doc: jsPDF, y: number, label: string): number {
@@ -90,12 +96,12 @@ function addDecorations(doc: jsPDF, title: string) {
 
     if (i > 1) {
       // Compact continuation header
-      doc.setFillColor(...C.accent); doc.rect(0, 0, PW, 1.5, 'F');
-      doc.setFillColor(...C.black); doc.rect(0, 1.5, PW, 10, 'F');
-      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
-      doc.text('HOU INC', M, 8.5);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
-      doc.text(title, PW - M, 8.5, { align: 'right' });
+      doc.setFillColor(...C.accent); doc.rect(0, 0, PW, 1.2, 'F');
+      doc.setDrawColor(...C.border); doc.line(M, 11, PW - M, 11);
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.black);
+      doc.text('HOU INC', M, 7.8);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+      doc.text(title, PW - M, 7.8, { align: 'right', maxWidth: 90 });
     }
 
     // Footer
@@ -103,7 +109,7 @@ function addDecorations(doc: jsPDF, title: string) {
     doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
     doc.line(M, fy, PW - M, fy);
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-    doc.text('HOU INC · Private Bookkeeping System', M, fy + 4.5);
+    doc.text('HOU INC · Houston Enterprise Financial Records', M, fy + 4.5);
     doc.text(
       `Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
       PW / 2, fy + 4.5, { align: 'center' }
@@ -118,19 +124,24 @@ const tblCfg = (startY: number) => ({
   startY,
   margin: { left: M, right: M, top: 14, bottom: 20 },
   headStyles: {
-    fillColor: C.black, textColor: C.white,
-    fontStyle: 'bold' as const, fontSize: 7,
-    cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+    fillColor: [246, 246, 246] as [number, number, number],
+    textColor: C.black,
+    fontStyle: 'bold' as const, fontSize: 6.1,
+    cellPadding: { top: 2.3, bottom: 2.3, left: 2.4, right: 2.4 },
+    lineColor: C.border,
+    lineWidth: 0.2,
   },
   bodyStyles: {
-    fontSize: 7.5, textColor: C.black,
-    cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+    fontSize: 6.4, textColor: C.black,
+    cellPadding: { top: 2.1, bottom: 2.1, left: 2.4, right: 2.4 },
+    overflow: 'linebreak' as const,
+    minCellHeight: 4.6,
   },
   alternateRowStyles: { fillColor: C.altRow },
   footStyles: {
-    fillColor: [235, 235, 235] as [number, number, number],
-    textColor: C.black, fontStyle: 'bold' as const, fontSize: 7.5,
-    cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+    fillColor: [241, 241, 241] as [number, number, number],
+    textColor: C.black, fontStyle: 'bold' as const, fontSize: 6.5,
+    cellPadding: { top: 2.8, bottom: 2.8, left: 2.4, right: 2.4 },
   },
   tableLineColor: C.border,
   tableLineWidth: 0.2,
@@ -313,56 +324,402 @@ export function generateLedgerReport(
 }
 
 /* ────────────────────────────────────────────
+   PDF: Individual Ledger Record
+──────────────────────────────────────────── */
+export function generateLedgerRecordReport(row: any) {
+  const raw = row?.raw ?? {};
+  const isCredit = Number(row?.amount ?? 0) >= 0;
+  const date = row?.date || raw.transaction_date || raw.issue_date;
+  const ref = row?.ref || raw.check_reference || raw.external_reference || raw.check_number || '—';
+  const status = row?.reconciled ? 'Reconciled' : 'Open';
+  const method = raw.payment_method?.replace?.(/_/g, ' ') || raw.delivery_status?.replace?.(/_/g, ' ') || '—';
+  const memo = raw.description || raw.notes || raw.memo || raw.internal_memo || raw.public_memo || '—';
+  const externalInvoiceUrl = raw.external_invoice_url || raw.stripe_payment_link || raw.invoice_url;
+  const externalInvoiceProvider = raw.external_invoice_provider?.replace?.(/_/g, ' ') || (String(externalInvoiceUrl || '').includes('stripe') ? 'Stripe' : String(externalInvoiceUrl || '').includes('quickbooks') ? 'QuickBooks' : '—');
+  const paymentIdentifierLabel = raw.payment_method === 'check' || row?.type === 'Check'
+    ? 'Check Number'
+    : raw.payment_method === 'ach' || raw.payment_method === 'ach_wire'
+      ? 'ACH / Wire Confirmation'
+      : raw.payment_method === 'wire'
+        ? 'Wire Confirmation'
+        : raw.payment_method === 'credit_card'
+          ? 'Card / Processor Reference'
+          : 'Payment Reference';
+  const { doc, y } = makeDoc('Houston Enterprise Ledger Record', `${row?.type || 'Finance Entry'} · ${method}`);
+
+  const signedAmount = `${isCredit ? '+' : '-'}${fmtUSD(Math.abs(Number(row?.amount || 0)))}`;
+  let my = drawMetrics(doc, y, [
+    { label: 'Signed Amount', value: signedAmount, color: isCredit ? C.positive : C.negative },
+    { label: 'Type', value: row?.type || '—' },
+    { label: 'Status', value: status, color: row?.reconciled ? C.positive : C.black },
+    { label: 'Entry Date', value: date?.slice?.(0, 10) || '—' },
+  ]);
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...C.black);
+  doc.text(row?.party || 'Ledger Entry', M, my + 4);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...C.muted);
+  doc.text(`Reference: ${ref}`, M, my + 9);
+  my += 16;
+
+  const detailRows = [
+    ['Project', row?.project || raw.projects?.name || 'Unassigned'],
+    ['Counterparty', row?.party || raw.payee_name || raw.source_name || raw.vendors?.name || '—'],
+    ['Reference / Trace', ref],
+    ['Payment Method', method],
+    [paymentIdentifierLabel, raw.check_reference || raw.external_reference || raw.check_number || ref],
+    ['External Reference', raw.external_reference || '—'],
+    ['Linked Invoice ID', raw.invoice_id || '—'],
+    ['Invoice Provider', externalInvoiceProvider || '—'],
+    ['Invoice Number / Confirmation', raw.external_invoice_number || raw.invoice_number || '—'],
+    ['Invoice Payment Link', externalInvoiceUrl || '—'],
+    ['Record Status', raw.status || row?.status || status],
+    ['Payment Status', raw.payment_status?.replace?.(/_/g, ' ') || '—'],
+    ['Approval Status', raw.approval_status?.replace?.(/_/g, ' ') || '—'],
+    ['Reconciliation', status],
+    ['Posting Date', raw.posting_date?.slice?.(0, 10) || '—'],
+    ['Due Date', raw.due_date?.slice?.(0, 10) || '—'],
+    ['Cleared Date', raw.cleared_date?.slice?.(0, 10) || '—'],
+    ['Accounting Period', raw.accounting_period || '—'],
+    ['Category', raw.category || row?.ref || '—'],
+    ['Cost Type', raw.cost_type?.replace?.(/_/g, ' ') || '—'],
+    ['Cost Phase', raw.cost_phase || '—'],
+    ['Currency', raw.currency || 'USD'],
+  ];
+
+  autoTable(doc, {
+    ...tblCfg(sectionLabel(doc, my, 'Record Detail')),
+    head: [['Field', 'Value', 'Field', 'Value']],
+    body: Array.from({ length: Math.ceil(detailRows.length / 2) }, (_, i) => {
+      const left = detailRows[i * 2] ?? ['', ''];
+      const right = detailRows[i * 2 + 1] ?? ['', ''];
+      return [
+        { content: left[0], styles: { fontStyle: 'bold', textColor: C.muted } },
+        left[1],
+        { content: right[0], styles: { fontStyle: 'bold', textColor: C.muted } },
+        right[1],
+      ];
+    }),
+    columnStyles: {
+      0: { cellWidth: 30 },
+      1: { cellWidth: 58 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 58 },
+    },
+  });
+
+  let y2 = (doc as any).lastAutoTable.finalY + 8;
+  const financialRows = [
+    ['Amount Before Tax', raw.amount_before_tax !== undefined ? fmtUSD(raw.amount_before_tax) : '—'],
+    ['Tax Amount', raw.tax_amount !== undefined ? fmtUSD(raw.tax_amount) : '—'],
+    ['Total Amount', raw.total_amount !== undefined ? fmtUSD(raw.total_amount) : fmtUSD(Math.abs(Number(row?.amount || 0)))],
+    ['Net Amount', raw.net_amount !== undefined ? fmtUSD(raw.net_amount) : '—'],
+  ];
+
+  autoTable(doc, {
+    ...tblCfg(sectionLabel(doc, y2, 'Financial Detail')),
+    head: [['Metric', 'Amount']],
+    body: financialRows.map(([label, value]) => [
+      { content: label, styles: { fontStyle: 'bold', textColor: C.muted } },
+      { content: value, styles: { halign: 'right', fontStyle: 'bold' } },
+    ]),
+    columnStyles: { 1: { halign: 'right' } },
+  });
+
+  y2 = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...C.muted);
+  doc.text('MEMO / NOTES', M, y2);
+  doc.setDrawColor(...C.border);
+  doc.line(M + 22, y2 - 0.5, PW - M, y2 - 0.5);
+  doc.setFillColor(248, 248, 248);
+  doc.setDrawColor(...C.border);
+  doc.rect(M, y2 + 4, PW - M * 2, 26, 'FD');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...C.black);
+  doc.text(doc.splitTextToSize(String(memo), PW - M * 2 - 8), M + 4, y2 + 10);
+
+  addDecorations(doc, 'Houston Enterprise Ledger Record');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
    PDF: Project Portfolio
 ──────────────────────────────────────────── */
 export function generateProjectReport(projects: any[]) {
-  const { doc, y } = makeDoc('Project Portfolio', 'HOU INC · Capital Containers');
+  const { doc, y } = makeDoc('Project Portfolio', 'HOU INC · Executive Project Packet');
 
-  const totalBudget = projects.reduce((s: number, p: any) => s + Number(p.budget), 0);
-  const totalSpent  = projects.reduce((s: number, p: any) => s + Number(p.spent || 0), 0);
-  const totalIn     = projects.reduce((s: number, p: any) => s + Number(p.incoming || 0), 0);
-  const net         = totalIn - totalSpent;
+  const n = (v: any) => Number(v ?? 0) || 0;
+  const totalBudget = projects.reduce((s: number, p: any) => s + n(p.current_contract_value ?? p.contract_value ?? p.budget), 0);
+  const totalSpent  = projects.reduce((s: number, p: any) => s + n(p.spent ?? p.total_expenses ?? p.actual_project_costs), 0);
+  const totalIn     = projects.reduce((s: number, p: any) => s + n(p.incoming ?? p.total_income ?? p.total_collected), 0);
+  const outstanding = projects.reduce((s: number, p: any) => s + n(p.outstanding_checks ?? p.accounts_receivable), 0);
+  const net         = totalIn - totalSpent - outstanding;
+  const avgUsed     = projects.length ? projects.reduce((s: number, p: any) => s + n(p.used), 0) / projects.length : 0;
 
   const my = drawMetrics(doc, y, [
-    { label: 'Total Budget', value: fmtUSD(totalBudget) },
-    { label: 'Total Spent',  value: fmtUSD(totalSpent), color: C.negative },
-    { label: 'Total Income', value: fmtUSD(totalIn),    color: C.positive },
-    { label: 'Net Portfolio',value: fmtUSD(net),        color: net >= 0 ? C.positive : C.negative },
+    { label: 'Contract Value', value: fmtUSD(totalBudget) },
+    { label: 'Capital Deployed', value: fmtUSD(totalSpent), color: C.negative },
+    { label: 'Collected', value: fmtUSD(totalIn), color: C.positive },
+    { label: 'Cash Position', value: fmtUSD(net), color: net >= 0 ? C.positive : C.negative },
   ]);
 
-  const ty = sectionLabel(doc, my + 2, 'Project Detail');
-
-  const rows = projects.map((p: any) => [
-    p.name,
-    p.code || '—',
-    { content: (p.status || '—').toUpperCase(), styles: { fontStyle: 'bold' } },
-    { content: fmtUSD(p.budget),       styles: { halign: 'right' } },
-    { content: fmtUSD(p.spent || 0),   styles: { halign: 'right' } },
-    { content: fmtUSD(p.incoming || 0),styles: { halign: 'right', textColor: C.positive } },
-    { content: `${(p.used || 0).toFixed(1)}%`, styles: { halign: 'right' } },
-  ]);
-
+  const sy = sectionLabel(doc, my + 2, 'Portfolio Financial Summary');
   autoTable(doc, {
-    ...tblCfg(ty),
-    head: [['Project', 'Code', 'Status', 'Budget', 'Spent', 'Incoming', 'Utilization']],
-    body: rows,
+    ...tblCfg(sy),
+    head: [['Metric', 'Value', 'Operating Meaning']],
+    body: [
+      ['Active project records', String(projects.length), 'Project cards included in this packet'],
+      ['Average budget utilization', `${avgUsed.toFixed(1)}%`, 'Portfolio-wide cost progress against budget'],
+      ['Outstanding / receivable exposure', fmtUSD(outstanding), 'Open checks, receivables, or pending cash exposure visible in project data'],
+      ['Net portfolio cash position', fmtUSD(net), 'Collected revenue less deployed capital and known open exposure'],
+    ],
     columnStyles: {
-      2: { cellWidth: 22 },
-      3: { halign: 'right', cellWidth: 28 },
-      4: { halign: 'right', cellWidth: 28 },
-      5: { halign: 'right', cellWidth: 28 },
-      6: { halign: 'right', cellWidth: 24 },
+      0: { cellWidth: 48 },
+      1: { cellWidth: 42, halign: 'right', fontStyle: 'bold' },
+      2: { cellWidth: PW - M * 2 - 90 },
     },
-    foot: [[
-      { content: 'Portfolio Total', colSpan: 3, styles: { fontStyle: 'bold' } },
-      { content: fmtUSD(totalBudget), styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: fmtUSD(totalSpent),  styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: fmtUSD(totalIn),     styles: { halign: 'right', fontStyle: 'bold', textColor: C.positive } },
-      { content: '—', styles: { halign: 'right' } },
-    ]],
+  });
+
+  let cy = (doc as any).lastAutoTable.finalY + 10;
+  cy = sectionLabel(doc, cy, 'Project Overview Cards');
+
+  const cardH = 38;
+  const cardW = PW - M * 2;
+  const drawText = (text: string, x: number, y0: number, width: number, size = 6.6, color = C.black, bold = false) => {
+    doc.setFontSize(size);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(...color);
+    doc.text(doc.splitTextToSize(text || '—', width), x, y0);
+  };
+  const drawKV = (label: string, value: string, x: number, y0: number, width: number, color = C.black) => {
+    doc.setFontSize(5.3);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.muted);
+    doc.text(label.toUpperCase(), x, y0);
+    doc.setFontSize(7.2);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...color);
+    doc.text(value, x, y0 + 5, { maxWidth: width });
+  };
+
+  projects.forEach((p: any, index: number) => {
+    if (cy + cardH > PH - 24) {
+      doc.addPage();
+      cy = 18;
+    }
+
+    const contract = n(p.current_contract_value ?? p.contract_value ?? p.budget);
+    const spent = n(p.spent ?? p.total_expenses ?? p.actual_project_costs);
+    const collected = n(p.incoming ?? p.total_income ?? p.total_collected);
+    const projectNet = collected - spent - n(p.outstanding_checks);
+    const used = contract > 0 ? Math.min(999, (spent / contract) * 100) : n(p.used);
+    const status = String(p.status || 'active').replace(/_/g, ' ');
+    const category = p.category || p.project_type || p.department || 'Project';
+    const client = p.client_name_snapshot || p.client_name || p.client || p.portal_clients?.name || 'Client not assigned';
+    const location = p.location || p.address || p.city || 'Location not assigned';
+    const health = projectNet >= 0 && used <= 85 ? 'Healthy' : projectNet >= 0 ? 'Watch' : 'Needs review';
+    const healthColor = health === 'Healthy' ? C.positive : health === 'Watch' ? C.accent : C.negative;
+
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(0.25);
+    doc.rect(M, cy, cardW, cardH, 'FD');
+    doc.setFillColor(...healthColor);
+    doc.rect(M, cy, 1.3, cardH, 'F');
+
+    drawText(`${index + 1}. ${p.name || 'Untitled Project'}`, M + 4, cy + 7, 82, 8.8, C.black, true);
+    drawText(`${category} · ${status.toUpperCase()}`, M + 4, cy + 12.5, 82, 5.8, C.muted, true);
+    drawText(`${client} · ${location}`, M + 4, cy + 18.5, 82, 6.2, C.muted);
+
+    const kx = M + 92;
+    const col = 31;
+    drawKV('Contract', fmtUSD(contract), kx, cy + 8, col);
+    drawKV('Spent', fmtUSD(spent), kx + col, cy + 8, col, C.negative);
+    drawKV('Collected', fmtUSD(collected), kx + col * 2, cy + 8, col, C.positive);
+    drawKV('Cash Position', fmtUSD(projectNet), kx + col * 3, cy + 8, col, projectNet >= 0 ? C.positive : C.negative);
+
+    doc.setFontSize(5.3);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.muted);
+    doc.text('BUDGET UTILIZATION', kx, cy + 25);
+    doc.setFillColor(238, 238, 238);
+    doc.rect(kx, cy + 27.2, 82, 2.2, 'F');
+    doc.setFillColor(...(used > 95 ? C.negative : used > 80 ? C.accent : C.positive));
+    doc.rect(kx, cy + 27.2, Math.min(82, (used / 100) * 82), 2.2, 'F');
+    doc.setFontSize(6.6);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.black);
+    doc.text(`${used.toFixed(1)}%`, kx + 86, cy + 29);
+
+    drawKV('Health', health, kx + 119, cy + 25, 28, healthColor);
+    cy += cardH + 5;
   });
 
   addDecorations(doc, 'Project Portfolio');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   PDF: Houston Enterprise Reconciliation
+   Mirrors the client SOV / draw / add-on reconciliation worksheet.
+──────────────────────────────────────────── */
+export function generateProjectReconciliationReport({
+  project,
+  scopeItems,
+  changeOrders,
+  draws,
+  payments,
+  fin,
+}: {
+  project: any;
+  scopeItems: any[];
+  changeOrders: any[];
+  draws: any[];
+  payments: any[];
+  fin: any;
+}) {
+  const doc = new jsPDF({ format: 'letter', orientation: 'landscape', unit: 'mm' });
+  const pageW = 279.4;
+  const margin = 8;
+  const today = new Date().toLocaleDateString('en-US');
+  const drawCols = draws.slice(0, 5);
+
+  doc.setFillColor(...C.black);
+  doc.rect(0, 0, pageW, 15, 'F');
+  doc.setFillColor(...C.accent);
+  doc.rect(0, 15, pageW, 1.4, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...C.white);
+  doc.text('Houston Enterprise Reconciliation', margin, 9.5);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text(project?.name || 'Project', pageW - margin, 6.8, { align: 'right' });
+  doc.text(`Generated ${today}`, pageW - margin, 11, { align: 'right' });
+
+  const metrics = [
+    ['Project Total with Add Ons', fmtUSD(fin.revised)],
+    ['Total Work Completed', fmtUSD(fin.earned)],
+    ['Total Paid to Date', fmtUSD(fin.paid)],
+    ['Current Balance Due', fmtUSD(Math.max(fin.earned - fin.paid, 0))],
+    ['Project Balance Due', fmtUSD(fin.balance)],
+  ];
+  let x = margin;
+  const boxW = (pageW - margin * 2 - 8) / 5;
+  metrics.forEach(([label, value], i) => {
+    doc.setFillColor(248, 248, 248);
+    doc.setDrawColor(...C.border);
+    doc.rect(x, 21, boxW, 13, 'FD');
+    doc.setTextColor(...C.muted);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(label).toUpperCase(), x + 2, 26);
+    doc.setTextColor(i === 3 ? C.accent[0] : C.black[0], i === 3 ? C.accent[1] : C.black[1], i === 3 ? C.accent[2] : C.black[2]);
+    doc.setFontSize(8.5);
+    doc.text(String(value), x + 2, 31.2);
+    x += boxW + 2;
+  });
+
+  const drawHead = drawCols.map((d: any) => d.scheduled_date?.slice(0, 10) || d.invoice_number || 'Draw');
+  const head = [[
+    'Scope / SOV',
+    'Total Project',
+    '% Work Completed',
+    ...drawHead,
+    'Total $ Value of Work Completed',
+    'Balance',
+  ]];
+  const body = scopeItems.map((item: any) => {
+    const revised = Number(item.contract_amount || 0) + Number(item.change_order_amount || 0) - Number(item.approved_credit_amount || 0);
+    const earned = revised * Number(item.percent_complete || 0) / 100;
+    const balance = Math.max(revised - earned, 0);
+    const rowDraws = drawCols.map((d: any) => {
+      const match = String(d.milestone_name || '').toLowerCase().includes(String(item.name || '').toLowerCase());
+      return { content: match ? fmtUSD(d.draw_amount) : '', styles: { halign: 'right' } };
+    });
+    return [
+      item.name || '—',
+      { content: fmtUSD(revised), styles: { halign: 'right' } },
+      { content: `${Number(item.percent_complete || 0).toFixed(1)}%`, styles: { halign: 'right' } },
+      ...rowDraws,
+      { content: fmtUSD(earned), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: balance ? fmtUSD(balance) : '-', styles: { halign: 'right' } },
+    ];
+  });
+
+  autoTable(doc, {
+    startY: 39,
+    margin: { left: margin, right: margin, bottom: 18 },
+    head,
+    body,
+    styles: { fontSize: 6.6, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15, overflow: 'linebreak' },
+    headStyles: { fillColor: C.black, textColor: C.white, fontSize: 6.2, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    columnStyles: {
+      0: { cellWidth: 48 },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 22 },
+      [head[0].length - 2]: { cellWidth: 32 },
+      [head[0].length - 1]: { cellWidth: 24 },
+    },
+    foot: [[
+      { content: 'Totals', styles: { fontStyle: 'bold' } },
+      { content: fmtUSD(fin.revised), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${Number(fin.pctDone || 0).toFixed(1)}%`, styles: { halign: 'right', fontStyle: 'bold' } },
+      ...drawCols.map((d: any) => ({ content: fmtUSD(d.draw_amount), styles: { halign: 'right', fontStyle: 'bold' } })),
+      { content: fmtUSD(fin.earned), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: fmtUSD(fin.balance), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } },
+    ]],
+    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
+  });
+
+  let y = (doc as any).lastAutoTable.finalY + 6;
+  if (y > 155) { doc.addPage(); y = 18; }
+
+  const approvedCos = changeOrders.filter((c: any) => c.status === 'approved');
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: pageW / 2 + 3 },
+    head: [['Add Ons / Credits', 'Amount', 'Notes']],
+    body: approvedCos.map((c: any) => [
+      c.title,
+      { content: fmtUSD((c.type === 'deduction' || c.type === 'credit') ? -Number(c.amount) : Number(c.amount)), styles: { halign: 'right' } },
+      c.description || c.notes || c.approval_method || '—',
+    ]),
+    foot: [[
+      'Change Order Total',
+      { content: fmtUSD(fin.net), styles: { halign: 'right', fontStyle: 'bold' } },
+      '',
+    ]],
+    styles: { fontSize: 6.4, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15 },
+    headStyles: { fillColor: C.black, textColor: C.white, fontStyle: 'bold' },
+    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
+  });
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: pageW / 2 + 3, right: margin },
+    head: [['Payments Received', 'Paid']],
+    body: payments.map((p: any) => [
+      p.source_name || p.description || p.transaction_date?.slice(0, 10) || 'Payment',
+      { content: `(${fmtUSD(p.amount)})`, styles: { halign: 'right' } },
+    ]),
+    foot: [[
+      'Total Paid to Date',
+      { content: `(${fmtUSD(fin.paid)})`, styles: { halign: 'right', fontStyle: 'bold' } },
+    ]],
+    styles: { fontSize: 6.4, cellPadding: 1.7, lineColor: C.border, lineWidth: 0.15 },
+    headStyles: { fillColor: C.black, textColor: C.white, fontStyle: 'bold' },
+    footStyles: { fillColor: [235, 235, 235], textColor: C.black, fontStyle: 'bold' },
+  });
+
+  addDecorations(doc, 'Houston Enterprise Reconciliation');
   return doc;
 }
 
@@ -452,7 +809,7 @@ function buildSheet(def: SheetDef, reportTitle: string): XLSX.WorkSheet {
   });
 
   const aoa: any[][] = [
-    ['HOU INC — Private Bookkeeping System'],
+    ['HOU INC — Houston Enterprise Financial Records'],
     [reportTitle],
     [`Generated: ${today}`],
     [],
@@ -463,12 +820,16 @@ function buildSheet(def: SheetDef, reportTitle: string): XLSX.WorkSheet {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
   // Column widths
-  if (def.colWidths) {
-    ws['!cols'] = def.colWidths.map(w => ({ wch: w }));
-  }
+  ws['!cols'] = (def.colWidths ?? def.headers.map(h => Math.min(Math.max(String(h).length + 8, 14), 32))).map(w => ({ wch: w }));
 
   // Freeze header row (rows 1-5 frozen so headers are always visible)
   ws['!views'] = [{ state: 'frozen', ySplit: 5, topLeftCell: 'A6' } as any];
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: 4, c: 0 },
+      e: { r: Math.max(4, def.rows.length + 4), c: def.headers.length - 1 },
+    }),
+  };
 
   // Merge title/metadata rows across all columns
   const lastCol = def.headers.length - 1;

@@ -25,6 +25,9 @@ function ChartTooltip({ active, payload, label }: any) {
 export function CashFlowChart({ data }: {
   data: { label: string; inflow: number; outflow: number; net: number }[];
 }) {
+  const incomeColor = '#10b981';
+  const expenseColor = '#ef4444';
+  const netColor = '#2563eb';
   const [mode, setMode] = useState<'flow' | 'net'>('flow');
   const totalIn = data.reduce((s, d) => s + d.inflow, 0);
   const totalOut = data.reduce((s, d) => s + d.outflow, 0);
@@ -36,29 +39,21 @@ export function CashFlowChart({ data }: {
   const netDelta = last.net - prior.net;
 
   return (
-    <div className="border border-border idx-widget overflow-hidden">
-      <div className="p-3 sm:p-4 border-b border-border/70">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
+    <div className="border border-border idx-widget overflow-visible relative z-0 hover:z-30">
+      <div className="p-3 border-b border-border/70">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
             <div className="micro-label">Cash Flow Trend · 6 Month</div>
-            <div className={`text-lg sm:text-xl font-bold font-mono-tab mt-1 leading-tight ${totalNet >= 0 ? 'text-positive' : 'text-destructive'}`}>
-              {totalNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(totalNet))}
-            </div>
-            <div className="text-[9px] text-muted-foreground font-mono-tab mt-0.5">
-              Avg {avgNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(avgNet))} / month · Best {bestMonth.label}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between sm:justify-end gap-2">
-            <div className="grid grid-cols-2 gap-2 text-right text-[9px] font-mono-tab">
-              <div className="px-2 py-1 border border-positive/20 bg-positive/5">
-                <div className="text-muted-foreground">In</div>
-                <div className="text-positive font-semibold">{fmtUSD(totalIn)}</div>
+              <div className="flex items-baseline gap-2 mt-1 min-w-0">
+                <div className={`text-lg font-bold font-mono-tab leading-tight ${totalNet >= 0 ? 'text-positive' : 'text-destructive'}`}>
+                  {totalNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(totalNet))}
+                </div>
+                <div className="text-[9px] text-foreground/65 font-mono-tab truncate">
+                  Avg {avgNet >= 0 ? '+' : '-'}{fmtUSD(Math.abs(avgNet))} / mo
+                </div>
               </div>
-              <div className="px-2 py-1 border border-accent/20 bg-accent/5">
-                <div className="text-muted-foreground">Out</div>
-                <div className="text-accent font-semibold">{fmtUSD(totalOut)}</div>
-              </div>
+              <div className="text-[9px] text-foreground/55 font-mono-tab mt-0.5 truncate">Best month · {bestMonth.label}</div>
             </div>
             <div className="flex border border-border overflow-hidden shrink-0">
               {(['flow', 'net'] as const).map(opt => (
@@ -67,7 +62,7 @@ export function CashFlowChart({ data }: {
                   type="button"
                   onClick={() => setMode(opt)}
                   className={`px-2.5 py-1.5 text-[9px] uppercase tracking-[0.14em] font-semibold transition-colors ${
-                    mode === opt ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground'
+                    mode === opt ? 'bg-foreground text-background' : 'bg-background text-foreground/65 hover:text-foreground'
                   }`}
                 >
                   {opt === 'flow' ? 'trend' : 'net'}
@@ -75,26 +70,37 @@ export function CashFlowChart({ data }: {
               ))}
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[9px] font-mono-tab">
+              <div className="px-2 py-1.5 border border-positive/20 bg-positive/5 min-w-0">
+                <div className="text-foreground/55 uppercase tracking-[0.14em]">Income</div>
+                <div className="text-positive font-semibold">{fmtUSD(totalIn)}</div>
+              </div>
+              <div className="px-2 py-1.5 border min-w-0" style={{ borderColor: `${expenseColor}33`, backgroundColor: `${expenseColor}0d` }}>
+                <div className="text-foreground/55 uppercase tracking-[0.14em]">Expenses</div>
+                <div className="font-semibold" style={{ color: expenseColor }}>{fmtUSD(totalOut)}</div>
+              </div>
+            </div>
         </div>
       </div>
 
-      <div className="px-2 sm:px-3 pt-3">
-        <div className="h-44 sm:h-48">
+      <div className="px-2 sm:px-3 pt-2">
+        <div className="h-40 sm:h-44">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="cash-inflow-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--positive)" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="var(--positive)" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={incomeColor} stopOpacity={0.24} />
+                  <stop offset="100%" stopColor={incomeColor} stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="cash-outflow-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.16} />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.01} />
+                  <stop offset="0%" stopColor={expenseColor} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={expenseColor} stopOpacity={0.01} />
                 </linearGradient>
                 <linearGradient id="cash-net-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--foreground)" stopOpacity={0.16} />
-                  <stop offset="65%" stopColor="var(--foreground)" stopOpacity={0.04} />
-                  <stop offset="100%" stopColor="var(--foreground)" stopOpacity={0} />
+                  <stop offset="0%" stopColor={netColor} stopOpacity={0.18} />
+                  <stop offset="65%" stopColor={netColor} stopOpacity={0.05} />
+                  <stop offset="100%" stopColor={netColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} strokeOpacity={0.65} />
@@ -113,11 +119,11 @@ export function CashFlowChart({ data }: {
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
               <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.4} />
-              <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: 'var(--border)', fillOpacity: 0.08 }} />
+              <RechartsTooltip content={<ChartTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} cursor={{ fill: 'var(--border)', fillOpacity: 0.08 }} />
               {mode === 'flow' && (
                 <>
-                  <Area type="monotone" dataKey="inflow" name="Income" stroke="var(--positive)" fill="url(#cash-inflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: 'var(--positive)', stroke: 'var(--background)', strokeWidth: 2 }} />
-                  <Area type="monotone" dataKey="outflow" name="Expenses" stroke="var(--accent)" fill="url(#cash-outflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: 'var(--accent)', stroke: 'var(--background)', strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="inflow" name="Income" stroke={incomeColor} fill="url(#cash-inflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: incomeColor, stroke: 'var(--background)', strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="outflow" name="Expenses" stroke={expenseColor} fill="url(#cash-outflow-fill)" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: expenseColor, stroke: 'var(--background)', strokeWidth: 2 }} />
                 </>
               )}
               {mode === 'net' && (
@@ -127,10 +133,10 @@ export function CashFlowChart({ data }: {
                 type="monotone"
                 dataKey="net"
                 name="Net"
-                stroke="var(--foreground)"
+                stroke={netColor}
                 strokeWidth={2.8}
-                dot={{ r: 3, fill: 'var(--background)', stroke: 'var(--foreground)', strokeWidth: 1.7 }}
-                activeDot={{ r: 5, fill: 'var(--foreground)', stroke: 'var(--background)', strokeWidth: 2 }}
+                dot={{ r: 3, fill: 'var(--background)', stroke: netColor, strokeWidth: 1.7 }}
+                activeDot={{ r: 5, fill: netColor, stroke: 'var(--background)', strokeWidth: 2 }}
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -151,10 +157,10 @@ export function CashFlowChart({ data }: {
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-3 text-[9px] text-muted-foreground uppercase tracking-wider px-3 py-2 border-t border-border">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-positive rounded-full" /> Income</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent rounded-full" /> Expenses</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 border border-foreground rounded-full" /> Net</span>
+      <div className="flex flex-wrap gap-3 text-[9px] text-foreground/65 uppercase tracking-wider px-3 py-2 border-t border-border">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: incomeColor }} /> Income</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: expenseColor }} /> Expenses</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: netColor }} /> Net</span>
       </div>
     </div>
   );
@@ -200,7 +206,7 @@ export function ExposureChart({ projects, totalExposure }: {
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={2} dataKey="value">
                 {pieData.map((_, i) => <Cell key={`cell-${i}`} fill={chartColors[i % chartColors.length]} />)}
               </Pie>
-              <RechartsTooltip content={({ active, payload }) => {
+              <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const d = payload[0];
                 return (

@@ -12,9 +12,11 @@ import { toast } from 'sonner';
 import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
   Layers, TrendingUp, Receipt, Calendar, History,
+  ClipboardCheck, FileSpreadsheet, CreditCard, MessageSquare, ShieldCheck,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
+import { generateProjectReconciliationReport, savePDF } from '@/lib/reports';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'payments' | 'reconciliation' | 'notes' | 'audit';
@@ -91,17 +93,26 @@ type DrawSchedule = {
 };
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-const SUB_TABS: { key: SubTab; label: string }[] = [
-  { key: 'overview',       label: 'Overview' },
-  { key: 'sov',            label: 'Scope / SOV' },
-  { key: 'milestones',     label: 'Milestones' },
-  { key: 'draws',          label: 'Draws & Billing' },
-  { key: 'cos',            label: 'Change Orders' },
-  { key: 'payments',       label: 'Payments' },
-  { key: 'reconciliation', label: 'Reconciliation' },
-  { key: 'notes',          label: 'Notes' },
-  { key: 'audit',          label: 'Audit' },
+const SUB_TABS: { key: SubTab; label: string; short: string; desc: string; icon: any; group: string }[] = [
+  { key: 'overview',       label: 'Reconciliation Summary', short: 'Summary', desc: 'Contract, billing, balance', icon: ShieldCheck, group: 'Control' },
+  { key: 'sov',            label: 'Scope / SOV', short: 'SOV', desc: 'Line-item scope values', icon: FileSpreadsheet, group: 'Scope' },
+  { key: 'milestones',     label: 'Milestones', short: 'Milestones', desc: 'Schedule and progress', icon: ClipboardCheck, group: 'Scope' },
+  { key: 'draws',          label: 'Draws & Billing', short: 'Draws', desc: 'Funding and billing dates', icon: Calendar, group: 'Money' },
+  { key: 'cos',            label: 'Change Orders', short: 'COs', desc: 'Additions, credits, approvals', icon: TrendingUp, group: 'Money' },
+  { key: 'payments',       label: 'Payments', short: 'Payments', desc: 'Client receipts and collections', icon: CreditCard, group: 'Money' },
+  { key: 'reconciliation', label: 'Reconciliation', short: 'Reconcile', desc: 'Per-line over/under status', icon: Layers, group: 'Control' },
+  { key: 'notes',          label: 'Notes', short: 'Notes', desc: 'Client and internal notes', icon: MessageSquare, group: 'Records' },
+  { key: 'audit',          label: 'Audit', short: 'Audit', desc: 'System activity log', icon: History, group: 'Records' },
 ];
+
+const PB_CSS = `
+.pb-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.18),transparent 190px);}
+.pb-nav-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
+.pb-nav-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
+.pb-nav-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
+.pb-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.dark .pb-nav-card,.dark .pb-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
+`;
 
 const SOV_CATEGORIES = [
   'General Conditions', 'Project Management', 'Supervision & Field Engineering',
@@ -189,6 +200,27 @@ function PanelHeader({ label, action }: { label: string; action?: React.ReactNod
 
 function EmptyState({ text }: { text: string }) {
   return <div className="px-4 py-12 text-center text-sm text-muted-foreground">{text}</div>;
+}
+
+function GuidedEntryIntro({ title, intent, steps }: { title: string; intent: string; steps: string[] }) {
+  return (
+    <div className="border border-border bg-background px-3.5 py-3 sm:px-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-[#9D7E3F] font-bold">{title}</div>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-2xl">{intent}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 sm:min-w-[300px]">
+          {steps.map((step, index) => (
+            <div key={step} className="border border-border bg-secondary/30 px-2.5 py-2">
+              <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Step {index + 1}</div>
+              <div className="text-[11px] font-semibold text-foreground leading-snug mt-0.5">{step}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -285,6 +317,19 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     };
   }, [scopeItems, changeOrders, draws, enriched?.incomeList]);
 
+  const exportReconciliationPDF = () => {
+    const doc = generateProjectReconciliationReport({
+      project,
+      scopeItems,
+      changeOrders,
+      draws,
+      payments: enriched?.incomeList ?? [],
+      fin,
+    });
+    savePDF(doc, `houston-enterprise-reconciliation-${(project?.name || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success('Houston Enterprise Reconciliation exported');
+  };
+
   const incomeByScope = useMemo(() => {
     const map: Record<string, number> = {};
     (enriched?.incomeList ?? []).forEach((t: any) => {
@@ -298,6 +343,12 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const co   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setCoForm(p => ({ ...p, [k]: e.target.value }));
   const ms   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setMsForm(p => ({ ...p, [k]: e.target.value }));
   const dr   = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setDrawForm(p => ({ ...p, [k]: e.target.value }));
+  const dbError = (label: string, error: any) => {
+    console.error(label, error);
+    toast.error(label, {
+      description: error?.message || error?.details || 'The database rejected this save. Confirm the latest repair migration is applied.',
+    });
+  };
 
   /* SOV */
   const openAddSOV = () => { setSovForm(blankSOV()); setEditSOVId(null); setShowSOV(true); };
@@ -306,12 +357,16 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     setEditSOVId(i.id); setShowSOV(true);
   };
   const saveSOV = async () => {
-    if (!sovForm.name.trim() || !user) return;
+    if (!sovForm.name.trim()) return toast.error('Scope item name is required');
+    if (!user || !projectId) return toast.error('Sign in and open an active project before saving');
     setSavingSOV(true);
-    const p = { project_id: projectId, entity_id: entityId, user_id: user.id, name: sovForm.name.trim(), cost_code: sovForm.cost_code || null, category: sovForm.category || null, description: sovForm.description || null, contract_amount: parseFloat(sovForm.contract_amount) || 0, change_order_amount: parseFloat(sovForm.change_order_amount) || 0, approved_credit_amount: parseFloat(sovForm.approved_credit_amount) || 0, percent_complete: parseFloat(sovForm.percent_complete) || 0, total_billed: parseFloat(sovForm.total_billed) || 0, payment_status: sovForm.payment_status, work_status: sovForm.work_status, notes: sovForm.notes || null, internal_notes: sovForm.internal_notes || null, client_visible_notes: sovForm.client_visible_notes || null };
-    const { error } = editSOVId ? await (supabase as any).from('project_scope_items').update(p).eq('id', editSOVId) : await (supabase as any).from('project_scope_items').insert(p);
-    if (error) toast.error('Save failed'); else { toast.success(editSOVId ? 'Updated' : 'Added'); setShowSOV(false); load(); }
-    setSavingSOV(false);
+    try {
+      const p = { project_id: projectId, entity_id: entityId, user_id: user.id, name: sovForm.name.trim(), cost_code: sovForm.cost_code || null, category: sovForm.category || null, description: sovForm.description || null, contract_amount: parseFloat(sovForm.contract_amount) || 0, change_order_amount: parseFloat(sovForm.change_order_amount) || 0, approved_credit_amount: parseFloat(sovForm.approved_credit_amount) || 0, percent_complete: parseFloat(sovForm.percent_complete) || 0, total_billed: parseFloat(sovForm.total_billed) || 0, payment_status: sovForm.payment_status, work_status: sovForm.work_status, notes: sovForm.notes || null, internal_notes: sovForm.internal_notes || null, client_visible_notes: sovForm.client_visible_notes || null };
+      const { error } = editSOVId ? await (supabase as any).from('project_scope_items').update(p).eq('id', editSOVId) : await (supabase as any).from('project_scope_items').insert(p);
+      if (error) dbError('Scope item save failed', error); else { toast.success(editSOVId ? 'Scope item updated' : 'Scope item added'); setShowSOV(false); await load(); }
+    } finally {
+      setSavingSOV(false);
+    }
   };
   const deleteSOV = async (id: string) => { if (!confirm('Delete this scope item?')) return; await (supabase as any).from('project_scope_items').delete().eq('id', id); toast.success('Deleted'); load(); };
 
@@ -319,12 +374,16 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const openAddCO = () => { setCoForm(blankCO()); setEditCOId(null); setShowCO(true); };
   const openEditCO = (c: ChangeOrder) => { setCoForm({ co_number: c.co_number ?? '', title: c.title, description: c.description ?? '', type: c.type, amount: String(c.amount), status: c.status, requested_date: c.requested_date ?? '', approved_date: c.approved_date ?? '', approval_method: c.approval_method ?? '', client_visible_notes: c.client_visible_notes ?? '', internal_notes: c.internal_notes ?? '', notes: c.notes ?? '' }); setEditCOId(c.id); setShowCO(true); };
   const saveCO = async () => {
-    if (!coForm.title.trim() || !user) return;
+    if (!coForm.title.trim()) return toast.error('Change order title is required');
+    if (!user || !projectId) return toast.error('Sign in and open an active project before saving');
     setSavingCO(true);
-    const p = { project_id: projectId, entity_id: entityId, user_id: user.id, co_number: coForm.co_number || null, title: coForm.title.trim(), description: coForm.description || null, type: coForm.type, amount: parseFloat(coForm.amount) || 0, status: coForm.status, requested_date: coForm.requested_date || null, approved_date: coForm.approved_date || null, approval_method: coForm.approval_method || null, client_visible_notes: coForm.client_visible_notes || null, internal_notes: coForm.internal_notes || null, notes: coForm.notes || null };
-    const { error } = editCOId ? await (supabase as any).from('project_change_orders').update(p).eq('id', editCOId) : await (supabase as any).from('project_change_orders').insert(p);
-    if (error) toast.error('Save failed'); else { toast.success(editCOId ? 'Updated' : 'Added'); setShowCO(false); load(); }
-    setSavingCO(false);
+    try {
+      const p = { project_id: projectId, entity_id: entityId, user_id: user.id, co_number: coForm.co_number || null, title: coForm.title.trim(), description: coForm.description || null, type: coForm.type, amount: parseFloat(coForm.amount) || 0, status: coForm.status, requested_date: coForm.requested_date || null, approved_date: coForm.approved_date || null, approval_method: coForm.approval_method || null, client_visible_notes: coForm.client_visible_notes || null, internal_notes: coForm.internal_notes || null, notes: coForm.notes || null };
+      const { error } = editCOId ? await (supabase as any).from('project_change_orders').update(p).eq('id', editCOId) : await (supabase as any).from('project_change_orders').insert(p);
+      if (error) dbError('Change order save failed', error); else { toast.success(editCOId ? 'Change order updated' : 'Change order added'); setShowCO(false); await load(); }
+    } finally {
+      setSavingCO(false);
+    }
   };
   const deleteCO = async (id: string) => { if (!confirm('Delete this change order?')) return; await (supabase as any).from('project_change_orders').delete().eq('id', id); toast.success('Deleted'); load(); };
 
@@ -332,12 +391,16 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const openAddMS = () => { setMsForm(blankMS()); setEditMSId(null); setShowMS(true); };
   const openEditMS = (m: Milestone) => { setMsForm({ title: m.title, description: m.description ?? '', planned_start_date: m.planned_start_date ?? '', planned_completion_date: m.planned_completion_date ?? '', actual_completion_date: m.actual_completion_date ?? '', percent_complete: String(m.percent_complete), status: m.status, billing_eligible: m.billing_eligible, billing_amount: String(m.billing_amount), client_visible: m.client_visible, client_visible_notes: m.client_visible_notes ?? '', internal_notes: m.internal_notes ?? '' }); setEditMSId(m.id); setShowMS(true); };
   const saveMS = async () => {
-    if (!msForm.title.trim() || !user) return;
+    if (!msForm.title.trim()) return toast.error('Milestone title is required');
+    if (!user || !projectId) return toast.error('Sign in and open an active project before saving');
     setSavingMS(true);
-    const p = { project_id: projectId, entity_id: entityId, user_id: user.id, title: msForm.title.trim(), description: msForm.description || null, planned_start_date: msForm.planned_start_date || null, planned_completion_date: msForm.planned_completion_date || null, actual_completion_date: msForm.actual_completion_date || null, percent_complete: parseFloat(msForm.percent_complete) || 0, status: msForm.status, billing_eligible: msForm.billing_eligible, billing_amount: parseFloat(msForm.billing_amount) || 0, client_visible: msForm.client_visible, client_visible_notes: msForm.client_visible_notes || null, internal_notes: msForm.internal_notes || null };
-    const { error } = editMSId ? await (supabase as any).from('project_milestones').update(p).eq('id', editMSId) : await (supabase as any).from('project_milestones').insert(p);
-    if (error) toast.error('Save failed'); else { toast.success(editMSId ? 'Updated' : 'Added'); setShowMS(false); load(); }
-    setSavingMS(false);
+    try {
+      const p = { project_id: projectId, entity_id: entityId, user_id: user.id, title: msForm.title.trim(), description: msForm.description || null, planned_start_date: msForm.planned_start_date || null, planned_completion_date: msForm.planned_completion_date || null, actual_completion_date: msForm.actual_completion_date || null, percent_complete: parseFloat(msForm.percent_complete) || 0, status: msForm.status, billing_eligible: msForm.billing_eligible, billing_amount: parseFloat(msForm.billing_amount) || 0, client_visible: msForm.client_visible, client_visible_notes: msForm.client_visible_notes || null, internal_notes: msForm.internal_notes || null };
+      const { error } = editMSId ? await (supabase as any).from('project_milestones').update(p).eq('id', editMSId) : await (supabase as any).from('project_milestones').insert(p);
+      if (error) dbError('Milestone save failed', error); else { toast.success(editMSId ? 'Milestone updated' : 'Milestone added'); setShowMS(false); await load(); }
+    } finally {
+      setSavingMS(false);
+    }
   };
   const deleteMS = async (id: string) => { if (!confirm('Delete this milestone?')) return; await (supabase as any).from('project_milestones').delete().eq('id', id); toast.success('Deleted'); load(); };
 
@@ -345,22 +408,35 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const openAddDraw = () => { setDrawForm(blankDraw()); setEditDrawId(null); setShowDraw(true); };
   const openEditDraw = (d: DrawSchedule) => { setDrawForm({ milestone_name: d.milestone_name, draw_amount: String(d.draw_amount), scheduled_date: d.scheduled_date ?? '', status: d.status, notes: d.notes ?? '', invoice_number: d.invoice_number ?? '', billing_period_start: d.billing_period_start ?? '', billing_period_end: d.billing_period_end ?? '' }); setEditDrawId(d.id); setShowDraw(true); };
   const saveDraw = async () => {
-    if (!drawForm.milestone_name.trim()) return;
+    if (!drawForm.milestone_name.trim()) return toast.error('Draw name is required');
+    if (!projectId) return toast.error('Open an active project before saving');
     setSavingDraw(true);
-    const p = { project_id: projectId, milestone_name: drawForm.milestone_name.trim(), draw_amount: parseFloat(drawForm.draw_amount) || 0, scheduled_date: drawForm.scheduled_date || null, status: drawForm.status, notes: drawForm.notes || null, invoice_number: drawForm.invoice_number || null, billing_period_start: drawForm.billing_period_start || null, billing_period_end: drawForm.billing_period_end || null };
-    const { error } = editDrawId ? await (supabase as any).from('draw_schedules').update(p).eq('id', editDrawId) : await (supabase as any).from('draw_schedules').insert(p);
-    if (error) toast.error('Save failed'); else { toast.success(editDrawId ? 'Updated' : 'Added'); setShowDraw(false); load(); }
-    setSavingDraw(false);
+    try {
+      const p = { project_id: projectId, milestone_name: drawForm.milestone_name.trim(), draw_amount: parseFloat(drawForm.draw_amount) || 0, scheduled_date: drawForm.scheduled_date || null, status: drawForm.status, notes: drawForm.notes || null, invoice_number: drawForm.invoice_number || null, billing_period_start: drawForm.billing_period_start || null, billing_period_end: drawForm.billing_period_end || null };
+      const { error } = editDrawId ? await (supabase as any).from('draw_schedules').update(p).eq('id', editDrawId) : await (supabase as any).from('draw_schedules').insert(p);
+      if (error) dbError('Draw request save failed', error); else { toast.success(editDrawId ? 'Draw request updated' : 'Draw request added'); setShowDraw(false); await load(); }
+    } finally {
+      setSavingDraw(false);
+    }
   };
   const deleteDraw = async (id: string) => { if (!confirm('Delete this draw?')) return; await (supabase as any).from('draw_schedules').delete().eq('id', id); toast.success('Deleted'); load(); };
 
   /* Notes */
-  const saveNotes = async () => { setSavingNotes(true); await (supabase as any).from('projects').update({ notes }).eq('id', projectId); toast.success('Notes saved'); setSavingNotes(false); };
+  const saveNotes = async () => {
+    if (!projectId) return toast.error('Open an active project before saving notes');
+    setSavingNotes(true);
+    try {
+      const { error } = await (supabase as any).from('projects').update({ notes }).eq('id', projectId);
+      if (error) dbError('Project notes save failed', error);
+      else toast.success('Notes saved');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   /* ── shared field styles (match existing Input component look) ───────────── */
   const F = 'w-full h-9 rounded-none border border-border bg-background text-foreground text-sm px-3 focus:outline-none focus:border-foreground/40 placeholder:text-muted-foreground';
   const TA = 'w-full rounded-none border border-border bg-background text-foreground text-sm px-3 py-2 resize-none focus:outline-none focus:border-foreground/40 placeholder:text-muted-foreground';
-  const addBtn = 'flex items-center gap-1 text-[10px] text-accent hover:opacity-80 transition-opacity font-bold uppercase tracking-[0.12em]';
   const saveBtn = 'h-9 px-5 rounded-none bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-40';
   const cancelBtn = 'h-9 px-4 rounded-none border border-border text-xs text-muted-foreground hover:text-foreground transition-colors';
   const iconBtn   = 'p-1.5 text-muted-foreground hover:text-foreground transition-colors';
@@ -368,11 +444,22 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
 
   if (!project) return null;
 
+  const activeSubTab = SUB_TABS.find(t => t.key === subTab) ?? SUB_TABS[0];
+  const ActiveSubIcon = activeSubTab.icon;
+  const contextualAction = (() => {
+    if (subTab === 'sov') return { label: 'Add Scope Item', onClick: openAddSOV };
+    if (subTab === 'milestones') return { label: 'Add Milestone', onClick: openAddMS };
+    if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
+    if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
+    if (subTab === 'notes') return { label: savingNotes ? 'Saving Notes...' : 'Save Notes', onClick: saveNotes, disabled: savingNotes };
+    return null;
+  })();
+
   return (
-    <div>
+    <div className="pb-shell">
+      <style>{PB_CSS}</style>
       {/* ── Sub-tab navigation ────────────────────────────────────────────── */}
-      {/* Mobile dropdown */}
-      <div className="sm:hidden px-4 py-3 border-b border-border">
+      <div className="sm:hidden px-4 pt-4 pb-2">
         <div className="relative">
           <select
             value={subTab}
@@ -384,21 +471,58 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         </div>
       </div>
-      {/* Desktop tab bar */}
-      <div className="hidden sm:flex overflow-x-auto border-b border-border">
-        {SUB_TABS.map(t => (
+
+      <div className="px-4 sm:px-8 py-3 border-b border-border bg-secondary/20 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[9px] uppercase tracking-[0.24em] text-[#9D7E3F] font-bold">Houston Enterprise Reconciliation</div>
+          <div className="flex items-start gap-2.5 mt-1 max-w-3xl">
+            <span className="hidden sm:flex w-7 h-7 border border-border bg-background items-center justify-center shrink-0">
+              <ActiveSubIcon className="w-3.5 h-3.5" strokeWidth={1.7} style={{ color: '#9D7E3F' }} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-foreground">{activeSubTab.label}</div>
+              <div className="text-[10px] text-muted-foreground leading-snug">{activeSubTab.desc}</div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {contextualAction && (
+            <button
+              onClick={contextualAction.onClick}
+              disabled={contextualAction.disabled}
+              className="h-9 px-3 border border-foreground bg-foreground text-background hover:opacity-90 text-[9px] uppercase tracking-[0.14em] font-bold transition-opacity disabled:opacity-45"
+            >
+              <Plus className="inline w-3 h-3 mr-1" /> {contextualAction.label}
+            </button>
+          )}
           <button
-            key={t.key}
-            onClick={() => setSubTab(t.key)}
-            className={`flex items-center px-4 py-2.5 text-[9px] uppercase tracking-[0.18em] font-bold whitespace-nowrap border-b-2 transition-all ${
-              subTab === t.key
-                ? 'border-foreground text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+            onClick={exportReconciliationPDF}
+            className="h-9 px-3 border border-border bg-background hover:bg-secondary/60 text-[9px] uppercase tracking-[0.14em] font-bold text-foreground transition-colors"
           >
-            {t.label}
+            Export PDF
           </button>
-        ))}
+        </div>
+      </div>
+
+      <div className="hidden sm:block px-4 sm:px-8 py-2.5 border-b border-border">
+        <div className="flex overflow-x-auto gap-1.5 pb-0.5">
+          {SUB_TABS.map(t => {
+            const Icon = t.icon;
+            const active = subTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setSubTab(t.key)}
+                className={`h-9 px-3 border text-[9px] uppercase tracking-[0.14em] font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
+                  active ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary/45'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
+                {t.short}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
@@ -522,18 +646,19 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                   ]} />
                 </div>
 
-                <div className="border border-border">
-                  <PanelHeader
-                    label={`Schedule of Values — ${scopeItems.length} Line Item${scopeItems.length !== 1 ? 's' : ''}`}
-                    action={<button className={addBtn} onClick={openAddSOV}><Plus className="w-3 h-3" /> Add Line Item</button>}
-                  />
+	                <div className="border border-border">
+	                  <PanelHeader
+	                    label={`Schedule of Values — ${scopeItems.length} Line Item${scopeItems.length !== 1 ? 's' : ''}`}
+	                  />
 
                   {/* Inline form */}
                   {showSOV && (
                     <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-3">
-                        {editSOVId ? 'Edit' : 'New'} Scope Item
-                      </div>
+                      <GuidedEntryIntro
+                        title={`${editSOVId ? 'Edit' : 'New'} Scope Item`}
+                        intent="Create a clean SOV line that ties scope, cost code, contract value, billing progress, and internal notes into one finance-ready record."
+                        steps={['Identify scope', 'Set value', 'Track billing']}
+                      />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="sm:col-span-2 space-y-1">
                           <div className="micro-label">Line Item Name</div>
@@ -723,15 +848,18 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 MILESTONES
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'milestones' && (
-              <div className="border border-border">
-                <PanelHeader
-                  label={`Milestones — ${milestones.length}`}
-                  action={<button className={addBtn} onClick={openAddMS}><Plus className="w-3 h-3" /> Add Milestone</button>}
-                />
+	              <div className="border border-border">
+	                <PanelHeader
+	                  label={`Milestones — ${milestones.length}`}
+	                />
 
                 {showMS && (
                   <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
-                    <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-3">{editMSId ? 'Edit' : 'New'} Milestone</div>
+                    <GuidedEntryIntro
+                      title={`${editMSId ? 'Edit' : 'New'} Milestone`}
+                      intent="Capture the work marker, schedule target, completion status, and billing eligibility so project progress and draw timing stay aligned."
+                      steps={['Name marker', 'Schedule dates', 'Billing rules']}
+                    />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="sm:col-span-2 space-y-1">
                         <div className="micro-label">Title</div>
@@ -842,15 +970,18 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                   ]} />
                 </div>
 
-                <div className="border border-border">
-                  <PanelHeader
-                    label={`Draw Schedule — ${draws.length} Request${draws.length !== 1 ? 's' : ''}`}
-                    action={<button className={addBtn} onClick={openAddDraw}><Plus className="w-3 h-3" /> Add Draw</button>}
-                  />
+	                <div className="border border-border">
+	                  <PanelHeader
+	                    label={`Draw Schedule — ${draws.length} Request${draws.length !== 1 ? 's' : ''}`}
+	                  />
 
                   {showDraw && (
                     <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-3">{editDrawId ? 'Edit' : 'New'} Draw Request</div>
+                      <GuidedEntryIntro
+                        title={`${editDrawId ? 'Edit' : 'New'} Draw Request`}
+                        intent="Log the draw request with invoice details, billing window, scheduled date, and funded status for reconciliation and portfolio reporting."
+                        steps={['Name draw', 'Attach invoice', 'Confirm status']}
+                      />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="sm:col-span-2 space-y-1">
                           <div className="micro-label">Draw / Milestone Name</div>
@@ -1000,15 +1131,18 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                   ]} />
                 </div>
 
-                <div className="border border-border">
-                  <PanelHeader
-                    label={`Change Orders — ${changeOrders.length}`}
-                    action={<button className={addBtn} onClick={openAddCO}><Plus className="w-3 h-3" /> Add CO</button>}
-                  />
+	                <div className="border border-border">
+	                  <PanelHeader
+	                    label={`Change Orders — ${changeOrders.length}`}
+	                  />
 
                   {showCO && (
                     <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-3">{editCOId ? 'Edit' : 'New'} Change Order</div>
+                      <GuidedEntryIntro
+                        title={`${editCOId ? 'Edit' : 'New'} Change Order`}
+                        intent="Record additions, deductions, credits, and allowances with approval timing so revised contract value remains defensible."
+                        steps={['Classify CO', 'Set amount', 'Document approval']}
+                      />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <div className="micro-label">CO Number</div>

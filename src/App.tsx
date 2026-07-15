@@ -78,6 +78,7 @@ import ProjectDetail from "./pages/ProjectDetail";
 import Vendors       from "./pages/Vendors";
 import Concierge     from "./pages/Concierge";
 import Charts        from "./pages/Charts";
+import Changelog     from "./pages/Changelog";
 import Settings      from "./pages/Settings";
 import Invoices      from "./pages/Invoices";
 import InvoiceNew    from "./pages/InvoiceNew";
@@ -109,6 +110,7 @@ function FinanceRoutes() {
         <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
         <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Concierge /></RoleGuard>} />
         <Route path="/charts"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Charts /></RoleGuard>} />
+        <Route path="/changelog"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Changelog /></RoleGuard>} />
         <Route path="/invoices"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Invoices /></RoleGuard>} />
         <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
         <Route path="/invoices/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
