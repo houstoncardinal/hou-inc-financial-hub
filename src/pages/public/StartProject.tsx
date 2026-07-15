@@ -173,7 +173,9 @@ export default function StartProject() {
           const sub = { id: crypto.randomUUID(), ...data, scope: data.scopes.join(', '), submittedAt: new Date().toISOString(), source: 'start-project-form' };
           const prev = JSON.parse(localStorage.getItem('hou-start-project-submissions') || '[]');
           localStorage.setItem('hou-start-project-submissions', JSON.stringify([...prev, sub]));
-        } catch {}
+        } catch {
+          // Local backup is best-effort; the Supabase submission is the source of truth.
+        }
         setDone(true);
       } catch (err: any) {
         setSubmitError(err?.message || 'Something went wrong. Please try again or call us at (281) 915-9595.');

@@ -18,6 +18,10 @@ export default function TiltCard({ children, className, style, max = 8, glare = 
   const ry = useSpring(useTransform(mx, [0, 1], [-max, max]), { stiffness: 220, damping: 18 });
   const gx = useTransform(mx, v => `${v * 100}%`);
   const gy = useTransform(my, v => `${v * 100}%`);
+  const glareBackground = useTransform(
+    [gx, gy] as any,
+    ([x, y]: any) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.22), transparent 45%)`
+  );
 
   const onMove = (e: MouseEvent) => {
     if (reduced || !ref.current) return;
@@ -48,10 +52,7 @@ export default function TiltCard({ children, className, style, max = 8, glare = 
           aria-hidden
           style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            background: useTransform(
-              [gx, gy] as any,
-              ([x, y]: any) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.22), transparent 45%)`
-            ) as any,
+            background: glareBackground as any,
             mixBlendMode: 'overlay',
           }}
         />

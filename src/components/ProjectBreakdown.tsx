@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { generateProjectReconciliationReport, savePDF } from '@/lib/reports';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -106,11 +108,23 @@ const SUB_TABS: { key: SubTab; label: string; short: string; desc: string; icon:
 ];
 
 const PB_CSS = `
-.pb-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.18),transparent 190px);}
+.pb-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.14),transparent 150px);}
 .pb-nav-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
 .pb-nav-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
 .pb-nav-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
 .pb-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.pb-entry-panel{padding:10px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--secondary)/0.14);}
+.pb-entry-grid{display:grid;grid-template-columns:1fr;gap:8px;}
+.pb-advanced{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.42) inset;}
+.pb-advanced summary{cursor:pointer;padding:8px 10px;font-size:8px;text-transform:uppercase;letter-spacing:.18em;font-weight:800;color:hsl(var(--muted-foreground));}
+.pb-advanced[open] summary{border-bottom:1px solid hsl(var(--border));color:hsl(var(--foreground));}
+.pb-workflow-dialog{width:calc(100vw - 18px);max-width:1040px;max-height:calc(100vh - 18px);overflow:hidden;padding:0;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 30px 100px rgba(10,10,10,0.3),0 1px 0 rgba(255,255,255,0.58) inset;}
+.pb-workflow-dialog:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,#0f0f0f,#9D7E3F,#0f0f0f);}
+.pb-workflow-head{padding:15px 16px 12px;border-bottom:1px solid hsl(var(--border));background:linear-gradient(180deg,hsl(var(--secondary)/0.34),hsl(var(--background)));position:relative;}
+.pb-workflow-body{max-height:calc(100vh - 138px);overflow:auto;padding:10px;background:linear-gradient(180deg,hsl(var(--secondary)/0.12),transparent 130px);}
+.pb-workflow-body .micro-label{font-size:7.5px;letter-spacing:.18em;}
+@media(min-width:640px){.pb-entry-grid{grid-template-columns:repeat(4,minmax(0,1fr));}.pb-span-2{grid-column:span 2 / span 2}.pb-span-4{grid-column:span 4 / span 4}.pb-workflow-body{padding:12px;}.pb-entry-panel{padding:12px;}}
+@media(max-width:639px){.pb-workflow-head{padding:13px 12px 10px}.pb-workflow-body{max-height:calc(100vh - 128px)}.pb-entry-panel{padding:9px}.pb-entry-grid{gap:7px}.pb-entry-grid input,.pb-entry-grid select{height:34px;font-size:12px}.pb-entry-grid textarea{font-size:12px}.pb-advanced summary{padding:7px 9px}.pb-workflow-body button{min-height:34px}}
 .dark .pb-nav-card,.dark .pb-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
@@ -204,17 +218,17 @@ function EmptyState({ text }: { text: string }) {
 
 function GuidedEntryIntro({ title, intent, steps }: { title: string; intent: string; steps: string[] }) {
   return (
-    <div className="border border-border bg-background px-3.5 py-3 sm:px-4">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div className="border border-border bg-background px-3 py-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.16em] text-[#9D7E3F] font-bold">{title}</div>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-2xl">{intent}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug max-w-2xl">{intent}</p>
         </div>
-        <div className="grid grid-cols-3 gap-1.5 sm:min-w-[300px]">
+        <div className="grid grid-cols-3 gap-1.5 sm:min-w-[280px]">
           {steps.map((step, index) => (
-            <div key={step} className="border border-border bg-secondary/30 px-2.5 py-2">
-              <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Step {index + 1}</div>
-              <div className="text-[11px] font-semibold text-foreground leading-snug mt-0.5">{step}</div>
+            <div key={step} className="border border-border bg-secondary/30 px-2 py-1.5">
+              <div className="text-[8px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Step {index + 1}</div>
+              <div className="text-[10px] font-semibold text-foreground leading-snug mt-0.5">{step}</div>
             </div>
           ))}
         </div>
@@ -223,10 +237,44 @@ function GuidedEntryIntro({ title, intent, steps }: { title: string; intent: str
   );
 }
 
+function WorkflowDialog({
+  open,
+  onOpenChange,
+  kicker,
+  title,
+  description,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  kicker: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="pb-workflow-dialog rounded-none">
+        <DialogHeader className="pb-workflow-head text-left">
+          <div className="text-[8px] uppercase tracking-[0.28em] font-black text-[#9D7E3F]">{kicker}</div>
+          <DialogTitle className="text-lg sm:text-xl font-semibold tracking-tight text-foreground">{title}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
+            {description}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="pb-workflow-body">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function ProjectBreakdown({ project, enriched }: { project: any; enriched: any }) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { entity } = useEntity();
   const entityId  = entity?.id ?? 'houston-enterprise';
@@ -245,6 +293,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   /* ── notes ───────────────────────────────────────────────────────────────── */
   const [notes,       setNotes]       = useState<string>(project?.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [showNotes,   setShowNotes]   = useState(false);
 
   /* ── SOV form ────────────────────────────────────────────────────────────── */
   const [sovForm,    setSovForm]    = useState(blankSOV());
@@ -428,7 +477,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     try {
       const { error } = await (supabase as any).from('projects').update({ notes }).eq('id', projectId);
       if (error) dbError('Project notes save failed', error);
-      else toast.success('Notes saved');
+      else { toast.success('Notes saved'); setShowNotes(false); }
     } finally {
       setSavingNotes(false);
     }
@@ -439,6 +488,7 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
   const TA = 'w-full rounded-none border border-border bg-background text-foreground text-sm px-3 py-2 resize-none focus:outline-none focus:border-foreground/40 placeholder:text-muted-foreground';
   const saveBtn = 'h-9 px-5 rounded-none bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-40';
   const cancelBtn = 'h-9 px-4 rounded-none border border-border text-xs text-muted-foreground hover:text-foreground transition-colors';
+  const outlineBtn = 'h-9 px-4 rounded-none border border-border bg-background text-xs font-bold hover:bg-secondary/50 transition-colors';
   const iconBtn   = 'p-1.5 text-muted-foreground hover:text-foreground transition-colors';
   const delBtn    = 'p-1.5 text-muted-foreground hover:text-destructive transition-colors';
 
@@ -451,7 +501,8 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
     if (subTab === 'milestones') return { label: 'Add Milestone', onClick: openAddMS };
     if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
     if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
-    if (subTab === 'notes') return { label: savingNotes ? 'Saving Notes...' : 'Save Notes', onClick: saveNotes, disabled: savingNotes };
+    if (subTab === 'payments') return { label: 'Log Payment', onClick: () => navigate(`/concierge?type=income&project=${projectId}`) };
+    if (subTab === 'notes') return { label: 'Edit Notes', onClick: () => setShowNotes(true), disabled: savingNotes };
     return null;
   })();
 
@@ -651,16 +702,23 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
 	                    label={`Schedule of Values — ${scopeItems.length} Line Item${scopeItems.length !== 1 ? 's' : ''}`}
 	                  />
 
-                  {/* Inline form */}
+                  {/* Guided modal form */}
                   {showSOV && (
-                    <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
+                    <WorkflowDialog
+                      open={showSOV}
+                      onOpenChange={setShowSOV}
+                      kicker="Schedule of Values"
+                      title={`${editSOVId ? 'Edit' : 'New'} Scope Item`}
+                      description="Add or correct one SOV line without disrupting the project view. Core scope, money, billing progress, and optional notes stay organized in one focused workflow."
+                    >
+                    <div className="pb-entry-panel space-y-3 border border-border bg-background">
                       <GuidedEntryIntro
                         title={`${editSOVId ? 'Edit' : 'New'} Scope Item`}
                         intent="Create a clean SOV line that ties scope, cost code, contract value, billing progress, and internal notes into one finance-ready record."
                         steps={['Identify scope', 'Set value', 'Track billing']}
                       />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="sm:col-span-2 space-y-1">
+                      <div className="pb-entry-grid">
+                        <div className="pb-span-4 space-y-1">
                           <div className="micro-label">Line Item Name</div>
                           <input className={F} value={sovForm.name} onChange={sov('name')} placeholder="e.g. Electrical Rough-In" />
                         </div>
@@ -718,20 +776,26 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                             <option value="credited">Credited</option>
                           </select>
                         </div>
-                        <div className="sm:col-span-2 space-y-1">
-                          <div className="micro-label">Client Notes</div>
-                          <textarea className={TA} rows={2} value={sovForm.client_visible_notes} onChange={sov('client_visible_notes')} />
-                        </div>
-                        <div className="sm:col-span-2 space-y-1">
-                          <div className="micro-label">Internal Notes</div>
-                          <textarea className={TA} rows={2} value={sovForm.internal_notes} onChange={sov('internal_notes')} />
-                        </div>
                       </div>
+                      <details className="pb-advanced">
+                        <summary>Advanced notes and client/internal context</summary>
+                        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <div className="micro-label">Client Notes</div>
+                            <textarea className={TA} rows={2} value={sovForm.client_visible_notes} onChange={sov('client_visible_notes')} />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="micro-label">Internal Notes</div>
+                            <textarea className={TA} rows={2} value={sovForm.internal_notes} onChange={sov('internal_notes')} />
+                          </div>
+                        </div>
+                      </details>
                       <div className="flex gap-2 pt-1">
                         <button onClick={saveSOV} disabled={savingSOV} className={saveBtn}>{savingSOV ? 'Saving…' : 'Save'}</button>
                         <button onClick={() => setShowSOV(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
+                    </WorkflowDialog>
                   )}
 
                   {/* Table */}
@@ -854,20 +918,23 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
 	                />
 
                 {showMS && (
-                  <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
+                  <WorkflowDialog
+                    open={showMS}
+                    onOpenChange={setShowMS}
+                    kicker="Project Milestones"
+                    title={`${editMSId ? 'Edit' : 'New'} Milestone`}
+                    description="Track the marker, schedule, billing eligibility, and client visibility from a compact guided workspace built for field and office use."
+                  >
+                  <div className="pb-entry-panel space-y-3 border border-border bg-background">
                     <GuidedEntryIntro
                       title={`${editMSId ? 'Edit' : 'New'} Milestone`}
                       intent="Capture the work marker, schedule target, completion status, and billing eligibility so project progress and draw timing stay aligned."
                       steps={['Name marker', 'Schedule dates', 'Billing rules']}
                     />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="sm:col-span-2 space-y-1">
+                      <div className="pb-entry-grid">
+                      <div className="pb-span-2 space-y-1">
                         <div className="micro-label">Title</div>
                         <input className={F} value={msForm.title} onChange={ms('title')} placeholder="e.g. Foundation Complete" />
-                      </div>
-                      <div className="sm:col-span-2 space-y-1">
-                        <div className="micro-label">Description</div>
-                        <textarea className={TA} rows={2} value={msForm.description} onChange={ms('description')} />
                       </div>
                       <div className="space-y-1">
                         <div className="micro-label">Status</div>
@@ -903,16 +970,26 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                         <input type="checkbox" id="ms-cv" checked={msForm.client_visible} onChange={e => setMsForm(p => ({ ...p, client_visible: e.target.checked }))} className="accent-foreground w-3.5 h-3.5" />
                         <label htmlFor="ms-cv" className="micro-label cursor-pointer">Client Visible</label>
                       </div>
-                      <div className="sm:col-span-2 space-y-1">
-                        <div className="micro-label">Internal Notes</div>
-                        <textarea className={TA} rows={2} value={msForm.internal_notes} onChange={ms('internal_notes')} />
-                      </div>
                     </div>
+                    <details className="pb-advanced">
+                      <summary>Description and internal/client notes</summary>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <div className="micro-label">Description</div>
+                          <textarea className={TA} rows={2} value={msForm.description} onChange={ms('description')} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="micro-label">Internal Notes</div>
+                          <textarea className={TA} rows={2} value={msForm.internal_notes} onChange={ms('internal_notes')} />
+                        </div>
+                      </div>
+                    </details>
                     <div className="flex gap-2 pt-1">
                       <button onClick={saveMS} disabled={savingMS} className={saveBtn}>{savingMS ? 'Saving…' : 'Save'}</button>
                       <button onClick={() => setShowMS(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
+                  </WorkflowDialog>
                 )}
 
                 {milestones.length === 0 ? (
@@ -976,14 +1053,21 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
 	                  />
 
                   {showDraw && (
-                    <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
+                    <WorkflowDialog
+                      open={showDraw}
+                      onOpenChange={setShowDraw}
+                      kicker="Draw Schedule"
+                      title={`${editDrawId ? 'Edit' : 'New'} Draw Request`}
+                      description="Prepare draw requests with invoice references, billing windows, funding status, and notes in one focused process."
+                    >
+                    <div className="pb-entry-panel space-y-3 border border-border bg-background">
                       <GuidedEntryIntro
                         title={`${editDrawId ? 'Edit' : 'New'} Draw Request`}
                         intent="Log the draw request with invoice details, billing window, scheduled date, and funded status for reconciliation and portfolio reporting."
                         steps={['Name draw', 'Attach invoice', 'Confirm status']}
                       />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="sm:col-span-2 space-y-1">
+                      <div className="pb-entry-grid">
+                        <div className="pb-span-4 space-y-1">
                           <div className="micro-label">Draw / Milestone Name</div>
                           <input className={F} value={drawForm.milestone_name} onChange={dr('milestone_name')} placeholder="e.g. Draw #1 — Foundation" />
                         </div>
@@ -1015,16 +1099,20 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                             <option value="funded">Funded</option>
                           </select>
                         </div>
-                        <div className="sm:col-span-2 space-y-1">
+                      </div>
+                      <details className="pb-advanced">
+                        <summary>Optional draw notes</summary>
+                        <div className="p-3">
                           <div className="micro-label">Notes</div>
                           <textarea className={TA} rows={2} value={drawForm.notes} onChange={dr('notes')} />
                         </div>
-                      </div>
+                      </details>
                       <div className="flex gap-2 pt-1">
                         <button onClick={saveDraw} disabled={savingDraw} className={saveBtn}>{savingDraw ? 'Saving…' : 'Save'}</button>
                         <button onClick={() => setShowDraw(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
+                    </WorkflowDialog>
                   )}
 
                   {draws.length === 0 ? (
@@ -1137,13 +1225,20 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
 	                  />
 
                   {showCO && (
-                    <div className="p-5 border-b border-border bg-secondary/20 space-y-4">
+                    <WorkflowDialog
+                      open={showCO}
+                      onOpenChange={setShowCO}
+                      kicker="Change Orders"
+                      title={`${editCOId ? 'Edit' : 'New'} Change Order`}
+                      description="Document additions, deductions, credits, approval timing, and internal context while keeping revised contract totals defensible."
+                    >
+                    <div className="pb-entry-panel space-y-3 border border-border bg-background">
                       <GuidedEntryIntro
                         title={`${editCOId ? 'Edit' : 'New'} Change Order`}
                         intent="Record additions, deductions, credits, and allowances with approval timing so revised contract value remains defensible."
                         steps={['Classify CO', 'Set amount', 'Document approval']}
                       />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="pb-entry-grid">
                         <div className="space-y-1">
                           <div className="micro-label">CO Number</div>
                           <input className={F} value={coForm.co_number} onChange={co('co_number')} placeholder="CO-001" />
@@ -1157,13 +1252,9 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                             <option value="credit">Credit</option>
                           </select>
                         </div>
-                        <div className="sm:col-span-2 space-y-1">
+                        <div className="pb-span-4 space-y-1">
                           <div className="micro-label">Title</div>
                           <input className={F} value={coForm.title} onChange={co('title')} placeholder="e.g. Add electrical panel upgrade" />
-                        </div>
-                        <div className="sm:col-span-2 space-y-1">
-                          <div className="micro-label">Description</div>
-                          <textarea className={TA} rows={2} value={coForm.description} onChange={co('description')} />
                         </div>
                         <div className="space-y-1">
                           <div className="micro-label">Amount ($)</div>
@@ -1185,20 +1276,30 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                           <div className="micro-label">Date Approved</div>
                           <DateInput className={F} value={coForm.approved_date} onChange={co('approved_date')} />
                         </div>
-                        <div className="sm:col-span-2 space-y-1">
+                        <div className="pb-span-4 space-y-1">
                           <div className="micro-label">Approval Method</div>
                           <input className={F} value={coForm.approval_method} onChange={co('approval_method')} placeholder="e.g. Signed CO, Email, Verbal" />
                         </div>
-                        <div className="sm:col-span-2 space-y-1">
-                          <div className="micro-label">Internal Notes</div>
-                          <textarea className={TA} rows={2} value={coForm.internal_notes} onChange={co('internal_notes')} />
-                        </div>
                       </div>
+                      <details className="pb-advanced">
+                        <summary>Description and approval notes</summary>
+                        <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <div className="micro-label">Description</div>
+                            <textarea className={TA} rows={2} value={coForm.description} onChange={co('description')} />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="micro-label">Internal Notes</div>
+                            <textarea className={TA} rows={2} value={coForm.internal_notes} onChange={co('internal_notes')} />
+                          </div>
+                        </div>
+                      </details>
                       <div className="flex gap-2 pt-1">
                         <button onClick={saveCO} disabled={savingCO} className={saveBtn}>{savingCO ? 'Saving…' : 'Save'}</button>
                         <button onClick={() => setShowCO(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
+                    </WorkflowDialog>
                   )}
 
                   {changeOrders.length === 0 ? (
@@ -1295,7 +1396,29 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
                 </div>
 
                 <div className="border border-border">
-                  <PanelHeader label={`Client Payments — ${(enriched?.incomeList ?? []).length} Record${(enriched?.incomeList ?? []).length !== 1 ? 's' : ''}`} />
+                  <PanelHeader
+                    label={`Client Payments — ${(enriched?.incomeList ?? []).length} Record${(enriched?.incomeList ?? []).length !== 1 ? 's' : ''}`}
+                    action={
+                      <button
+                        onClick={() => navigate(`/concierge?type=income&project=${projectId}`)}
+                        className={outlineBtn}
+                      >
+                        Log Payment
+                      </button>
+                    }
+                  />
+                  <div className="px-4 py-3 border-b border-border bg-secondary/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <div className="text-[9px] uppercase tracking-[0.18em] font-black text-foreground">Guided collection workflow</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">Record payments through Income so Stripe, QuickBooks, invoice links, SOV allocation, and client portal visibility stay connected.</div>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/concierge?type=income&project=${projectId}`)}
+                      className={`${saveBtn} shrink-0`}
+                    >
+                      Open Income Concierge
+                    </button>
+                  </div>
                   {(enriched?.incomeList ?? []).length === 0 ? (
                     <EmptyState text="No payments recorded yet. Record client payments through the Income section." />
                   ) : (
@@ -1425,18 +1548,48 @@ export default function ProjectBreakdown({ project, enriched }: { project: any; 
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'notes' && (
               <div className="border border-border">
-                <PanelHeader label="Project Notes" />
-                <div className="p-5 space-y-4">
-                  <textarea
-                    className={`${TA} min-h-[240px]`}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Add project notes, field observations, client communications, scope details…"
-                  />
-                  <button onClick={saveNotes} disabled={savingNotes} className={saveBtn}>
-                    {savingNotes ? 'Saving…' : 'Save Notes'}
-                  </button>
+                <PanelHeader
+                  label="Project Notes"
+                  action={<button onClick={() => setShowNotes(true)} className="text-[10px] text-accent hover:opacity-80 font-bold">Edit Notes</button>}
+                />
+                <div className="p-4">
+                  <div className="border border-border bg-background p-4">
+                    <div className="micro-label mb-2">Current Project Narrative</div>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {notes?.trim() || 'No project notes have been added yet. Use Edit Notes to capture field observations, client decisions, scope context, and internal reconciliation details.'}
+                    </p>
+                  </div>
                 </div>
+                <WorkflowDialog
+                  open={showNotes}
+                  onOpenChange={setShowNotes}
+                  kicker="Project Notes"
+                  title="Edit Project Notes"
+                  description="Capture client context, field observations, scope decisions, and internal reconciliation notes without turning the project page into a spreadsheet."
+                >
+                  <div className="pb-entry-panel space-y-3 border border-border bg-background">
+                    <GuidedEntryIntro
+                      title="Project Notes"
+                      intent="Keep concise client context, field observations, scope decisions, and internal reconciliation notes attached to the project record."
+                      steps={['Capture context', 'Confirm accuracy', 'Save record']}
+                    />
+                    <textarea
+                      className={`${TA} min-h-[132px]`}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Add project notes, field observations, client communications, scope details..."
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="text-[10px] text-muted-foreground">Saved notes update the project record and remain part of the project operating history.</div>
+                      <div className="flex gap-2">
+                        <button onClick={saveNotes} disabled={savingNotes} className={saveBtn}>
+                          {savingNotes ? 'Saving...' : 'Save Notes'}
+                        </button>
+                        <button onClick={() => setShowNotes(false)} className={cancelBtn}><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  </div>
+                </WorkflowDialog>
               </div>
             )}
 

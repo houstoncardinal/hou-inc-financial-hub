@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -23,7 +23,7 @@ import {
   Trash2, Table2, FileText, ChevronRight, BarChart2,
   Search, Plus, Grid3X3, List, ExternalLink,
   FolderKanban, Download, Home, Building2, BriefcaseBusiness,
-  Activity, CircleDollarSign, ShieldCheck,
+  Activity, CircleDollarSign, ShieldCheck, Settings2, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -32,6 +32,8 @@ import {
   Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
   Tooltip as RechartsTooltip, XAxis, YAxis,
 } from 'recharts';
+import { useFinanceChangelog } from '@/hooks/useFinanceChangelog';
+import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 
 /* ── Status metadata ─────────────────────────────────────────────────────── */
 const S = {
@@ -81,7 +83,7 @@ const blank = {
 };
 
 const PROJ_CSS = `
-.proj-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.22),transparent 220px);}
+.proj-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.18),transparent 170px);}
 .proj-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
 .proj-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;background-image:linear-gradient(145deg,rgba(157,126,63,0.045),transparent 42%);}
 .proj-card:hover{box-shadow:0 7px 22px rgba(10,10,10,0.085),0 2px 6px rgba(10,10,10,0.04),0 1px 0 rgba(255,255,255,0.45) inset;transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
@@ -90,11 +92,12 @@ const PROJ_CSS = `
 .proj-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;position:relative;overflow:visible;}
 .proj-intel-card:hover{box-shadow:0 8px 22px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);z-index:30;}
 .proj-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
-.proj-spark{height:46px;min-width:96px;}
+.proj-card-foot{border-top:1px solid hsl(var(--border)/0.65);background:hsl(var(--secondary)/0.24);}
+.proj-spark{height:40px;min-width:92px;}
 .proj-category{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
 .proj-category:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
 .proj-category-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
-.proj-health-card{background:hsl(var(--secondary)/0.2);border:1px solid hsl(var(--border));}
+.proj-health-card{background:hsl(var(--secondary)/0.18);border:1px solid hsl(var(--border));}
 .proj-meter{height:3px;background:hsl(var(--secondary));overflow:hidden;}
 .proj-meter>span{display:block;height:100%;border-radius:999px;}
 .proj-table-shell{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
@@ -102,14 +105,19 @@ const PROJ_CSS = `
 .proj-export:hover{background:hsl(var(--secondary)/0.62);border-color:hsl(var(--foreground)/0.24);transform:translateY(-1px);}
 .proj-row:hover td{background-color:rgba(157,126,63,0.032)!important;}
 .proj-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+@media(max-width:639px){.proj-spark{height:34px}.proj-intel-card{min-height:auto}.proj-card{box-shadow:0 1px 2px rgba(10,10,10,0.045)}}
 .dark .proj-card,.dark .proj-panel,.dark .proj-kpi,.dark .proj-export,.dark .proj-category,.dark .proj-table-shell,.dark .proj-intel-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
+
+const PROJECT_CARD_STORAGE_KEY = 'hou-finance-project-card-selection';
+const DEFAULT_PROJECT_CARDS = ['health', 'contract', 'deployed', 'cash'] as const;
 
 export default function Projects() {
   const navigate  = useNavigate();
   const role      = useRole();
   const isAdmin   = role === 'admin';
   const { entity } = useEntity();
+  const logFinanceChange = useFinanceChangelog();
 
   const { data: projects  = [] } = useProjects();
   const { data: checks    = [] } = useChecks();
@@ -128,12 +136,43 @@ export default function Projects() {
   const [categoryFilter, setCategoryFilter] = useState<ProjectCategory>('all');
   const [sortBy,     setSortBy]     = useState<'name' | 'budget' | 'spent' | 'net' | 'used'>('name');
   const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc');
+  const [timePeriod, setTimePeriod] = useState('all');
+  const [projectCardPickerOpen, setProjectCardPickerOpen] = useState(false);
+  const [selectedProjectCardIds, setSelectedProjectCardIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [...DEFAULT_PROJECT_CARDS];
+    const saved = window.localStorage.getItem(PROJECT_CARD_STORAGE_KEY);
+    if (!saved) return [...DEFAULT_PROJECT_CARDS];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length ? parsed : [...DEFAULT_PROJECT_CARDS];
+    } catch {
+      return [...DEFAULT_PROJECT_CARDS];
+    }
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(PROJECT_CARD_STORAGE_KEY, JSON.stringify(selectedProjectCardIds));
+  }, [selectedProjectCardIds]);
+
+  const selectedRangeLabel = financeRangeLabel(timePeriod);
+  const rangedChecks = useMemo(
+    () => checks.filter((c: any) => isInFinanceRange(c.issue_date || c.posting_date || c.created_at, timePeriod)),
+    [checks, timePeriod],
+  );
+  const rangedIncome = useMemo(
+    () => income.filter((t: any) => isInFinanceRange(t.transaction_date || t.posting_date || t.created_at, timePeriod)),
+    [income, timePeriod],
+  );
+  const rangedExpenses = useMemo(
+    () => expenses.filter((t: any) => isInFinanceRange(t.transaction_date || t.posting_date || t.created_at, timePeriod)),
+    [expenses, timePeriod],
+  );
 
   /* ── Enriched data ── */
   const enriched = useMemo(() => projects.map((p: any) => {
-    const pChecks   = checks.filter((c: any) => c.project_id === p.id);
-    const pIn       = income.filter((t: any) => t.project_id === p.id).reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const pExp      = expenses.filter((t: any) => t.project_id === p.id).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const pChecks   = rangedChecks.filter((c: any) => c.project_id === p.id);
+    const pIn       = rangedIncome.filter((t: any) => t.project_id === p.id).reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+    const pExp      = rangedExpenses.filter((t: any) => t.project_id === p.id).reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
     const cleared   = pChecks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const outstanding = pChecks.filter((c: any) => c.status === 'pending').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const spent     = pExp + cleared;
@@ -164,7 +203,7 @@ export default function Projects() {
       healthScore,
       healthLabel: healthTone(healthScore).label,
     };
-  }), [projects, checks, income, expenses]);
+  }), [projects, rangedChecks, rangedIncome, rangedExpenses]);
 
   /* ── Portfolio KPIs ── */
   const portfolio = useMemo(() => ({
@@ -198,13 +237,13 @@ export default function Projects() {
       const month = d.getMonth();
       const year = d.getFullYear();
       const label = d.toLocaleDateString('en-US', { month: 'short' });
-      const revenue = income
+      const revenue = rangedIncome
         .filter((t: any) => {
           const td = new Date(t.transaction_date || t.date || t.created_at);
           return td.getMonth() === month && td.getFullYear() === year;
         })
         .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
-      const cost = expenses
+      const cost = rangedExpenses
         .filter((t: any) => {
           const td = new Date(t.transaction_date || t.date || t.created_at);
           return td.getMonth() === month && td.getFullYear() === year;
@@ -212,12 +251,199 @@ export default function Projects() {
         .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
       return { label, revenue, cost, net: revenue - cost };
     });
-  }, [income, expenses]);
+  }, [rangedIncome, rangedExpenses]);
 
   const categoryChart = useMemo(
     () => categoryStats.filter(c => c.id !== 'all').map(c => ({ name: c.short, value: c.count, budget: c.budget, color: c.color })),
     [categoryStats],
   );
+
+  const projectCardCatalog = useMemo(() => {
+    const activeCategory = (id: ProjectCategory) => categoryStats.find(c => c.id === id);
+    const collectionCoverage = portfolio.totalBudget > 0 ? (portfolio.totalIncoming / portfolio.totalBudget) * 100 : 0;
+    const deployedPct = portfolio.totalBudget > 0 ? (portfolio.totalSpent / portfolio.totalBudget) * 100 : 0;
+    const healthBars = enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, health: p.healthScore, color: healthTone(p.healthScore).color }));
+
+    return [
+      {
+        id: 'health',
+        label: 'Portfolio Health',
+        value: Math.round(portfolio.avgHealth).toString(),
+        sub: `${portfolio.active} active · ${portfolio.atRisk} watch-list`,
+        aux: `${portfolio.overBudget} over budget`,
+        icon: FolderKanban,
+        color: '#9D7E3F',
+        chartLabel: 'Health',
+        chart: (
+          <BarChart data={healthBars}>
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} cursor={{ fill: 'rgba(157,126,63,0.08)' }} formatter={(value: number) => [`${Math.round(value)}`, 'Health']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Bar dataKey="health" radius={[3, 3, 0, 0]}>
+              {healthBars.map((p: any) => <Cell key={p.name} fill={p.color} />)}
+            </Bar>
+          </BarChart>
+        ),
+      },
+      {
+        id: 'contract',
+        label: 'Contract Value',
+        value: fmtUSD(portfolio.totalBudget),
+        sub: `${portfolio.total} total projects under management`,
+        aux: `${fmtUSD(portfolio.totalIncoming)} collected`,
+        icon: CircleDollarSign,
+        color: '#2563eb',
+        chartLabel: 'Budget',
+        chart: (
+          <BarChart data={categoryChart}>
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} cursor={{ fill: 'rgba(37,99,235,0.08)' }} formatter={(value: number) => [fmtUSD(value), 'Budget']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Bar dataKey="budget" radius={[3, 3, 0, 0]}>
+              {categoryChart.map((c) => <Cell key={c.name} fill={c.color} />)}
+            </Bar>
+          </BarChart>
+        ),
+      },
+      {
+        id: 'deployed',
+        label: 'Capital Deployed',
+        value: fmtUSD(portfolio.totalSpent),
+        sub: `${deployedPct.toFixed(1)}% of approved budgets`,
+        aux: `${fmtUSD(portfolio.totalBudget - portfolio.totalSpent)} remaining`,
+        icon: Activity,
+        color: '#ef4444',
+        chartLabel: 'Costs',
+        chart: (
+          <AreaChart data={portfolioTrend}>
+            <defs><linearGradient id="projectCostCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.32} /><stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} /></linearGradient></defs>
+            <XAxis dataKey="label" hide /><YAxis hide />
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Costs']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Area type="monotone" dataKey="cost" stroke="#ef4444" fill="url(#projectCostCustom)" strokeWidth={2} />
+          </AreaChart>
+        ),
+      },
+      {
+        id: 'cash',
+        label: 'Cash Position',
+        value: fmtUSD(portfolio.totalNet),
+        sub: `${fmtUSD(portfolio.outstanding)} outstanding checks`,
+        aux: portfolio.totalNet >= 0 ? 'Positive portfolio cash' : 'Cash pressure visible',
+        icon: ShieldCheck,
+        color: portfolio.totalNet >= 0 ? '#10b981' : '#ef4444',
+        chartLabel: 'Net',
+        chart: (
+          <AreaChart data={portfolioTrend}>
+            <defs><linearGradient id="projectNetCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0.02} /></linearGradient></defs>
+            <XAxis dataKey="label" hide /><YAxis hide />
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Net']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Area type="monotone" dataKey="net" stroke="#10b981" fill="url(#projectNetCustom)" strokeWidth={2} />
+          </AreaChart>
+        ),
+      },
+      {
+        id: 'active',
+        label: 'Active Work',
+        value: String(portfolio.active),
+        sub: `${portfolio.total - portfolio.active} inactive or complete`,
+        aux: `${portfolio.total} total records`,
+        icon: Grid3X3,
+        color: '#111827',
+        chartLabel: 'Projects',
+        chart: (
+          <BarChart data={categoryChart}>
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [value, 'Projects']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Bar dataKey="value" radius={[3, 3, 0, 0]} fill="#111827" />
+          </BarChart>
+        ),
+      },
+      {
+        id: 'risk',
+        label: 'Watch List',
+        value: String(portfolio.atRisk),
+        sub: 'Projects under health threshold',
+        aux: `${portfolio.overBudget} over budget`,
+        icon: AlertTriangle,
+        color: '#f59e0b',
+        chartLabel: 'Risk',
+        chart: (
+          <BarChart data={healthBars}>
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [`${Math.round(value)}`, 'Health']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Bar dataKey="health" radius={[3, 3, 0, 0]} fill="#f59e0b" />
+          </BarChart>
+        ),
+      },
+      {
+        id: 'open-checks',
+        label: 'Open Checks',
+        value: fmtUSD(portfolio.outstanding),
+        sub: 'Pending project obligations',
+        aux: `${portfolio.overBudget} budget alerts`,
+        icon: FileText,
+        color: '#7c3aed',
+        chartLabel: 'Open checks',
+        chart: (
+          <BarChart data={enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, outstanding: p.outstanding }))}>
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Open checks']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Bar dataKey="outstanding" radius={[3, 3, 0, 0]} fill="#7c3aed" />
+          </BarChart>
+        ),
+      },
+      {
+        id: 'collections',
+        label: 'Collection Coverage',
+        value: `${collectionCoverage.toFixed(1)}%`,
+        sub: `${fmtUSD(portfolio.totalIncoming)} collected`,
+        aux: `${fmtUSD(Math.max(portfolio.totalBudget - portfolio.totalIncoming, 0))} uncollected`,
+        icon: Download,
+        color: '#0f766e',
+        chartLabel: 'Revenue',
+        chart: (
+          <AreaChart data={portfolioTrend}>
+            <defs><linearGradient id="projectRevenueCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0f766e" stopOpacity={0.3} /><stop offset="95%" stopColor="#0f766e" stopOpacity={0.02} /></linearGradient></defs>
+            <XAxis dataKey="label" hide /><YAxis hide />
+            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Revenue']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+            <Area type="monotone" dataKey="revenue" stroke="#0f766e" fill="url(#projectRevenueCustom)" strokeWidth={2} />
+          </AreaChart>
+        ),
+      },
+      ...(['residential', 'commercial', 'management'] as ProjectCategory[]).map((id) => {
+        const category = activeCategory(id)!;
+        return {
+          id,
+          label: category.label,
+          value: String(category.count),
+          sub: `${fmtUSD(category.budget)} contract value`,
+          aux: `${Math.round(category.health || 0)} avg health`,
+          icon: category.icon,
+          color: category.color,
+          chartLabel: category.short,
+          chart: (
+            <BarChart data={[category]}>
+              <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Budget']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
+              <Bar dataKey="budget" radius={[3, 3, 0, 0]} fill={category.color} />
+            </BarChart>
+          ),
+        };
+      }),
+    ];
+  }, [categoryChart, categoryStats, enriched, portfolio, portfolioTrend]);
+
+  const visibleProjectCards = selectedProjectCardIds
+    .map(id => projectCardCatalog.find(card => card.id === id))
+    .filter(Boolean);
+
+  const updateSelectedProjectCards = (nextIds: string[], reason: string) => {
+    if (!nextIds.length) {
+      toast.error('Keep at least one project card visible.');
+      return;
+    }
+    const previous = selectedProjectCardIds;
+    setSelectedProjectCardIds(nextIds);
+    void logFinanceChange({
+      action: 'preference_updated',
+      entity: 'projects_dashboard',
+      entityId: 'projects_metric_cards',
+      entityLabel: 'Projects dashboard metric cards',
+      details: { reason, previous, current: nextIds },
+    });
+  };
 
   /* ── Status counts ── */
   const counts = useMemo(() => ({
@@ -365,14 +591,9 @@ export default function Projects() {
         description="Budget allocation, capital deployed, and outstanding obligations across all active jobs."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin && (
-              <button
-                onClick={() => navigate('/admin')}
-                className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-[9px] uppercase tracking-[0.18em] font-bold border border-border text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-all"
-              >
-                <ExternalLink className="w-2.5 h-2.5" /> Admin
-              </button>
-            )}
+            <div className="hidden sm:block">
+              <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
+            </div>
             <div className="hidden sm:flex items-center gap-1">
               <button onClick={exportPDF} title="Export PDF"
                 className="proj-export h-9 px-3 flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] font-bold text-foreground transition-all">
@@ -393,136 +614,93 @@ export default function Projects() {
       />
 
       <div className="proj-shell border-t border-border/50">
+      <div className="sm:hidden px-4 py-3 border-b border-border">
+        <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
+      </div>
       {/* ── Portfolio Intelligence ── */}
-      <div className="px-4 sm:px-8 py-4">
+      <div className="px-4 sm:px-8 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.24em] font-black text-foreground/55">Portfolio Intelligence · {selectedRangeLabel}</div>
+            <div className="text-sm font-semibold tracking-tight mt-0.5">Choose the project signals that keep operations focused.</div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-none h-8 text-[10px] uppercase tracking-[0.16em] font-bold self-start sm:self-auto"
+            onClick={() => setProjectCardPickerOpen(open => !open)}
+          >
+            <Settings2 className="w-3.5 h-3.5 mr-1.5" />
+            Customize
+          </Button>
+        </div>
+
+        {projectCardPickerOpen && (
+          <div className="proj-panel p-2.5 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-2">
+              {projectCardCatalog.map((card: any) => {
+                const active = selectedProjectCardIds.includes(card.id);
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => {
+                      const next = active
+                        ? selectedProjectCardIds.filter(id => id !== card.id)
+                        : [...selectedProjectCardIds, card.id];
+                      updateSelectedProjectCards(next, active ? `hid ${card.label}` : `showed ${card.label}`);
+                    }}
+                    className={`proj-export p-2 text-left min-w-0 ${active ? 'proj-category-active' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: card.color }}>
+                        <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold truncate text-foreground">{card.label}</div>
+                        <div className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/55">{active ? 'Visible' : 'Hidden'}</div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end mt-2">
+              <Button variant="ghost" size="sm" className="rounded-none h-7 text-[10px]" onClick={() => updateSelectedProjectCards([...DEFAULT_PROJECT_CARDS], 'reset project card selection')}>
+                Reset cards
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#9D7E3F]" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                  <FolderKanban className="w-3 h-3" /> Portfolio Health
+          {visibleProjectCards.map((card: any) => {
+            const Icon = card.icon;
+            return (
+              <div key={card.id} className="proj-intel-card min-w-0">
+                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
+                <div className="relative flex items-start justify-between gap-3 p-2.5 sm:p-3 pb-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                      <Icon className="w-3 h-3" /> {card.label}
+                    </div>
+                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.id === 'cash' ? card.color : undefined }}>{card.value}</div>
+                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
+                  </div>
+                  <div className="proj-spark">
+                    <ResponsiveContainer width="100%" height="100%">
+                      {card.chart}
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="text-xl font-bold font-mono-tab leading-none">{Math.round(portfolio.avgHealth)}</div>
-                <div className="text-[9px] text-foreground/60 mt-1">{portfolio.active} active · {portfolio.atRisk} watch-list</div>
-              </div>
-              <div className="proj-spark">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, health: p.healthScore }))}>
-                    <RechartsTooltip
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
-                      cursor={{ fill: 'rgba(157,126,63,0.08)' }}
-                      formatter={(value: number) => [`${Math.round(value)}`, 'Health']}
-                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
-                    />
-                    <Bar dataKey="health" radius={[3, 3, 0, 0]}>
-                      {enriched.slice(0, 8).map((p: any) => <Cell key={p.id} fill={healthTone(p.healthScore).color} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#2563eb]" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                  <CircleDollarSign className="w-3 h-3" /> Contract Value
-                </div>
-                <div className="text-lg font-bold font-mono-tab leading-tight truncate">{fmtUSD(portfolio.totalBudget)}</div>
-                <div className="text-[9px] text-foreground/60 mt-1">{portfolio.total} total projects under management</div>
-              </div>
-              <div className="proj-spark">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryChart}>
-                    <RechartsTooltip
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
-                      cursor={{ fill: 'rgba(37,99,235,0.08)' }}
-                      formatter={(value: number) => [fmtUSD(value), 'Budget']}
-                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
-                    />
-                    <Bar dataKey="budget" radius={[3, 3, 0, 0]}>
-                      {categoryChart.map((c) => <Cell key={c.name} fill={c.color} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
-            <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#ef4444]" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                  <Activity className="w-3 h-3" /> Capital Deployed
-                </div>
-                <div className="text-lg font-bold font-mono-tab leading-tight truncate">{fmtUSD(portfolio.totalSpent)}</div>
-                <div className="text-[9px] text-foreground/60 mt-1">
-                  {portfolio.totalBudget > 0 ? ((portfolio.totalSpent / portfolio.totalBudget) * 100).toFixed(1) : '0.0'}% of approved budgets
+                <div className="proj-card-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/48 truncate">{card.chartLabel}</span>
+                  <span className="text-[9px] font-mono-tab font-semibold text-foreground/68 truncate">{card.aux}</span>
                 </div>
               </div>
-              <div className="proj-spark">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={portfolioTrend}>
-                    <defs>
-                      <linearGradient id="projectCost" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.32} />
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="label" hide />
-                    <YAxis hide />
-                    <RechartsTooltip
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
-                      formatter={(value: number) => [fmtUSD(value), 'Costs']}
-                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
-                    />
-                    <Area type="monotone" dataKey="cost" stroke="#ef4444" fill="url(#projectCost)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          <div className="proj-intel-card p-2.5 sm:p-3 min-w-0">
-            <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: portfolio.totalNet >= 0 ? '#10b981' : '#ef4444' }} />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                  <ShieldCheck className="w-3 h-3" /> Cash Position
-                </div>
-                <div className={`text-lg font-bold font-mono-tab leading-tight truncate ${portfolio.totalNet >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(portfolio.totalNet)}</div>
-                <div className="text-[9px] text-foreground/60 mt-1">{fmtUSD(portfolio.outstanding)} outstanding checks</div>
-              </div>
-              <div className="proj-spark">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={portfolioTrend}>
-                    <defs>
-                      <linearGradient id="projectNet" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="label" hide />
-                    <YAxis hide />
-                    <RechartsTooltip
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }}
-                      formatter={(value: number) => [fmtUSD(value), 'Net']}
-                      labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
-                    />
-                    <Area type="monotone" dataKey="net" stroke="#10b981" fill="url(#projectNet)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
 

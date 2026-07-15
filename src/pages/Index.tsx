@@ -9,11 +9,11 @@ import { fmtUSD, fmtDate } from '@/lib/format';
 import {
   FileText, ArrowDownToLine, ArrowUpFromLine,
   ConciergeBell, FolderKanban, Users, Receipt, AlertTriangle,
-  X, Camera, BookOpen, Grid3X3, BookMarked, FolderOpen,
-  Upload, ChevronRight, Layers, ChevronDown, Settings2,
-  Check as CheckIcon, Calendar, BarChart3,
+  X, Camera, BookOpen, Grid3X3, FolderOpen,
+  Upload, ChevronRight, Layers, Settings2,
+  Check as CheckIcon, BarChart3,
 } from 'lucide-react';
-import { getDateRange } from '@/components/TimeFilter';
+import { buildFinanceBuckets, FinanceRangePicker, financeRangeLabel, getFinanceDateRange } from '@/lib/financeTime';
 import { CashFlowChart } from '@/components/FinancialChartPanel';
 import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from '@/components/StatChartPanel';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -27,149 +27,11 @@ const parseLocalDate = (d: string): Date => {
   return new Date(y, m - 1, day);
 };
 
-type ChartBucket = { label: string; start: Date; end: Date };
-
-const atStartOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const addDays = (d: Date, days: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
-const addMonths = (d: Date, months: number) => new Date(d.getFullYear(), d.getMonth() + months, 1);
-
-function buildAdaptiveBuckets(start: Date, end: Date, earliest?: Date): ChartBucket[] {
-  const rangeEnd = atStartOfDay(end);
-  const rawStart = atStartOfDay(start);
-  const effectiveStart = earliest && earliest > rawStart ? atStartOfDay(earliest) : rawStart;
-  const daySpan = Math.max(1, Math.ceil((rangeEnd.getTime() - effectiveStart.getTime()) / 86400000) + 1);
-
-  if (daySpan <= 45) {
-    return Array.from({ length: daySpan }, (_, i) => {
-      const s = addDays(effectiveStart, i);
-      return {
-        label: s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        start: s,
-        end: addDays(s, 1),
-      };
-    });
-  }
-
-  if (daySpan <= 180) {
-    const buckets: ChartBucket[] = [];
-    for (let s = effectiveStart; s <= rangeEnd; s = addDays(s, 7)) {
-      buckets.push({
-        label: s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        start: s,
-        end: addDays(s, 7),
-      });
-    }
-    return buckets;
-  }
-
-  const monthStart = new Date(effectiveStart.getFullYear(), effectiveStart.getMonth(), 1);
-  const months = Math.max(1, (rangeEnd.getFullYear() - monthStart.getFullYear()) * 12 + rangeEnd.getMonth() - monthStart.getMonth() + 1);
-  const visibleMonths = Math.min(months, 18);
-  const first = addMonths(monthStart, months - visibleMonths);
-  return Array.from({ length: visibleMonths }, (_, i) => {
-    const s = addMonths(first, i);
-    return {
-      label: s.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-      start: s,
-      end: addMonths(s, 1),
-    };
-  });
-}
-
-/* ── Period options ───────────────────────────────────────────────────────── */
-const PERIOD_OPTS = [
-  { id: '1d',      label: 'Today',         short: 'Today' },
-  { id: '1w',      label: 'Last 7 days',   short: '7D' },
-  { id: '1m',      label: 'Last 30 days',  short: '30D' },
-  { id: 'quarter', label: 'This quarter',  short: 'QTR' },
-  { id: '1y',      label: 'This year',     short: 'YTD' },
-  { id: 'all',     label: 'All time',      short: 'All' },
-];
-
 /* ── Compact period picker ────────────────────────────────────────────────── */
 function CompactPeriodPicker({
   value, onChange, accentColor,
 }: { value: string; onChange: (v: string) => void; accentColor?: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const color = accentColor || '#9D7E3F';
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const current = PERIOD_OPTS.find(o => o.id === value) ?? PERIOD_OPTS[5];
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`group flex items-center justify-center gap-2 min-w-[9.75rem] sm:min-w-[10.5rem] px-3.5 py-2 sm:py-2 border text-[11px] font-semibold transition-all duration-150 whitespace-nowrap shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] ${
-          open
-            ? 'border-foreground/30 bg-secondary text-foreground'
-            : 'border-border bg-background hover:border-foreground/25 hover:bg-secondary/60 text-foreground/80'
-        }`}
-      >
-        <span className="w-5 h-5 flex items-center justify-center" style={{ backgroundColor: `${color}14`, color }}>
-          <Calendar className="w-3 h-3" strokeWidth={1.5} />
-        </span>
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block text-[7px] uppercase tracking-[0.22em] text-muted-foreground leading-none mb-0.5">Range</span>
-          <span className="hidden sm:block truncate">{current.label}</span>
-          <span className="sm:hidden block truncate">{current.label}</span>
-        </span>
-        <ChevronDown
-          className={`w-3 h-3 opacity-60 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
-          strokeWidth={2}
-        />
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.96 }}
-            transition={{ duration: 0.11, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-2 w-64 sm:w-60 border border-border bg-background shadow-[0_22px_70px_rgba(0,0,0,0.18)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.55)] z-50 overflow-hidden"
-          >
-            <div className="px-3.5 pt-3 pb-2 border-b border-border/50" style={{ background: `linear-gradient(135deg, ${color}12, transparent 70%)` }}>
-              <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Time Range</div>
-              <div className="text-[10px] text-muted-foreground mt-1">Filters dashboard cards, charts, activity, and intelligence.</div>
-            </div>
-            <div className="p-1.5">
-              {PERIOD_OPTS.map(o => {
-                const active = o.id === value;
-                return (
-                  <button
-                    key={o.id}
-                    onClick={() => { onChange(o.id); setOpen(false); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-left text-[11px] transition-colors border ${
-                      active
-                        ? 'bg-secondary/60 font-semibold text-foreground border-border'
-                        : 'hover:bg-secondary/40 text-muted-foreground hover:text-foreground border-transparent'
-                    }`}
-                  >
-                    <span>
-                      <span className="block">{o.label}</span>
-                      <span className="block text-[8px] uppercase tracking-[0.16em] text-muted-foreground/70 mt-0.5">{o.short}</span>
-                    </span>
-                    {active && (
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+  return <FinanceRangePicker value={value} onChange={onChange} accentColor={accentColor} />;
 }
 
 /* ── Mobile Finance Menu ──────────────────────────────────────────────────── */
@@ -198,7 +60,6 @@ const FINANCE_SECTIONS = [
     items: [
       { to: '/concierge', label: 'Concierge',     icon: ConciergeBell, desc: 'Guided assistant' },
       { to: '/documents', label: 'Documents',     icon: FolderOpen,    desc: 'Receipts & files' },
-      { to: '/glossary',  label: 'Glossary',      icon: BookMarked,    desc: 'Terms & definitions' },
       { to: '/finance',   label: 'Switch Entity', icon: Layers,        desc: 'Change active entity' },
     ],
   },
@@ -584,7 +445,7 @@ export default function Index() {
 
   /* ── Data hooks ─────────────────────────────────────────────────────────── */
   const filtered = useMemo(() => {
-    const { start, end } = getDateRange(timePeriod);
+    const { start, end } = getFinanceDateRange(timePeriod);
     const inRange = (d: string) => { const dt = parseLocalDate(d); return dt >= start && dt <= end; };
     return {
       checks:   checks.filter((c: any) => inRange(c.issue_date)),
@@ -612,7 +473,8 @@ export default function Index() {
   }, [income, expenses, checks]);
 
   const periodStats = useMemo(() => {
-    const { start, end, label } = getDateRange(timePeriod);
+    const { start, end } = getFinanceDateRange(timePeriod);
+    const label = financeRangeLabel(timePeriod);
     const inRange = (d: string) => { const dt = parseLocalDate(d); return dt >= start && dt <= end; };
     const pInc = income.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
     const pExp = expenses.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
@@ -621,14 +483,13 @@ export default function Index() {
   }, [income, expenses, checks, timePeriod]);
 
   const dashboardBuckets = useMemo(() => {
-    const { start, end } = getDateRange(timePeriod);
     const dates = [
       ...income.map((t: any) => t.transaction_date),
       ...expenses.map((t: any) => t.transaction_date),
       ...checks.map((c: any) => c.issue_date),
       ...invoices.flatMap((i: any) => [i.issue_date, i.due_date].filter(Boolean)),
-    ].filter(Boolean).map(parseLocalDate).sort((a, b) => a.getTime() - b.getTime());
-    return buildAdaptiveBuckets(start, end, timePeriod === 'all' ? dates[0] : undefined);
+    ].filter(Boolean);
+    return buildFinanceBuckets(timePeriod, dates);
   }, [timePeriod, income, expenses, checks, invoices]);
 
   const cashFlowData = useMemo(() => {
@@ -657,7 +518,7 @@ export default function Index() {
   }, [dashboardBuckets, income, expenses, checks]);
 
   const periodInvoices = useMemo(() => {
-    const { start, end } = getDateRange(timePeriod);
+    const { start, end } = getFinanceDateRange(timePeriod);
     const inRange = (d?: string) => {
       if (!d) return false;
       const dt = parseLocalDate(d);
@@ -850,6 +711,11 @@ export default function Index() {
   const greeting  = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const rawName   = user?.user_metadata?.full_name ?? user?.email ?? '';
   const firstName = rawName.includes('@') ? rawName.split('@')[0] : (rawName.split(' ')[0] || '');
+  const entityNotice = entity.type === 'construction'
+    ? 'Construction operating entity'
+    : entity.type === 'energy'
+      ? 'Energy services operating entity'
+      : 'Holdings and development entity';
 
   const pMargin = periodStats.income > 0
     ? ((periodStats.income - periodStats.outflow) / periodStats.income) * 100
@@ -1108,7 +974,7 @@ export default function Index() {
             <div className="flex items-center gap-1.5 mb-0.5">
               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: entity.color }} />
               <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-medium">
-                {entity.shortName} · {entity.category}
+                {entity.name} · {entityNotice}
               </span>
             </div>
             <h1 className="text-xl font-semibold tracking-tight leading-snug">
@@ -1127,7 +993,7 @@ export default function Index() {
             <div>
               <div className="flex items-center gap-1.5 mb-0.5">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entity.color }} />
-                <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-medium">{entity.shortName}</span>
+                <span className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-medium">{entity.name} · {entity.category}</span>
               </div>
               <h1 className="text-[17px] font-semibold tracking-tight leading-tight">
                 {greeting}{firstName ? `, ${firstName}` : ''}.

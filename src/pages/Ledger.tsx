@@ -121,13 +121,13 @@ const LDG_CSS = `
 .ldg-op-card:hover{background:hsl(var(--secondary)/0.22);border-color:hsl(var(--foreground)/0.18);box-shadow:0 4px 14px rgba(10,10,10,0.06);}
 .ldg-op-card.active{background:hsl(var(--secondary)/0.45);border-color:hsl(var(--foreground)/0.26);box-shadow:inset 0 0 0 1px hsl(var(--foreground)/0.08),0 4px 14px rgba(10,10,10,0.07);}
 .ldg-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}
-.ldg-inspector{background:#fff;border:1px solid #e2e2e2;box-shadow:0 18px 54px rgba(10,10,10,0.16);position:fixed;right:18px;top:86px;bottom:18px;width:min(420px,calc(100vw - 36px));z-index:60;color:#111;overflow:hidden;}
-.ldg-inspector-body{padding:10px;display:grid;gap:8px;max-height:calc(100vh - 190px);overflow-y:auto;}
-.ldg-inspector-section{border:1px solid #e4e4e4;background:#fff;padding:8px;}
+.ldg-inspector{background:#fff;border-left:1px solid #d8d8d8;box-shadow:-18px 0 54px rgba(10,10,10,0.16);position:fixed;right:0;top:0;bottom:0;width:min(440px,calc(100vw - 24px));z-index:60;color:#111;overflow:hidden;}
+.ldg-inspector-body{padding:12px;display:grid;gap:9px;max-height:calc(100vh - 132px);overflow-y:auto;}
+.ldg-inspector-section{border:1px solid #e4e4e4;background:#fff;padding:10px;}
 .ldg-inspector-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;}
 .ldg-inspector-kv{min-width:0;border-bottom:1px solid #efefef;padding-bottom:4px;}
-.ldg-inspector-kv dt{font-size:7px;line-height:1.1;text-transform:uppercase;letter-spacing:.16em;color:#777;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ldg-inspector-kv dd{font-size:10px;line-height:1.25;color:#141414;font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
+.ldg-inspector-kv dt{font-size:8px;line-height:1.1;text-transform:uppercase;letter-spacing:.14em;color:#777;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-inspector-kv dd{font-size:12px;line-height:1.28;color:#141414;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;}
 .ldg-table-head{position:sticky;top:0;z-index:10;}
 .ldg-status-badge{border:1px solid hsl(var(--border));background:hsl(var(--secondary)/0.36);color:hsl(var(--foreground)/0.72);}
 .ldg-record-card{border:1px solid #e2e2e2;background:#fff;box-shadow:0 1px 3px rgba(10,10,10,0.04);}
@@ -147,6 +147,11 @@ const LDG_CSS = `
 .ldg-mobile-chip{border:1px solid #e0e0e0;background:#fafafa;padding:7px 8px;min-width:0;}
 .ldg-mobile-chip-label{font-size:7px;text-transform:uppercase;letter-spacing:.16em;color:#777;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ldg-mobile-chip-value{font-size:11px;color:#111;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+.ldg-correction-modal{background:#fff;color:#111;}
+.ldg-correction-header{background:linear-gradient(180deg,#fff,#fafafa);border-bottom:1px solid #dedede;position:relative;}
+.ldg-correction-header:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:#9D7E3F;}
+.ldg-correction-section{border:1px solid #e2e2e2;background:#fff;padding:12px;box-shadow:0 1px 3px rgba(10,10,10,0.035);}
+.ldg-correction-title{font-size:8px;text-transform:uppercase;letter-spacing:.22em;color:#9D7E3F;font-weight:900;margin-bottom:10px;}
 .dark .ldg-panel,.dark .ldg-stat,.dark .ldg-action{background:hsl(var(--card))!important;box-shadow:0 1px 4px rgba(0,0,0,0.28);}
 .dark .ldg-export{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 .dark .ldg-recon-panel{background:hsl(var(--card));}
@@ -465,8 +470,8 @@ function LedgerDetailDialog({
 }
 
 function LedgerInspector({
-  row, onClose, onToggleReconcile, onExport, onEdit,
-}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onEdit: (r: any) => void }) {
+  row, onClose, onToggleReconcile, onExport, onExportExcel, onEdit,
+}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onExportExcel: (r: any) => void; onEdit: (r: any) => void }) {
   if (!row) return null;
 
   const raw = row.raw ?? {};
@@ -519,7 +524,7 @@ function LedgerInspector({
 
   return (
     <aside className="hidden xl:block ldg-inspector">
-      <div className="px-3 py-2.5 border-b border-[#e4e4e4] bg-[#fafafa]">
+      <div className="px-4 py-3 border-b border-[#e4e4e4] bg-[#fafafa]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[8px] uppercase tracking-[0.24em] font-bold text-[#9D7E3F]">Transaction Inspector</div>
@@ -530,7 +535,7 @@ function LedgerInspector({
             <X className="w-3.5 h-3.5" strokeWidth={1.5} />
           </button>
         </div>
-        <div className={`text-xl font-bold font-mono-tab mt-2 ${isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}`}>{amount}</div>
+        <div className={`text-2xl font-bold font-mono-tab mt-3 ${isCredit ? 'text-[#12643a]' : 'text-[#8b1e1e]'}`}>{amount}</div>
         <div className="flex flex-wrap gap-1 mt-1.5">
           <span className="text-[8px] uppercase tracking-[0.14em] font-bold px-2 py-1 border border-[#ddd] bg-white text-[#555]">{row.type}</span>
           <span className={`text-[8px] uppercase tracking-[0.14em] font-bold px-2 py-1 border ${row.reconciled ? 'border-[#b9d8c6] bg-[#f0f8f3] text-[#12643a]' : 'border-[#e2d5a8] bg-[#fbf7e8] text-[#6f5b16]'}`}>{row.reconciled ? 'Reconciled' : 'Open'}</span>
@@ -570,15 +575,18 @@ function LedgerInspector({
           </div>
         </section>
 
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={() => onEdit(row)} className="h-8 border border-[#d8d8d8] bg-[#fff] text-[#222] hover:bg-[#f0f0f0] text-[8px] uppercase tracking-[0.15em] font-bold">
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => onEdit(row)} className="h-9 border border-[#d8d8d8] bg-[#fff] text-[#222] hover:bg-[#f0f0f0] text-[9px] uppercase tracking-[0.15em] font-bold">
             Edit
           </button>
-          <button onClick={() => onToggleReconcile(row)} className="h-8 border border-[#d8d8d8] bg-[#f8f8f8] text-[#222] hover:bg-[#f0f0f0] text-[8px] uppercase tracking-[0.15em] font-bold">
+          <button onClick={() => onToggleReconcile(row)} className="h-9 border border-[#d8d8d8] bg-[#f8f8f8] text-[#222] hover:bg-[#f0f0f0] text-[9px] uppercase tracking-[0.15em] font-bold">
             {row.reconciled ? 'Reopen' : 'Reconcile'}
           </button>
-          <button onClick={() => onExport(row)} className="h-8 border border-[#111] bg-[#111] text-white hover:bg-[#2a2a2a] text-[8px] uppercase tracking-[0.15em] font-bold">
+          <button onClick={() => onExport(row)} className="h-9 border border-[#111] bg-[#111] text-white hover:bg-[#2a2a2a] text-[9px] uppercase tracking-[0.15em] font-bold">
             Export PDF
+          </button>
+          <button onClick={() => onExportExcel(row)} className="h-9 border border-[#d8d8d8] bg-white text-[#222] hover:bg-[#f0f0f0] text-[9px] uppercase tracking-[0.15em] font-bold">
+            Export XLS
           </button>
         </div>
       </div>
@@ -587,8 +595,8 @@ function LedgerInspector({
 }
 
 function LedgerMobileSheet({
-  row, onClose, onToggleReconcile, onExport, onEdit,
-}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onEdit: (r: any) => void }) {
+  row, onClose, onToggleReconcile, onExport, onExportExcel, onEdit,
+}: { row: any; onClose: () => void; onToggleReconcile: (r: any) => void; onExport: (r: any) => void; onExportExcel: (r: any) => void; onEdit: (r: any) => void }) {
   if (!row) return null;
 
   const raw = row.raw ?? {};
@@ -635,7 +643,7 @@ function LedgerMobileSheet({
   return (
     <div className="xl:hidden fixed inset-0 z-[70] bg-black/35 backdrop-blur-[2px]" onClick={onClose}>
       <section
-        className="ldg-mobile-sheet absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto bg-white text-[#111] border-t border-[#d9d9d9] shadow-2xl"
+        className="ldg-mobile-sheet absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto bg-white text-[#111] border-t border-[#d9d9d9] shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 bg-white border-b border-[#e5e5e5] px-4 py-2.5">
@@ -669,24 +677,30 @@ function LedgerMobileSheet({
             </section>
           ))}
           {memo && <div className="ldg-record-note text-[10px] leading-snug line-clamp-3">{memo}</div>}
-          <div className="grid grid-cols-3 gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-2 pt-1">
             <button
               onClick={() => onEdit(row)}
-              className="h-10 border border-[#d8d8d8] bg-white text-[9px] uppercase tracking-[0.15em] font-bold"
+              className="h-11 border border-[#d8d8d8] bg-white text-[10px] uppercase tracking-[0.13em] font-bold"
             >
               Edit
             </button>
             <button
               onClick={() => onToggleReconcile(row)}
-              className="h-10 border border-[#d8d8d8] bg-[#f8f8f8] text-[9px] uppercase tracking-[0.15em] font-bold"
+              className="h-11 border border-[#d8d8d8] bg-[#f8f8f8] text-[10px] uppercase tracking-[0.13em] font-bold"
             >
               {row.reconciled ? 'Mark Open' : 'Reconcile'}
             </button>
             <button
               onClick={() => onExport(row)}
-              className="h-10 border border-[#111] bg-[#111] text-white text-[9px] uppercase tracking-[0.15em] font-bold"
+              className="h-11 border border-[#111] bg-[#111] text-white text-[10px] uppercase tracking-[0.13em] font-bold"
             >
               Export PDF
+            </button>
+            <button
+              onClick={() => onExportExcel(row)}
+              className="h-11 border border-[#d8d8d8] bg-white text-[10px] uppercase tracking-[0.13em] font-bold"
+            >
+              Export XLS
             </button>
           </div>
         </div>
@@ -724,10 +738,11 @@ export default function Ledger() {
   const [editSignature, setEditSignature] = useState('');
   const [editForm, setEditForm] = useState({
     amount: '', amount_before_tax: '', tax_amount: '', date: '', posting_date: '', due_date: '', cleared_date: '',
-    party: '', ref: '', category: '', project_id: '', vendor_id: '', payment_method: '', cost_phase: '', cost_type: '',
+    party: '', ref: '', transaction_number: '', external_reference: '', category: '', project_id: '', vendor_id: '', payee_vendor_id: '', payment_method: '', cost_phase: '', cost_type: '',
     status: '', payment_status: '', approval_status: '', reconciliation_status: '', receipt_status: '',
+    print_status: '', delivery_status: '', void_reason: '',
     billable_status: '', reimbursable_status: '', external_invoice_url: '', external_invoice_provider: '',
-    external_invoice_number: '', currency: 'USD', notes: '',
+    external_invoice_number: '', currency: 'USD', notes: '', internal_memo: '', public_memo: '', department: '', location: '',
   });
   const [reconcileMode, setReconcileMode] = useState(false);
 
@@ -769,9 +784,12 @@ export default function Ledger() {
       cleared_date: raw.cleared_date || '',
       party: row?._kind === 'check' ? (raw.payee_name || row?.party || '') : (raw.source_name || row?.party || ''),
       ref: raw.check_reference || raw.external_reference || raw.check_number || row?.ref || '',
+      transaction_number: raw.transaction_number || '',
+      external_reference: raw.external_reference || '',
       category: raw.category || '',
       project_id: row?.project_id || raw.project_id || '',
       vendor_id: raw.vendor_id || '',
+      payee_vendor_id: raw.payee_vendor_id || '',
       payment_method: raw.payment_method || '',
       cost_type: raw.cost_type || '',
       cost_phase: raw.cost_phase || '',
@@ -779,6 +797,9 @@ export default function Ledger() {
       payment_status: raw.payment_status || '',
       approval_status: raw.approval_status || '',
       reconciliation_status: raw.reconciliation_status || '',
+      print_status: raw.print_status || '',
+      delivery_status: raw.delivery_status || '',
+      void_reason: raw.void_reason || '',
       receipt_status: raw.receipt_status || '',
       billable_status: raw.billable_status || '',
       reimbursable_status: raw.reimbursable_status || '',
@@ -787,6 +808,10 @@ export default function Ledger() {
       external_invoice_number: raw.external_invoice_number || raw.invoice_number || '',
       currency: raw.currency || 'USD',
       notes: raw.description || raw.notes || raw.memo || raw.internal_memo || '',
+      internal_memo: raw.internal_memo || '',
+      public_memo: raw.public_memo || '',
+      department: raw.department || '',
+      location: raw.location || '',
     });
   };
 
@@ -1001,6 +1026,16 @@ export default function Ledger() {
     toast.success('Ledger record PDF exported');
   };
 
+  const exportLedgerRecordExcel = (row: any) => {
+    if (!row) return;
+    downloadLedgerExcel(
+      row._kind === 'income' ? [row.raw] : [],
+      row._kind === 'expense' ? [row.raw] : [],
+      row._kind === 'check' ? [row.raw] : [],
+    );
+    toast.success('Ledger record spreadsheet exported');
+  };
+
   const submitIncome = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formIncome.amount) { toast.error('Amount required'); return; }
@@ -1103,9 +1138,16 @@ export default function Ledger() {
           cleared_date: editForm.cleared_date || null,
           payee_name: editForm.party || null,
           check_number: editForm.ref || null,
+          payee_vendor_id: editForm.payee_vendor_id || null,
           memo: editForm.notes || null,
           project_id: editForm.project_id || null,
           status: editForm.status || editRow.status || 'pending',
+          approval_status: editForm.approval_status || undefined,
+          print_status: editForm.print_status || undefined,
+          delivery_status: editForm.delivery_status || undefined,
+          reconciliation_status: editForm.reconciliation_status || undefined,
+          external_reference: editForm.external_reference || undefined,
+          void_reason: editForm.void_reason || undefined,
           __mode: 'update' as const,
         };
         await checkUpsert.mutateAsync(payload as any);
@@ -1121,10 +1163,16 @@ export default function Ledger() {
           net_amount: amount - (Number.isFinite(taxAmount) ? 0 : 0),
           currency: editForm.currency || 'USD',
           transaction_date: editForm.date || editRow.date,
+          transaction_number: editForm.transaction_number || undefined,
+          external_reference: editForm.external_reference || undefined,
           posting_date: editForm.posting_date || editForm.date || editRow.date,
           due_date: editForm.due_date || null,
           cleared_date: editForm.cleared_date || null,
-          source_name: editRow._kind === 'income' ? (editForm.party || null) : undefined,
+          source_name: editRow._kind === 'income'
+            ? (editForm.party || null)
+            : editRow._kind === 'expense' && !editForm.vendor_id
+              ? (editForm.party || null)
+              : undefined,
           vendor_id: editRow._kind === 'expense' ? (editForm.vendor_id || null) : undefined,
           check_reference: editForm.ref || null,
           category: editForm.category || null,
@@ -1142,6 +1190,10 @@ export default function Ledger() {
           external_invoice_url: editForm.external_invoice_url || undefined,
           external_invoice_provider: editForm.external_invoice_provider || undefined,
           external_invoice_number: editForm.external_invoice_number || undefined,
+          internal_memo: editForm.internal_memo || undefined,
+          public_memo: editForm.public_memo || undefined,
+          department: editForm.department || undefined,
+          location: editForm.location || undefined,
           accounting_period: (editForm.date || editRow.date || '').slice(0, 7) || undefined,
           fiscal_year: editForm.date ? new Date(editForm.date).getFullYear() : undefined,
         };
@@ -1230,30 +1282,33 @@ export default function Ledger() {
 
         <div className="px-4 sm:px-8 pt-3 pb-3 border-b border-border/60">
           <div className="ldg-panel p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[9px] uppercase tracking-[0.2em] text-foreground/60 font-bold">Search Toolbar</div>
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.2em] text-foreground/60 font-bold">Search Toolbar</div>
+                <div className="text-[10px] text-foreground/45 sm:hidden">{selectedQueueLabel} · {selectedRangeLabel}</div>
+              </div>
               <div className="hidden lg:flex items-center gap-1.5 text-[9px] text-foreground/45 font-mono-tab">
                 <span className="px-2 py-1 border border-border bg-secondary/25">Saved View: {selectedQueueLabel}</span>
                 <span className="px-2 py-1 border border-border bg-secondary/25">Density: Comfortable</span>
                 <span className="px-2 py-1 border border-border bg-secondary/25">Columns: Core</span>
               </div>
             </div>
-            <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 lg:items-center">
               <div className="relative flex-1 min-w-[220px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/45" strokeWidth={1.5} />
-                <Input placeholder="Search description, counterparty, reference, project, category…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none h-10 w-full text-sm pl-9 bg-background" />
+                <Input placeholder="Search ledger…" value={q} onChange={e => setQ(e.target.value)} className="rounded-none h-9 sm:h-10 w-full text-sm pl-9 bg-background" />
               </div>
               <div className="grid grid-cols-2 lg:flex gap-2">
                 <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="rounded-none w-full lg:w-36 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="rounded-none w-full lg:w-36 h-9 sm:h-10 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="check">Checks</SelectItem><SelectItem value="income">Income</SelectItem><SelectItem value="expense">Expenses</SelectItem></SelectContent>
                 </Select>
                 <Select value={project} onValueChange={setProject}>
-                  <SelectTrigger className="rounded-none w-full lg:w-56 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="rounded-none w-full lg:w-56 h-9 sm:h-10 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="all">All projects</SelectItem>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
-                  <SelectTrigger className="rounded-none w-full lg:w-32 h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="rounded-none w-full lg:w-32 h-9 sm:h-10 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{PAGE_SIZE_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{n} / page</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -1327,7 +1382,7 @@ export default function Ledger() {
           {rows.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No entries match.</div>
           ) : pagedRows.map(r => (
-            <div key={r.rowId} role="button" tabIndex={0} onClick={() => setDetailRow(r)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setDetailRow(r); }} className={`ldg-panel relative w-full p-2.5 space-y-1.5 text-left cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-75' : ''}`}>
+            <div key={r.rowId} role="button" tabIndex={0} onClick={() => setDetailRow(r)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setDetailRow(r); }} className={`ldg-panel relative w-full p-2 space-y-1.5 text-left cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-75' : ''}`}>
               <div className="flex items-center justify-between">
                 <span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span>
                 <div className="flex items-center gap-2">
@@ -1345,7 +1400,7 @@ export default function Ledger() {
                 </div>
               </div>
               <div className="text-sm font-semibold truncate">{r.party}</div>
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono-tab">
+              <div className="grid grid-cols-2 gap-1 text-[10px] font-mono-tab">
                 <div className="border border-border/70 bg-secondary/25 px-2 py-1 min-w-0">
                   <div className="text-foreground/45 uppercase tracking-[0.14em]">Project</div>
                   <div className="truncate text-foreground/75">{r.project || 'Unassigned'}</div>
@@ -1365,7 +1420,11 @@ export default function Ledger() {
               </div>
               <div className="flex items-center justify-between gap-2 text-[10px] text-foreground/55">
                 <span className="truncate">Ref: {r.ref}</span>
-                <span className="flex items-center gap-1 uppercase tracking-[0.14em] font-bold">Details <ChevronRight className="w-3 h-3" /></span>
+                <span className="flex items-center gap-1 uppercase tracking-[0.14em] font-bold">Inspector <ChevronRight className="w-3 h-3" /></span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5" onClick={e => e.stopPropagation()}>
+                <button className="h-8 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold" onClick={() => setDetailRow(r)}>View</button>
+                <button className="h-8 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold" onClick={() => openEdit(r)}>Edit</button>
               </div>
               {reconcileMode && (
                 <button
@@ -1499,22 +1558,22 @@ export default function Ledger() {
           </div>
         )}
         </div>
-        <LedgerInspector row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onEdit={openEdit} />
+        <LedgerInspector row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onExportExcel={exportLedgerRecordExcel} onEdit={openEdit} />
       </div>
       </div>
 
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null); }}>
-        <DialogContent className="z-[100] rounded-none sm:max-w-4xl w-[calc(100%-2rem)] max-h-[92vh] overflow-y-auto p-0">
-          <div className="bg-white text-[#111]">
-            <div className="px-5 py-4 border-b border-[#dedede] bg-[#fafafa]">
+        <DialogContent className="z-[100] rounded-none sm:max-w-5xl w-[calc(100%-2rem)] max-h-[92vh] overflow-y-auto p-0 border-[#d8d8d8]">
+          <div className="ldg-correction-modal">
+            <div className="ldg-correction-header px-5 py-4">
               <DialogHeader>
-                <DialogTitle className="text-base font-bold">Signed Ledger Correction</DialogTitle>
+                <DialogTitle className="text-base sm:text-lg font-bold tracking-tight">Signed Ledger Correction</DialogTitle>
               </DialogHeader>
-              <p className="text-[11px] text-[#666] mt-1">Every saved correction requires a digital signature and writes to the finance changelog.</p>
+              <p className="text-[11px] text-[#666] mt-1 max-w-2xl">Edit the ledger record, sign the correction, and preserve a permanent changelog footprint with previous and current values.</p>
             </div>
-            <form onSubmit={submitLedgerEdit} className="p-5 space-y-4">
+            <form onSubmit={submitLedgerEdit} className="p-4 sm:p-5 space-y-3 bg-[#f7f7f7]">
               {editRow && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="ldg-correction-section grid grid-cols-2 lg:grid-cols-4 gap-2">
                   {[
                     ['Record Type', editRow.type],
                     ['Existing Ref', editRow.ref],
@@ -1529,6 +1588,8 @@ export default function Ledger() {
                 </div>
               )}
 
+              <section className="ldg-correction-section">
+                <div className="ldg-correction-title">Amounts & Dates</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   {fld('Total Amount')}
@@ -1565,6 +1626,9 @@ export default function Ledger() {
                   <DateInput className="h-10" value={editForm.cleared_date} onChange={e => setEditForm(f => ({ ...f, cleared_date: e.target.value }))} />
                 </div>
               </div>
+              </section>
+              <section className="ldg-correction-section">
+                <div className="ldg-correction-title">Status & Counterparty</div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   {fld('Status')}
@@ -1579,18 +1643,30 @@ export default function Ledger() {
                   <Input className="rounded-none h-10" value={editForm.approval_status} onChange={e => setEditForm(f => ({ ...f, approval_status: e.target.value }))} />
                 </div>
               </div>
-              <div className={`grid grid-cols-1 ${editRow?._kind === 'expense' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+              {editRow?._kind === 'check' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                  <div>{fld('Print Status')}<Input className="rounded-none h-10" value={editForm.print_status} onChange={e => setEditForm(f => ({ ...f, print_status: e.target.value }))} /></div>
+                  <div>{fld('Delivery Status')}<Input className="rounded-none h-10" value={editForm.delivery_status} onChange={e => setEditForm(f => ({ ...f, delivery_status: e.target.value }))} /></div>
+                  <div>{fld('Void Reason')}<Input className="rounded-none h-10" value={editForm.void_reason} onChange={e => setEditForm(f => ({ ...f, void_reason: e.target.value }))} /></div>
+                </div>
+              )}
+              <div className={`grid grid-cols-1 ${editRow?._kind !== 'income' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3 mt-3`}>
                 <div>
                   {fld(editRow?._kind === 'check' ? 'Payee' : 'Counterparty / Source')}
                   <Input className="rounded-none h-10" value={editForm.party} onChange={e => setEditForm(f => ({ ...f, party: e.target.value }))} />
                 </div>
-                {editRow?._kind === 'expense' && (
+                {editRow?._kind !== 'income' && (
                   <div>
-                    {fld('Vendor')}
-                    <Select value={editForm.vendor_id || 'none'} onValueChange={v => setEditForm(f => ({ ...f, vendor_id: v === 'none' ? '' : v }))}>
-                      <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="none">No linked vendor</SelectItem>{vendors.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
-                    </Select>
+                    {fld(editRow?._kind === 'check' ? 'Linked Payee Vendor' : 'Vendor')}
+                    <QuickCreateSelect
+                      value={editRow?._kind === 'check' ? editForm.payee_vendor_id : editForm.vendor_id}
+                      onValueChange={v => setEditForm(f => editRow?._kind === 'check' ? ({ ...f, payee_vendor_id: v }) : ({ ...f, vendor_id: v }))}
+                      options={vendors}
+                      placeholder="Select or create vendor"
+                      entityLabel="Vendor"
+                      onCreateNew={async name => { const r = await createVendor.mutateAsync({ name }); toast.success(`Vendor "${name}" created`); return r; }}
+                    />
+                    <button type="button" className="text-[9px] uppercase tracking-[0.14em] text-[#777] hover:text-[#111] mt-1" onClick={() => setEditForm(f => editRow?._kind === 'check' ? ({ ...f, payee_vendor_id: '' }) : ({ ...f, vendor_id: '' }))}>Clear vendor</button>
                   </div>
                 )}
                 <div>
@@ -1598,13 +1674,25 @@ export default function Ledger() {
                   <Input className="rounded-none h-10" value={editForm.ref} onChange={e => setEditForm(f => ({ ...f, ref: e.target.value }))} />
                 </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div>{fld('Transaction Number')}<Input className="rounded-none h-10" value={editForm.transaction_number} onChange={e => setEditForm(f => ({ ...f, transaction_number: e.target.value }))} disabled={editRow?._kind === 'check'} /></div>
+                <div>{fld('External Reference')}<Input className="rounded-none h-10" value={editForm.external_reference} onChange={e => setEditForm(f => ({ ...f, external_reference: e.target.value }))} /></div>
+              </div>
+              </section>
+              <section className="ldg-correction-section">
+                <div className="ldg-correction-title">Project & Classification</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   {fld('Project')}
-                  <Select value={editForm.project_id || 'none'} onValueChange={v => setEditForm(f => ({ ...f, project_id: v === 'none' ? '' : v }))}>
-                    <SelectTrigger className="rounded-none h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="none">Unassigned</SelectItem>{projects.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <QuickCreateSelect
+                    value={editForm.project_id}
+                    onValueChange={v => setEditForm(f => ({ ...f, project_id: v }))}
+                    options={projects}
+                    placeholder="Select or create project"
+                    entityLabel="Project"
+                    onCreateNew={async name => { const r = await createProject.mutateAsync({ name }); toast.success(`Project "${name}" created`); return r; }}
+                  />
+                  <button type="button" className="text-[9px] uppercase tracking-[0.14em] text-[#777] hover:text-[#111] mt-1" onClick={() => setEditForm(f => ({ ...f, project_id: '' }))}>Clear project</button>
                 </div>
                 <div>
                   {fld('Category')}
@@ -1626,8 +1714,10 @@ export default function Ledger() {
                   <Input className="rounded-none h-10" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
                 </div>
               </div>
+              </section>
               {editRow?._kind !== 'check' && (
-                <>
+                <section className="ldg-correction-section">
+                  <div className="ldg-correction-title">Documentation & Invoice Links</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       {fld('Receipt Status')}
@@ -1656,9 +1746,22 @@ export default function Ledger() {
                       <Input className="rounded-none h-10" value={editForm.external_invoice_number} onChange={e => setEditForm(f => ({ ...f, external_invoice_number: e.target.value }))} />
                     </div>
                   </div>
-                </>
+                </section>
               )}
-              <div className="border border-[#dedede] bg-[#fafafa] p-3">
+              {editRow?._kind !== 'check' && (
+                <section className="ldg-correction-section">
+                  <div className="ldg-correction-title">Operational Metadata</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>{fld('Department')}<Input className="rounded-none h-10" value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} /></div>
+                    <div>{fld('Location')}<Input className="rounded-none h-10" value={editForm.location} onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))} /></div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    <div>{fld('Internal Memo')}<Input className="rounded-none h-10" value={editForm.internal_memo} onChange={e => setEditForm(f => ({ ...f, internal_memo: e.target.value }))} /></div>
+                    <div>{fld('Public Memo')}<Input className="rounded-none h-10" value={editForm.public_memo} onChange={e => setEditForm(f => ({ ...f, public_memo: e.target.value }))} /></div>
+                  </div>
+                </section>
+              )}
+              <div className="border border-[#d9c896] bg-[#fffdf6] p-3 shadow-sm">
                 {fld('Digital Signature Required')}
                 <Input className="rounded-none h-10 bg-white" placeholder="Type your full name to approve this correction" value={editSignature} onChange={e => setEditSignature(e.target.value)} />
                 <p className="text-[10px] text-[#666] mt-2">Signature timestamp will be recorded as {new Date().toLocaleString()}.</p>
@@ -1918,7 +2021,7 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      <LedgerMobileSheet row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onEdit={openEdit} />
+      <LedgerMobileSheet row={detailRow} onClose={() => setDetailRow(null)} onToggleReconcile={toggleReconcile} onExport={exportLedgerRecord} onExportExcel={exportLedgerRecordExcel} onEdit={openEdit} />
     </AppShell>
   );
 }

@@ -1,4 +1,6 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -7,7 +9,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   useCreateTransactionAllocations,
   useDelete,
@@ -27,8 +29,12 @@ import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
-import { Trash2, FileText, Table2, Plus, Camera, X, Sparkles } from 'lucide-react';
-import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
+import {
+  Trash2, FileText, Table2, Plus, Camera, X, Sparkles, Eye,
+  ExternalLink, CreditCard, FolderKanban, Building2, ShieldCheck,
+  CircleDollarSign, ReceiptText,
+  Settings2,
+} from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import { useCreatePortalClient, usePortalClients } from '@/hooks/usePortalClients';
@@ -37,6 +43,10 @@ import { scanReceipt, type ScannedReceipt } from '@/lib/receiptScan';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
+import {
+  Area, AreaChart, Bar, BarChart, ResponsiveContainer,
+  Tooltip as RechartsTooltip, XAxis, YAxis,
+} from 'recharts';
 
 const EXPENSE_CATEGORIES = [
   'Materials', 'Labor', 'Subcontractor', 'Equipment', 'Equipment rental',
@@ -209,16 +219,181 @@ function FormNav({ step, total, onBack, onNext, submitLabel, isPending }: {
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 const TXN_CSS = `
+.txn-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.22),transparent 240px);}
+.txn-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.txn-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;position:relative;overflow:visible;}
+.txn-intel-card:hover{box-shadow:0 8px 22px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);z-index:30;}
+.txn-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.06),transparent 44%);pointer-events:none;}
+.txn-card-foot{border-top:1px solid hsl(var(--border)/0.65);background:hsl(var(--secondary)/0.24);}
+.txn-spark{height:44px;min-width:96px;}
+.txn-record-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s;}
+.txn-record-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
 .txn-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .txn-stat{background:rgba(255,255,255,0.86)!important;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
+.txn-inspector{background:#fff;color:#171717;box-shadow:-18px 0 50px rgba(15,23,42,.16);border-left:1px solid #e5e2dc;}
+.txn-inspector-label{font-size:8px;text-transform:uppercase;letter-spacing:.18em;font-weight:800;color:#737373;}
+.txn-inspector-value{font-size:12px;font-weight:700;color:#171717;line-height:1.2;}
+.txn-inspector-section{border:1px solid #e8e4dc;background:#fbfaf7;}
 .dark .txn-stat{background:hsl(var(--card))!important;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.dark .txn-panel,.dark .txn-intel-card,.dark .txn-record-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 .dark .txn-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
+@media(max-width:767px){.txn-inspector{left:0;right:0;bottom:0;top:auto;height:min(86vh,760px);border-left:0;border-top:1px solid #e5e2dc;box-shadow:0 -20px 55px rgba(15,23,42,.18);}}
 `;
 
 const INCOME_STEPS  = ['Core Details', 'Payment', 'Classification'];
 const EXPENSE_STEPS = ['Core Details', 'Payment', 'Classification'];
+const DEFAULT_TXN_CARDS = ['total', 'ready', 'links'] as const;
+
+const providerName = (provider?: string) => {
+  if (provider === 'stripe') return 'Stripe';
+  if (provider === 'quickbooks') return 'QuickBooks';
+  if (provider === 'other') return 'External link';
+  return 'Not attached';
+};
+
+function InspectorField({ label, value }: { label: string; value?: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="txn-inspector-label">{label}</div>
+      <div className="txn-inspector-value mt-1 break-words">{value || '—'}</div>
+    </div>
+  );
+}
+
+function TransactionInspector({
+  txn,
+  kind,
+  onClose,
+}: {
+  txn: any | null;
+  kind: 'income' | 'expense';
+  onClose: () => void;
+}) {
+  if (!txn) return null;
+  const isIncome = kind === 'income';
+  const amount = Number(txn.total_amount ?? txn.amount ?? 0);
+  const accent = isIncome ? '#10b981' : '#ef4444';
+  const title = isIncome
+    ? (txn.source_name || txn.client_name || 'Income record')
+    : (txn.vendors?.name || txn.vendor_name || 'Expense record');
+  const invoiceUrl = txn.external_invoice_url || txn.stripe_payment_link;
+
+  return (
+    <div className="fixed inset-0 z-50 pointer-events-none">
+      <button className="absolute inset-0 bg-black/20 pointer-events-auto" aria-label="Close transaction inspector" onClick={onClose} />
+      <aside className="txn-inspector pointer-events-auto fixed right-0 top-0 h-screen w-full md:w-[440px] lg:w-[500px] flex flex-col">
+        <div className="h-1 shrink-0" style={{ backgroundColor: accent }} />
+        <div className="px-4 sm:px-5 py-4 border-b border-[#e8e4dc] bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase tracking-[0.26em] text-[#777] font-black">Transaction Inspector</div>
+              <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-[#171717] truncate mt-1">{title}</h2>
+              <div className="text-[11px] text-[#777] mt-1 font-mono-tab truncate">{txn.transaction_number || txn.external_reference || txn.check_reference || txn.id}</div>
+            </div>
+            <button onClick={onClose} className="w-9 h-9 border border-[#e5e2dc] bg-[#fbfaf7] flex items-center justify-center text-[#333] hover:bg-[#f3f0e8] transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-[1fr_auto] gap-3 items-end">
+            <div>
+              <div className="txn-inspector-label">Record type</div>
+              <div className="text-[12px] font-bold uppercase tracking-[0.14em] mt-1" style={{ color: accent }}>{isIncome ? 'Income received' : 'Expense recorded'}</div>
+            </div>
+            <div className="text-right">
+              <div className="txn-inspector-label">Amount</div>
+              <div className="text-2xl font-black font-mono-tab mt-1" style={{ color: accent }}>{isIncome ? '+' : '-'}{fmtUSD(amount)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 bg-[#f8f7f3]">
+          <section className="txn-inspector-section p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <InspectorField label="Transaction date" value={fmtDate(txn.transaction_date)} />
+              <InspectorField label="Posting date" value={txn.posting_date ? fmtDate(txn.posting_date) : fmtDate(txn.transaction_date)} />
+              <InspectorField label="Status" value={txn.status || txn.payment_status || 'posted'} />
+              <InspectorField label="Reconciliation" value={txn.reconciliation_status || 'unreconciled'} />
+            </div>
+          </section>
+
+          <section className="txn-inspector-section p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard className="w-4 h-4" style={{ color: accent }} />
+              <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#555]">Payment Details</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InspectorField label="Method" value={txn.payment_method || '—'} />
+              <InspectorField label="Reference" value={txn.check_reference || txn.external_reference || '—'} />
+              <InspectorField label="Category" value={txn.category || txn.expense_type || '—'} />
+              <InspectorField label="Currency" value={txn.currency || 'USD'} />
+            </div>
+          </section>
+
+          <section className="txn-inspector-section p-3">
+            <div className="flex items-center gap-2 mb-3">
+              {isIncome ? <ReceiptText className="w-4 h-4" style={{ color: accent }} /> : <Building2 className="w-4 h-4" style={{ color: accent }} />}
+              <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#555]">{isIncome ? 'Invoice Connection' : 'Vendor & Costing'}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {isIncome ? (
+                <>
+                  <InspectorField label="Invoice provider" value={providerName(txn.external_invoice_provider)} />
+                  <InspectorField label="Invoice ref" value={txn.external_invoice_number || txn.invoice_id || '—'} />
+                  <InspectorField label="Retainage" value={txn.retainage_amount ? fmtUSD(Number(txn.retainage_amount)) : txn.retainage_percent ? `${txn.retainage_percent}%` : '—'} />
+                  <InspectorField label="Client" value={txn.source_name || txn.client_name || '—'} />
+                </>
+              ) : (
+                <>
+                  <InspectorField label="Vendor" value={txn.vendors?.name || txn.vendor_name || '—'} />
+                  <InspectorField label="Cost code" value={txn.cost_code_id || '—'} />
+                  <InspectorField label="Cost phase" value={txn.cost_phase || '—'} />
+                  <InspectorField label="Billable" value={txn.billable_status || 'not_billable'} />
+                </>
+              )}
+            </div>
+            {invoiceUrl && (
+              <button
+                type="button"
+                onClick={() => window.open(invoiceUrl, '_blank', 'noopener,noreferrer')}
+                className="mt-3 w-full h-9 border border-[#d8d3c8] bg-white text-[#171717] text-[10px] uppercase tracking-[0.18em] font-black flex items-center justify-center gap-2 hover:bg-[#f3f0e8] transition-colors"
+              >
+                Open Payable Invoice <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </section>
+
+          <section className="txn-inspector-section p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <FolderKanban className="w-4 h-4" style={{ color: accent }} />
+              <div className="text-[10px] uppercase tracking-[0.22em] font-black text-[#555]">Project Context</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InspectorField label="Project" value={txn.projects?.name || 'No project'} />
+              <InspectorField label="Phase" value={txn.project_phase_id || txn.cost_phase || '—'} />
+              <InspectorField label="Division" value={txn.construction_division_id || '—'} />
+              <InspectorField label="Approval" value={txn.approval_status || 'approved'} />
+            </div>
+          </section>
+
+          {(txn.description || txn.notes || txn.internal_memo) && (
+            <section className="txn-inspector-section p-3">
+              <div className="txn-inspector-label">Memo / notes</div>
+              <p className="mt-2 text-[12px] leading-relaxed text-[#333] whitespace-pre-wrap">{txn.description || txn.notes || txn.internal_memo}</p>
+            </section>
+          )}
+        </div>
+
+        <div className="px-4 sm:px-5 py-3 border-t border-[#e8e4dc] bg-white grid grid-cols-2 gap-2">
+          <button onClick={onClose} className="h-10 border border-[#d8d3c8] bg-white text-[10px] uppercase tracking-[0.18em] font-black hover:bg-[#f3f0e8] transition-colors">Close</button>
+          <button onClick={() => window.print()} className="h-10 bg-[#171717] text-white text-[10px] uppercase tracking-[0.18em] font-black hover:bg-black transition-colors">Export / Print</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
 
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
+  const navigate = useNavigate();
   const { entity } = useEntity();
   const { user } = useAuth();
   const { data: txns = [] } = useTransactions(kind);
@@ -246,6 +421,27 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const [step, setStep] = useState(1);
   const [detailRow, setDetailRow] = useState<any>(null);
   const [timePeriod, setTimePeriod] = useState('all');
+  const [cardPickerOpen, setCardPickerOpen] = useState(false);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [...DEFAULT_TXN_CARDS];
+    const saved = window.localStorage.getItem(`hou-finance-${kind}-card-selection`);
+    if (!saved) return [...DEFAULT_TXN_CARDS];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length ? parsed : [...DEFAULT_TXN_CARDS];
+    } catch {
+      return [...DEFAULT_TXN_CARDS];
+    }
+  });
+
+  const updateSelectedCards = (next: string[]) => {
+    if (!next.length) {
+      toast.error('Keep at least one card visible.');
+      return;
+    }
+    setSelectedCardIds(next);
+    window.localStorage.setItem(`hou-finance-${kind}-card-selection`, JSON.stringify(next));
+  };
 
   const blankForm = {
     amount: '', transaction_date: new Date().toISOString().slice(0, 10),
@@ -518,9 +714,139 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     [txns, timePeriod]
   );
   const selectedRangeLabel = financeRangeLabel(timePeriod);
+  const total = filteredTxns.reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+  const average = filteredTxns.length ? total / filteredTxns.length : 0;
+  const unreconciledCount = filteredTxns.filter((t: any) => (t.reconciliation_status || 'unreconciled') !== 'reconciled').length;
+  const pendingCount = filteredTxns.filter((t: any) => ['draft', 'submitted', 'under_review', 'unpaid', 'partial'].includes(t.status || t.payment_status || '')).length;
+  const invoiceLinkedCount = filteredTxns.filter((t: any) => t.invoice_id || t.external_invoice_url).length;
+  const projectLinkedCount = filteredTxns.filter((t: any) => t.project_id).length;
+  const receiptReadyCount = filteredTxns.filter((t: any) => ['received', 'attached', 'uploaded', 'provided'].includes(t.receipt_status || '') || t.attachment_count > 0).length;
+  const methodData = Object.entries(filteredTxns.reduce((acc: Record<string, number>, t: any) => {
+    const key = t.payment_method || 'Unspecified';
+    acc[key] = (acc[key] || 0) + Number(t.total_amount ?? t.amount ?? 0);
+    return acc;
+  }, {})).slice(0, 5).map(([label, value]) => ({ label, value }));
+  const accent = isIncome ? '#10b981' : '#ef4444';
+
+  const trendData = useMemo(() => {
+    const buckets = new Map<string, { label: string; amount: number; count: number }>();
+    filteredTxns.forEach((t: any) => {
+      const raw = t.transaction_date || t.posting_date || t.created_at;
+      if (!raw) return;
+      const d = new Date(raw);
+      const key = timePeriod === '30d' || timePeriod.startsWith('custom:')
+        ? d.toISOString().slice(0, 10)
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = timePeriod === '30d' || timePeriod.startsWith('custom:')
+        ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : d.toLocaleDateString('en-US', { month: 'short' });
+      const existing = buckets.get(key) || { label, amount: 0, count: 0 };
+      existing.amount += Number(t.total_amount ?? t.amount ?? 0);
+      existing.count += 1;
+      buckets.set(key, existing);
+    });
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([, value]) => value);
+  }, [filteredTxns, timePeriod]);
+
+  const cardData = [
+    {
+      id: 'total',
+      label: isIncome ? 'Income Captured' : 'Expense Volume',
+      value: fmtUSD(total),
+      sub: `${filteredTxns.length} record${filteredTxns.length === 1 ? '' : 's'} · ${selectedRangeLabel}`,
+      aux: `Avg ${fmtUSD(average)}`,
+      icon: CircleDollarSign,
+      color: accent,
+      chart: (
+        <AreaChart data={trendData}>
+          <defs>
+            <linearGradient id={`txnTotal-${kind}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={accent} stopOpacity={0.34} />
+              <stop offset="95%" stopColor={accent} stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" hide />
+          <YAxis hide domain={[0, 'dataMax']} />
+          <RechartsTooltip cursor={false} formatter={(v: number) => fmtUSD(Number(v))} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+          <Area type="monotone" dataKey="amount" stroke={accent} fill={`url(#txnTotal-${kind})`} strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+        </AreaChart>
+      ),
+    },
+    {
+      id: 'ready',
+      label: 'Ledger Readiness',
+      value: `${Math.max(0, filteredTxns.length - unreconciledCount)}/${filteredTxns.length || 0}`,
+      sub: `${unreconciledCount} awaiting reconciliation`,
+      aux: pendingCount ? `${pendingCount} pending` : 'Clean workflow',
+      icon: ShieldCheck,
+      color: '#9D7E3F',
+      chart: (
+        <BarChart data={[{ label: 'Done', value: Math.max(0, filteredTxns.length - unreconciledCount) }, { label: 'Open', value: unreconciledCount }]}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip cursor={false} formatter={(v: number) => Number(v).toLocaleString()} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+          <Bar dataKey="value" fill="#9D7E3F" radius={[2, 2, 0, 0]} />
+        </BarChart>
+      ),
+    },
+    {
+      id: 'links',
+      label: isIncome ? 'Invoice Links' : 'Project Costing',
+      value: isIncome ? invoiceLinkedCount.toString() : projectLinkedCount.toString(),
+      sub: isIncome ? 'Income tied to payable invoices' : 'Expenses assigned to projects',
+      aux: `${Math.round(((isIncome ? invoiceLinkedCount : projectLinkedCount) / Math.max(filteredTxns.length, 1)) * 100)}% coverage`,
+      icon: isIncome ? ReceiptText : FolderKanban,
+      color: isIncome ? '#2563eb' : '#0f766e',
+      chart: (
+        <BarChart data={[{ label: 'Linked', value: isIncome ? invoiceLinkedCount : projectLinkedCount }, { label: 'Other', value: Math.max(0, filteredTxns.length - (isIncome ? invoiceLinkedCount : projectLinkedCount)) }]}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip cursor={false} formatter={(v: number) => Number(v).toLocaleString()} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+          <Bar dataKey="value" fill={isIncome ? '#2563eb' : '#0f766e'} radius={[2, 2, 0, 0]} />
+        </BarChart>
+      ),
+    },
+    {
+      id: 'method',
+      label: 'Payment Mix',
+      value: methodData.length ? methodData[0].label : 'None',
+      sub: methodData.length ? `${fmtUSD(methodData[0].value)} via top method` : 'No payment method data',
+      aux: `${methodData.length} method${methodData.length === 1 ? '' : 's'} tracked`,
+      icon: CreditCard,
+      color: '#111827',
+      chart: (
+        <BarChart data={methodData.length ? methodData : [{ label: 'None', value: 0 }]}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip cursor={false} formatter={(v: number) => fmtUSD(Number(v))} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+          <Bar dataKey="value" fill="#111827" radius={[2, 2, 0, 0]} />
+        </BarChart>
+      ),
+    },
+    {
+      id: 'docs',
+      label: isIncome ? 'Invoice Evidence' : 'Receipt Control',
+      value: isIncome ? invoiceLinkedCount.toString() : receiptReadyCount.toString(),
+      sub: isIncome ? 'Records with invoice proof' : 'Records with receipt/document proof',
+      aux: `${Math.round(((isIncome ? invoiceLinkedCount : receiptReadyCount) / Math.max(filteredTxns.length, 1)) * 100)}% documented`,
+      icon: FileText,
+      color: '#7c3aed',
+      chart: (
+        <BarChart data={[{ label: 'Ready', value: isIncome ? invoiceLinkedCount : receiptReadyCount }, { label: 'Open', value: Math.max(0, filteredTxns.length - (isIncome ? invoiceLinkedCount : receiptReadyCount)) }]}>
+          <XAxis dataKey="label" hide />
+          <YAxis hide />
+          <RechartsTooltip cursor={false} formatter={(v: number) => Number(v).toLocaleString()} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+          <Bar dataKey="value" fill="#7c3aed" radius={[2, 2, 0, 0]} />
+        </BarChart>
+      ),
+    },
+  ];
+  const visibleCards = selectedCardIds.map(id => cardData.find(card => card.id === id)).filter(Boolean);
 
   /* ── Exports ── */
-  const total = filteredTxns.reduce((s: number, t: any) => s + Number(t.amount), 0);
   const exportPDF = () => {
     const doc = generateTransactionReport(filteredTxns, kind, selectedRangeLabel);
     savePDF(doc, `hou-${kind}-${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -568,11 +894,15 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               }
             </Button>
 
-            {/* Log Income / Record Expense dialog */}
+            <Button
+              className="rounded-none h-9 text-sm bg-foreground text-background hover:bg-foreground/90"
+              onClick={() => navigate(`/concierge?start=${kind}`)}
+            >
+              {isIncome ? 'Log Income' : 'Log Expense'}
+            </Button>
+
+            {/* Advanced transaction dialog */}
             <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetDialog(); }}>
-              <DialogTrigger asChild>
-                <Button className="rounded-none h-9 text-sm">{isIncome ? 'Log Income' : 'Record Expense'}</Button>
-              </DialogTrigger>
               <DialogContent className="rounded-none sm:max-w-xl w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto p-6">
                 <DialogHeader className="pb-0">
                   <DialogTitle className="text-base font-semibold">
@@ -1238,29 +1568,109 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         </button>
       </div>
 
-      <div className="px-4 sm:px-8 py-5 border-b border-border flex items-center gap-6 overflow-x-auto txn-stat">
-        <div className="shrink-0"><div className="micro-label">Total</div><div className="stat-value mt-1 text-lg sm:text-2xl">{fmtUSD(total)}</div></div>
-        <div className="shrink-0"><div className="micro-label">Records</div><div className="stat-value mt-1 text-lg sm:text-2xl">{filteredTxns.length}</div></div>
-        <div className="shrink-0"><div className="micro-label">Range</div><div className="stat-value mt-1 text-lg sm:text-2xl">{selectedRangeLabel}</div></div>
+      <div className="txn-shell px-4 sm:px-8 py-5 border-b border-border">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-3">
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.24em] font-black text-foreground/55">
+              {isIncome ? 'Income Intelligence' : 'Expense Intelligence'} · {selectedRangeLabel}
+            </div>
+            <div className="text-sm font-semibold tracking-tight mt-0.5">
+              Choose the operating signals that make this register easier to manage.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCardPickerOpen(open => !open)}
+            className="self-start sm:self-auto h-8 px-1 text-[10px] uppercase tracking-[0.16em] font-black text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Customize
+          </button>
+        </div>
+        {cardPickerOpen && (
+          <div className="txn-panel p-2.5 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {cardData.map((card) => {
+                const active = selectedCardIds.includes(card.id);
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => updateSelectedCards(active ? selectedCardIds.filter(id => id !== card.id) : [...selectedCardIds, card.id])}
+                    className={`txn-record-card p-2 text-left min-w-0 ${active ? 'ring-1 ring-foreground/20' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: card.color }}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold truncate text-foreground">{card.label}</div>
+                        <div className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/55">{active ? 'Visible' : 'Hidden'}</div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end mt-2">
+              <Button variant="ghost" size="sm" className="rounded-none h-7 text-[10px]" onClick={() => updateSelectedCards([...DEFAULT_TXN_CARDS])}>
+                Reset cards
+              </Button>
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {visibleCards.map((card) => {
+            if (!card) return null;
+            const Icon = card.icon;
+            return (
+              <div key={card.id} className="txn-intel-card min-w-0">
+                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
+                <div className="relative flex items-start justify-between gap-3 p-2.5 sm:p-3 pb-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                      <Icon className="w-3 h-3" /> {card.label}
+                    </div>
+                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.id === 'total' ? card.color : undefined }}>{card.value}</div>
+                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
+                  </div>
+                  <div className="txn-spark">
+                    <ResponsiveContainer width="100%" height="100%">
+                      {card.chart}
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="txn-card-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/48 truncate">{selectedRangeLabel}</span>
+                  <span className="text-[9px] font-mono-tab font-semibold text-foreground/68 truncate">{card.aux}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="px-4 sm:px-8 py-6">
         {/* Mobile cards */}
-        <div className="sm:hidden space-y-3">
+        <div className="sm:hidden space-y-2.5">
           {filteredTxns.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No records.</div>
           ) : filteredTxns.map((t: any) => (
-            <div key={t.id} className="border border-border p-4 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
+            <div key={t.id} className="txn-record-card p-3 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
-                <span className={`text-sm font-semibold font-mono-tab ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</span>
+                <span className={`text-sm font-bold font-mono-tab ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(Number(t.total_amount ?? t.amount ?? 0))}</span>
               </div>
               <div className="text-sm font-medium">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
                 <span>{t.projects?.name || 'No project'}</span>
-                <span>{isIncome ? (t.notes || '') : (t.category || '')}</span>
+                <span className="text-right truncate">{isIncome ? (t.external_invoice_provider ? providerName(t.external_invoice_provider) : (t.category || 'Income')) : (t.category || 'Expense')}</span>
               </div>
-              <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center pt-1 border-t border-border/60" onClick={e => e.stopPropagation()}>
+                <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-foreground" onClick={() => setDetailRow(t)}>
+                  <Eye className="w-3.5 h-3.5 mr-1" />Inspect
+                </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-muted-foreground hover:text-destructive">
@@ -1281,7 +1691,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden sm:block border border-border">
+        <div className="hidden sm:block txn-panel">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
             <div className="col-span-2">Date</div>
             <div className="col-span-3">{isIncome ? 'Source' : 'Vendor'}</div>
@@ -1298,7 +1708,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
               <div className="col-span-3 truncate text-muted-foreground">{t.projects?.name || '—'}</div>
               <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : (t.category || '—')}</div>
-              <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(t.amount)}</div>
+              <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(Number(t.total_amount ?? t.amount ?? 0))}</div>
               <div className="col-span-1 flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -1319,7 +1729,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           ))}
         </div>
       </div>
-      <FinanceDetailDrawer open={!!detailRow} onClose={() => setDetailRow(null)} kind={kind === 'income' ? 'income' : 'expense'} data={detailRow} />
+      <TransactionInspector txn={detailRow} kind={kind} onClose={() => setDetailRow(null)} />
     </AppShell>
   );
 }

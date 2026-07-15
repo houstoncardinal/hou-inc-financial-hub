@@ -8,9 +8,9 @@ import { useFinanceRealtime } from '@/hooks/useFinance';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, ConciergeBell, BarChart3,
-  Settings, Sun, Moon, Receipt, BookMarked, Globe,
+  Settings, Sun, Moon, Receipt, Globe,
   Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, Check,
-  MoreHorizontal, History,
+  MoreHorizontal, History, ShieldCheck,
 } from 'lucide-react';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
@@ -47,7 +47,6 @@ const navGroups = [
       { to: '/charts',    label: 'Charts',    icon: BarChart3,   desc: 'Visual analytics' },
       { to: '/changelog', label: 'Changelog', icon: History,     desc: 'Finance audit trail' },
       { to: '/concierge', label: 'Concierge', icon: ConciergeBell, desc: 'Guided entry assistant' },
-      { to: '/glossary',  label: 'Glossary',  icon: BookMarked,  desc: 'Terms & definitions' },
     ],
   },
   {
@@ -91,26 +90,26 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`group w-full min-w-0 border transition-all hover:bg-secondary/40 active:opacity-80 shadow-[0_1px_0_rgba(255,255,255,0.35)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] ${
+        className={`group w-full min-w-0 border transition-all hover:bg-secondary/45 active:opacity-80 shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset] ${
           compact
-            ? 'h-10 px-2.5 flex items-center gap-2'
-            : 'h-12 px-3 flex items-center gap-2.5'
+            ? 'h-9 px-2 flex items-center gap-1.5'
+            : 'h-10 px-2.5 flex items-center gap-2'
         }`}
-        style={{ borderColor: `${active.color}45`, backgroundColor: active.colorMuted }}
+        style={{ borderColor: `${active.color}30`, backgroundColor: 'hsl(var(--background))' }}
         aria-label="Switch finance entity"
       >
         <div
-          className={`${compact ? 'w-6 h-6' : 'w-7 h-7'} flex items-center justify-center shrink-0`}
-          style={{ backgroundColor: `${active.color}18`, border: `1px solid ${active.color}45` }}
+          className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} flex items-center justify-center shrink-0`}
+          style={{ backgroundColor: `${active.color}10`, border: `1px solid ${active.color}35` }}
         >
-          <ActiveIcon className={compact ? 'w-3.5 h-3.5' : 'w-3.5 h-3.5'} style={{ color: active.color }} strokeWidth={1.7} />
+          <ActiveIcon className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} style={{ color: active.color }} strokeWidth={1.7} />
         </div>
         <div className="min-w-0 flex-1 text-left">
-          <div className={`${compact ? 'text-[10px]' : 'text-[12px]'} font-bold uppercase tracking-[0.08em] truncate leading-tight`} style={{ color: active.color }}>
+          <div className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-bold tracking-tight truncate leading-tight text-foreground`}>
             {active.name}
           </div>
-          <div className={`${compact ? 'text-[7px]' : 'text-[8px]'} uppercase tracking-[0.18em] text-muted-foreground truncate mt-0.5`}>
-            {active.category} · Est. {active.since}
+          <div className={`${compact ? 'text-[7px]' : 'text-[8px]'} uppercase tracking-[0.16em] text-muted-foreground truncate mt-0.5`}>
+            {active.category}
           </div>
         </div>
         <ChevronDown className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: active.color }} strokeWidth={2} />
@@ -123,15 +122,15 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.13, ease: [0.16, 1, 0.3, 1] }}
-            className={`absolute left-0 top-full mt-2 border border-border bg-background shadow-[0_22px_70px_rgba(0,0,0,0.20)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.55)] z-50 overflow-hidden ${
-              compact ? 'w-[min(94vw,24rem)]' : 'w-full min-w-[20rem]'
+            className={`absolute left-0 top-full mt-2 border border-border bg-background shadow-[0_20px_55px_rgba(0,0,0,0.16)] dark:shadow-[0_22px_70px_rgba(0,0,0,0.55)] z-50 overflow-hidden ${
+              compact ? 'w-[min(94vw,22rem)]' : 'w-full min-w-[18rem]'
             }`}
           >
-            <div className="px-3.5 py-3 border-b border-border/60" style={{ background: `linear-gradient(135deg, ${active.color}12, transparent 64%)` }}>
+            <div className="px-3 py-2.5 border-b border-border/60" style={{ background: `linear-gradient(135deg, ${active.color}0F, transparent 64%)` }}>
               <div className="text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-bold">Finance Entity</div>
-              <div className="text-[11px] text-foreground/80 mt-1 truncate">Select the operating company for this dashboard.</div>
+              <div className="text-[10px] text-foreground/75 mt-1 truncate">Select the operating company for this dashboard.</div>
             </div>
-            <div className="p-2 space-y-1.5">
+            <div className="p-1.5 space-y-1">
               {ENTITIES.map(e => {
                 const EIcon = ENTITY_ICONS[e.id] ?? Building2;
                 const selected = e.id === active.id;
@@ -140,15 +139,15 @@ function ShellEntitySelector({ compact = false }: { compact?: boolean }) {
                     key={e.id}
                     type="button"
                     onClick={() => choose(e.id)}
-                    className="w-full flex items-center gap-3 px-2.5 py-2.5 text-left transition-all hover:bg-secondary/60 border"
-                    style={{ backgroundColor: selected ? e.colorMuted : undefined, borderColor: selected ? `${e.color}55` : 'hsl(var(--border))', borderLeft: selected ? `3px solid ${e.color}` : '3px solid transparent' }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-all hover:bg-secondary/55 border"
+                    style={{ backgroundColor: selected ? `${e.color}0D` : undefined, borderColor: selected ? `${e.color}45` : 'hsl(var(--border))', borderLeft: selected ? `2px solid ${e.color}` : '2px solid transparent' }}
                   >
-                    <div className="w-7 h-7 flex items-center justify-center shrink-0" style={{ backgroundColor: `${e.color}14`, border: `1px solid ${e.color}35` }}>
+                    <div className="w-6 h-6 flex items-center justify-center shrink-0" style={{ backgroundColor: `${e.color}10`, border: `1px solid ${e.color}30` }}>
                       <EIcon className="w-3.5 h-3.5" style={{ color: e.color }} strokeWidth={1.6} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-semibold truncate">{e.name}</div>
-                      <div className="text-[9px] text-muted-foreground truncate mt-0.5">{e.category} · {e.tagline}</div>
+                      <div className="text-[11px] font-semibold truncate">{e.name}</div>
+                      <div className="text-[8px] text-muted-foreground truncate mt-0.5">{e.category} · {e.tagline}</div>
                     </div>
                     {selected && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: e.color }} strokeWidth={2.3} />}
                   </button>
@@ -517,7 +516,7 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
 
   return (
     <div className="flex flex-col h-full bg-background/98">
-      <div className="px-3 h-16 flex items-center gap-2 border-b border-border shrink-0 bg-gradient-to-b from-secondary/30 to-background">
+      <div className="px-3 h-14 flex items-center gap-2 border-b border-border shrink-0 bg-gradient-to-b from-secondary/25 to-background">
         <ShellEntitySelector />
         <button
           onClick={() => { toggle(); sounds.tap(); }}
@@ -529,10 +528,10 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
         </button>
       </div>
 
-      <nav className="flex-1 py-2 overflow-hidden">
+      <nav className="flex-1 py-1.5 overflow-hidden">
         {navGroups.map(group => (
-          <div key={group.label} className="mb-1.5">
-            <div className="px-4 py-1">
+          <div key={group.label} className="mb-1">
+            <div className="px-4 py-0.5">
               <span className="text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold">{group.label}</span>
             </div>
             {group.items.map(n => (
@@ -542,7 +541,7 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
                 end={n.end}
                 onClick={() => { onNavigate?.(); sounds.tap(); }}
                 className={({ isActive }) =>
-                  `relative mx-2.5 flex items-center gap-2 px-2.5 py-1.5 text-[12px] transition-all duration-150 border ${
+                  `relative mx-2.5 flex items-center gap-2 px-2.5 py-1 text-[11px] transition-all duration-150 border ${
                     isActive
                       ? 'text-foreground bg-secondary/80 font-semibold border-border shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] dark:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset]'
                       : 'text-foreground/78 border-transparent hover:text-foreground hover:bg-secondary/45 hover:border-border/70'
@@ -556,14 +555,14 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
                       style={{ backgroundColor: isActive ? (entity?.color ?? '#9D7E3F') : 'transparent' }}
                     />
                     <span
-                      className={`w-6 h-6 flex items-center justify-center shrink-0 border ${isActive ? 'bg-background border-border' : 'bg-secondary/30 border-border/40'}`}
+                      className={`w-5 h-5 flex items-center justify-center shrink-0 border ${isActive ? 'bg-background border-border' : 'bg-secondary/30 border-border/40'}`}
                       style={{ color: isActive ? (entity?.color ?? undefined) : undefined }}
                     >
-                      <n.icon className="w-3.5 h-3.5" strokeWidth={1.6} />
+                      <n.icon className="w-3 h-3" strokeWidth={1.6} />
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block truncate leading-tight">{n.label}</span>
-                      <span className="block text-[8px] text-foreground/45 truncate mt-px leading-tight">{n.desc}</span>
+                      <span className="block text-[7px] text-foreground/45 truncate mt-px leading-tight">{n.desc}</span>
                     </span>
                     {n.to === '/invoices' && overdueCount > 0 && (
                       <span className="text-[8px] font-bold px-1 py-0.5 min-w-[16px] text-center bg-accent text-background leading-none">{overdueCount > 9 ? '9+' : overdueCount}</span>
@@ -579,7 +578,7 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
       <div className="border-t border-border shrink-0 bg-secondary/20">
         <button
           onClick={handleSettings}
-          className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors hover:bg-secondary/45 ${location.pathname === '/settings' ? 'bg-secondary' : ''}`}
+          className={`w-full flex items-center gap-2.5 px-4 py-1.5 text-xs transition-colors hover:bg-secondary/45 ${location.pathname === '/settings' ? 'bg-secondary' : ''}`}
         >
           <div className="w-6 h-6 bg-foreground/10 border border-border/70 flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">{initials}</div>
           <div className="flex-1 min-w-0 text-left">
@@ -593,10 +592,17 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
           </div>
           <Settings className="w-3 h-3 text-foreground/55 shrink-0" strokeWidth={1.5} />
         </button>
+        {role === 'admin' && (
+          <NavLink to="/admin" onClick={() => { onNavigate?.(); sounds.tap(); }}
+            className="w-full flex items-center gap-2.5 px-4 py-1.5 text-[10px] text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-colors">
+            <ShieldCheck className="w-3 h-3 shrink-0" strokeWidth={1.5} />
+            <span>Admin Dashboard</span>
+          </NavLink>
+        )}
         <NavLink to="/" end onClick={() => { onNavigate?.(); sounds.tap(); }}
           className="w-full flex items-center gap-2.5 px-4 py-1.5 text-[10px] text-foreground/70 hover:text-foreground hover:bg-secondary/30 transition-colors">
           <Globe className="w-3 h-3 shrink-0" strokeWidth={1.5} />
-          <span>HOU INC Website</span>
+          <span>Houston Enterprise Website</span>
         </NavLink>
         <button
           onClick={async () => { sounds.click(); await signOut(); navigate('/auth'); onNavigate?.(); }}
@@ -668,11 +674,11 @@ export default function AppShell({
       <main className="md:ml-64 min-h-screen flex flex-col">
         <div className="md:hidden h-14 shrink-0" />
         <div className="flex-1 page-enter">{children}</div>
-        <div className="md:hidden h-[72px] shrink-0" />
+        <div className="md:hidden h-[66px] shrink-0" />
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 h-[72px] bg-white border-t border-[#E6E1D8] z-30 grid grid-cols-5 items-stretch shadow-[0_-12px_34px_rgba(10,10,10,0.10),0_-1px_0_rgba(255,255,255,0.9)_inset]"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 h-[66px] bg-white border-t border-[#E6E1D8] z-30 grid grid-cols-5 items-stretch shadow-[0_-8px_24px_rgba(10,10,10,0.075)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {mobileQuickNav.slice(0, 2).map(n => (
           <NavLink
@@ -681,16 +687,16 @@ export default function AppShell({
             end={n.end}
             onClick={() => sounds.tap()}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777]'}`
+              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777] hover:text-[#222]'}`
             }
           >
             {({ isActive }) => (
               <>
-                <div className={`p-1.5 transition-colors ${isActive ? 'bg-[#F5F2EA] border border-[#E2DACD] shadow-[0_1px_2px_rgba(10,10,10,0.04)]' : ''}`}>
+                <div className="h-6 flex items-center justify-center transition-colors">
                   <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
                 </div>
-                <span className={`text-[8px] uppercase tracking-[0.08em] ${isActive ? 'font-semibold' : ''}`}>{n.label}</span>
-                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-[#111]" />}
+                <span className={`text-[8px] uppercase tracking-[0.07em] ${isActive ? 'font-bold' : 'font-semibold'}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-[#111]" />}
               </>
             )}
           </NavLink>
@@ -703,12 +709,12 @@ export default function AppShell({
           aria-label="Add Entry"
         >
           <div
-            className="w-12 h-12 -mt-7 flex items-center justify-center rounded-full shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_0_5px_rgba(255,255,255,0.92)] transition-transform active:scale-95 border border-white/20"
+            className="w-11 h-11 -mt-6 flex items-center justify-center rounded-full shadow-[0_10px_22px_rgba(0,0,0,0.24),0_0_0_4px_rgba(255,255,255,0.96)] transition-transform active:scale-95 border border-black"
             style={{ backgroundColor: '#050505' }}
           >
-            <Plus className="w-5 h-5" strokeWidth={2.6} style={{ color: '#fff' }} />
+            <Plus className="w-5 h-5" strokeWidth={2.35} style={{ color: '#fff' }} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold -mt-0.5" style={{ color: '#111' }}>Add</span>
+          <span className="text-[8px] uppercase tracking-[0.07em] font-bold -mt-0.5" style={{ color: '#111' }}>Add</span>
         </button>
 
         {mobileQuickNav.slice(2).map(n => (
@@ -718,16 +724,16 @@ export default function AppShell({
             end={n.end}
             onClick={() => sounds.tap()}
             className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777]'}`
+              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777] hover:text-[#222]'}`
             }
           >
             {({ isActive }) => (
               <>
-                <div className={`p-1.5 transition-colors ${isActive ? 'bg-[#F5F2EA] border border-[#E2DACD] shadow-[0_1px_2px_rgba(10,10,10,0.04)]' : ''}`}>
+                <div className="h-6 flex items-center justify-center transition-colors">
                   <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
                 </div>
-                <span className={`text-[8px] uppercase tracking-[0.08em] ${isActive ? 'font-semibold' : ''}`}>{n.label}</span>
-                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-[#111]" />}
+                <span className={`text-[8px] uppercase tracking-[0.07em] ${isActive ? 'font-bold' : 'font-semibold'}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-[#111]" />}
               </>
             )}
           </NavLink>
@@ -739,10 +745,10 @@ export default function AppShell({
           className="flex flex-col items-center justify-center gap-0.5 text-[#777] hover:text-[#111] transition-colors"
           aria-label="All sections"
         >
-          <div className="p-1.5">
+          <div className="h-6 flex items-center justify-center">
             <MoreHorizontal className="w-4 h-4" strokeWidth={1.7} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.08em]">More</span>
+          <span className="text-[8px] uppercase tracking-[0.07em] font-semibold">More</span>
         </button>
       </nav>
 

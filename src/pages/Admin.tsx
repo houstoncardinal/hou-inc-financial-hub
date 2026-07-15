@@ -27,6 +27,9 @@ import PortfolioManager from '@/components/admin/PortfolioManager';
 import MilestoneManager from '@/components/admin/MilestoneManager';
 import ProjectManager from '@/components/admin/ProjectManager';
 import { toast } from '@/hooks/use-toast';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const B     = '#0A0A0A';
@@ -776,7 +779,7 @@ export default function Admin() {
       </AnimatePresence>
 
       {/* ── OLD MOBILE DRAWER BODY (REPLACED) — this block closes the old structure */}
-      {false && mobileNavOpen && (
+      {mobileNavOpen && Boolean((globalThis as { __HOU_ENABLE_LEGACY_ADMIN_DRAWER?: boolean }).__HOU_ENABLE_LEGACY_ADMIN_DRAWER) && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-[240px] flex flex-col"
@@ -2996,8 +2999,6 @@ export default function Admin() {
 
             function exportChangelogPDF() {
               try {
-                const { jsPDF } = require('jspdf') as { jsPDF: typeof import('jspdf').jsPDF };
-                const autoTable = (require('jspdf-autotable') as any).default ?? require('jspdf-autotable');
                 const doc = new jsPDF({ format: 'letter', unit: 'mm' });
                 const PW = 215.9, M = 18;
                 doc.setFillColor(157, 126, 63); doc.rect(0, 0, PW, 2.5, 'F');
@@ -3048,7 +3049,6 @@ export default function Admin() {
 
             function exportChangelogExcel() {
               try {
-                const XLSX = require('xlsx') as typeof import('xlsx');
                 const headers = ['Timestamp', 'Action', 'Entity', 'Dashboard', 'Item / Label', 'Changed By', 'Details'];
                 const rows = filtered.map((e: any) => [
                   new Date(e.created_at).toLocaleString('en-US'),
@@ -3257,4 +3257,3 @@ export default function Admin() {
     </div>
   );
 }
-

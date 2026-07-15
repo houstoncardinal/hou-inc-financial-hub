@@ -42,6 +42,20 @@ interface Question {
 const REF_METHODS_INCOME = new Set(['check', 'ach_wire']);
 const REF_METHODS_EXPENSE = new Set(['check', 'ach', 'wire']);
 
+const detectInvoiceProvider = (url: string) => {
+  const normalized = url.toLowerCase();
+  if (normalized.includes('stripe.com') || normalized.includes('stripe')) return 'stripe';
+  if (normalized.includes('quickbooks') || normalized.includes('intuit')) return 'quickbooks';
+  return url.trim() ? 'other' : '';
+};
+
+const invoiceProviderLabel = (provider: string) => {
+  if (provider === 'stripe') return 'Stripe';
+  if (provider === 'quickbooks') return 'QuickBooks';
+  if (provider === 'other') return 'External invoice';
+  return '';
+};
+
 interface ServiceDef {
   icon: any;
   label: string;
@@ -91,6 +105,9 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
       { id: 'check_number', label: 'Check number?', placeholder: 'e.g. 1024', type: 'text', icon: Hash },
       { id: 'date', label: 'Date on check?', type: 'date', required: true, icon: Calendar },
       { id: 'project_id', label: 'Assign to a project?', type: 'project', icon: FolderKanban },
+      { id: 'status', label: 'What is the check status?', type: 'check_status', icon: FileSpreadsheet, helper: 'Most new checks should stay pending until the bank clears them.' },
+      { id: 'retainage_pct', label: 'Retainage withheld?', placeholder: '0.00', type: 'number', icon: DollarSign, helper: 'Optional percentage retained from subcontractor/vendor payment.' },
+      { id: 'lien_waiver_status', label: 'Lien waiver status?', type: 'lien_waiver', icon: FileText, helper: 'Track whether lien waiver documentation is needed.' },
       { id: 'memo', label: 'Add a memo?', placeholder: 'Optional memo…', type: 'text', icon: MessageSquare },
     ],
   },
@@ -174,6 +191,28 @@ function SimpleInput({ type, value, onChange, placeholder, options }: { type: st
           </SelectContent>
         </Select>
       );
+    case 'check_status':
+      return (
+        <Select value={value || 'pending'} onValueChange={onChange}>
+          <SelectTrigger className="rounded-none h-12 text-base"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="cleared">Cleared</SelectItem>
+            <SelectItem value="voided">Voided</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+    case 'lien_waiver':
+      return (
+        <Select value={value || 'not_required'} onValueChange={onChange}>
+          <SelectTrigger className="rounded-none h-12 text-base"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="not_required">Not Required</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+          </SelectContent>
+        </Select>
+      );
     default:
       return <Input className="rounded-none h-12 text-base" placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} autoFocus />;
   }
@@ -225,7 +264,7 @@ export default function Concierge() {
   const { data: vendors = [] } = useVendors();
   const { data: projects = [] } = useProjects();
   const { data: portalClients = [] } = usePortalClients();
-  const { invoices = [] } = useInvoices();
+  const { invoices = [], update: updateInvoice } = useInvoices();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
   const { data: checks = [] } = useChecks();
@@ -423,6 +462,9 @@ export default function Concierge() {
             retainage_percent: getVal('retainage_percent') ? parseFloat(getVal('retainage_percent')) : null,
             retainage_amount: getVal('retainage_amount') ? parseFloat(getVal('retainage_amount')) : null,
             invoice_id: getVal('invoice_id') || null,
+            external_invoice_provider: getVal('external_invoice_provider') || null,
+            external_invoice_url: getVal('external_invoice_url') || null,
+            external_invoice_number: getVal('external_invoice_number') || null,
             cost_phase: getVal('cost_phase') || null,
             status: 'posted',
             approval_status: 'approved',
@@ -431,6 +473,17 @@ export default function Concierge() {
             fiscal_year: new Date(getVal('date')).getFullYear(),
             accounting_period: getVal('date').slice(0, 7),
           } as any);
+          if (getVal('invoice_id') && (getVal('external_invoice_url') || getVal('external_invoice_provider') || getVal('external_invoice_number') || getVal('portal_client_id'))) {
+            await updateInvoice(getVal('invoice_id'), {
+              status: 'paid',
+              stripe_payment_link: getVal('external_invoice_provider') === 'stripe' && getVal('external_invoice_url') ? getVal('external_invoice_url') : undefined,
+              external_invoice_url: getVal('external_invoice_url') || undefined,
+              external_invoice_provider: getVal('external_invoice_provider') || undefined,
+              external_invoice_number: getVal('external_invoice_number') || undefined,
+              portal_client_id: getVal('portal_client_id') || undefined,
+              client_visible: true,
+            } as any);
+          }
           break;
         case 'expense': {
           const txnId = crypto.randomUUID();
@@ -465,9 +518,30 @@ export default function Concierge() {
           }
           break;
         }
-        case 'check':
-          await checkUpsert.mutateAsync({ amount: parseFloat(getVal('amount')), payee_name: getVal('payee_name'), issue_date: getVal('date'), check_number: getVal('check_number') || null, memo: getVal('memo') || null, project_id: getVal('project_id') || null, status: 'pending' } as any);
+        case 'check': {
+          const status = getVal('status') || 'pending';
+          const retainagePct = parseFloat(getVal('retainage_pct') || '0') || 0;
+          const amount = parseFloat(getVal('amount'));
+          await checkUpsert.mutateAsync({
+            amount,
+            payee_name: getVal('payee_name'),
+            issue_date: getVal('date'),
+            posting_date: getVal('date'),
+            check_number: getVal('check_number') || null,
+            memo: getVal('memo') || null,
+            project_id: getVal('project_id') || null,
+            status,
+            reconciliation_status: status === 'cleared' ? 'reconciled' : 'unreconciled',
+            cleared_date: status === 'cleared' ? getVal('date') : null,
+            approval_status: 'approved',
+            print_status: 'not_printed',
+            delivery_status: 'not_delivered',
+            retainage_pct: retainagePct,
+            retainage_held: retainagePct ? amount * (retainagePct / 100) : 0,
+            lien_waiver_status: getVal('lien_waiver_status') || 'not_required',
+          } as any);
           break;
+        }
         case 'vendor':
           await vendorCreate.mutateAsync({ name: getVal('vendor_name'), contact_email: getVal('vendor_email') || null, contact_phone: getVal('vendor_phone') || null });
           break;
@@ -652,7 +726,24 @@ export default function Concierge() {
         const openInvoices = (invoices as any[]).filter(inv => inv.status !== 'paid');
         return (
           <div className="space-y-3">
-            <Select value={getVal('invoice_id')} onValueChange={v => setVal('invoice_id', v)}>
+            <div className="border border-border bg-secondary/20 p-3 space-y-3">
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.22em] text-muted-foreground font-bold">Existing invoice</div>
+                <div className="text-xs text-muted-foreground mt-1">Optional. Choose an invoice already in this finance system, then attach the payable link used by the client.</div>
+              </div>
+              <Select
+                value={getVal('invoice_id')}
+                onValueChange={v => {
+                  const invoice = (invoices as any[]).find(inv => inv.id === v);
+                  setVal('invoice_id', v);
+                  if (invoice) {
+                    const url = invoice.external_invoice_url || invoice.stripe_payment_link || getVal('external_invoice_url');
+                    setVal('external_invoice_url', url || '');
+                    setVal('external_invoice_number', invoice.external_invoice_number || invoice.invoice_number || getVal('external_invoice_number'));
+                    setVal('external_invoice_provider', invoice.external_invoice_provider || detectInvoiceProvider(url || '') || getVal('external_invoice_provider'));
+                  }
+                }}
+              >
               <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="No invoice (skip)" /></SelectTrigger>
               <SelectContent>
                 {openInvoices.map((inv: any) => (
@@ -662,7 +753,52 @@ export default function Concierge() {
                 ))}
               </SelectContent>
             </Select>
-            {openInvoices.length === 0 && <p className="text-xs text-muted-foreground text-center">No open invoices found.</p>}
+              {openInvoices.length === 0 && <p className="text-xs text-muted-foreground">No open invoices found. You can still attach a Stripe, QuickBooks, or other payable invoice link below.</p>}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[0.82fr_1.4fr] gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1.5">Provider</div>
+                <Select value={getVal('external_invoice_provider')} onValueChange={v => setVal('external_invoice_provider', v)}>
+                  <SelectTrigger className="rounded-none h-11 text-sm"><SelectValue placeholder="Auto / select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="quickbooks">QuickBooks</SelectItem>
+                    <SelectItem value="other">Other payable link</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1.5">Invoice / payment link</div>
+                <Input
+                  className="rounded-none h-11 text-sm"
+                  inputMode="url"
+                  placeholder="https://pay.stripe.com/... or QuickBooks invoice link"
+                  value={getVal('external_invoice_url')}
+                  onChange={e => {
+                    const url = e.target.value;
+                    setVal('external_invoice_url', url);
+                    if (!getVal('external_invoice_provider')) setVal('external_invoice_provider', detectInvoiceProvider(url));
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1.5">Invoice / confirmation number</div>
+              <Input
+                className="rounded-none h-11 text-sm"
+                placeholder="INV-1042, Stripe invoice ID, QuickBooks reference..."
+                value={getVal('external_invoice_number')}
+                onChange={e => setVal('external_invoice_number', e.target.value)}
+              />
+            </div>
+
+            {(getVal('external_invoice_url') || getVal('external_invoice_number')) && (
+              <div className="border border-positive/20 bg-positive/5 px-3 py-2 text-xs text-positive">
+                This payable invoice detail will stay connected to the income record and the linked client-visible invoice.
+              </div>
+            )}
           </div>
         );
       }
@@ -1010,6 +1146,23 @@ export default function Concierge() {
                 {questions.map(q => {
                   if (q.type === 'receipt') return null;
                   if (q.skipIf?.(data)) return null;
+                  if (q.id === 'invoice_id') {
+                    const invoiceLabel = getVal(q.id)
+                      ? ((invoices as any[]).find((inv: any) => inv.id === getVal(q.id))?.invoice_number || getVal(q.id))
+                      : '';
+                    const label = [
+                      invoiceLabel,
+                      invoiceProviderLabel(getVal('external_invoice_provider')),
+                      getVal('external_invoice_number'),
+                    ].filter(Boolean).join(' · ') || getVal('external_invoice_url');
+                    if (!label) return null;
+                    return (
+                      <div key={q.id} className="flex items-center justify-between px-4 py-3">
+                        <span className="text-xs text-muted-foreground">{q.label}</span>
+                        <span className="text-sm font-medium font-mono-tab text-right max-w-[60%] truncate ml-4">{label}</span>
+                      </div>
+                    );
+                  }
                   if (q.type === 'retainage') {
                     const pct = getVal('retainage_percent');
                     const amt = getVal('retainage_amount');

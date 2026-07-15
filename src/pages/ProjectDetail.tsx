@@ -58,7 +58,7 @@ const DOC_TYPES: { value: DocType; label: string }[] = [
 ];
 
 const PD_CSS = `
-.pd-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.2),transparent 220px);}
+.pd-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.16),transparent 170px);}
 .pd-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;position:relative;overflow:hidden;transition:box-shadow .18s,transform .18s,border-color .18s;}
 .pd-intel-card:hover{box-shadow:0 8px 24px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
 .pd-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
@@ -66,8 +66,16 @@ const PD_CSS = `
 .pd-tab-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
 .pd-tab-card-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
 .pd-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
+.pd-section{padding:14px 16px;}
+.pd-tab-strip{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;}
+.pd-tab-btn{height:34px;padding:0 11px;border:1px solid transparent;font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:800;display:flex;align-items:center;gap:7px;white-space:nowrap;transition:background .16s,border-color .16s,color .16s;}
+.pd-tab-btn-active{border-color:hsl(var(--foreground));background:hsl(var(--foreground));color:hsl(var(--background));}
+.pd-tab-btn:not(.pd-tab-btn-active){color:hsl(var(--foreground)/0.66);}
+.pd-tab-btn:not(.pd-tab-btn-active):hover{background:hsl(var(--secondary)/0.48);border-color:hsl(var(--border));color:hsl(var(--foreground));}
 .pd-row:hover td,.pd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .pd-doc-row:hover{background-color:rgba(157,126,63,0.025)!important;}
+.pd-compact-table td,.pd-compact-table th{padding-top:9px!important;padding-bottom:9px!important;}
+@media(max-width:639px){.pd-section{padding:12px}.pd-tab-btn{height:32px;padding:0 9px;font-size:8px}.pd-panel{box-shadow:0 1px 2px rgba(10,10,10,0.04)}}
 .dark .pd-intel-card,.dark .pd-tab-card,.dark .pd-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
@@ -352,6 +360,12 @@ export default function ProjectDetail() {
   ];
   const activeTabMeta = TABS.find(t => t.key === tab) ?? TABS[0];
   const ActiveTabIcon = activeTabMeta.icon;
+  const projectHealthCards = [
+    { label: 'Project Health', value: `${Math.round(healthScore)}`, sub: healthTone.label, color: healthTone.color, Icon: ShieldCheck },
+    { label: 'Budget Used', value: `${enriched.used.toFixed(1)}%`, sub: `${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`, color: enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F', Icon: BarChart3 },
+    { label: 'Cash Position', value: fmtUSD(enriched.net), sub: `${fmtUSD(enriched.outstanding)} open checks`, color: enriched.net >= 0 ? '#10b981' : '#ef4444', Icon: Receipt },
+    { label: 'Project Files', value: String(projectDocs.length), sub: `${sortedActivity.length} ledger movements`, color: '#2563eb', Icon: FolderOpen },
+  ];
 
   return (
     <AppShell>
@@ -456,31 +470,8 @@ export default function ProjectDetail() {
 
       {/* ── Project command center + navigation ── */}
       <div className="pd-shell border-b border-border/70">
-        <div className="px-4 sm:px-8 py-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-            {[
-              { label: 'Project Health', value: `${Math.round(healthScore)}`, sub: healthTone.label, color: healthTone.color, Icon: ShieldCheck },
-              { label: 'Budget Used', value: `${enriched.used.toFixed(1)}%`, sub: `${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`, color: enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F', Icon: BarChart3 },
-              { label: 'Cash Position', value: fmtUSD(enriched.net), sub: `${fmtUSD(enriched.outstanding)} open checks`, color: enriched.net >= 0 ? '#10b981' : '#ef4444', Icon: Receipt },
-              { label: 'Project Files', value: String(projectDocs.length), sub: `${sortedActivity.length} ledger movements`, color: '#2563eb', Icon: FolderOpen },
-            ].map(card => (
-              <div key={card.label} className="pd-intel-card p-3 min-w-0">
-                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                      <card.Icon className="w-3 h-3" style={{ color: card.color }} />
-                      {card.label}
-                    </div>
-                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
-                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="pd-panel p-2.5">
+        <div className="px-4 sm:px-8 py-3 space-y-3">
+          <div className="pd-tab-strip p-2">
             <div className="sm:hidden relative">
               <select
                 value={tab}
@@ -500,9 +491,7 @@ export default function ProjectDetail() {
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={`h-9 px-3 border text-[9px] uppercase tracking-[0.14em] font-bold flex items-center gap-2 transition-all ${
-                      active ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary/45'
-                    }`}
+                    className={`pd-tab-btn ${active ? 'pd-tab-btn-active' : ''}`}
                   >
                     <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
                     {t.short}
@@ -516,7 +505,7 @@ export default function ProjectDetail() {
               })}
             </div>
 
-            <div className="mt-2.5 pt-2.5 border-t border-border flex items-start gap-2.5">
+            <div className="mt-2 pt-2 border-t border-border flex items-start gap-2.5">
               <span className="w-8 h-8 border border-border bg-secondary/35 flex items-center justify-center shrink-0">
                 <ActiveTabIcon className="w-4 h-4" strokeWidth={1.7} style={{ color: '#9D7E3F' }} />
               </span>
@@ -533,7 +522,24 @@ export default function ProjectDetail() {
           OVERVIEW TAB
       ══════════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
-        <div className="p-4 sm:p-8 space-y-6">
+        <div className="pd-section space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            {projectHealthCards.map(card => (
+              <div key={card.label} className="pd-intel-card p-3 min-w-0">
+                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
+                      <card.Icon className="w-3 h-3" style={{ color: card.color }} />
+                      {card.label}
+                    </div>
+                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.color }}>{card.value}</div>
+                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
           {projectSummary && (
             <div className="pd-panel bg-secondary/20 overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
@@ -607,7 +613,7 @@ export default function ProjectDetail() {
                 { label: 'Pending Checks',   value: fmtUSD(enriched.outstanding), c: enriched.outstanding > 0 ? 'text-warning' : '' },
                 { label: 'Retainage Held',   value: fmtUSD(retainageHeld),        c: retainageHeld > 0 ? 'text-blue-400' : 'text-muted-foreground' },
               ].map(s => (
-                <div key={s.label} className="bg-background px-4 sm:px-5 py-4">
+                <div key={s.label} className="bg-background px-4 sm:px-5 py-3">
                   <div className="text-[8px] uppercase tracking-[0.22em] font-bold text-muted-foreground mb-1.5 leading-tight">{s.label}</div>
                   <div className={`text-lg sm:text-xl font-bold font-mono-tab leading-tight ${s.c}`}>{s.value}</div>
                 </div>
@@ -616,7 +622,7 @@ export default function ProjectDetail() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
 
             {/* Budget utilization */}
             <div className="pd-panel p-4 sm:p-5">
@@ -813,7 +819,7 @@ export default function ProjectDetail() {
           DOCUMENTS TAB
       ══════════════════════════════════════════════════════════ */}
       {tab === 'documents' && (
-        <div className="p-4 sm:p-8">
+        <div className="pd-section">
           {/* Upload bar */}
           <div className="pd-panel p-4 mb-5 bg-secondary/20">
             <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground mb-3">Upload Document</div>
@@ -938,7 +944,7 @@ export default function ProjectDetail() {
           ACTIVITY TAB
       ══════════════════════════════════════════════════════════ */}
       {tab === 'activity' && (
-        <div className="p-4 sm:p-8">
+        <div className="pd-section">
           {sortedActivity.length === 0 ? (
             <div className="pd-panel py-16 text-center text-sm text-muted-foreground">
               No activity recorded for this project yet.
@@ -1013,7 +1019,7 @@ export default function ProjectDetail() {
           DRAWS TAB
       ══════════════════════════════════════════════════════════ */}
       {tab === 'draws' && (
-        <div className="p-4 sm:p-8">
+        <div className="pd-section">
           <div className="pd-panel overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border bg-secondary/40 flex items-center justify-between">
               <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Draw Schedule</div>

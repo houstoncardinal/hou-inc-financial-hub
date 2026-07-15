@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "lint:errors": "eslint . --quiet",
+    "lint:finance": "eslint src/hooks/useFinance.ts src/pages/Checks.tsx src/pages/Projects.tsx src/pages/Ledger.tsx src/pages/TxnPage.tsx --quiet",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

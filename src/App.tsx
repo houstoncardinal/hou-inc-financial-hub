@@ -82,7 +82,6 @@ import Changelog     from "./pages/Changelog";
 import Settings      from "./pages/Settings";
 import Invoices      from "./pages/Invoices";
 import InvoiceNew    from "./pages/InvoiceNew";
-import Glossary      from "./pages/Glossary";
 import Documents     from "./pages/Documents";
 import OpsCenter     from "./pages/OpsCenter";
 import NotFound      from "./pages/NotFound";
@@ -115,7 +114,6 @@ function FinanceRoutes() {
         <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
         <Route path="/invoices/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
         <Route path="/settings"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Settings /></RoleGuard>} />
-        <Route path="/glossary"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Glossary /></RoleGuard>} />
         <Route path="/documents"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Documents /></RoleGuard>} />
         <Route path="/ops"                element={<RoleGuard allowed={[...ADMIN_ROLES]}><OpsCenter /></RoleGuard>} />
         <Route path="*"                   element={<NotFound />} />
