@@ -5,7 +5,14 @@ export const fmtUSD = (n: number | string | null | undefined) => {
 
 export const fmtDate = (d: string | Date | null | undefined) => {
   if (!d) return '—';
-  const date = typeof d === 'string' ? new Date(d) : d;
+  // Bare "YYYY-MM-DD" (what Postgres DATE columns come back as) has no
+  // timezone, so `new Date(...)` parses it as UTC midnight — then
+  // `toLocaleDateString` renders it in the browser's local zone, which
+  // rolls it back a day anywhere behind UTC. Anchoring to local midnight
+  // avoids that shift; datetime strings (already timezone-aware) pass through.
+  const date = typeof d === 'string'
+    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00` : d)
+    : d;
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
 };
 

@@ -226,6 +226,7 @@ export default function Concierge() {
   const inputFileRef = useRef<HTMLInputElement>(null);
   const captureFileRef = useRef<HTMLInputElement>(null);
   const guidedFormRef = useRef<HTMLFormElement>(null);
+  const appliedProjectPrefillRef = useRef(false);
 
   const [phase, setPhase] = useState<'welcome' | 'guided' | 'summary' | 'done'>('welcome');
   const [serviceType, setServiceType] = useState<ServiceType | null>(null);
@@ -319,6 +320,23 @@ export default function Concierge() {
     searchParams.delete('start');
     setSearchParams(searchParams, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  // Intelligent prefill: a project detail page can deep-link here with ?project=<id>
+  // to pin the guided form to that project and pull in its known client name.
+  useEffect(() => {
+    if (appliedProjectPrefillRef.current || phase !== 'guided') return;
+    const projectId = searchParams.get('project');
+    if (!projectId) return;
+    const proj = projects.find((p: any) => p.id === projectId);
+    if (!proj) return; // projects query hasn't resolved yet — try again next render
+    appliedProjectPrefillRef.current = true;
+    setVal('project_id', proj.id);
+    if (serviceType === 'income' && proj.client_name_snapshot && !getVal('source_name')) {
+      setVal('source_name', proj.client_name_snapshot);
+    }
+    searchParams.delete('project');
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams, projects, phase, serviceType]);
 
   const goNext = () => {
     if (!currentQuestion) return;

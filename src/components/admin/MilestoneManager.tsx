@@ -17,18 +17,18 @@ import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DateInput } from '@/components/ui/date-input';
 
-/* ── Tokens ──────────────────────────────────────────────────────────── */
-const B    = '#0A0A0A';
-const W    = '#FFFFFF';
+/* ── Tokens — theme-aware, matches the pdv2-card design system used
+   elsewhere in Admin ── */
+const B    = 'hsl(var(--foreground))';
+const W    = 'hsl(var(--background))';
 const AC   = '#9D7E3F';
 const ACL  = '#C4A76B';
-const G50  = '#F5F4F2';
-const G100 = '#ECEAE6';
-const G200 = '#E8E4DE';
-const G500 = '#8A8580';
+const G50  = 'hsl(var(--secondary))';
+const G100 = 'hsl(var(--secondary))';
+const G200 = 'hsl(var(--border))';
+const G500 = 'hsl(var(--muted-foreground))';
 const GREEN = '#10b981';
 const AMBER = '#f59e0b';
-const SERIF = "'Cormorant Garamond', Georgia, serif";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 export interface MilestoneRow {
@@ -235,7 +235,7 @@ function MilestoneItem({
               >Delete</button>
               <button
                 onClick={onCancelDelete}
-                className="text-[8px] font-bold uppercase tracking-widest px-2 py-1"
+                className="text-[8px] font-bold uppercase tracking-widest px-2 py-1 rounded-md"
                 style={{ border: `1px solid ${G200}`, color: G500 }}
               >Cancel</button>
             </div>
@@ -287,7 +287,7 @@ function MilestoneItem({
                           key={s}
                           onClick={() => onStatusChange(s)}
                           disabled={saving || active}
-                          className="text-[8px] uppercase tracking-[0.16em] font-bold px-4 py-3 transition-all disabled:opacity-40 min-h-[44px]"
+                          className="text-[8px] uppercase tracking-[0.16em] font-bold px-4 py-3 rounded-lg transition-all disabled:opacity-40 min-h-[44px]"
                           style={{ backgroundColor: active ? color : W, color: active ? W : color, border: `1px solid ${active ? color : G200}` }}
                         >
                           {label}
@@ -307,7 +307,7 @@ function MilestoneItem({
                       value={milestone.target_date}
                       onChange={e => onChange('target_date', e.target.value)}
                       onBlur={onSave}
-                      className="h-8 text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                      className="h-8 rounded-lg text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                       style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
                     />
                   </div>
@@ -319,7 +319,7 @@ function MilestoneItem({
                       value={milestone.completed_date}
                       onChange={e => onChange('completed_date', e.target.value)}
                       onBlur={onSave}
-                      className="h-8 text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                      className="h-8 rounded-lg text-[11px] font-light outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                       style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
                     />
                   </div>
@@ -336,7 +336,7 @@ function MilestoneItem({
                     value={milestone.phase_description}
                     onChange={e => onChange('phase_description', e.target.value)}
                     onBlur={onSave}
-                    className="w-full text-[11px] font-light outline-none resize-none"
+                    className="w-full rounded-lg text-[11px] font-light outline-none resize-none"
                     style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: W, color: B }}
                   />
                 </div>
@@ -352,7 +352,7 @@ function MilestoneItem({
                     value={milestone.admin_notes}
                     onChange={e => onChange('admin_notes', e.target.value)}
                     onBlur={onSave}
-                    className="w-full text-[11px] font-light outline-none resize-none"
+                    className="w-full rounded-lg text-[11px] font-light outline-none resize-none"
                     style={{ padding: '6px 10px', border: `1px solid ${G200}`, backgroundColor: 'rgba(157,126,63,0.025)', color: B }}
                   />
                 </div>
@@ -632,7 +632,7 @@ export default function MilestoneManager({ clientId }: { clientId: string }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '1.05rem', color: B }}>
+              <span className="font-bold" style={{ fontSize: '15px', color: B }}>
                 Project Milestones
               </span>
               <div className="flex items-center gap-1">

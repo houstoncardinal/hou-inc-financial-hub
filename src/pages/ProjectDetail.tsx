@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -25,6 +26,7 @@ import {
   Users, LayoutDashboard, Upload, Trash2, File, Image, Eye, Camera,
   ChevronRight, ChevronDown, Pencil, Check, X, FolderOpen, Link2,
   BarChart3, Receipt, ClipboardList, ShieldCheck, Mail,
+  TrendingUp, Clock, AlertCircle, Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -38,6 +40,7 @@ import { MilestoneTimeline } from '@/components/project-detail/MilestoneTimeline
 import { ActivityFeedCard } from '@/components/project-detail/ActivityFeedCard';
 import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
 import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
+import { ProjectGantt } from '@/components/project-detail/ProjectGantt';
 
 /* ── Status config ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
@@ -106,6 +109,7 @@ export default function ProjectDetail() {
   const role       = useRole();
   const isAdmin    = role === 'admin';
   const { entity } = useEntity();
+  const qc = useQueryClient();
 
   const [tab, setTab] = useState<Tab>('overview');
 
@@ -122,59 +126,68 @@ export default function ProjectDetail() {
   const [recentDraws, setRecentDraws]         = useState<any[]>([]);
   const [recentChangeOrders, setRecentChangeOrders] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices]   = useState<any[]>([]);
+  /* Gantt feeds — full reconciliation rows with their schedule dates */
+  const [sovItems, setSovItems]   = useState<any[]>([]);
+  const [ganttDraws, setGanttDraws] = useState<any[]>([]);
+  const [ganttCOs, setGanttCOs]     = useState<any[]>([]);
 
-  useEffect(() => {
-    if (!id) return;
-    (supabase as any).from('project_milestones').select('*').eq('project_id', id).order('sort_order').limit(6)
+  const loadOverviewData = async (projectId: string) => {
+    (supabase as any).from('project_milestones').select('*').eq('project_id', projectId).order('sort_order')
       .then(({ data }: any) => setPdMilestones(data ?? []));
 
-    (supabase as any).from('draw_schedules').select('id, milestone_name, draw_amount, status, created_at').eq('project_id', id).order('created_at', { ascending: false }).limit(5)
+    (supabase as any).from('project_scope_items').select('id, name, percent_complete, contract_amount, change_order_amount, sort_order').eq('project_id', projectId).order('sort_order')
+      .then(({ data }: any) => setSovItems(data ?? []));
+
+    (supabase as any).from('draw_schedules').select('id, milestone_name, draw_amount, status, scheduled_date').eq('project_id', projectId).order('scheduled_date', { ascending: true })
+      .then(({ data }: any) => setGanttDraws(data ?? []));
+
+    (supabase as any).from('project_change_orders').select('id, title, co_number, amount, status, requested_date, approved_date, created_at').eq('project_id', projectId).order('created_at', { ascending: true })
+      .then(({ data }: any) => setGanttCOs(data ?? []));
+
+    (supabase as any).from('draw_schedules').select('id, milestone_name, draw_amount, status, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(5)
       .then(({ data }: any) => setRecentDraws(data ?? []));
 
-    (supabase as any).from('project_change_orders').select('id, title, amount, status, created_at').eq('project_id', id).order('created_at', { ascending: false }).limit(5)
+    (supabase as any).from('project_change_orders').select('id, title, amount, status, created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(5)
       .then(({ data }: any) => setRecentChangeOrders(data ?? []));
 
-    (supabase as any).from('invoices').select('id, invoice_number, amount_paid, status, updated_at').eq('project_id', id).order('updated_at', { ascending: false }).limit(5)
+    (supabase as any).from('invoices').select('id, invoice_number, amount_paid, status, updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(5)
       .then(({ data }: any) => setRecentInvoices(data ?? []));
 
     Promise.all([
-      (supabase as any).from('project_change_orders').select('id', { count: 'exact', head: true }).eq('project_id', id).eq('status', 'pending'),
-      (supabase as any).from('draw_schedules').select('id', { count: 'exact', head: true }).eq('project_id', id).in('status', ['pending', 'requested']),
-      (supabase as any).from('invoices').select('id', { count: 'exact', head: true }).eq('project_id', id).in('status', ['sent', 'overdue']),
+      (supabase as any).from('project_change_orders').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('status', 'pending'),
+      (supabase as any).from('draw_schedules').select('id', { count: 'exact', head: true }).eq('project_id', projectId).in('status', ['pending', 'requested']),
+      (supabase as any).from('invoices').select('id', { count: 'exact', head: true }).eq('project_id', projectId).in('status', ['sent', 'overdue']),
     ]).then(([co, dr, inv]) => {
       setPendingCounts({ changeOrders: co.count ?? 0, draws: dr.count ?? 0, invoices: inv.count ?? 0 });
     });
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    loadOverviewData(id);
   }, [id]);
 
-  const recentActivity = useMemo(() => {
-    if (!enriched) return [];
-    const entries = [
-      ...enriched.incomeList.map((t: any) => ({
-        id: `income-${t.id}`, created_at: t.transaction_date,
-        title: `Payment received${t.source_name ? ` from ${t.source_name}` : ''}`,
-        amount: fmtUSD(t.amount), dotColor: 'bg-positive',
-      })),
-      ...recentDraws.map((d: any) => ({
-        id: `draw-${d.id}`, created_at: d.created_at,
-        title: `Draw ${d.milestone_name} ${d.status === 'funded' ? 'funded' : d.status === 'requested' ? 'requested' : 'added'}`,
-        amount: fmtUSD(d.draw_amount), dotColor: 'bg-blue-400',
-      })),
-      ...recentChangeOrders.map((c: any) => ({
-        id: `co-${c.id}`, created_at: c.created_at,
-        title: `Change order "${c.title}" ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'added'}`,
-        amount: fmtUSD(c.amount), dotColor: c.status === 'approved' ? 'bg-positive' : c.status === 'rejected' ? 'bg-accent' : 'bg-warning',
-      })),
-      ...recentInvoices.filter((i: any) => i.status === 'paid').map((i: any) => ({
-        id: `inv-${i.id}`, created_at: i.updated_at,
-        title: `Invoice #${i.invoice_number} paid`,
-        amount: fmtUSD(i.amount_paid), dotColor: 'bg-positive',
-      })),
-    ];
-    return entries
-      .filter(e => e.created_at)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .map(e => ({ ...e, timestamp: fmtDate(e.created_at) }));
-  }, [enriched, recentDraws, recentChangeOrders, recentInvoices]);
+  /* ── Live sync: refresh milestones/draws/change-orders/invoices when anyone
+     changes them for this project, so the Overview tab never goes stale.
+     Also invalidates the project-financial-summary RPC (contract value,
+     committed costs, cash position) since it aggregates these same tables. ── */
+  useEffect(() => {
+    if (!id) return;
+    const refresh = () => {
+      loadOverviewData(id);
+      qc.invalidateQueries({ queryKey: ['project-financial-summary', id] });
+    };
+    const channel = supabase
+      .channel(`project-detail-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_milestones', filter: `project_id=eq.${id}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'draw_schedules', filter: `project_id=eq.${id}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_change_orders', filter: `project_id=eq.${id}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_add_ons', filter: `project_id=eq.${id}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_scope_items', filter: `project_id=eq.${id}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `project_id=eq.${id}` }, refresh)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, qc]);
 
   /* ── Portal link info ── */
   const [portalClient, setPortalClient] = useState<any>(null);
@@ -335,6 +348,41 @@ export default function ProjectDetail() {
       checksList: pChecks,
     };
   }, [project, checks, income, expenses]);
+
+  const recentActivity = useMemo(() => {
+    if (!enriched) return [];
+    const entries = [
+      ...enriched.incomeList.map((t: any) => ({
+        id: `income-${t.id}`, created_at: t.transaction_date,
+        title: `Payment received${t.source_name ? ` from ${t.source_name}` : ''}`,
+        amount: fmtUSD(t.amount), dotColor: 'bg-positive',
+        icon: <Receipt className="w-3.5 h-3.5" />, iconClassName: 'bg-emerald-500/10 text-emerald-500',
+      })),
+      ...recentDraws.map((d: any) => ({
+        id: `draw-${d.id}`, created_at: d.created_at,
+        title: `Draw ${d.milestone_name} ${d.status === 'funded' ? 'funded' : d.status === 'requested' ? 'requested' : 'added'}`,
+        amount: fmtUSD(d.draw_amount), dotColor: 'bg-blue-400',
+        icon: <Wallet className="w-3.5 h-3.5" />, iconClassName: 'bg-blue-500/10 text-blue-400',
+      })),
+      ...recentChangeOrders.map((c: any) => ({
+        id: `co-${c.id}`, created_at: c.created_at,
+        title: `Change order "${c.title}" ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'added'}`,
+        amount: fmtUSD(c.amount), dotColor: c.status === 'approved' ? 'bg-positive' : c.status === 'rejected' ? 'bg-accent' : 'bg-warning',
+        icon: <TrendingUp className="w-3.5 h-3.5" />,
+        iconClassName: c.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : c.status === 'rejected' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-500',
+      })),
+      ...recentInvoices.filter((i: any) => i.status === 'paid').map((i: any) => ({
+        id: `inv-${i.id}`, created_at: i.updated_at,
+        title: `Invoice #${i.invoice_number} paid`,
+        amount: fmtUSD(i.amount_paid), dotColor: 'bg-positive',
+        icon: <FileText className="w-3.5 h-3.5" />, iconClassName: 'bg-emerald-500/10 text-emerald-500',
+      })),
+    ];
+    return entries
+      .filter(e => e.created_at)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map(e => ({ ...e, timestamp: fmtDate(e.created_at) }));
+  }, [enriched, recentDraws, recentChangeOrders, recentInvoices]);
 
   const sortedActivity = useMemo(() => {
     if (!enriched) return [];
@@ -777,32 +825,36 @@ export default function ProjectDetail() {
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatCard
               label="Project Health" value={`${Math.round(healthScore)}`} sub={healthTone.label}
-              subColor="" trendColor={healthTone.color}
+              subColor="" trendColor={healthTone.color} icon={ShieldCheck} deltaTone="neutral"
             />
             <StatCard
               label="Budget Used" value={`${enriched.used.toFixed(1)}%`}
               sub={`${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`}
               trend={budgetUsedTrend} trendColor={enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F'}
+              icon={BarChart3} deltaTone="neutral" deltaMode="absolute"
             />
             <StatCard
               label="Cost to Complete"
               value={projectSummary ? fmtUSD(projectSummary.estimated_cost_to_complete) : '—'}
-              sub="Estimated"
+              sub="Estimated" icon={Clock}
             />
             <StatCard
               label="Forecast Profit"
               value={projectSummary ? fmtUSD(projectSummary.estimated_gross_profit) : '—'}
               sub={projectSummary ? `${projectSummary.estimated_gross_margin.toFixed(1)}% margin` : 'Awaiting data'}
               subColor={projectSummary && projectSummary.estimated_gross_profit >= 0 ? 'text-positive' : 'text-accent'}
+              icon={TrendingUp} trendColor={projectSummary && projectSummary.estimated_gross_profit >= 0 ? '#10b981' : '#ef4444'}
             />
             <StatCard
               label="Cash Position" value={fmtUSD(projectSummary?.cash_position ?? enriched.net)}
               sub="Available" trend={cashPositionTrend} trendColor={(projectSummary?.cash_position ?? enriched.net) >= 0 ? '#10b981' : '#ef4444'}
+              icon={Wallet}
             />
             <StatCard
               label="Open Items" value={String(openItemsTotal)}
               sub={openItemsTotal > 0 ? 'Requires attention' : 'All caught up'}
               subColor={openItemsTotal > 0 ? 'text-warning' : 'text-positive'}
+              icon={AlertCircle} trendColor={openItemsTotal > 0 ? '#f59e0b' : '#10b981'}
             />
           </div>
 
@@ -900,13 +952,31 @@ export default function ProjectDetail() {
             </div>
             <div className="p-4">
               <MilestoneTimeline
-                milestones={pdMilestones.map(m => ({
+                milestones={pdMilestones.slice(0, 6).map(m => ({
                   id: m.id, title: m.title,
                   date: m.actual_completion_date || m.planned_completion_date || m.planned_start_date,
                   status: m.status === 'completed' ? 'completed' : m.status === 'in_progress' ? 'active' : 'pending',
+                  percentComplete: Number(m.percent_complete) || 0,
                 }))}
               />
             </div>
+          </div>
+
+          {/* ── Reconciliation Schedule — Gantt ── */}
+          <div className="pdv2-card overflow-hidden">
+            <div className="pdv2-card-header flex items-center justify-between">
+              <div className="text-[11px] font-bold uppercase tracking-wide">Reconciliation Schedule</div>
+              <button onClick={() => setTab('breakdown')} className="pdv2-link">Open reconciliation →</button>
+            </div>
+            <ProjectGantt
+              milestones={pdMilestones}
+              scopeItems={sovItems}
+              changeOrders={ganttCOs}
+              draws={ganttDraws}
+              projectStart={enriched.start_date}
+              projectEnd={enriched.end_date}
+              onOpenReconciliation={() => setTab('breakdown')}
+            />
           </div>
 
           {/* ── Recent Activity / Pending Items ── */}

@@ -44,6 +44,7 @@ import ResidentialConstruction from "./pages/public/ResidentialConstruction";
 import CommercialConstruction from "./pages/public/CommercialConstruction";
 import ProjectManagementServices from "./pages/public/ProjectManagementServices";
 import Portfolio     from "./pages/public/Portfolio";
+import PortfolioDetail from "./pages/public/PortfolioDetail";
 import About         from "./pages/public/About";
 import Contact       from "./pages/public/Contact";
 import StartProject  from "./pages/public/StartProject";
@@ -142,6 +143,7 @@ const App = () => (
                 <Route path="/services/project-management"      element={<ProjectManagementServices />} />
                 <Route path="/services/:slug"   element={<ServiceDetail />} />
                 <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/portfolio/:id" element={<PortfolioDetail />} />
                 <Route path="/about"     element={<About />} />
                 <Route path="/contact"        element={<Contact />} />
                 <Route path="/start-project" element={<StartProject />} />

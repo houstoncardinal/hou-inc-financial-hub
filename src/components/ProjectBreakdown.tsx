@@ -14,11 +14,20 @@ import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
   Layers, TrendingUp, Receipt, Calendar, History, PackagePlus,
   ClipboardCheck, FileSpreadsheet, CreditCard, MessageSquare, ShieldCheck,
+  RefreshCw, Wallet,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { generateProjectReconciliationReport, savePDF } from '@/lib/reports';
+import { invoiceTotal } from '@/hooks/useInvoices';
+import { PDV2_CSS } from '@/components/project-detail/cardStyles';
+import { ProgressRing } from '@/components/project-detail/ProgressRing';
+import { TrendLineChart } from '@/components/project-detail/TrendLineChart';
+import { MiniTable } from '@/components/project-detail/MiniTable';
+import { ActivityFeedCard } from '@/components/project-detail/ActivityFeedCard';
+import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
+import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'addons' | 'payments' | 'reconciliation' | 'notes' | 'audit';
@@ -315,6 +324,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const [addOns,       setAddOns]       = useState<AddOn[]>([]);
   const [milestones,   setMilestones]   = useState<Milestone[]>([]);
   const [draws,        setDraws]        = useState<DrawSchedule[]>([]);
+  const [invoices,     setInvoices]     = useState<any[]>([]);
   const [loading,      setLoading]      = useState(true);
 
   /* ── notes ───────────────────────────────────────────────────────────────── */
@@ -353,24 +363,42 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const [savingAddOn, setSavingAddOn] = useState(false);
 
   /* ── load ────────────────────────────────────────────────────────────────── */
-  const load = async () => {
+  const load = async (silent = false) => {
     if (!projectId) return;
-    setLoading(true);
-    const [s, c, ao, m, d] = await Promise.all([
+    if (!silent) setLoading(true);
+    const [s, c, ao, m, d, inv] = await Promise.all([
       (supabase as any).from('project_scope_items').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('project_change_orders').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
       (supabase as any).from('project_add_ons').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('project_milestones').select('*').eq('project_id', projectId).order('sort_order'),
       (supabase as any).from('draw_schedules').select('*').eq('project_id', projectId).order('scheduled_date'),
+      (supabase as any).from('invoices').select('id, status, due_date, line_items, tax_rate, amount_paid').eq('project_id', projectId),
     ]);
     setScopeItems((s.data ?? []) as ScopeItem[]);
     setChangeOrders((c.data ?? []) as ChangeOrder[]);
     setAddOns((ao.data ?? []) as AddOn[]);
     setMilestones((m.data ?? []) as Milestone[]);
     setDraws((d.data ?? []) as DrawSchedule[]);
-    setLoading(false);
+    setInvoices(inv.data ?? []);
+    if (!silent) setLoading(false);
   };
   useEffect(() => { load(); }, [projectId]);
+
+  /* ── Live sync: refresh scope/CO/add-on/milestone/draw/invoice data when
+     anyone changes it for this project, so reconciliation never goes stale. ── */
+  useEffect(() => {
+    if (!projectId) return;
+    const channel = supabase
+      .channel(`project-breakdown-${projectId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_scope_items', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_change_orders', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_add_ons', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_milestones', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'draw_schedules', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `project_id=eq.${projectId}` }, () => load(true))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId]);
 
   /* ── calculation engine ──────────────────────────────────────────────────── */
   const fin = useMemo(() => {
@@ -513,6 +541,17 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     return months.map(m => ({ period: m.period, billed: buckets[m.key].billed, paid: buckets[m.key].paid }));
   }, [draws, enriched?.incomeList]);
 
+  /* ── Reconciliation Center: real overdue amount + pending-approvals count. ── */
+  const overdueAmount = useMemo(() => (
+    invoices.filter((i: any) => i.status === 'overdue').reduce((s: number, i: any) => s + invoiceTotal(i), 0)
+  ), [invoices]);
+
+  const pendingApprovalsCount = useMemo(() => (
+    changeOrders.filter(c => c.status === 'pending').length
+    + addOns.filter(a => a.status === 'pending').length
+    + draws.filter(d => d.status === 'pending' || d.status === 'requested').length
+  ), [changeOrders, addOns, draws]);
+
   const exportReconciliationPDF = () => {
     const doc = generateProjectReconciliationReport({
       project,
@@ -543,9 +582,11 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const aof  = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setAddOnForm(p => ({ ...p, [k]: e.target.value }));
   const dbError = (label: string, error: any) => {
     console.error(label, error);
-    toast.error(label, {
-      description: error?.message || error?.details || 'The database rejected this save. Confirm the latest repair migration is applied.',
-    });
+    const missing = error?.message?.match(/Could not find the '([^']+)' column/)?.[1];
+    const description = missing
+      ? `The "${missing}" column is missing from the database. Run supabase/migrations/20260716000007_change_order_draw_column_repair.sql in the Supabase SQL editor, then reload the app.`
+      : error?.message || error?.details || 'The database rejected this save. Confirm the latest repair migration is applied.';
+    toast.error(label, { description });
   };
 
   /* SOV */
@@ -703,7 +744,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
     if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
     if (subTab === 'addons') return { label: 'Add Add-On', onClick: openAddAddOn };
-    if (subTab === 'payments') return { label: 'Log Payment', onClick: () => navigate(`/concierge?type=income&project=${projectId}`) };
+    if (subTab === 'payments') return { label: 'Log Payment', onClick: () => navigate(`/concierge?start=income&project=${projectId}`) };
     if (subTab === 'notes') return { label: 'Edit Notes', onClick: () => setShowNotes(true), disabled: savingNotes };
     return null;
   })();
@@ -711,6 +752,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   return (
     <div className="pb-shell">
       <style>{PB_CSS}</style>
+      <style>{PDV2_CSS}</style>
       {/* ── Sub-tab navigation ────────────────────────────────────────────── */}
       <div className="sm:hidden px-4 pt-4 pb-2">
         <div className="relative">
@@ -789,110 +831,196 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
             {/* ══════════════════════════════════════════════════════════════
                 OVERVIEW
             ══════════════════════════════════════════════════════════════ */}
-            {subTab === 'overview' && (
-              <div className="space-y-4">
-                {/* KPIs row 1 */}
-                <div className="border border-border">
-                  <KpiGrid items={[
-                    { label: 'Original Contract',  value: fmtUSD(fin.originalContractValue) },
-                    { label: 'Net Change Orders',  value: fmtUSD(fin.net), sub: fin.net >= 0 ? 'net addition' : 'net credit' },
-                    { label: 'Revised Total',      value: fmtUSD(fin.revised), accent: true },
-                    { label: 'Pending COs',        value: fmtUSD(fin.pendingCOs), sub: 'awaiting approval' },
-                  ]} />
-                </div>
-                {/* KPIs row 2 */}
-                <div className="border border-border">
-                  <KpiGrid items={[
-                    { label: 'Total Billed',       value: fmtUSD(fin.billed),   sub: `${fin.billedPct.toFixed(1)}% of contract` },
-                    { label: 'Payments Received',  value: fmtUSD(fin.paid),     sub: `${fin.collectPct.toFixed(1)}% collected` },
-                    { label: 'Accounts Receivable', value: fmtUSD(fin.ar),      sub: fin.ar > 0 ? 'billed, unpaid' : 'fully collected' },
-                    { label: 'Balance Remaining',  value: fmtUSD(fin.balance),  accent: true },
-                  ]} />
-                </div>
-                {/* KPIs row 3 — Add Ons */}
-                <div className="border border-border">
-                  <KpiGrid items={[
-                    { label: 'Approved Add-Ons',   value: fmtUSD(fin.addOnsAdditions), sub: 'extra work approved' },
-                    { label: 'Approved Credits',   value: fmtUSD(fin.addOnsCredits) },
-                    { label: 'Net Add-Ons',         value: fmtUSD(fin.addOnsNet), accent: true },
-                    { label: 'Pending Add-Ons',     value: fmtUSD(fin.pendingAddOns), sub: 'awaiting approval' },
-                  ]} />
-                </div>
-
-                {/* Progress section */}
-                <div className="border border-border">
-                  <PanelHeader label="Project Progress" />
-                  <div className="p-4 space-y-3">
-                    {[
-                      { label: 'Work Completed',  pct: fin.pctDone,      value: fin.earned,  hex: '#3b82f6' },
-                      { label: 'Billed to Date',  pct: fin.billedPct,    value: fin.billed,  hex: '#f59e0b' },
-                      { label: 'Collected',        pct: fin.collectPct,   value: fin.paid,    hex: '#10b981' },
-                    ].map(row => (
-                      <div key={row.label}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="micro-label">{row.label}</span>
-                          <span className="text-xs font-mono-tab text-muted-foreground">
-                            {fmtUSD(row.value)} · {row.pct.toFixed(1)}%
-                          </span>
+            {subTab === 'overview' && (() => {
+              const clientName = enriched?.client_name_snapshot || null;
+              const lastActivityTs = auditEntries[0]?.created_at ? fmtDate(auditEntries[0].created_at) : null;
+              return (
+              <div className="space-y-3">
+                {/* ── Reconciliation Center / Quick Actions / Key Metrics / Project Details ── */}
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 items-stretch">
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Reconciliation Center</div></div>
+                    <div className="p-4">
+                      <div className="flex items-center gap-4">
+                        <ProgressRing pct={fin.billed > 0 ? (fin.paid / fin.billed) * 100 : 0} />
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold">Reconciliation Progress</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">{fmtUSD(fin.paid)} collected of {fmtUSD(fin.billed)}</div>
                         </div>
-                        <Bar value={row.value} max={fin.revised} hex={row.hex} />
                       </div>
-                    ))}
+                      <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-border text-center">
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Cleared</div>
+                          <div className="text-[12px] font-bold font-mono-tab text-positive mt-0.5">{fmtUSD(fin.paid)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Open</div>
+                          <div className="text-[12px] font-bold font-mono-tab mt-0.5">{fmtUSD(Math.max(fin.ar, 0))}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Overdue</div>
+                          <div className="text-[12px] font-bold font-mono-tab text-accent mt-0.5">{fmtUSD(overdueAmount)}</div>
+                        </div>
+                      </div>
+                      {lastActivityTs && (
+                        <div className="text-[10px] text-muted-foreground mt-3 pt-3 border-t border-border">Last updated {lastActivityTs}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Quick Actions</div></div>
+                    <div className="p-2 space-y-1">
+                      {[
+                        { label: 'Reconcile Now', sub: 'Match transactions', icon: RefreshCw, color: '#3b82f6', onClick: () => setSubTab('reconciliation') },
+                        { label: 'Create Draw', sub: 'New draw request', icon: Wallet, color: '#9D7E3F', onClick: () => { setSubTab('draws'); openAddDraw(); } },
+                        { label: 'Create CO', sub: 'New change order', icon: TrendingUp, color: '#f59e0b', onClick: () => { setSubTab('cos'); openAddCO(); } },
+                        { label: 'Record Payment', sub: 'Log incoming payment', icon: Receipt, color: '#10b981', onClick: () => { setSubTab('payments'); navigate(`/concierge?start=income&project=${projectId}`); } },
+                      ].map(a => (
+                        <button key={a.label} onClick={a.onClick} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-secondary/50 rounded-md transition-colors group">
+                          <span className="pdv2-icon-chip" style={{ backgroundColor: `${a.color}1a` }}>
+                            <a.icon className="w-3.5 h-3.5" style={{ color: a.color }} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[12px] font-semibold">{a.label}</div>
+                            <div className="text-[10px] text-muted-foreground">{a.sub}</div>
+                          </div>
+                          <ChevronDown className="w-3.5 h-3.5 -rotate-90 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Key Metrics</div></div>
+                    <div className="p-4 space-y-3">
+                      {[
+                        ['Billings to Date', fmtUSD(fin.billed)],
+                        ['Change Orders', fmtUSD(fin.net)],
+                        ['Retainage Held', fmtUSD((enriched?.checksList ?? []).reduce((s: number, c: any) => s + (Number(c.retainage_held) || 0), 0))],
+                        ['Pending Approvals', `${pendingApprovalsCount} item${pendingApprovalsCount !== 1 ? 's' : ''}`],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex justify-between items-baseline text-[12px]">
+                          <span className="text-muted-foreground">{label}</span>
+                          <span className="font-mono-tab font-semibold">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <ProjectDetailsCard
+                    data={{
+                      name: project?.name, code: project?.code, clientName,
+                      projectManager: project?.project_manager,
+                      status: (project?.status || 'active').replace('_', ' '),
+                      statusColor: project?.status === 'active' ? 'bg-positive/15 text-positive' : project?.status === 'on_hold' ? 'bg-warning/15 text-warning' : 'bg-secondary text-foreground',
+                      contractType: project?.contract_type,
+                      startDate: project?.start_date, endDate: project?.end_date,
+                      location: project?.location, department: project?.department,
+                    }}
+                  />
+                </div>
+
+                {/* ── Financial Summary / Billing vs Payments ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Financial Summary</div></div>
+                    <div className="grid grid-cols-2 gap-px bg-border">
+                      {[
+                        { label: 'Original Contract', value: fmtUSD(fin.originalContractValue) },
+                        { label: 'Change Orders', value: fmtUSD(fin.net), sub: `${fin.originalContractValue > 0 ? (fin.net / fin.originalContractValue * 100).toFixed(1) : '0.0'}% of contract` },
+                        { label: 'Revised Contract', value: fmtUSD(fin.revised), accent: true },
+                        { label: 'Pending Change Orders', value: fmtUSD(fin.pendingCOs), sub: 'awaiting approval' },
+                        { label: 'Total Billed', value: fmtUSD(fin.billed), sub: `${fin.billedPct.toFixed(1)}% of contract` },
+                        { label: 'Payments Received', value: fmtUSD(fin.paid), sub: `${fin.collectPct.toFixed(1)}% of billed` },
+                        { label: 'Accounts Receivable', value: fmtUSD(fin.ar), sub: fin.billed > 0 ? `${(fin.ar / fin.billed * 100).toFixed(1)}% of billed` : undefined },
+                        { label: 'Balance Remaining', value: fmtUSD(fin.balance), accent: true },
+                      ].map(card => (
+                        <div key={card.label} className="bg-background px-4 py-3">
+                          <div className="text-[9px] uppercase tracking-wide text-muted-foreground font-bold leading-tight">{card.label}</div>
+                          <div className={`text-[15px] font-bold font-mono-tab mt-1 ${card.accent ? 'text-[#9D7E3F]' : ''}`}>{card.value}</div>
+                          {card.sub && <div className="text-[10px] text-muted-foreground mt-0.5 font-mono-tab">{card.sub}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Billing vs Payments</div></div>
+                    <div className="p-4">
+                      <TrendLineChart
+                        data={billingVsPaymentsSeries}
+                        series={[
+                          { key: 'billed', label: 'Billed Amount', color: '#3b82f6' },
+                          { key: 'paid', label: 'Payments Received', color: '#10b981' },
+                        ]}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* SOV quick summary */}
-                {scopeItems.length > 0 && (
-                  <div className="border border-border">
-                    <PanelHeader
-                      label={`Scope Items — ${scopeItems.length} Line${scopeItems.length !== 1 ? 's' : ''}`}
-                      action={
-                        <button onClick={() => setSubTab('sov')} className="text-[10px] text-accent hover:opacity-80 font-bold">
-                          View All →
-                        </button>
-                      }
+                {/* ── Recent Draws / Change Orders / Payments + sidebar ── */}
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 items-start">
+                  <div className="xl:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <MiniTable
+                      title="Recent Draw Requests"
+                      onViewAll={() => setSubTab('draws')}
+                      emptyText="No draws recorded yet."
+                      columns={[
+                        { key: 'name', label: 'Draw', render: (d: any) => d.milestone_name },
+                        { key: 'amount', label: 'Amount', align: 'right', render: (d: any) => fmtUSD(d.draw_amount) },
+                        { key: 'status', label: 'Status', render: (d: any) => (
+                          <span className={`text-[9px] font-bold uppercase ${d.status === 'funded' ? 'text-positive' : d.status === 'requested' ? 'text-warning' : 'text-muted-foreground'}`}>{d.status}</span>
+                        ) },
+                      ]}
+                      rows={[...draws].sort((a, b) => (b.scheduled_date || b.created_at || '').localeCompare(a.scheduled_date || a.created_at || '')).slice(0, 3)}
                     />
-                    <div className="divide-y divide-border">
-                      {scopeItems.slice(0, 6).map(item => {
-                        const revised = Number(item.contract_amount) + Number(item.change_order_amount) - Number(item.approved_credit_amount || 0);
-                        return (
-                          <div key={item.id} className="px-4 py-3 flex items-center gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-foreground truncate">{item.name}</div>
-                              {item.category && <div className="micro-label mt-0.5">{item.category}</div>}
-                            </div>
-                            <div className="w-20 hidden sm:block">
-                              <Bar value={item.percent_complete} max={100} hex="#9D7E3F" />
-                              <div className="micro-label text-right mt-1">{item.percent_complete}%</div>
-                            </div>
-                            <div className="text-sm font-mono-tab text-foreground text-right shrink-0">{fmtUSD(revised)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <MiniTable
+                      title="Change Orders"
+                      onViewAll={() => setSubTab('cos')}
+                      emptyText="No change orders have been added to this project."
+                      emptyAction={<button onClick={() => { setSubTab('cos'); openAddCO(); }} className={saveBtn}>+ New Change Order</button>}
+                      columns={[
+                        { key: 'title', label: 'Title', render: (c: any) => c.title },
+                        { key: 'amount', label: 'Amount', align: 'right', render: (c: any) => fmtUSD(c.amount) },
+                        { key: 'status', label: 'Status', render: (c: any) => (
+                          <span className={`text-[9px] font-bold uppercase ${c.status === 'approved' ? 'text-positive' : c.status === 'rejected' ? 'text-destructive' : 'text-warning'}`}>{c.status}</span>
+                        ) },
+                      ]}
+                      rows={[...changeOrders].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3)}
+                    />
+                    <MiniTable
+                      title="Recent Payments"
+                      onViewAll={() => setSubTab('payments')}
+                      emptyText="No payments recorded yet."
+                      columns={[
+                        { key: 'date', label: 'Date', render: (p: any) => fmtDate(p.transaction_date) },
+                        { key: 'amount', label: 'Amount', align: 'right', render: (p: any) => fmtUSD(p.amount) },
+                        { key: 'status', label: 'Status', render: () => <span className="text-[9px] font-bold uppercase text-positive">Cleared</span> },
+                      ]}
+                      rows={[...(enriched?.incomeList ?? [])].sort((a: any, b: any) => b.transaction_date.localeCompare(a.transaction_date)).slice(0, 3)}
+                    />
                   </div>
-                )}
 
-                {/* Milestone chips */}
-                {milestones.length > 0 && (
-                  <div className="border border-border">
-                    <PanelHeader label={`Milestones — ${milestones.length}`} action={<button onClick={() => setSubTab('milestones')} className="text-[10px] text-accent hover:opacity-80 font-bold">View All →</button>} />
-                    <div className="p-4 flex flex-wrap gap-2">
-                      {milestones.map(m => {
-                        const meta = MS_STATUS[m.status] ?? MS_STATUS.not_started;
-                        return (
-                          <div key={m.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-border text-[10px] font-medium">
-                            <span className={meta.color}>●</span>
-                            <span className="text-foreground">{m.title}</span>
-                            <span className="text-muted-foreground">{m.percent_complete}%</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="space-y-3">
+                    <ActivityFeedCard
+                      onViewAll={() => setSubTab('audit')}
+                      entries={auditEntries.slice(0, 5).map(e => ({
+                        id: e.id,
+                        title: `${e.badge}: ${e.title}`,
+                        amount: e.value,
+                        timestamp: fmtDate(e.created_at),
+                        dotColor: e.statusColor.replace('text-', 'bg-'),
+                        icon: e.icon,
+                        iconClassName: e.badgeBg,
+                      }))}
+                    />
+                    <DocumentsCard documents={projectDocs} />
                   </div>
-                )}
+                </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* ══════════════════════════════════════════════════════════════
                 SCOPE / SCHEDULE OF VALUES
@@ -1828,7 +1956,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     label={`Client Payments — ${(enriched?.incomeList ?? []).length} Record${(enriched?.incomeList ?? []).length !== 1 ? 's' : ''}`}
                     action={
                       <button
-                        onClick={() => navigate(`/concierge?type=income&project=${projectId}`)}
+                        onClick={() => navigate(`/concierge?start=income&project=${projectId}`)}
                         className={outlineBtn}
                       >
                         Log Payment
@@ -1841,7 +1969,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                       <div className="text-[11px] text-muted-foreground mt-0.5">Record payments through Income so Stripe, QuickBooks, invoice links, SOV allocation, and client portal visibility stay connected.</div>
                     </div>
                     <button
-                      onClick={() => navigate(`/concierge?type=income&project=${projectId}`)}
+                      onClick={() => navigate(`/concierge?start=income&project=${projectId}`)}
                       className={`${saveBtn} shrink-0`}
                     >
                       Open Income Concierge

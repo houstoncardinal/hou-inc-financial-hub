@@ -1,9 +1,13 @@
+import type { ReactNode } from 'react';
+
 export interface ActivityEntry {
   id: string;
   title: string;
   amount?: string;
   timestamp: string;
   dotColor?: string;
+  icon?: ReactNode;
+  iconClassName?: string;
 }
 
 export function ActivityFeedCard({ entries, onViewAll, limit = 5 }: {
@@ -25,8 +29,14 @@ export function ActivityFeedCard({ entries, onViewAll, limit = 5 }: {
       ) : (
         <div className="divide-y divide-border">
           {shown.map(e => (
-            <div key={e.id} className="px-4 py-3 flex items-start gap-2.5">
-              <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${e.dotColor || 'bg-[#9D7E3F]'}`} />
+            <div key={e.id} className="px-4 py-3 flex items-start gap-2.5 pdv2-row-hover transition-colors">
+              {e.icon ? (
+                <span className={`pdv2-icon-chip ${e.iconClassName || 'bg-secondary text-muted-foreground'}`}>
+                  {e.icon}
+                </span>
+              ) : (
+                <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${e.dotColor || 'bg-[#9D7E3F]'}`} />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="text-[12px] font-medium truncate">
                   {e.title}

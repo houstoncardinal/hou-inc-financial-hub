@@ -7,13 +7,18 @@ import {
   DollarSign, Edit3, Trash2, Send, Link2, Copy, RefreshCw,
   ArrowLeft, Pin, Eye, EyeOff, Target, MessageSquare,
   UserCheck, Users, Loader2, Zap, Building2, AlertTriangle,
-  Wand2, ChevronRight, ChevronLeft, MapPin,
+  Wand2, ChevronRight, ChevronLeft, MapPin, Clock, TrendingUp,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { StatCard } from '@/components/project-detail/StatCard';
+import { MilestoneTimeline } from '@/components/project-detail/MilestoneTimeline';
+import { ProgressRing } from '@/components/project-detail/ProgressRing';
+import { ActionButton } from '@/components/admin/design/ActionButton';
+import { PDV2_CSS } from '@/components/project-detail/cardStyles';
 
 /* ── Tokens ──────────────────────────────────────────────────────── */
 const AC    = '#9D7E3F';
@@ -119,10 +124,6 @@ function autoCode(title: string, count: number) {
 }
 
 /* ── Shared UI pieces ───────────────────────────────────────────── */
-function StatusDot({ status }: { status: string }) {
-  return <span className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: statusMeta(status).color }} />;
-}
-
 function StatusBadge({ status }: { status: string }) {
   const m = statusMeta(status);
   return (
@@ -130,19 +131,6 @@ function StatusBadge({ status }: { status: string }) {
       style={{ backgroundColor: m.color + '18', color: m.color }}>
       {m.label}
     </span>
-  );
-}
-
-function ProgressRing({ pct, size = 38 }: { pct: number; size?: number }) {
-  const r = (size - 6) / 2;
-  const circ = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} className="flex-shrink-0 -rotate-90">
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-border" />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={AC} strokeWidth={3}
-        strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
-        style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.22,1,0.36,1)' }} />
-    </svg>
   );
 }
 
@@ -159,13 +147,13 @@ function PillPicker({ options, value, onChange }: {
     <div className="flex flex-wrap gap-2">
       {options.map(o => {
         const sel = o.value === value;
-        const c = o.color ?? '#0A0A0A';
+        const c = o.color ?? 'hsl(var(--foreground))';
         return (
           <button key={o.value} type="button" onClick={() => onChange(o.value)}
-            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] border transition-all"
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-[0.14em] border transition-all"
             style={sel
               ? { backgroundColor: c, color: '#fff', borderColor: c }
-              : { backgroundColor: 'transparent', borderColor: 'var(--border)', color: 'var(--muted-foreground)' }
+              : { backgroundColor: 'transparent', borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }
             }>
             {o.label}
           </button>
@@ -263,7 +251,7 @@ function AddressAutocomplete({
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Start typing to search Texas addresses…"
           autoComplete="off"
-          className="w-full h-11 pl-9 pr-10 text-[14px] border border-border bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 transition-colors"
+          className="w-full h-11 pl-9 pr-10 text-[14px] rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 transition-colors"
         />
         {loading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin" style={{ color: AC }} />}
       </div>
@@ -445,7 +433,7 @@ function NewProjectWizard({
               onChange={e => set('title', e.target.value)}
               onKeyDown={e => e.key === 'Enter' && goNext()}
               placeholder="e.g. Johnson Custom Estate"
-              className="w-full h-12 px-4 text-[15px] border border-border bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 transition-colors"
+              className="w-full h-12 px-4 text-[15px] rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/40 transition-colors"
             />
             {/* Auto-code suggestion */}
             {form.title && (
@@ -467,7 +455,7 @@ function NewProjectWizard({
                       value={form.project_code}
                       onChange={e => set('project_code', e.target.value)}
                       placeholder="PRJ-001"
-                      className="h-8 px-3 text-[12px] font-mono border border-border bg-background focus:outline-none focus:border-foreground/40 w-36 transition-colors"
+                      className="h-8 px-3 text-[12px] font-mono rounded-lg border border-border bg-background focus:outline-none focus:border-foreground/40 w-36 transition-colors"
                     />
                     <button onClick={() => { setCodeManual(false); }}
                       className="text-[10px] text-muted-foreground underline hover:text-foreground transition-colors">
@@ -517,7 +505,7 @@ function NewProjectWizard({
                 value={form.city}
                 onChange={e => set('city', e.target.value)}
                 placeholder="City"
-                className="w-full h-10 px-3 text-[13px] border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
+                className="w-full h-10 px-3 text-[13px] rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
               />
             </div>
             <div className="col-span-1">
@@ -527,7 +515,7 @@ function NewProjectWizard({
                 onChange={e => set('state', e.target.value.toUpperCase().slice(0, 2))}
                 placeholder="TX"
                 maxLength={2}
-                className="w-full h-10 px-3 text-[13px] font-mono border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
+                className="w-full h-10 px-3 text-[13px] font-mono rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
               />
             </div>
             <div className="col-span-2">
@@ -537,7 +525,7 @@ function NewProjectWizard({
                 onChange={e => set('zipcode', e.target.value.replace(/\D/g, '').slice(0, 5))}
                 placeholder="00000"
                 maxLength={5}
-                className="w-full h-10 px-3 text-[13px] font-mono border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
+                className="w-full h-10 px-3 text-[13px] font-mono rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-foreground/40 transition-colors"
               />
             </div>
           </div>
@@ -604,7 +592,7 @@ function NewProjectWizard({
             </div>
           </div>
           {form.start_date && form.estimated_completion && (
-            <div className="p-3 border border-border bg-secondary/30">
+            <div className="p-3 rounded-lg border border-border bg-secondary/30">
               {(() => {
                 const start = new Date(form.start_date);
                 const end = new Date(form.estimated_completion);
@@ -737,7 +725,7 @@ function NewProjectWizard({
       case 'review': return (
         <div className="space-y-4">
           {/* Completeness bar */}
-          <div className="p-3 border border-border bg-secondary/20">
+          <div className="p-3 rounded-lg border border-border bg-secondary/20">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Project Completeness</span>
               <span className="text-[10px] font-bold" style={{ color: optionalFilled >= 4 ? '#10b981' : AC }}>
@@ -753,7 +741,7 @@ function NewProjectWizard({
           </div>
 
           {/* Summary sections */}
-          <div className="space-y-0 border border-border divide-y divide-border">
+          <div className="space-y-0 rounded-lg border border-border divide-y divide-border overflow-hidden">
             {[
               { label: 'Name',    value: form.title },
               { label: 'Code',    value: form.project_code || '—' },
@@ -862,7 +850,7 @@ function NewProjectWizard({
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[9px] font-black uppercase tracking-[0.24em] text-muted-foreground">{currentStep.label}</span>
               {isOptional && (
-                <span className="text-[8px] font-bold uppercase tracking-[0.16em] px-1.5 py-0.5 border border-border text-muted-foreground/70">
+                <span className="text-[8px] font-bold uppercase tracking-[0.16em] px-1.5 py-0.5 rounded border border-border text-muted-foreground/70">
                   Optional
                 </span>
               )}
@@ -943,7 +931,6 @@ export default function ProjectManager() {
   const [loading,       setLoading]       = useState(true);
 
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
-  const [mobileView,   setMobileView]   = useState<'list' | 'detail'>('list');
   const [detailTab,    setDetailTab]    = useState<'overview' | 'milestones' | 'updates' | 'settings'>('overview');
   const [search,       setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -1045,7 +1032,7 @@ export default function ProjectManager() {
     if (!confirm('Delete this project and all milestones/updates?')) return;
     await supabase.from('admin_projects').delete().eq('id', id);
     setProjects(prev => prev.filter(p => p.id !== id));
-    if (selectedId === id) { setSelectedId(null); setMobileView('list'); }
+    if (selectedId === id) setSelectedId(null);
     toast({ title: 'Project deleted' });
   };
 
@@ -1141,204 +1128,336 @@ export default function ProjectManager() {
     return p.client_name ?? null;
   };
 
+  const openProject = (id: string) => {
+    setSelectedId(id); setDetailTab('overview'); setEditMode(false); setEditForm(null);
+    // Scroll the admin content pane (and window, when standalone) back to the top
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0 });
+      document.querySelector('.admin-dashboard main')?.scrollTo({ top: 0 });
+    });
+  };
+
+  /* ── Portfolio metrics ────────────────────────────────────────── */
+  const activeCount    = projects.filter(p => p.status === 'active').length;
+  const planningCount  = projects.filter(p => p.status === 'planning').length;
+  const completedCount = projects.filter(p => p.status === 'completed').length;
+  const totalContract  = projects.reduce((s, p) => s + (Number(p.contract_amount) || 0), 0);
+  const avgProgress    = projects.length ? Math.round(projects.reduce((s, p) => s + (p.progress_pct || 0), 0) / projects.length) : 0;
+
+  /* ── Selected-project derived data ────────────────────────────── */
+  const selMeta = selectedProject ? statusMeta(selectedProject.status) : null;
+  const msDone  = milestones.filter(m => m.completed_date).length;
+  const timelineMs = milestones.map(m => ({
+    id: m.id,
+    title: m.title,
+    date: m.completed_date || m.target_date,
+    status: (m.completed_date ? 'completed' : m.is_active ? 'active' : 'pending') as 'completed' | 'active' | 'pending',
+  }));
+  const schedule = (() => {
+    if (!selectedProject?.start_date || !selectedProject?.estimated_completion) return null;
+    const start = new Date(selectedProject.start_date + 'T12:00:00').getTime();
+    const end   = new Date(selectedProject.estimated_completion + 'T12:00:00').getTime();
+    if (isNaN(start) || isNaN(end) || end <= start) return null;
+    const now = Date.now();
+    const totalDays   = Math.round((end - start) / 86400000);
+    const elapsedDays = Math.min(Math.max(Math.round((now - start) / 86400000), 0), totalDays);
+    const daysLeft    = Math.ceil((end - now) / 86400000);
+    return { totalDays, elapsedDays, daysLeft, pct: Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100) };
+  })();
+
+  /* Set progress_pct from completed-milestone ratio */
+  const syncProgress = async () => {
+    if (!selectedId || milestones.length === 0) return;
+    const pct = Math.round((msDone / milestones.length) * 100);
+    const { data, error } = await supabase.from('admin_projects').update({ progress_pct: pct }).eq('id', selectedId).select().single();
+    if (error) { toast({ title: 'Sync failed', description: error.message, variant: 'destructive' }); return; }
+    setProjects(prev => prev.map(p => p.id === selectedId ? data : p));
+    toast({ title: `Progress synced to ${pct}%`, description: 'Based on completed milestones' });
+  };
+
   /* ═══════════════════════════════════════════════════════════════
      RENDER
   ═══════════════════════════════════════════════════════════════ */
   return (
-    <div className="flex h-full overflow-hidden bg-background text-foreground">
+    <div className="text-foreground">
+      <style>{PDV2_CSS}</style>
 
-      {/* ═══ LEFT — Project List ═══ */}
-      <aside className={`flex flex-col border-r border-border flex-shrink-0 w-full md:w-72 lg:w-80 ${mobileView === 'detail' ? 'hidden md:flex' : 'flex'}`}>
-        <div className="flex-shrink-0 p-4 border-b border-border space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: AC }} strokeWidth={1.5} />
-              <div style={{ fontFamily: SERIF, fontStyle: 'italic' }} className="text-lg font-light leading-none">Projects</div>
-            </div>
-            <button onClick={() => setShowNew(true)}
-              className="flex items-center gap-1.5 h-7 px-3 text-[9px] font-black uppercase tracking-[0.18em] bg-foreground text-background hover:opacity-80 transition-opacity">
-              <Plus className="w-2.5 h-2.5" strokeWidth={3} /> New
-            </button>
+      {!selectedProject ? (
+        /* ═══ PORTFOLIO — KPI rail + project register ═══ */
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="Total Projects" value={String(projects.length)}
+              sub={`${planningCount} planning · ${completedCount} completed`} icon={FolderKanban} trendColor={AC} />
+            <StatCard label="Active Builds" value={String(activeCount)}
+              sub={activeCount > 0 ? 'Currently in delivery' : 'No active builds'}
+              subColor={activeCount > 0 ? 'text-positive font-semibold' : undefined} icon={Zap} trendColor="#10b981" />
+            <StatCard label="Contract Value" value={fmtUSD(totalContract)} sub="Combined portfolio" icon={DollarSign} trendColor="#3b82f6" />
+            <StatCard label="Avg Progress" value={`${avgProgress}%`} sub="Across all projects" icon={TrendingUp} trendColor="#8b5cf6" />
           </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…"
-              className="w-full h-8 pl-8 pr-3 text-xs border border-border bg-background placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors" />
-          </div>
-          <div className="flex gap-1 overflow-x-auto pb-0.5">
-            {['all', 'planning', 'active', 'on_hold', 'completed', 'archived'].map(s => {
-              const active = filterStatus === s;
-              const m = s !== 'all' ? statusMeta(s) : null;
-              return (
-                <button key={s} onClick={() => setFilterStatus(s)}
-                  className={`flex-shrink-0 h-5 px-2 text-[8px] font-bold uppercase tracking-[0.14em] transition-all ${active ? '' : 'border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
-                  style={active ? { backgroundColor: m?.color ?? '#0A0A0A', color: '#fff' } : {}}>
-                  {s === 'all' ? 'All' : s === 'on_hold' ? 'Hold' : m!.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <FolderKanban className="w-8 h-8 text-border mb-3" strokeWidth={1} />
-              <p className="text-xs text-muted-foreground">{search || filterStatus !== 'all' ? 'No matching projects' : 'No projects yet'}</p>
-              {!search && filterStatus === 'all' && (
-                <button onClick={() => setShowNew(true)} className="mt-4 text-[9px] font-black uppercase tracking-[0.18em] px-4 py-2 bg-foreground text-background hover:opacity-80 transition-opacity">
-                  Create First Project
-                </button>
-              )}
+          <div className="pdv2-card overflow-hidden">
+            <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-border">
+              <div className="text-[11px] font-bold uppercase tracking-wide flex-1 min-w-[150px]">
+                Project Portfolio ({filtered.length}{filtered.length !== projects.length ? ` of ${projects.length}` : ''})
+              </div>
+              <div className="relative flex items-center">
+                <Search className="absolute left-2.5 w-3 h-3 pointer-events-none text-muted-foreground" strokeWidth={2} />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Search title, client, or code…"
+                  className="text-[11px] outline-none rounded-lg border border-border bg-background text-foreground pl-6 pr-2.5 py-1.5 w-[150px] sm:w-[200px] focus:border-accent transition-colors" />
+              </div>
+              <ActionButton variant="primary" icon={Plus} onClick={() => setShowNew(true)}>New Project</ActionButton>
             </div>
-          ) : (
-            filtered.map((p, i) => {
-              const sel = p.id === selectedId;
-              const m = statusMeta(p.status);
-              const client = clientDisplay(p);
-              return (
-                <motion.button key={p.id}
-                  initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.16, delay: i * 0.025 }}
-                  onClick={() => { setSelectedId(p.id); setMobileView('detail'); setDetailTab('overview'); setEditMode(false); setEditForm(null); }}
-                  className={`w-full text-left px-4 py-3.5 border-b border-border transition-all ${sel ? 'bg-secondary/60' : 'hover:bg-secondary/30'}`}
-                  style={{ borderLeft: `2px solid ${sel ? AC : 'transparent'}` }}>
-                  <div className="flex items-start gap-2 mb-2">
-                    <StatusDot status={p.status} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-[13px] leading-tight truncate mb-0.5">{p.title}</div>
-                      {client && (
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                          {p.portal_client_id ? <UserCheck className="w-2.5 h-2.5 flex-shrink-0" /> : <Users className="w-2.5 h-2.5 flex-shrink-0" />}
-                          <span className="truncate">{client}</span>
+
+            <div className="flex gap-1.5 px-5 py-2.5 border-b border-border overflow-x-auto scrollbar-none">
+              {['all', 'planning', 'active', 'on_hold', 'completed', 'archived'].map(s => {
+                const on = filterStatus === s;
+                const m  = s !== 'all' ? statusMeta(s) : null;
+                const count = s === 'all' ? projects.length : projects.filter(p => p.status === s).length;
+                return (
+                  <button key={s} onClick={() => setFilterStatus(s)}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[8px] font-black uppercase tracking-[0.18em] transition-all"
+                    style={on
+                      ? { backgroundColor: m?.color ?? 'hsl(var(--foreground))', borderColor: m?.color ?? 'hsl(var(--foreground))', color: '#fff' }
+                      : { borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}>
+                    {s === 'all' ? 'All' : m!.label}
+                    <span className="font-mono-tab">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-20 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <FolderKanban className="w-9 h-9 text-muted-foreground/35 mb-3" strokeWidth={1} />
+                <div className="text-[13px] font-semibold text-foreground mb-1">{search || filterStatus !== 'all' ? 'No matching projects' : 'No projects yet'}</div>
+                <p className="text-[11px] text-muted-foreground mb-5">
+                  {search || filterStatus !== 'all' ? 'Try a different search or status filter.' : 'Create your first project to start tracking delivery.'}
+                </p>
+                {!search && filterStatus === 'all' && (
+                  <ActionButton variant="primary" icon={Plus} onClick={() => setShowNew(true)}>Create First Project</ActionButton>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead className="bg-secondary/45">
+                      <tr className="border-b border-border">
+                        {['Project', 'Client', 'Status', 'Progress', 'Contract', 'Est. Complete', ''].map((h, i) => (
+                          <th key={h + i} className={`px-4 py-3.5 text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-black whitespace-nowrap ${h === 'Contract' ? 'text-right' : 'text-left'}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map(p => {
+                        const m = statusMeta(p.status);
+                        const client = clientDisplay(p);
+                        return (
+                          <tr key={p.id} onClick={() => openProject(p.id)}
+                            className="border-b border-border last:border-b-0 pdv2-row-hover transition-colors cursor-pointer">
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${m.color}14` }}>
+                                  <Building2 className="w-3.5 h-3.5" style={{ color: m.color }} strokeWidth={1.6} />
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-[12.5px] font-bold text-foreground truncate max-w-[260px]">{p.title}</div>
+                                  <div className="text-[9.5px] text-muted-foreground font-mono">{p.project_code || p.type}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {client ? (
+                                <div className="flex items-center gap-1.5 text-[11px] text-foreground">
+                                  {p.portal_client_id
+                                    ? <UserCheck className="w-3 h-3 text-positive shrink-0" strokeWidth={2} />
+                                    : <Users className="w-3 h-3 text-muted-foreground shrink-0" strokeWidth={2} />}
+                                  <span className="truncate max-w-[150px]">{client}</span>
+                                </div>
+                              ) : <span className="text-[11px] text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-4 py-3.5"><StatusBadge status={p.status} /></td>
+                            <td className="px-4 py-3.5 min-w-[130px]">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 rounded-full bg-secondary/70 overflow-hidden min-w-[56px]">
+                                  <div className="h-full rounded-full" style={{ width: `${p.progress_pct}%`, backgroundColor: m.color, transition: 'width .5s ease' }} />
+                                </div>
+                                <span className="text-[10px] font-bold font-mono-tab w-8 text-right" style={{ color: m.color }}>{p.progress_pct}%</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-mono-tab font-semibold whitespace-nowrap">{fmtUSD(p.contract_amount)}</td>
+                            <td className="px-4 py-3.5 text-[11px] text-muted-foreground whitespace-nowrap">{fmtDate(p.estimated_completion)}</td>
+                            <td className="px-4 py-3.5 text-right"><ChevronRight className="w-3.5 h-3.5 text-muted-foreground inline-block" strokeWidth={1.5} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden divide-y divide-border">
+                  {filtered.map(p => {
+                    const m = statusMeta(p.status);
+                    const client = clientDisplay(p);
+                    return (
+                      <button key={p.id} onClick={() => openProject(p.id)} className="w-full text-left px-4 py-4 pdv2-row-hover transition-colors">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-bold text-foreground truncate">{p.title}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {client || p.type}{p.project_code ? ` · ${p.project_code}` : ''}
+                            </div>
+                          </div>
+                          <StatusBadge status={p.status} />
                         </div>
-                      )}
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-[11px] font-bold font-mono" style={{ color: m.color }}>{p.progress_pct}%</div>
-                      {p.project_code && <div className="text-[8px] text-muted-foreground font-mono mt-0.5">{p.project_code}</div>}
-                    </div>
-                  </div>
-                  <div className="h-0.5 bg-border overflow-hidden">
-                    <div className="h-full" style={{ width: `${p.progress_pct}%`, backgroundColor: m.color, transition: 'width 0.6s ease' }} />
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <StatusBadge status={p.status} />
-                    {p.estimated_completion && (
-                      <span className="text-[8px] text-muted-foreground flex items-center gap-0.5">
-                        <CalendarDays className="w-2 h-2" />{fmtDate(p.estimated_completion)}
-                      </span>
-                    )}
-                  </div>
-                </motion.button>
-              );
-            })
-          )}
-        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-secondary/70 overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${p.progress_pct}%`, backgroundColor: m.color }} />
+                          </div>
+                          <span className="text-[10px] font-bold font-mono-tab" style={{ color: m.color }}>{p.progress_pct}%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span className="font-mono-tab font-semibold text-foreground">{fmtUSD(p.contract_amount)}</span>
+                          {p.estimated_completion && (
+                            <span className="flex items-center gap-1"><CalendarDays className="w-2.5 h-2.5" strokeWidth={1.7} />{fmtDate(p.estimated_completion)}</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-        <div className="flex-shrink-0 border-t border-border px-4 py-2.5 flex items-center justify-between">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-[0.16em]">
-            {projects.length} project{projects.length !== 1 ? 's' : ''}
-          </span>
-          <span className="text-[9px] font-bold" style={{ color: AC }}>
-            {projects.filter(p => p.status === 'active').length} active
-          </span>
-        </div>
-      </aside>
-
-      {/* ═══ RIGHT — Detail ═══ */}
-      <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
-        {!selectedProject ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-            <div className="w-16 h-16 border border-border flex items-center justify-center mb-6">
-              <FolderKanban className="w-6 h-6 text-muted-foreground" strokeWidth={1} />
-            </div>
-            <div style={{ fontFamily: SERIF, fontStyle: 'italic' }} className="text-2xl font-light mb-2">Select a project</div>
-            <p className="text-xs text-muted-foreground max-w-[220px] mb-6 leading-relaxed">
-              Choose a project from the list to view details, milestones, and updates.
-            </p>
-            <button onClick={() => setShowNew(true)}
-              className="flex items-center gap-2 h-9 px-5 text-[9px] font-black uppercase tracking-[0.2em] bg-foreground text-background hover:opacity-80 transition-opacity">
-              <Plus className="w-3 h-3" strokeWidth={2.5} /> New Project
-            </button>
+                <div className="border-t border-border px-5 py-2.5 flex items-center justify-between bg-secondary/20">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-[0.16em]">
+                    {projects.length} total project{projects.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: AC }}>{activeCount} active</span>
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <>
-            {/* Detail header */}
-            <div className="flex-shrink-0 border-b border-border bg-background">
-              <div className="px-4 sm:px-6 pt-4 pb-3 flex items-start gap-3">
-                <button className="md:hidden mt-0.5 flex-shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => setMobileView('list')}>
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                    <h1 className="text-base font-bold leading-tight">{selectedProject.title}</h1>
-                    <StatusBadge status={selectedProject.status} />
-                    {selectedProject.project_code && (
-                      <span className="text-[9px] text-muted-foreground font-mono px-1.5 py-0.5 border border-border">{selectedProject.project_code}</span>
+        </div>
+      ) : (
+        /* ═══ PROJECT DETAIL — full-width command view ═══ */
+        <div className="space-y-5">
+            {/* ── Command header ── */}
+            <div className="pdv2-card overflow-hidden">
+              <div className="h-[3px]" style={{ backgroundColor: selMeta!.color }} />
+              <div className="p-4 sm:p-5">
+                <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <button onClick={() => setSelectedId(null)}
+                      className="mt-0.5 w-8 h-8 shrink-0 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-accent hover:border-accent transition-colors"
+                      title="Back to portfolio">
+                      <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h1 className="text-[17px] sm:text-[20px] font-bold leading-tight text-foreground">{selectedProject.title}</h1>
+                        <StatusBadge status={selectedProject.status} />
+                        {selectedProject.project_code && (
+                          <span className="text-[9px] text-muted-foreground font-mono px-1.5 py-0.5 rounded border border-border">{selectedProject.project_code}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><Building2 className="w-3 h-3" strokeWidth={1.6} />{selectedProject.type}</span>
+                        {(selectedProject.address || selectedProject.city) && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" strokeWidth={1.6} />
+                            {[selectedProject.address, selectedProject.city, selectedProject.state].filter(Boolean).join(', ')}
+                          </span>
+                        )}
+                        {clientDisplay(selectedProject) && (
+                          <span className="flex items-center gap-1">
+                            {selectedProject.portal_client_id
+                              ? <UserCheck className="w-3 h-3 text-positive" strokeWidth={1.6} />
+                              : <Users className="w-3 h-3" strokeWidth={1.6} />}
+                            {clientDisplay(selectedProject)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 pl-11 lg:pl-2">
+                    <ActionButton variant="neutral" icon={selectedProject.portal_client_id ? UserCheck : Link2}
+                      className={selectedProject.portal_client_id ? '!border-positive/30 !text-positive' : '!border-accent/30 !text-accent'}
+                      onClick={() => setShowInvite(true)}>
+                      {selectedProject.portal_client_id ? 'Portal Linked' : 'Invite Client'}
+                    </ActionButton>
+                    <ActionButton variant={editMode ? 'primary' : 'neutral'} icon={Edit3}
+                      onClick={() => { if (editMode) { setEditMode(false); setEditForm(null); } else { setEditMode(true); openEdit(); setDetailTab('overview'); } }}>
+                      {editMode ? 'Cancel Edit' : 'Edit'}
+                    </ActionButton>
+                    <ActionButton variant="negative" icon={Trash2} onClick={() => deleteProject(selectedProject.id)}>Delete</ActionButton>
+                  </div>
+                </div>
+
+                {/* Progress gauge + schedule strip */}
+                <div className="mt-4 pt-4 border-t border-border flex flex-col sm:flex-row gap-4 sm:gap-6 sm:items-center">
+                  <ProgressRing pct={selectedProject.progress_pct} size={76} label="complete" color={selMeta!.color} />
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <div>
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-[8px] uppercase tracking-[0.24em] font-black text-muted-foreground">Progress</span>
+                        <span className="text-[10px] font-bold font-mono-tab" style={{ color: selMeta!.color }}>{selectedProject.progress_pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-secondary/70 overflow-hidden">
+                        <motion.div className="h-full rounded-full" style={{ backgroundColor: selMeta!.color }}
+                          initial={{ width: 0 }} animate={{ width: `${selectedProject.progress_pct}%` }}
+                          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }} />
+                      </div>
+                    </div>
+                    {schedule && (
+                      <div>
+                        <div className="flex justify-between items-baseline mb-1">
+                          <span className="text-[8px] uppercase tracking-[0.24em] font-black text-muted-foreground">Schedule</span>
+                          <span className={`text-[10px] font-bold font-mono-tab ${schedule.daysLeft < 0 ? 'text-destructive' : schedule.daysLeft <= 30 ? 'text-warning' : 'text-muted-foreground'}`}>
+                            {schedule.daysLeft < 0 ? `${Math.abs(schedule.daysLeft)} days overdue` : `${schedule.daysLeft} days remaining`}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-secondary/70 overflow-hidden">
+                          <div className="h-full rounded-full bg-foreground/30" style={{ width: `${schedule.pct}%`, transition: 'width .5s ease' }} />
+                        </div>
+                        <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+                          <span>{fmtDate(selectedProject.start_date)}</span>
+                          <span className="font-semibold">Day {schedule.elapsedDays} of {schedule.totalDays}</span>
+                          <span>{fmtDate(selectedProject.estimated_completion)}</span>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {selectedProject.type}{selectedProject.city ? ` · ${selectedProject.city}, ${selectedProject.state}` : ''}
-                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={() => setShowInvite(true)}
-                    className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 text-[9px] font-bold uppercase tracking-[0.14em] border transition-all"
-                    style={{ borderColor: selectedProject.portal_client_id ? '#10b98144' : AC + '44', color: selectedProject.portal_client_id ? '#10b981' : AC, backgroundColor: selectedProject.portal_client_id ? '#10b98108' : AC + '08' }}>
-                    {selectedProject.portal_client_id ? <><UserCheck className="w-2.5 h-2.5" />Linked</> : <><Link2 className="w-2.5 h-2.5" />Invite</>}
-                  </button>
-                  <button onClick={() => { if (editMode) { setEditMode(false); setEditForm(null); } else { setEditMode(true); openEdit(); } }}
-                    className={`flex items-center gap-1.5 h-7 px-2.5 text-[9px] font-bold uppercase tracking-[0.14em] border transition-all ${editMode ? 'bg-foreground text-background border-foreground' : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}>
-                    <Edit3 className="w-2.5 h-2.5" />{editMode ? 'Cancel' : 'Edit'}
-                  </button>
-                  <button onClick={() => deleteProject(selectedProject.id)}
-                    className="h-7 w-7 flex items-center justify-center border border-border text-muted-foreground hover:text-accent hover:border-accent/30 transition-all">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="px-4 sm:px-6 pb-3">
-                <div className="flex items-center gap-3">
-                  <ProgressRing pct={selectedProject.progress_pct} size={36} />
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[8px] uppercase tracking-[0.2em] font-bold text-muted-foreground">Progress</span>
-                      <span className="text-[9px] font-bold font-mono" style={{ color: AC }}>{selectedProject.progress_pct}%</span>
-                    </div>
-                    <div className="h-1 bg-border overflow-hidden">
-                      <motion.div className="h-full" style={{ backgroundColor: AC }}
-                        initial={{ width: 0 }} animate={{ width: `${selectedProject.progress_pct}%` }}
-                        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex border-t border-border overflow-x-auto">
-                {(['overview', 'milestones', 'updates', 'settings'] as const).map(t => (
-                  <button key={t} onClick={() => setDetailTab(t)}
-                    className={`flex-shrink-0 px-4 sm:px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] border-b-2 transition-all ${detailTab === t ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-                    {t === 'milestones' ? `Milestones${milestones.length ? ` (${milestones.length})` : ''}`
-                      : t === 'updates' ? `Updates${updates.length ? ` (${updates.length})` : ''}`
-                      : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
               </div>
             </div>
 
-            {/* Detail body */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4 sm:p-6 max-w-3xl">
+            {/* ── Section tabs ── */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
+              {(['overview', 'milestones', 'updates', 'settings'] as const).map(t => (
+                <button key={t} onClick={() => setDetailTab(t)}
+                  className={`text-[9px] uppercase tracking-[0.22em] font-bold px-3 md:px-4 py-2 rounded-lg transition-all shrink-0 border ${
+                    detailTab === t ? 'bg-foreground text-background border-foreground' : 'bg-background text-muted-foreground border-border hover:border-accent hover:text-accent'
+                  }`}>
+                  {t === 'milestones' ? `Milestones${milestones.length ? ` (${milestones.length})` : ''}`
+                    : t === 'updates' ? `Updates${updates.length ? ` (${updates.length})` : ''}`
+                    : t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
 
                 {/* OVERVIEW */}
                 {detailTab === 'overview' && (
-                  editMode ? (
-                    <div className="space-y-4">
+                  editMode && editForm ? (
+                    <div className="pdv2-card overflow-hidden">
+                      <div className="pdv2-card-header flex items-center gap-2">
+                        <Edit3 className="w-3.5 h-3.5 text-accent" strokeWidth={1.5} />
+                        <span className="text-[11px] font-bold uppercase tracking-wide">Edit Project</span>
+                      </div>
+                      <div className="p-5 space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         {[['title','Project Name *','text'],['project_code','Code','text'],['type','Type','select-type'],['status','Status','select-status']].map(([k, l, t]) => (
                           <div key={k} className={k === 'title' || k === 'type' ? 'col-span-2 sm:col-span-1' : ''}>
@@ -1440,65 +1559,160 @@ export default function ProjectManager() {
                         </Button>
                         <Button variant="outline" onClick={() => { setEditMode(false); setEditForm(null); }} className="rounded-none h-10">Cancel</Button>
                       </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-5">
-                      <div className="grid grid-cols-3 gap-px bg-border border border-border">
-                        {[
-                          { label: 'Contract', value: fmtUSD(selectedProject.contract_amount), Icon: DollarSign },
-                          { label: 'Start Date', value: fmtDate(selectedProject.start_date), Icon: CalendarDays },
-                          { label: 'Est. Complete', value: fmtDate(selectedProject.estimated_completion), Icon: Target },
-                        ].map(({ label, value, Icon }) => (
-                          <div key={label} className="bg-background p-4">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <Icon className="w-2.5 h-2.5" style={{ color: AC }} strokeWidth={1.5} />
-                              <div className="text-[8px] font-bold uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
-                            </div>
-                            <div className="text-[13px] font-bold">{value}</div>
-                          </div>
-                        ))}
+                      {/* KPI rail */}
+                      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                        <StatCard label="Contract Value" value={fmtUSD(selectedProject.contract_amount)}
+                          sub={selectedProject.budget != null ? `Budget ${fmtUSD(selectedProject.budget)}` : 'No budget set'}
+                          icon={DollarSign} trendColor={AC} />
+                        <StatCard label="Progress" value={`${selectedProject.progress_pct}%`}
+                          sub={selMeta!.label} icon={TrendingUp} trendColor={selMeta!.color} />
+                        <StatCard label="Days Remaining"
+                          value={schedule ? (schedule.daysLeft < 0 ? `${Math.abs(schedule.daysLeft)} over` : String(schedule.daysLeft)) : '—'}
+                          sub={selectedProject.estimated_completion ? `Est. ${fmtDate(selectedProject.estimated_completion)}` : 'No target date'}
+                          subColor={schedule && schedule.daysLeft < 0 ? 'text-destructive font-semibold' : schedule && schedule.daysLeft <= 30 ? 'text-warning font-semibold' : undefined}
+                          icon={Clock} trendColor={schedule && schedule.daysLeft < 0 ? '#ef4444' : schedule && schedule.daysLeft <= 30 ? '#f59e0b' : '#3b82f6'} />
+                        <StatCard label="Milestones" value={milestones.length ? `${msDone}/${milestones.length}` : '0'}
+                          sub={milestones.length ? `${Math.round((msDone / milestones.length) * 100)}% complete` : 'None yet'}
+                          icon={Target} trendColor="#10b981" />
+                        <StatCard label="Updates" value={String(updates.length)}
+                          sub={`${updates.filter(u => u.is_client_visible).length} client-visible`}
+                          icon={MessageSquare} trendColor="#3b82f6" />
+                        <StatCard label="Start Date" value={selectedProject.start_date ? fmtDate(selectedProject.start_date) : '—'}
+                          sub={schedule ? `${schedule.totalDays}-day schedule` : 'Timeline open'}
+                          icon={CalendarDays} trendColor="#8b5cf6" />
                       </div>
-                      <div className="border border-border divide-y divide-border">
-                        {[
-                          { label: 'Client', value: clientDisplay(selectedProject) ?? '—', sub: selectedProject.portal_client_id ? 'Linked portal account' : selectedProject.client_email },
-                          { label: 'Type', value: selectedProject.type },
-                          { label: 'Location', value: selectedProject.address ? `${selectedProject.address}, ${selectedProject.city}, ${selectedProject.state}` : `${selectedProject.city}, ${selectedProject.state}` },
-                          { label: 'Budget', value: fmtUSD(selectedProject.budget) },
-                        ].map(({ label, value, sub }) => (
-                          <div key={label} className="flex items-start px-4 py-3 gap-4">
-                            <div className="w-24 sm:w-28 flex-shrink-0 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground pt-0.5">{label}</div>
-                            <div>
-                              <div className="text-[13px] font-medium">{value}</div>
-                              {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
-                            </div>
+
+                      {/* Milestone timeline + project details */}
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+                        <div className="pdv2-card overflow-hidden xl:col-span-2">
+                          <div className="pdv2-card-header flex items-center justify-between">
+                            <div className="text-[11px] font-bold uppercase tracking-wide">Milestone Timeline</div>
+                            <button onClick={() => setDetailTab('milestones')} className="pdv2-link">Manage →</button>
                           </div>
-                        ))}
+                          <div className="p-4">
+                            <MilestoneTimeline milestones={timelineMs} />
+                          </div>
+                        </div>
+
+                        <div className="pdv2-card overflow-hidden">
+                          <div className="pdv2-card-header flex items-center justify-between">
+                            <div className="text-[11px] font-bold uppercase tracking-wide">Project Details</div>
+                            <button onClick={() => { setEditMode(true); openEdit(); }} className="pdv2-link">Edit →</button>
+                          </div>
+                          <div className="divide-y divide-border">
+                            {([
+                              ['Client', clientDisplay(selectedProject) ?? '—', selectedProject.portal_client_id ? 'Linked portal account' : selectedProject.client_email ?? undefined],
+                              ['Location', [selectedProject.address, selectedProject.city, selectedProject.state].filter(Boolean).join(', ') || '—', selectedProject.zip_code ?? undefined],
+                              ['Project Manager', selectedProject.project_manager ?? '—', undefined],
+                              ['Superintendent', selectedProject.superintendent ?? '—', undefined],
+                              ['Architect', selectedProject.architect ?? '—', undefined],
+                              ['Timeline', `${fmtDate(selectedProject.start_date)} → ${fmtDate(selectedProject.estimated_completion)}`, selectedProject.actual_completion ? `Completed ${fmtDate(selectedProject.actual_completion)}` : undefined],
+                            ] as [string, string, string | undefined][]).map(([label, value, sub]) => (
+                              <div key={label} className="flex items-start px-4 py-2.5 gap-3">
+                                <div className="w-24 shrink-0 text-[8px] font-black uppercase tracking-[0.18em] text-muted-foreground pt-0.5">{label}</div>
+                                <div className="min-w-0">
+                                  <div className="text-[12px] font-medium text-foreground">{value}</div>
+                                  {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      {/* Custom fields */}
-                      {selectedProject.custom_fields && Object.keys(selectedProject.custom_fields).length > 0 && (
-                        <div className="border border-border divide-y divide-border">
-                          <div className="px-4 py-2 text-[8px] font-black uppercase tracking-[0.24em] text-muted-foreground bg-secondary/30">Custom Fields</div>
-                          {Object.entries(selectedProject.custom_fields).map(([k, v]) => (
-                            <div key={k} className="flex items-center px-4 py-2.5 gap-4">
-                              <div className="w-24 sm:w-28 flex-shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{k}</div>
-                              <div className="text-[13px] font-medium">{v}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {selectedProject.description && (
-                        <div className="border border-border p-4 bg-secondary/20">
-                          <div className="text-[8px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2.5">Description</div>
-                          <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
-                        </div>
-                      )}
-                      {selectedProject.internal_notes && (
-                        <div className="border border-amber-200 dark:border-amber-900 p-4 bg-amber-50 dark:bg-amber-950/20">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-                            <div className="text-[8px] font-black uppercase tracking-[0.24em] text-amber-700 dark:text-amber-500">Internal Notes</div>
+
+                      {/* Latest updates + quick actions */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="pdv2-card overflow-hidden">
+                          <div className="pdv2-card-header flex items-center justify-between">
+                            <div className="text-[11px] font-bold uppercase tracking-wide">Latest Updates</div>
+                            <button onClick={() => setDetailTab('updates')} className="pdv2-link">View all →</button>
                           </div>
-                          <p className="text-[12px] text-amber-800 dark:text-amber-400 leading-relaxed whitespace-pre-wrap">{selectedProject.internal_notes}</p>
+                          {updates.length === 0 ? (
+                            <div className="px-5 py-10 text-center text-[12px] text-muted-foreground">No updates posted yet.</div>
+                          ) : (
+                            <div className="divide-y divide-border">
+                              {updates.slice(0, 4).map(u => {
+                                const ut = UPDATE_TYPES.find(t => t.value === u.update_type) ?? UPDATE_TYPES[0];
+                                return (
+                                  <div key={u.id} className="px-5 py-3.5 flex items-start gap-3">
+                                    <span className="pdv2-icon-chip shrink-0 mt-0.5" style={{ backgroundColor: `${ut.color}14` }}>
+                                      <MessageSquare className="w-3 h-3" style={{ color: ut.color }} strokeWidth={1.7} />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[12px] font-semibold text-foreground truncate">{u.title}</span>
+                                        {u.pinned && <Pin className="w-2.5 h-2.5 shrink-0" style={{ color: AC }} />}
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{u.body}</div>
+                                      <div className="text-[9px] text-muted-foreground mt-1">
+                                        {u.created_by} · {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {u.is_client_visible ? 'Client visible' : 'Internal'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pdv2-card overflow-hidden">
+                          <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Quick Actions</div></div>
+                          <div className="p-3 space-y-1.5">
+                            {[
+                              { label: 'Post Client Update', icon: MessageSquare, onClick: () => { setDetailTab('updates'); setShowUpdateForm(true); } },
+                              { label: 'Add Milestone', icon: Target, onClick: () => { setDetailTab('milestones'); setShowMilestoneForm(true); } },
+                              { label: selectedProject.portal_client_id ? 'Manage Portal Link' : 'Invite Client to Portal', icon: Link2, onClick: () => setShowInvite(true) },
+                              { label: 'Edit Project Details', icon: Edit3, onClick: () => { setEditMode(true); openEdit(); } },
+                            ].map(a => (
+                              <button key={a.label} onClick={a.onClick}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors border border-border rounded-md group">
+                                <a.icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
+                                <span className="flex-1 text-left">{a.label}</span>
+                                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={2} />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Description / internal notes / custom fields */}
+                      {(selectedProject.description || selectedProject.internal_notes || (selectedProject.custom_fields && Object.keys(selectedProject.custom_fields).length > 0)) && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {selectedProject.description && (
+                            <div className="pdv2-card overflow-hidden">
+                              <div className="pdv2-card-header flex items-center gap-1.5">
+                                <Eye className="w-3 h-3 text-positive" strokeWidth={2} />
+                                <div className="text-[11px] font-bold uppercase tracking-wide">Description — Client Visible</div>
+                              </div>
+                              <p className="p-4 text-[13px] leading-relaxed text-foreground whitespace-pre-wrap">{selectedProject.description}</p>
+                            </div>
+                          )}
+                          {selectedProject.internal_notes && (
+                            <div className="pdv2-card overflow-hidden !border-warning/30">
+                              <div className="pdv2-card-header flex items-center gap-1.5 bg-warning/5">
+                                <EyeOff className="w-3 h-3 text-warning" strokeWidth={2} />
+                                <div className="text-[11px] font-bold uppercase tracking-wide text-warning">Internal Notes — Admin Only</div>
+                              </div>
+                              <p className="p-4 text-[13px] leading-relaxed text-foreground whitespace-pre-wrap">{selectedProject.internal_notes}</p>
+                            </div>
+                          )}
+                          {selectedProject.custom_fields && Object.keys(selectedProject.custom_fields).length > 0 && (
+                            <div className="pdv2-card overflow-hidden">
+                              <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Custom Fields</div></div>
+                              <div className="divide-y divide-border">
+                                {Object.entries(selectedProject.custom_fields).map(([k, v]) => (
+                                  <div key={k} className="flex items-center px-4 py-2.5 gap-3">
+                                    <div className="w-28 shrink-0 text-[8px] font-black uppercase tracking-[0.16em] text-muted-foreground">{k}</div>
+                                    <div className="text-[12px] font-medium text-foreground">{v}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1507,66 +1721,73 @@ export default function ProjectManager() {
 
                 {/* MILESTONES */}
                 {detailTab === 'milestones' && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div style={{ fontFamily: SERIF, fontStyle: 'italic' }} className="text-xl font-light">Milestones</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">{milestones.filter(m => m.completed_date).length} of {milestones.length} complete</div>
-                      </div>
-                      <button onClick={() => setShowMilestoneForm(true)}
-                        className="flex items-center gap-1.5 h-8 px-3 text-[9px] font-black uppercase tracking-[0.16em] bg-foreground text-background hover:opacity-80 transition-opacity">
-                        <Plus className="w-2.5 h-2.5" strokeWidth={3} /> Add
-                      </button>
-                    </div>
-                    <AnimatePresence>
-                      {showMilestoneForm && (
-                        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                          className="border border-border bg-secondary/20 p-4 space-y-3">
-                          <Input className="rounded-none h-10" placeholder="Milestone title *" autoFocus
-                            value={msForm.title} onChange={e => setMsForm(f => ({ ...f, title: e.target.value }))} />
-                          <Textarea className="rounded-none" rows={2} placeholder="Description (optional)"
-                            value={msForm.description} onChange={e => setMsForm(f => ({ ...f, description: e.target.value }))} />
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1">
-                              <Label className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground font-bold">Target Date</Label>
-                              <Input type="date" className="rounded-none h-9 mt-1"
-                                value={msForm.target_date} onChange={e => setMsForm(f => ({ ...f, target_date: e.target.value }))} />
-                            </div>
-                            <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer mt-5">
-                              <input type="checkbox" checked={msForm.is_client_visible}
-                                onChange={e => setMsForm(f => ({ ...f, is_client_visible: e.target.checked }))}
-                                style={{ accentColor: AC }} />
-                              Client visible
-                            </label>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button onClick={addMilestone} className="rounded-none h-9 flex-1 text-xs">Add Milestone</Button>
-                            <Button variant="outline" onClick={() => setShowMilestoneForm(false)} className="rounded-none h-9 text-xs">Cancel</Button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                  <div className="space-y-5">
                     {milestones.length > 0 && (
-                      <div className="grid grid-cols-3 gap-px bg-border border border-border">
-                        {[
-                          { label: 'Total', v: milestones.length, c: '' },
-                          { label: 'Complete', v: milestones.filter(m => m.completed_date).length, c: 'text-green-600 dark:text-green-400' },
-                          { label: 'Remaining', v: milestones.filter(m => !m.completed_date).length, s: { color: AC } },
-                        ].map(({ label, v, c, s }) => (
-                          <div key={label} className="bg-background px-4 py-3 text-center">
-                            <div className={`text-xl font-bold font-mono ${c}`} style={s}>{v}</div>
-                            <div className="text-[8px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-3 gap-4">
+                        <StatCard label="Total Milestones" value={String(milestones.length)} icon={Target} trendColor={AC} />
+                        <StatCard label="Complete" value={String(msDone)} icon={CheckCircle2} trendColor="#10b981" />
+                        <StatCard label="Remaining" value={String(milestones.length - msDone)} icon={Clock} trendColor="#f59e0b" />
                       </div>
                     )}
-                    {milestones.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <Target className="w-8 h-8 text-border mb-3" strokeWidth={1} />
-                        <p className="text-xs text-muted-foreground">No milestones yet — add your first one above.</p>
+
+                    <div className="pdv2-card overflow-hidden">
+                      <div className="pdv2-card-header flex items-center justify-between gap-2 flex-wrap">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wide">Delivery Milestones</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">{msDone} of {milestones.length} complete — client-visible milestones appear in the portal</div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {milestones.length > 0 && (
+                            <ActionButton variant="neutral" icon={RefreshCw} onClick={syncProgress}>
+                              Sync Progress to {Math.round((msDone / milestones.length) * 100)}%
+                            </ActionButton>
+                          )}
+                          <ActionButton variant="primary" icon={Plus} onClick={() => setShowMilestoneForm(true)}>Add Milestone</ActionButton>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="border border-border divide-y divide-border">
+
+                      {milestones.length > 0 && (
+                        <div className="p-4 border-b border-border">
+                          <MilestoneTimeline milestones={timelineMs} />
+                        </div>
+                      )}
+
+                      <AnimatePresence>
+                        {showMilestoneForm && (
+                          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                            className="px-5 py-4 bg-accent/5 border-b border-border space-y-3">
+                            <Input className="rounded-none h-10" placeholder="Milestone title *" autoFocus
+                              value={msForm.title} onChange={e => setMsForm(f => ({ ...f, title: e.target.value }))} />
+                            <Textarea className="rounded-none" rows={2} placeholder="Description (optional)"
+                              value={msForm.description} onChange={e => setMsForm(f => ({ ...f, description: e.target.value }))} />
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1">
+                                <Label className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground font-bold">Target Date</Label>
+                                <Input type="date" className="rounded-none h-9 mt-1"
+                                  value={msForm.target_date} onChange={e => setMsForm(f => ({ ...f, target_date: e.target.value }))} />
+                              </div>
+                              <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer mt-5">
+                                <input type="checkbox" checked={msForm.is_client_visible}
+                                  onChange={e => setMsForm(f => ({ ...f, is_client_visible: e.target.checked }))}
+                                  style={{ accentColor: AC }} />
+                                Client visible
+                              </label>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button onClick={addMilestone} className="rounded-none h-9 flex-1 text-xs">Add Milestone</Button>
+                              <Button variant="outline" onClick={() => setShowMilestoneForm(false)} className="rounded-none h-9 text-xs">Cancel</Button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {milestones.length === 0 && !showMilestoneForm ? (
+                        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                          <Target className="w-9 h-9 text-muted-foreground/35 mb-3" strokeWidth={1} />
+                          <p className="text-[12px] text-muted-foreground">No milestones yet — add the first one to build the delivery timeline.</p>
+                        </div>
+                      ) : (
+                      <div className="divide-y divide-border">
                         {milestones.map(m => {
                           const done = !!m.completed_date;
                           const active = m.is_active && !done;
@@ -1597,7 +1818,7 @@ export default function ProjectManager() {
                               <div className="flex gap-1 flex-shrink-0">
                                 {!done && (
                                   <button onClick={() => setMilestoneActive(m)} title={active ? 'Remove active' : 'Set active'}
-                                    className="p-1.5 transition-colors" style={{ color: active ? AC : 'var(--muted-foreground)' }}>
+                                    className="p-1.5 rounded-md transition-colors" style={{ color: active ? AC : 'hsl(var(--muted-foreground))' }}>
                                     <Zap className="w-3.5 h-3.5" />
                                   </button>
                                 )}
@@ -1609,27 +1830,25 @@ export default function ProjectManager() {
                           );
                         })}
                       </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
 
                 {/* UPDATES */}
                 {detailTab === 'updates' && (
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-4">
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="pdv2-card-header flex items-center justify-between gap-2 flex-wrap">
                       <div>
-                        <div style={{ fontFamily: SERIF, fontStyle: 'italic' }} className="text-xl font-light">Project Updates</div>
+                        <div className="text-[11px] font-bold uppercase tracking-wide">Project Updates</div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">Client-visible updates appear in the portal in real-time.</div>
                       </div>
-                      <button onClick={() => setShowUpdateForm(true)}
-                        className="flex-shrink-0 flex items-center gap-1.5 h-8 px-3 text-[9px] font-black uppercase tracking-[0.16em] bg-foreground text-background hover:opacity-80 transition-opacity">
-                        <Plus className="w-2.5 h-2.5" strokeWidth={3} /> Post
-                      </button>
+                      <ActionButton variant="primary" icon={Plus} onClick={() => setShowUpdateForm(true)}>Post Update</ActionButton>
                     </div>
                     <AnimatePresence>
                       {showUpdateForm && (
                         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                          className="border border-border bg-secondary/20 p-4 space-y-3">
+                          className="px-5 py-4 bg-accent/5 border-b border-border space-y-3">
                           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                             <Input className="rounded-none h-10 sm:col-span-3" placeholder="Update title *" autoFocus
                               value={upForm.title} onChange={e => setUpForm(f => ({ ...f, title: e.target.value }))} />
@@ -1657,39 +1876,47 @@ export default function ProjectManager() {
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    {updates.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <MessageSquare className="w-8 h-8 text-border mb-3" strokeWidth={1} />
-                        <p className="text-xs text-muted-foreground">No updates yet — post the first update above.</p>
+                    {updates.length === 0 && !showUpdateForm ? (
+                      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                        <MessageSquare className="w-9 h-9 text-muted-foreground/35 mb-3" strokeWidth={1} />
+                        <p className="text-[12px] text-muted-foreground">No updates yet — post the first update to keep the client informed.</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="divide-y divide-border">
                         {updates.map(u => {
                           const ut = UPDATE_TYPES.find(t => t.value === u.update_type) ?? UPDATE_TYPES[0];
                           return (
-                            <div key={u.id} className="border p-4 relative"
-                              style={{ borderColor: u.pinned ? AC + '44' : undefined, backgroundColor: u.pinned ? AC + '04' : undefined }}>
-                              {u.pinned && <Pin className="w-3 h-3 absolute top-3 right-3" style={{ color: AC }} />}
-                              <div className="flex items-center gap-2 mb-2 pr-6">
-                                <span className="text-[7px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5"
-                                  style={{ backgroundColor: ut.color + '18', color: ut.color }}>{ut.label}</span>
-                                <span className="text-[12px] font-semibold">{u.title}</span>
-                              </div>
-                              <p className="text-[12px] text-muted-foreground leading-relaxed mb-3 whitespace-pre-wrap">{u.body}</p>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-[9px] text-muted-foreground">{u.created_by} · {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                  <span className={`text-[9px] flex items-center gap-1 ${u.is_client_visible ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-                                    {u.is_client_visible ? <><Eye className="w-2.5 h-2.5" />Visible</> : <><EyeOff className="w-2.5 h-2.5" />Internal</>}
-                                  </span>
-                                </div>
-                                <div className="flex gap-1">
-                                  <button onClick={() => toggleUpdateVisibility(u)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-                                    {u.is_client_visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                  </button>
-                                  <button onClick={() => deleteUpdate(u.id)} className="p-1.5 text-muted-foreground hover:text-accent transition-colors">
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                            <div key={u.id} className="px-5 py-4 relative" style={{ backgroundColor: u.pinned ? AC + '06' : undefined }}>
+                              {u.pinned && <Pin className="w-3 h-3 absolute top-4 right-5" style={{ color: AC }} />}
+                              <div className="flex items-start gap-3">
+                                <span className="pdv2-icon-chip shrink-0 mt-0.5" style={{ backgroundColor: `${ut.color}14` }}>
+                                  <MessageSquare className="w-3 h-3" style={{ color: ut.color }} strokeWidth={1.7} />
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1 pr-6">
+                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded"
+                                      style={{ backgroundColor: ut.color + '14', color: ut.color }}>{ut.label}</span>
+                                    <span className="text-[12.5px] font-semibold text-foreground">{u.title}</span>
+                                  </div>
+                                  <p className="text-[12px] text-muted-foreground leading-relaxed mb-2.5 whitespace-pre-wrap">{u.body}</p>
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-[9px] text-muted-foreground">{u.created_by} · {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                      <span className={`text-[9px] flex items-center gap-1 font-semibold ${u.is_client_visible ? 'text-positive' : 'text-muted-foreground'}`}>
+                                        {u.is_client_visible ? <><Eye className="w-2.5 h-2.5" />Client visible</> : <><EyeOff className="w-2.5 h-2.5" />Internal only</>}
+                                      </span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <button onClick={() => toggleUpdateVisibility(u)} title={u.is_client_visible ? 'Make internal' : 'Make visible'}
+                                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                                        {u.is_client_visible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                      </button>
+                                      <button onClick={() => deleteUpdate(u.id)} title="Delete update"
+                                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors">
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1702,47 +1929,52 @@ export default function ProjectManager() {
 
                 {/* SETTINGS */}
                 {detailTab === 'settings' && (
-                  <div className="space-y-4 max-w-lg">
-                    <div style={{ fontFamily: SERIF, fontStyle: 'italic' }} className="text-xl font-light">Settings</div>
-                    <div className="border border-border p-5 space-y-4">
-                      <div className="text-[11px] font-bold">Portal Client Access</div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        {selectedProject.portal_client_id
-                          ? 'Linked to a portal client — they see client-visible milestones and updates in real-time.'
-                          : 'Not linked. Invite them to register a portal account and see updates in real-time.'}
-                      </p>
-                      {selectedProject.portal_client_id && (
-                        <div className="flex items-center gap-2 p-2.5 border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/20">
-                          <UserCheck className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-[11px] text-green-700 dark:text-green-400 font-medium">
-                            {portalClients.find(c => c.id === selectedProject.portal_client_id)?.name ?? 'Client'} — linked
-                          </span>
-                        </div>
-                      )}
-                      <button onClick={() => setShowInvite(true)}
-                        className="flex items-center gap-2 h-9 px-4 text-[9px] font-black uppercase tracking-[0.16em] border border-border transition-all hover:bg-foreground hover:text-background hover:border-foreground">
-                        {selectedProject.portal_client_id
-                          ? <><RefreshCw className="w-3 h-3" />Send New Invite</>
-                          : <><Send className="w-3 h-3" />Invite Client to Portal</>}
-                      </button>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                    <div className="pdv2-card overflow-hidden">
+                      <div className="pdv2-card-header flex items-center gap-1.5">
+                        <Link2 className="w-3 h-3 text-accent" strokeWidth={2} />
+                        <div className="text-[11px] font-bold uppercase tracking-wide">Portal Client Access</div>
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <p className="text-[12px] text-muted-foreground leading-relaxed">
+                          {selectedProject.portal_client_id
+                            ? 'Linked to a portal client — they see client-visible milestones and updates in real-time.'
+                            : 'Not linked. Invite the client to register a portal account and follow progress in real-time.'}
+                        </p>
+                        {selectedProject.portal_client_id && (
+                          <div className="flex items-center gap-2 p-3 rounded-lg border border-positive/30 bg-positive/5">
+                            <UserCheck className="w-3.5 h-3.5 text-positive shrink-0" strokeWidth={2} />
+                            <span className="text-[12px] text-positive font-medium">
+                              {portalClients.find(c => c.id === selectedProject.portal_client_id)?.name ?? 'Client'} — linked
+                            </span>
+                          </div>
+                        )}
+                        <ActionButton variant="neutral" className="!border-accent/30 !text-accent"
+                          icon={selectedProject.portal_client_id ? RefreshCw : Send}
+                          onClick={() => setShowInvite(true)}>
+                          {selectedProject.portal_client_id ? 'Send New Invite' : 'Invite Client to Portal'}
+                        </ActionButton>
+                      </div>
                     </div>
-                    <div className="border border-red-200 dark:border-red-900 p-5 bg-red-50 dark:bg-red-950/20 space-y-3">
-                      <div className="text-[11px] font-bold text-red-700 dark:text-red-400">Danger Zone</div>
-                      <p className="text-[11px] text-red-600 dark:text-red-400/80 leading-relaxed">
-                        Deleting this project permanently removes all milestones, updates, and invite history.
-                      </p>
-                      <button onClick={() => deleteProject(selectedProject.id)}
-                        className="flex items-center gap-2 h-8 px-4 text-[9px] font-black uppercase tracking-[0.16em] bg-red-600 text-white hover:bg-red-700 transition-colors">
-                        <Trash2 className="w-3 h-3" /> Delete Project
-                      </button>
+
+                    <div className="pdv2-card overflow-hidden !border-destructive/30">
+                      <div className="pdv2-card-header flex items-center gap-1.5 bg-destructive/5">
+                        <AlertTriangle className="w-3 h-3 text-destructive" strokeWidth={2} />
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-destructive">Danger Zone</div>
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <p className="text-[12px] text-muted-foreground leading-relaxed">
+                          Deleting this project permanently removes all milestones, updates, and invite history.
+                        </p>
+                        <ActionButton variant="negative" icon={Trash2} onClick={() => deleteProject(selectedProject.id)}>
+                          Delete Project
+                        </ActionButton>
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          </>
-        )}
-      </main>
+        </div>
+      )}
 
       {/* ═══ WIZARD MODAL ═══ */}
       <AnimatePresence>
@@ -1752,7 +1984,6 @@ export default function ProjectManager() {
             onCreated={p => {
               setProjects(prev => prev.some(x => x.id === p.id) ? prev : [p, ...prev]);
               setSelectedId(p.id);
-              setMobileView('detail');
               setDetailTab('overview');
               setShowNew(false);
             }}
@@ -1822,7 +2053,7 @@ export default function ProjectManager() {
                     <div>
                       <MicroLabel>Invite Link</MicroLabel>
                       <div className="flex">
-                        <input readOnly value={inviteUrl} className="flex-1 h-10 px-3 text-[11px] font-mono border border-border bg-secondary/30 focus:outline-none overflow-hidden text-ellipsis" />
+                        <input readOnly value={inviteUrl} className="flex-1 h-10 px-3 text-[11px] font-mono rounded-lg border border-border bg-secondary/30 focus:outline-none overflow-hidden text-ellipsis" />
                         <button onClick={() => { navigator.clipboard.writeText(inviteUrl); toast({ title: 'Copied' }); }}
                           className="h-10 px-3 bg-foreground text-background border-l-0 hover:opacity-80 transition-opacity flex-shrink-0">
                           <Copy className="w-3.5 h-3.5" />

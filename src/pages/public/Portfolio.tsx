@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowUpRight, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PublicLayout from '@/components/PublicLayout';
 import Reveal from '@/components/motion/Reveal';
 import AnimatedCounter from '@/components/motion/AnimatedCounter';
@@ -50,6 +50,8 @@ type Filter = typeof FILTERS[number];
 type Project = {
   name: string; type: Filter; loc: string; year: string; sqft: string; value: string;
   area: string; detail: string; img: string; featured?: boolean;
+  /** Present only for live DB projects — enables the /portfolio/:id detail page. */
+  id?: string;
 };
 
 const PROJECTS: Project[] = [
@@ -70,6 +72,7 @@ const PROJECTS: Project[] = [
 /* ── Grid card with slide-up overlay ─────────────────────────────── */
 function ProjectCard({ p }: { p: Project }) {
   const [hov, setHov] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <motion.div
@@ -78,10 +81,11 @@ function ProjectCard({ p }: { p: Project }) {
       animate={{ opacity: 1, filter: 'blur(0px)' }}
       exit={{ opacity: 0, filter: 'blur(8px)' }}
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-      className="relative overflow-hidden cursor-default"
+      className={`relative overflow-hidden ${p.id ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ minHeight: 280, backgroundColor: '#0e0e0e' }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
+      onClick={() => { if (p.id) navigate(`/portfolio/${p.id}`); }}
     >
       {/* Background image */}
       <motion.div
@@ -140,10 +144,19 @@ function ProjectCard({ p }: { p: Project }) {
               </div>
             ))}
           </div>
-          <Link to="/contact" className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.24em] font-bold group" style={{ color: AC }}>
-            Inquire
-            <ArrowUpRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" strokeWidth={2.5} />
-          </Link>
+          {p.id ? (
+            <Link to={`/portfolio/${p.id}`} onClick={e => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.24em] font-bold group" style={{ color: AC }}>
+              View Project
+              <ArrowUpRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" strokeWidth={2.5} />
+            </Link>
+          ) : (
+            <Link to="/contact" onClick={e => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.24em] font-bold group" style={{ color: AC }}>
+              Inquire
+              <ArrowUpRight className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" strokeWidth={2.5} />
+            </Link>
+          )}
         </div>
       </motion.div>
     </motion.div>
@@ -153,8 +166,9 @@ function ProjectCard({ p }: { p: Project }) {
 /* ── Featured card (large) ────────────────────────────────────────── */
 function FeaturedCard({ p }: { p: Project }) {
   const [hov, setHov] = useState(false);
+  const navigate = useNavigate();
   return (
-    <TiltCard max={3} className="relative overflow-hidden cursor-default" style={{ minHeight: 540, backgroundColor: B }}>
+    <TiltCard max={3} className={`relative overflow-hidden ${p.id ? 'cursor-pointer' : 'cursor-default'}`} style={{ minHeight: 540, backgroundColor: B }}>
       {/* Background image */}
       <motion.div
         className="absolute inset-0"
@@ -169,6 +183,7 @@ function FeaturedCard({ p }: { p: Project }) {
         className="absolute inset-0 p-10 md:p-14 flex flex-col justify-between z-10"
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
+        onClick={() => { if (p.id) navigate(`/portfolio/${p.id}`); }}
       >
         <div className="flex items-start justify-between">
           <div className="inline-flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: 'rgba(157,126,63,0.12)', border: '1px solid rgba(157,126,63,0.2)' }}>
@@ -198,6 +213,13 @@ function FeaturedCard({ p }: { p: Project }) {
               </div>
             ))}
           </div>
+          {p.id && (
+            <Link to={`/portfolio/${p.id}`} onClick={e => e.stopPropagation()}
+              className="mt-7 inline-flex items-center gap-2 px-6 py-3.5 text-[8.5px] uppercase tracking-[0.3em] font-bold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: AC, color: W }}>
+              View Full Project <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
+            </Link>
+          )}
         </div>
       </div>
     </TiltCard>
@@ -214,12 +236,13 @@ function mapRow(row: any): Project {
   else if (/renovation/i.test(cat)) type = 'Renovation';
 
   return {
+    id:       row.id,
     name:     row.title,
     type,
     loc:      row.location ?? '',
     year:     row.year ?? '',
     sqft:     row.sqft ?? '',
-    value:    '',
+    value:    row.budget ?? '',
     area:     row.category ?? '',
     detail:   row.description ?? '',
     img:      row.cover_url ?? 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=85',

@@ -42,19 +42,19 @@ export function ProjectDetailsCard({ data, onEdit, onViewSettings }: {
           </button>
         )}
       </div>
-      <div className="p-4 space-y-2.5">
-        <div className="flex justify-between items-baseline text-[12px] gap-3">
+      <div className="px-1.5 py-1.5">
+        <div className="flex justify-between items-baseline text-[12px] gap-3 px-2.5 py-1.5 rounded-md pdv2-row-hover transition-colors">
           <span className="text-muted-foreground shrink-0">Project Name</span>
           <span className="font-semibold text-right truncate">{data.name}</span>
         </div>
-        <div className="flex justify-between items-center text-[12px] gap-3">
+        <div className="flex justify-between items-center text-[12px] gap-3 px-2.5 py-1.5 rounded-md pdv2-row-hover transition-colors">
           <span className="text-muted-foreground shrink-0">Status</span>
           <span className={`text-[9px] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full ${data.statusColor || 'bg-secondary text-foreground'}`}>
             {data.status}
           </span>
         </div>
         {rows.filter(([, v]) => v).map(([label, val, href]) => (
-          <div key={label} className="flex justify-between items-baseline gap-3 text-[12px]">
+          <div key={label} className="flex justify-between items-baseline gap-3 text-[12px] px-2.5 py-1.5 rounded-md pdv2-row-hover transition-colors">
             <span className="text-muted-foreground shrink-0">{label}</span>
             {href ? (
               <a href={href} className="font-medium text-right truncate text-blue-500 hover:underline">{val}</a>
