@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import EntityInsightCharts from '@/components/charts/EntityInsightCharts';
 import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
 import { fmtUSD } from '@/lib/format';
 import {
@@ -532,6 +533,9 @@ export default function Charts() {
       />
 
       <div className="px-4 sm:px-8 py-6 space-y-4">
+        {/* Row 0: entity-specific analytics (HGP generator ops / Holdings capital) */}
+        <EntityInsightCharts />
+
         {/* Row 1: Cash Flow + Inflow/Outflow */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <CashFlowTrendChart data={cashFlowData} />

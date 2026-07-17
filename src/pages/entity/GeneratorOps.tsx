@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useAuth } from '@/hooks/useAuth';
 import { useTransactions } from '@/hooks/useFinance';
 import {
-  useEquipmentUnits, useServiceAgreements, useServiceVisits,
+  useEquipmentUnits, useServiceAgreements, useServiceVisits, useHgpFinanceSummary,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
 import { fmtDate, fmtUSD } from '@/lib/format';
@@ -123,6 +123,7 @@ export default function GeneratorOps() {
   const { data: units = [], isLoading: unitsLoading } = useEquipmentUnits();
   const { data: agreements = [], isLoading: agreementsLoading } = useServiceAgreements();
   const { data: visits = [] } = useServiceVisits();
+  const { data: rpcSummary } = useHgpFinanceSummary();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
 
@@ -167,16 +168,23 @@ export default function GeneratorOps() {
       return d !== null && d >= 0 && d <= 90;
     });
 
-    const totalIncome = (income as any[]).filter(t => (t.status ?? '') !== 'voided')
-      .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
-    const totalExpense = (expenses as any[]).filter(t => (t.status ?? '') !== 'voided')
-      .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    /* Prefer the server-side rollup (get_hgp_finance_summary, migration
+       20260717000001); fall back to client-side math over the fetched
+       transactions when the RPC isn't deployed yet. */
     const isService = (t: any) => /service|maintenance|plan/i.test(t.category ?? '');
     const isEmergency = (t: any) => /emergency|after.?hours/i.test(`${t.category ?? ''} ${t.description ?? ''}`);
-    const serviceRevenue = (income as any[]).filter(t => (t.status ?? '') !== 'voided' && isService(t))
-      .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
-    const emergencyRevenue = (income as any[]).filter(t => (t.status ?? '') !== 'voided' && isEmergency(t))
-      .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    const totalIncome = rpcSummary?.totalIncome
+      ?? (income as any[]).filter(t => (t.status ?? '') !== 'voided')
+        .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    const totalExpense = rpcSummary?.totalExpense
+      ?? (expenses as any[]).filter(t => (t.status ?? '') !== 'voided')
+        .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    const serviceRevenue = rpcSummary?.serviceRevenue
+      ?? (income as any[]).filter(t => (t.status ?? '') !== 'voided' && isService(t))
+        .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    const emergencyRevenue = rpcSummary?.emergencyRevenue
+      ?? (income as any[]).filter(t => (t.status ?? '') !== 'voided' && isEmergency(t))
+        .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
 
     return {
       onHandCount: onHand.length, installedCount: installed.length, inventoryValue, depositsHeld,
@@ -184,7 +192,7 @@ export default function GeneratorOps() {
       upcoming, overdueVisits, warrantyExpiring,
       totalIncome, totalExpense, serviceRevenue, emergencyRevenue,
     };
-  }, [units, agreements, income, expenses]);
+  }, [units, agreements, income, expenses, rpcSummary]);
 
   const marginByModel = useMemo(() => {
     const groups: Record<string, { model: string; count: number; cost: number; revenue: number }> = {};

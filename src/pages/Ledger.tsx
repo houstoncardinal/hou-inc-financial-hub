@@ -907,6 +907,19 @@ export default function Ledger() {
     return true;
   };
 
+  /* Business context for trigger-mirrored rows (visit/note/draw/invoice
+     syncs). The server-paged path returns a richer joined label from
+     get_ledger_page's context_label; this is the client-side fallback for
+     the filtered/time-ranged path. */
+  const ledgerContextOf = (raw: any): string | null => {
+    const ref = String(raw?.external_reference || '');
+    if (ref.startsWith('hgp_visit:')) return raw?.category === 'Emergency Service' ? 'Emergency service visit' : 'Service visit';
+    if (ref.startsWith('note_payment:')) return raw?.category ? `Note payment · ${raw.category}` : 'Note payment';
+    if (ref.startsWith('draw_schedule:')) return 'Funded draw';
+    if (ref.startsWith('invoice:')) return raw?.external_invoice_number ? `Invoice ${raw.external_invoice_number}` : 'Invoice payment';
+    return null;
+  };
+
   const scopedRows = useMemo(() => {
     const a = [
       ...checks.map((c: any) => ({
@@ -914,6 +927,7 @@ export default function Ledger() {
         ref: c.check_number || c.external_reference || '—',
         party: c.payee_name, project: c.projects?.name, project_id: c.project_id,
         amount: -Number(c.amount), status: c.status, reconciled: c.reconciled || c.reconciliation_status === 'reconciled',
+        context: null as string | null,
         _kind: 'check' as const, raw: c,
       })),
       ...income.map((t: any) => ({
@@ -922,6 +936,7 @@ export default function Ledger() {
         party: t.source_name || t.vendors?.name || '—', project: t.projects?.name, project_id: t.project_id,
         amount: Number(t.total_amount ?? t.amount), status: t.status || t.payment_status || 'posted',
         reconciled: t.reconciled || t.reconciliation_status === 'reconciled',
+        context: ledgerContextOf(t),
         _kind: 'income' as const, raw: t,
       })),
       ...expenses.map((t: any) => ({
@@ -930,6 +945,7 @@ export default function Ledger() {
         party: t.vendors?.name || t.source_name || '—', project: t.projects?.name, project_id: t.project_id,
         amount: -Number(t.total_amount ?? t.amount), status: t.status || t.payment_status || 'posted',
         reconciled: t.reconciled || t.reconciliation_status === 'reconciled',
+        context: ledgerContextOf(t),
         _kind: 'expense' as const, raw: t,
       })),
     ];
@@ -1024,6 +1040,7 @@ export default function Ledger() {
       amount,
       status: r.status || (r.reconciled ? 'reconciled' : 'open'),
       reconciled: Boolean(r.reconciled || r.reconciliation_status === 'reconciled'),
+      context: (r.context_label as string | null) ?? null,
       _kind: kind === 'check' ? 'check' as const : kind === 'income' ? 'income' as const : 'expense' as const,
       raw: {
         id: r.source_id,
@@ -1517,6 +1534,11 @@ export default function Ledger() {
                   <div className={r.reconciled ? 'truncate text-positive font-bold' : 'truncate text-warning font-bold'}>{r.reconciled ? 'Reconciled' : 'Open'}</div>
                 </div>
               </div>
+              {r.context && (
+                <div className="text-[10px] font-bold px-2 py-1 border border-accent/25 bg-accent/5 text-accent truncate">
+                  {r.context}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2 text-[10px] text-foreground/55">
                 <span className="truncate">Ref: {r.ref}</span>
                 <span className="flex items-center gap-1 uppercase tracking-[0.14em] font-bold">Inspector <ChevronRight className="w-3 h-3" /></span>
@@ -1580,7 +1602,11 @@ export default function Ledger() {
                   <div className="truncate text-foreground/55 text-[11px]">{r.ref}</div>
                   <div className="min-w-0">
                     <div className="truncate text-[12px] font-semibold text-foreground">{r.party}</div>
-                    <div className="text-[9px] text-foreground/45 mt-0.5 truncate">{r.status && r.status !== '—' ? `Status: ${r.status}` : r.reconciled ? 'Reconciled' : 'Open ledger entry'}</div>
+                    {r.context ? (
+                      <div className="text-[9px] font-bold text-accent mt-0.5 truncate" title={r.context}>{r.context}</div>
+                    ) : (
+                      <div className="text-[9px] text-foreground/45 mt-0.5 truncate">{r.status && r.status !== '—' ? `Status: ${r.status}` : r.reconciled ? 'Reconciled' : 'Open ledger entry'}</div>
+                    )}
                   </div>
                   <div className="truncate text-foreground/58 text-[11px]">{r.project||'Unassigned'}</div>
                   <div className="truncate text-foreground/58 text-[11px] capitalize">{r.raw?.payment_method?.replace?.(/_/g, ' ') || r.raw?.delivery_status?.replace?.(/_/g, ' ') || '—'}</div>

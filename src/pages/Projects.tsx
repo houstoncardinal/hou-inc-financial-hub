@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import { financeProfileFor } from '@/lib/entityFinance';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -512,8 +513,8 @@ export default function Projects() {
       {/* ── Page Header ── */}
       <PageHeader
         eyebrow={entity?.name || 'Capital Containers'}
-        title="Project Portfolio"
-        description="Budget allocation, capital deployed, and outstanding obligations across all active jobs."
+        title={financeProfileFor(entity?.id).projectsHeader.title}
+        description={financeProfileFor(entity?.id).projectsHeader.description}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />

@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { useEntity } from '@/contexts/EntityContext';
+import { financeProfileFor } from '@/lib/entityFinance';
 import {
   useDocuments, useUploadDocument, useDeleteDocument, useUpdateDocument,
   useDocumentUrl, DOC_TYPE_LABELS, DOC_TYPE_COLORS, DocType, Document,
@@ -286,15 +287,21 @@ function UploadZone({ onFiles }: { onFiles: (files: File[]) => void }) {
 /* ── Upload Modal ── */
 function UploadModal({ files, onClose, onUploaded }: { files: File[]; onClose: () => void; onUploaded: () => void }) {
   const upload = useUploadDocument();
+  const { entity } = useEntity();
+  const tagPresets = financeProfileFor(entity?.id).documentTags;
   const [docType, setDocType] = useState<DocType>('receipt');
   const [title, setTitle] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
+
+  const toggleTag = (tag: string) =>
+    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
 
   const handleUpload = async () => {
     setProgress(0);
     try {
       for (let i = 0; i < files.length; i++) {
-        await upload.mutateAsync({ file: files[i], docType, title: title || undefined, runOcr: true });
+        await upload.mutateAsync({ file: files[i], docType, title: title || undefined, tags: tags.length ? tags : undefined, runOcr: true });
         setProgress(((i + 1) / files.length) * 100);
       }
       toast.success(`${files.length} file${files.length > 1 ? 's' : ''} uploaded successfully`);
@@ -356,6 +363,32 @@ function UploadModal({ files, onClose, onUploaded }: { files: File[]; onClose: (
               placeholder="Leave blank to use filename"
               className="w-full border border-border bg-background px-3 h-10 text-sm outline-none focus:border-foreground/30 transition-colors"
             />
+          </div>
+
+          {/* Entity-specific classification tags */}
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-[0.18em] mb-1.5 block">
+              Tags <span className="normal-case tracking-normal">(optional — {entity?.shortName ?? 'entity'} classifications)</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              {tagPresets.map(tag => {
+                const active = tags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`px-2 py-1 text-[10px] font-bold border transition-colors ${
+                      active
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* OCR notice */}

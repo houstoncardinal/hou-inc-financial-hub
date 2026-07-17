@@ -164,6 +164,47 @@ test('HGP service visit posts income and Holdings note payment moves balance', a
   expect(interestTxn?.type).toBe('income');
 });
 
+test('ledger context labels surface trigger-mirrored business meaning', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000002 is applied.
+  const verify = await client.rpc('verify_ledger_entity_context' as any);
+  test.skip(!!verify.error, `Ledger context migration missing — run 20260717000002 (${verify.error?.message ?? ''})`);
+  expect((verify.data as any[])?.[0]?.ok).toBe(true);
+
+  // A revenue-bearing visit must appear in the server-paged ledger with a
+  // joined context label, findable via search on the customer name.
+  const customer = `Ledger Ctx QA ${Date.now()}`;
+  const { data: visit, error: visitError } = await client
+    .from('hgp_service_visits' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      customer_name: customer, visit_type: 'emergency',
+      visit_date: new Date().toISOString().slice(0, 10), revenue: 181.25,
+    })
+    .select('*')
+    .single();
+  expect(visitError).toBeNull();
+
+  const page = await client.rpc('get_ledger_page' as any, {
+    p_entity_id: 'houston-generator-pros',
+    p_limit: 10,
+    p_offset: 0,
+    p_search: customer,
+  });
+  expect(page.error).toBeNull();
+  const row = (page.data as any[]).find(r => r.reference === `hgp_visit:${(visit as any).id}`);
+  expect(row).toBeTruthy();
+  expect(row.context_kind).toBe('service_visit');
+  expect(row.context_label).toContain('Emergency visit');
+  expect(row.context_label).toContain(customer);
+});
+
 test('funded draw and reconciliation audit database workflow', async () => {
   test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set Supabase and Playwright credentials for database launch workflow test.');
 

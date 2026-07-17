@@ -57,4 +57,40 @@ describe('entity-aware finance profiles', () => {
       expect(knownModules.has(mod)).toBe(true);
     }
   });
+
+  it('every profile ships non-empty category catalogs, document tags, and a projects header', () => {
+    for (const profile of Object.values(ENTITY_FINANCE_PROFILES)) {
+      expect(profile.incomeCategories.length).toBeGreaterThan(3);
+      expect(profile.expenseCategories.length).toBeGreaterThan(3);
+      expect(profile.documentTags.length).toBeGreaterThan(3);
+      expect(profile.projectsHeader.title.length).toBeGreaterThan(0);
+      expect(profile.projectsHeader.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('trigger-written category strings stay present in the entity catalogs', () => {
+    // The hgp_visit income sync writes these categories (20260716000016) —
+    // the HGP income catalog must keep offering the same strings so manual
+    // and automated entries classify identically.
+    const hgp = financeProfileFor('houston-generator-pros');
+    expect(hgp.incomeCategories).toContain('Service Maintenance');
+    expect(hgp.incomeCategories).toContain('Emergency Service');
+    // The note-payment sync writes Interest Income / Interest Expense.
+    const heh = financeProfileFor('houston-enterprise-holdings');
+    expect(heh.incomeCategories).toContain('Interest Income');
+    expect(heh.expenseCategories).toContain('Interest Expense');
+  });
+
+  it('entity catalogs are actually differentiated per business model', () => {
+    const he = financeProfileFor('houston-enterprise');
+    const hgp = financeProfileFor('houston-generator-pros');
+    const heh = financeProfileFor('houston-enterprise-holdings');
+    expect(hgp.expenseCategories).toContain('Generator Equipment Purchase');
+    expect(he.expenseCategories).not.toContain('Generator Equipment Purchase');
+    expect(heh.expenseCategories).toContain('Debt Service');
+    expect(he.expenseCategories).not.toContain('Debt Service');
+    expect(hgp.documentTags).toContain('Warranty Registration');
+    expect(heh.documentTags).toContain('Promissory Note');
+    expect(he.documentTags).toContain('Lien Waiver');
+  });
 });

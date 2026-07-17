@@ -24,6 +24,7 @@ import {
   useQuickCreate,
 } from '@/hooks/useFinance';
 import { useEntity } from '@/contexts/EntityContext';
+import { financeProfileFor } from '@/lib/entityFinance';
 import { useAuth } from '@/hooks/useAuth';
 import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -48,22 +49,10 @@ import {
   Tooltip as RechartsTooltip, XAxis, YAxis,
 } from 'recharts';
 
-const EXPENSE_CATEGORIES = [
-  'Materials', 'Labor', 'Subcontractor', 'Equipment', 'Equipment rental',
-  'Permits', 'Inspections', 'Fuel', 'Delivery', 'Dumpster and disposal',
-  'Jobsite utilities', 'Temporary facilities', 'Professional services',
-  'Repairs', 'Tools and supplies', 'Office overhead', 'Insurance',
-  'Marketing', 'Software', 'Payroll', 'Vehicle expense', 'Travel',
-  'Meals', 'Other',
-];
-
-const EXPENSE_TYPES = EXPENSE_CATEGORIES;
-
-const INCOME_CATEGORIES = [
-  'Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee',
-  'Reimbursement', 'Interest Income', 'Grant', 'Investment',
-  'Refund', 'Other Income',
-];
+/* Income/expense category catalogs are entity-aware — construction categories
+   for Houston Enterprise, generator-operations categories for HGP, and
+   holding-company categories for Holdings. Defined once in
+   src/lib/entityFinance.ts and resolved from the selected entity below. */
 
 const INCOME_PAYMENT_METHODS = [
   { value: 'check',           label: 'Check' },
@@ -395,6 +384,7 @@ function TransactionInspector({
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const navigate = useNavigate();
   const { entity } = useEntity();
+  const entityProfile = financeProfileFor(entity?.id);
   const { user } = useAuth();
   const { data: txns = [] } = useTransactions(kind);
   const { data: projects = [] } = useProjects();
@@ -1258,7 +1248,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                         <CategorySelect
                           value={form.category}
                           onChange={v => setForm(f => ({ ...f, category: v }))}
-                          options={isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES}
+                          options={isIncome ? entityProfile.incomeCategories : entityProfile.expenseCategories}
                         />
                       </div>
 
@@ -1269,7 +1259,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                               <Select value={form.expense_type} onValueChange={v => setForm(f => ({ ...f, expense_type: v }))}>
                                 <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Materials, labor, fuel..." /></SelectTrigger>
                                 <SelectContent>
-                                  {EXPENSE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                  {entityProfile.expenseCategories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                             </div>

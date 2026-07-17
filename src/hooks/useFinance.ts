@@ -254,6 +254,8 @@ export const useFinanceRealtime = () => {
       qc.invalidateQueries({ queryKey: ['finance-commitments'] });
       qc.invalidateQueries({ queryKey: ['ledger-page'] });
       qc.invalidateQueries({ queryKey: ['system-health-events'] });
+      qc.invalidateQueries({ queryKey: ['hgp-finance-summary'] });
+      qc.invalidateQueries({ queryKey: ['holdings-consolidated-totals'] });
     };
 
     const channel = supabase

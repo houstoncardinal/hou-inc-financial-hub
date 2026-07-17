@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
-import { useChecks, useTransactions, useProjects, useVendors } from '@/hooks/useFinance';
+import { useChecks, useTransactions, useProjects, useVendors, useFinanceControlSummary, useFinanceAgingSummary } from '@/hooks/useFinance';
 import { useInvoices, invoiceTotal } from '@/hooks/useInvoices';
 import { useEntity } from '@/contexts/EntityContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -359,13 +359,119 @@ const DEFAULT_QA_IDS = ['income', 'expense', 'check', 'projects', 'scan', 'conci
 
 /* ── Construction intelligence customization ─────────────────────────────── */
 const CI_OPTIONS = [
-  { id: 'margin',      label: 'Margin Control' },
-  { id: 'receivables', label: 'Receivables Risk' },
-  { id: 'projectBurn', label: 'Project Burn' },
-  { id: 'vendors',     label: 'Vendor Concentration' },
+  { id: 'margin',      label: 'WIP Over/Under Billings' },
+  { id: 'receivables', label: 'Aging Invoice Stack' },
+  { id: 'projectBurn', label: 'Committed Cost Index' },
+  { id: 'vendors',     label: 'Lien Waiver & Compliance' },
   { id: 'unlinked',    label: 'Unlinked Costs' },
   { id: 'clearance',   label: 'Check Clearance' },
 ] as const;
+
+/* ── Construction risk visualizations (WIP / aging / EAC / compliance) ─────
+   Compact div-based charts sized for the intelligence-card slot. All data
+   comes from live sources: the finance_project_control_summary rollup
+   (over/under billing, committed cost, EAC envelope), the AR aging RPC, and
+   the vendors table's real compliance columns (insurance_expiration,
+   w9_on_file, lien_waiver_required — editable on /vendors). ── */
+
+function WipBillingBar({ over, under }: { over: number; under: number }) {
+  const total = over + under;
+  const overPct = total > 0 ? (over / total) * 100 : 50;
+  return (
+    <div className="space-y-1">
+      <div className="h-3 flex overflow-hidden border border-border/70 bg-secondary/40">
+        {total > 0 ? (
+          <>
+            <div className="h-full bg-[#10b981]/80" style={{ width: `${overPct}%` }} title={`Over-billed ${fmtUSD(over)}`} />
+            <div className="h-full bg-[#ef4444]/75" style={{ width: `${100 - overPct}%` }} title={`Under-billed ${fmtUSD(under)}`} />
+          </>
+        ) : (
+          <div className="h-full w-full" />
+        )}
+      </div>
+      <div className="flex justify-between text-[7.5px] font-mono-tab text-muted-foreground">
+        <span className="text-positive">Over {fmtUSD(over)}</span>
+        <span className="text-destructive">Under {fmtUSD(under)}</span>
+      </div>
+    </div>
+  );
+}
+
+const AGING_BRACKETS: { key: string; label: string; color: string }[] = [
+  { key: 'current', label: 'Cur',  color: '#64748b' },
+  { key: '1-30',    label: '0-30', color: '#9D7E3F' },
+  { key: '31-60',   label: '31-60', color: '#f59e0b' },
+  { key: '61-90',   label: '61-90', color: '#f97316' },
+  { key: '90+',     label: '90+',  color: '#ef4444' },
+];
+
+function AgingMicroColumns({ buckets }: { buckets: Record<string, number> }) {
+  const max = Math.max(1, ...AGING_BRACKETS.map(b => buckets[b.key] ?? 0));
+  return (
+    <div className="flex items-end gap-1 h-11">
+      {AGING_BRACKETS.map(b => {
+        const v = buckets[b.key] ?? 0;
+        return (
+          <div key={b.key} className="flex-1 min-w-0 flex flex-col items-center gap-0.5" title={`${b.label}: ${fmtUSD(v)}`}>
+            <div className="w-full flex items-end" style={{ height: 32 }}>
+              <div className="w-full" style={{ height: `${Math.max(v > 0 ? 3 : 1, (v / max) * 32)}px`, backgroundColor: v > 0 ? b.color : 'hsl(var(--border))' }} />
+            </div>
+            <div className="text-[6.5px] font-bold text-muted-foreground uppercase tracking-tight">{b.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExposureRings({ jobs }: { jobs: { name: string; pct: number }[] }) {
+  if (!jobs.length) {
+    return <div className="h-11 flex items-center text-[8px] text-muted-foreground">No active jobs with contract envelopes yet.</div>;
+  }
+  return (
+    <div className="flex items-center gap-2.5 h-11">
+      {jobs.map(j => {
+        const color = j.pct > 100 ? '#ef4444' : j.pct > 85 ? '#f59e0b' : '#64748b';
+        return (
+          <div key={j.name} className="flex items-center gap-1.5 min-w-0 flex-1" title={`${j.name}: ${j.pct.toFixed(0)}% of envelope committed`}>
+            <div
+              className="w-8 h-8 shrink-0 rounded-full grid place-items-center"
+              style={{ background: `conic-gradient(${color} ${Math.min(j.pct, 100)}%, hsl(var(--secondary)) 0)` }}
+            >
+              <div className="w-6 h-6 rounded-full bg-background grid place-items-center text-[7px] font-black font-mono-tab" style={{ color }}>
+                {Math.round(j.pct)}%
+              </div>
+            </div>
+            <div className="text-[7px] leading-tight text-muted-foreground truncate">{j.name}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ComplianceMatrix({ vendors }: { vendors: { name: string; state: 'ok' | 'expiring' | 'expired' | 'unknown' }[] }) {
+  if (!vendors.length) {
+    return <div className="h-11 flex items-center text-[8px] text-muted-foreground">No vendors on file yet.</div>;
+  }
+  const COLORS = { ok: '#10b981', expiring: '#f59e0b', expired: '#ef4444', unknown: 'hsl(var(--border))' };
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-[3px]">
+        {vendors.slice(0, 27).map(v => (
+          <div key={v.name} className="w-3 h-3" title={`${v.name}: ${v.state === 'ok' ? 'COI current' : v.state === 'expiring' ? 'COI expires ≤30d' : v.state === 'expired' ? 'COI expired' : 'No COI on file'}`}
+            style={{ backgroundColor: COLORS[v.state] }} />
+        ))}
+      </div>
+      <div className="flex gap-2 text-[6.5px] font-bold uppercase tracking-tight text-muted-foreground">
+        <span><span className="inline-block w-1.5 h-1.5 mr-0.5" style={{ background: COLORS.ok }} />Current</span>
+        <span><span className="inline-block w-1.5 h-1.5 mr-0.5" style={{ background: COLORS.expiring }} />≤30d</span>
+        <span><span className="inline-block w-1.5 h-1.5 mr-0.5" style={{ background: COLORS.expired }} />Expired</span>
+        <span><span className="inline-block w-1.5 h-1.5 mr-0.5" style={{ background: COLORS.unknown }} />None</span>
+      </div>
+    </div>
+  );
+}
 
 const DEFAULT_CI_IDS = ['margin', 'receivables', 'projectBurn', 'vendors'];
 const DEFAULT_CI_MAX = 4;
@@ -703,6 +809,71 @@ export default function Index() {
   const stalePendingCount = pendingAgingData[3]?.count ?? 0;
   const stalePendingValue = pendingAgingData[3]?.value ?? 0;
 
+  /* ── Construction risk intelligence (WIP / aging / EAC / compliance) ─────
+     Must stay above the entity early-return so hook order is stable. */
+  const { data: controlRows = [] } = useFinanceControlSummary();
+  const { data: agingRows = [] } = useFinanceAgingSummary();
+
+  const wipBilling = useMemo(() => {
+    let over = 0, under = 0;
+    for (const r of controlRows as any[]) {
+      const v = Number(r.over_under_billed || 0);
+      if (v > 0) over += v; else under += Math.abs(v);
+    }
+    return { over, under, net: over - under };
+  }, [controlRows]);
+
+  const arAging = useMemo(() => {
+    const buckets: Record<string, number> = {};
+    let total = 0;
+    for (const r of agingRows as any[]) {
+      if (r.aging_type !== 'ar') continue;
+      const v = Number(r.open_amount || 0);
+      buckets[r.bucket] = (buckets[r.bucket] ?? 0) + v;
+      total += v;
+    }
+    const late30 = (buckets['31-60'] ?? 0) + (buckets['61-90'] ?? 0) + (buckets['90+'] ?? 0);
+    const late60 = (buckets['61-90'] ?? 0) + (buckets['90+'] ?? 0);
+    return { buckets, total, late30, late60 };
+  }, [agingRows]);
+
+  const exposureJobs = useMemo(() => {
+    const jobs = (controlRows as any[])
+      .filter(r => r.project_status === 'active')
+      .map(r => {
+        const exposure = Number(r.actual_cost || 0) + Number(r.remaining_commitment || 0);
+        const envelope = Number(r.revised_contract_value || 0);
+        return { name: r.project_name as string, exposure, envelope, pct: envelope > 0 ? (exposure / envelope) * 100 : 0 };
+      })
+      .filter(j => j.envelope > 0)
+      .sort((a, b) => b.exposure - a.exposure)
+      .slice(0, 3);
+    const overCount = jobs.filter(j => j.pct > 100).length;
+    const worst = jobs.reduce((w, j) => (j.pct > (w?.pct ?? -1) ? j : w), null as null | typeof jobs[number]);
+    return { jobs, overCount, worst };
+  }, [controlRows]);
+
+  const compliance = useMemo(() => {
+    const now = Date.now();
+    const soon = now + 30 * 86400000;
+    const stateOf = (v: any): 'ok' | 'expiring' | 'expired' | 'unknown' => {
+      if (!v.insurance_expiration) return 'unknown';
+      const exp = new Date(v.insurance_expiration + 'T12:00:00').getTime();
+      if (exp < now) return 'expired';
+      if (exp < soon) return 'expiring';
+      return 'ok';
+    };
+    const rows = (vendors as any[]).map(v => ({ id: v.id, name: v.name as string, state: stateOf(v), w9: Boolean(v.w9_on_file), waiver: Boolean(v.lien_waiver_required) }));
+    const expired = rows.filter(r => r.state === 'expired');
+    const expiring = rows.filter(r => r.state === 'expiring');
+    const expiredIds = new Set(expired.map(r => r.id));
+    const atRiskChecks = (checks as any[]).filter((c: any) => c.status === 'pending' && c.payee_vendor_id && expiredIds.has(c.payee_vendor_id));
+    const atRiskValue = atRiskChecks.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+    const missingW9 = rows.filter(r => !r.w9).length;
+    const waiverRequired = rows.filter(r => r.waiver).length;
+    return { rows, expired: expired.length, expiring: expiring.length, atRiskChecks: atRiskChecks.length, atRiskValue, missingW9, waiverRequired };
+  }, [vendors, checks]);
+
   if (!ready)  return null;
   if (!entity) return <Navigate to="/finance" replace />;
 
@@ -887,39 +1058,47 @@ export default function Index() {
   const ciCards = [
     {
       id:         'margin',
-      label:      'Margin Control',
-      value:      `${pMargin.toFixed(1)}%`,
-      sub:        `${fmtUSD(periodStats.income)} in · ${fmtUSD(periodStats.outflow)} out`,
-      detail:     pMargin >= 20 ? 'Healthy spread' : pMargin >= 0 ? 'Watch cost creep' : 'Negative margin',
-      valueColor: pMargin >= 20 ? 'text-positive' : pMargin >= 0 ? 'text-warning' : 'text-destructive',
-      chart:      <MiniArea data={ciTrendData.map(d => ({ ...d, label: d.month }))} dataKey="margin" name="Margin" color={pMargin >= 20 ? '#10b981' : pMargin >= 0 ? '#f59e0b' : '#ef4444'} gid="cig-margin" height={36} formatter={(v) => `${Number(v || 0).toFixed(1)}%`} />,
+      label:      'WIP Over/Under Billings',
+      value:      fmtUSD(Math.abs(wipBilling.net)),
+      sub:        wipBilling.over + wipBilling.under > 0
+        ? (wipBilling.net >= 0 ? 'Net over-billed — client capital working' : 'Net under-billed — fronting our own cash')
+        : 'No WIP variance recorded yet',
+      detail:     wipBilling.under > wipBilling.over ? 'Cash exposure' : 'Cash cushion',
+      valueColor: wipBilling.net >= 0 ? 'text-positive' : 'text-destructive',
+      chart:      <WipBillingBar over={wipBilling.over} under={wipBilling.under} />,
     },
     {
       id:         'receivables',
-      label:      'Receivables Risk',
-      value:      fmtUSD(invoicePeriodStats.open || constructionKPIs.receivables),
-      sub:        invoicePeriodStats.count > 0 ? `${invoicePeriodStats.openCount} open · ${invoicePeriodStats.overdueCount} overdue` : 'No invoices in range',
-      detail:     invoicePeriodStats.collectionPct > 0 ? `${invoicePeriodStats.collectionPct.toFixed(0)}% collected` : 'Collections watch',
-      valueColor: invoicePeriodStats.overdue > 0 ? 'text-destructive' : invoicePeriodStats.open > 0 ? 'text-warning' : 'text-positive',
-      chart:      <ReceivablesMiniChart data={invoiceTrendData} height={40} showLegend={false} />,
+      label:      'Aging Invoice Stack',
+      value:      fmtUSD(arAging.total),
+      sub:        arAging.total > 0
+        ? `${fmtUSD(arAging.late30)} locked 30d+ · ${fmtUSD(arAging.late60)} at 60d+`
+        : 'No open receivables',
+      detail:     (arAging.buckets['90+'] ?? 0) > 0 ? `${fmtUSD(arAging.buckets['90+'])} at 90d+` : 'None past 90d',
+      valueColor: arAging.late60 > 0 ? 'text-destructive' : arAging.late30 > 0 ? 'text-warning' : 'text-positive',
+      chart:      <AgingMicroColumns buckets={arAging.buckets} />,
     },
     {
       id:         'projectBurn',
-      label:      'Project Burn',
-      value:      `${Math.round(projectBurnPct)}%`,
-      sub:        `${fmtUSD(projectSpentTotal)} of ${fmtUSD(projectBudgetTotal)} committed`,
-      detail:     `${activeProjects.length} active job${activeProjects.length !== 1 ? 's' : ''}`,
-      valueColor: projectBurnPct > 90 ? 'text-destructive' : projectBurnPct > 72 ? 'text-warning' : 'text-foreground',
-      chart:      <ProjectsMiniChart data={projectFinancialData} compact />,
+      label:      'Committed Cost Index',
+      value:      exposureJobs.worst ? `${Math.round(exposureJobs.worst.pct)}%` : '—',
+      sub:        exposureJobs.worst
+        ? `${exposureJobs.worst.name} leads exposure vs contract envelope`
+        : 'Actual + open commitments vs revised contract',
+      detail:     exposureJobs.overCount > 0 ? `${exposureJobs.overCount} over envelope` : `Top ${exposureJobs.jobs.length} tracked`,
+      valueColor: exposureJobs.overCount > 0 ? 'text-destructive' : (exposureJobs.worst?.pct ?? 0) > 85 ? 'text-warning' : 'text-foreground',
+      chart:      <ExposureRings jobs={exposureJobs.jobs} />,
     },
     {
       id:         'vendors',
-      label:      'Vendor Concentration',
-      value:      topVendorShare > 0 ? `${topVendorShare.toFixed(0)}%` : '0%',
-      sub:        vendorSpendData[0] ? `${vendorSpendData[0].name} leads spend` : 'No vendor spend this period',
-      detail:     `${vendorSpendData.length} active vendor${vendorSpendData.length !== 1 ? 's' : ''}`,
-      valueColor: topVendorShare > 45 ? 'text-warning' : 'text-foreground',
-      chart:      <MiniArea data={vendorSpendData.map(v => ({ label: v.name, value: v.value }))} dataKey="value" name="Spend" color="#0891b2" gid="cig-vendor" height={36} formatter={(v) => fmtUSD(Number(v || 0))} />,
+      label:      'Lien Waiver & Compliance',
+      value:      compliance.atRiskChecks > 0 ? fmtUSD(compliance.atRiskValue) : `${compliance.expired + compliance.expiring}`,
+      sub:        compliance.atRiskChecks > 0
+        ? `${compliance.atRiskChecks} pending check${compliance.atRiskChecks !== 1 ? 's' : ''} to expired-COI vendors`
+        : `${compliance.expired} expired COI · ${compliance.expiring} expiring ≤30d · ${compliance.missingW9} missing W-9`,
+      detail:     compliance.waiverRequired > 0 ? `${compliance.waiverRequired} need lien waivers` : 'No waiver flags',
+      valueColor: compliance.atRiskChecks > 0 || compliance.expired > 0 ? 'text-destructive' : compliance.expiring > 0 ? 'text-warning' : 'text-positive',
+      chart:      <ComplianceMatrix vendors={compliance.rows} />,
     },
     {
       id:         'unlinked',

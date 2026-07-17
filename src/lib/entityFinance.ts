@@ -9,7 +9,7 @@
 export type FinanceModuleKey =
   | 'overview' | 'ledger' | 'checks' | 'income' | 'expenses'
   | 'projects' | 'vendors' | 'invoices' | 'charts' | 'controls'
-  | 'changelog' | 'concierge' | 'documents';
+  | 'changelog' | 'concierge' | 'documents' | 'storm';
 
 export type OverviewVariant = 'construction' | 'generator' | 'holdings';
 
@@ -24,6 +24,13 @@ export interface EntityFinanceProfile {
   descriptions: Partial<Record<FinanceModuleKey, string>>;
   /** Business-model terminology used across shared screens. */
   terms: { project: string; projects: string; vendor: string; vendors: string };
+  /** Category pickers on the Income/Expense forms (transactions.category). */
+  incomeCategories: string[];
+  expenseCategories: string[];
+  /** Quick-add tag presets on the Documents upload sheet (documents.tags). */
+  documentTags: string[];
+  /** Projects-screen header copy. */
+  projectsHeader: { title: string; description: string };
 }
 
 const ALL_MODULES: FinanceModuleKey[] = [
@@ -32,13 +39,36 @@ const ALL_MODULES: FinanceModuleKey[] = [
 ];
 
 export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
-  /* Full construction finance suite — WIP controls, guided entry, everything. */
+  /* Full construction finance suite — WIP controls, guided entry, everything.
+     Category lists match the pre-entity-aware hardcoded lists exactly so
+     Houston Enterprise's forms are byte-identical to before. */
   'houston-enterprise': {
     modules: ALL_MODULES,
     overview: 'construction',
     labels: {},
     descriptions: {},
     terms: { project: 'Project', projects: 'Projects', vendor: 'Vendor', vendors: 'Vendors' },
+    incomeCategories: [
+      'Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee',
+      'Reimbursement', 'Interest Income', 'Grant', 'Investment',
+      'Refund', 'Other Income',
+    ],
+    expenseCategories: [
+      'Materials', 'Labor', 'Subcontractor', 'Equipment', 'Equipment rental',
+      'Permits', 'Inspections', 'Fuel', 'Delivery', 'Dumpster and disposal',
+      'Jobsite utilities', 'Temporary facilities', 'Professional services',
+      'Repairs', 'Tools and supplies', 'Office overhead', 'Insurance',
+      'Marketing', 'Software', 'Payroll', 'Vehicle expense', 'Travel',
+      'Meals', 'Other',
+    ],
+    documentTags: [
+      'Contract', 'Change Order', 'Lien Waiver', 'Permit', 'Inspection',
+      'Draw Package', 'Sub Agreement', 'Jobsite Photo', 'Closeout',
+    ],
+    projectsHeader: {
+      title: 'Project Portfolio',
+      description: 'Budget allocation, capital deployed, and outstanding obligations across all active jobs.',
+    },
   },
 
   /* Generator sales, installs, inventory, and recurring service — no
@@ -46,20 +76,45 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
   'houston-generator-pros': {
     modules: [
       'overview', 'ledger', 'checks', 'income', 'expenses', 'projects',
-      'vendors', 'invoices', 'charts', 'changelog', 'documents',
+      'vendors', 'invoices', 'charts', 'changelog', 'documents', 'storm',
     ],
     overview: 'generator',
     labels: {
       overview: 'Generator Ops',
       projects: 'Install Jobs',
       vendors: 'Suppliers',
+      storm: 'Storm Response',
     },
     descriptions: {
       overview: 'Sales, inventory, service & margin',
       projects: 'Installation & service jobs',
       vendors: 'Distributors & suppliers',
+      storm: 'Outage intelligence & dispatch',
     },
     terms: { project: 'Job', projects: 'Install Jobs', vendor: 'Supplier', vendors: 'Suppliers' },
+    /* 'Service Maintenance'/'Emergency Service' match the categories written
+       by the hgp_visit income sync trigger (20260716000016) and read by the
+       Generator Ops revenue split — keep those strings stable. */
+    incomeCategories: [
+      'Generator Sale', 'Generator Deposit', 'Installation Payment', 'Final Payment',
+      'Service Maintenance', 'Maintenance Plan', 'Emergency Service',
+      'Warranty Reimbursement', 'Financing Payment', 'Parts Sale', 'Other Income',
+    ],
+    expenseCategories: [
+      'Generator Equipment Purchase', 'Distributor Invoice', 'Install Materials',
+      'Electrical Labor', 'Subcontract Labor', 'Permit Fees', 'Inspection Fees',
+      'Warranty Parts', 'Service Parts', 'Truck & Fuel', 'Marketing Leads',
+      'Software', 'Insurance', 'Payroll', 'Office Overhead', 'Other',
+    ],
+    documentTags: [
+      'Signed Proposal', 'Site Survey', 'Load Calculation', 'Spec Sheet',
+      'Permit Application', 'Inspection Approval', 'Warranty Registration',
+      'Maintenance Agreement', 'Install Photos', 'Service Report', 'Manufacturer Invoice',
+    ],
+    projectsHeader: {
+      title: 'Install Jobs',
+      description: 'Generator sales, installation jobs, and service work — equipment, labor, and margin per job.',
+    },
   },
 
   /* Holding-company operations — capital, notes, distributions, consolidated
@@ -84,6 +139,29 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       expenses: 'Overhead & corporate costs',
     },
     terms: { project: 'Asset', projects: 'Assets & Deals', vendor: 'Counterparty', vendors: 'Counterparties' },
+    /* 'Interest Income'/'Interest Expense' match the categories written by
+       the note-payment sync trigger (20260716000016) — keep stable. */
+    incomeCategories: [
+      'Management Fee', 'Interest Income', 'Intercompany Repayment',
+      'Capital Contribution Received', 'Distribution Received',
+      'Asset Sale Proceeds', 'Tax Refund', 'Entity Transfer In', 'Other Income',
+    ],
+    expenseCategories: [
+      'Corporate Overhead', 'Debt Service', 'Interest Expense',
+      'Owner Distribution', 'Tax Reserve Transfer', 'Legal & Accounting',
+      'Insurance', 'Intercompany Funding', 'Asset Purchase',
+      'Entity Transfer Out', 'Other',
+    ],
+    documentTags: [
+      'Loan Agreement', 'Promissory Note', 'Amortization Schedule',
+      'Board Resolution', 'Operating Agreement', 'Capital Record',
+      'Distribution Approval', 'Tax Document', 'Insurance Policy',
+      'Formation Document', 'Bank Statement', 'Owner Report',
+    ],
+    projectsHeader: {
+      title: 'Assets & Deals',
+      description: 'Investments, development deals, and strategic initiatives across the holding portfolio.',
+    },
   },
 };
 
@@ -112,6 +190,7 @@ export const ROUTE_MODULES: Record<string, FinanceModuleKey> = {
   '/changelog': 'changelog',
   '/concierge': 'concierge',
   '/documents': 'documents',
+  '/storm': 'storm',
 };
 
 export function moduleLabel(entityId: string | null | undefined, module: FinanceModuleKey, fallback: string): string {
