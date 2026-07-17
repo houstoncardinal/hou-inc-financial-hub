@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
-import { BrowserRouter, Route, Routes, useNavigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,7 +9,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
 import RoleGuard from "@/components/RoleGuard";
-import { EntityProvider } from "@/contexts/EntityContext";
+import { EntityProvider, useEntity } from "@/contexts/EntityContext";
+import { entityHasModule, type FinanceModuleKey } from "@/lib/entityFinance";
 import { isSchemaCacheError, recordSystemHealthEvent } from "@/lib/systemHealth";
 
 function ScrollToTop() {
@@ -69,7 +70,7 @@ import Admin from "./pages/Admin";
 
 // Finance dashboard
 import EntitySelect  from "./pages/EntitySelect";
-import Index         from "./pages/Index";
+import EntityOverview from "./pages/EntityOverview";
 import Auth          from "./pages/Auth";
 import Checks        from "./pages/Checks";
 import CheckNew      from "./pages/CheckNew";
@@ -117,6 +118,16 @@ const queryClient = new QueryClient({
 const FINANCE_ROLES = ['admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer'] as const;
 const ADMIN_ROLES   = ['admin'] as const;
 
+/* Direct-URL guard for modules the selected entity doesn't use (nav already
+   hides them): e.g. construction WIP Controls for HGP/Holdings. Waits for
+   entity hydration so a hard refresh doesn't misroute. */
+function ModuleGuard({ module, children }: { module: FinanceModuleKey; children: React.ReactNode }) {
+  const { entity, ready } = useEntity();
+  if (!ready) return null;
+  if (!entityHasModule(entity?.id, module)) return <Navigate to="/finance/dashboard" replace />;
+  return <>{children}</>;
+}
+
 // All finance routes share ONE EntityProvider so entity state is never stale
 function FinanceRoutes() {
   return (
@@ -124,7 +135,7 @@ function FinanceRoutes() {
       <Routes>
         <Route path="/finance"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
         <Route path="/finance/select"     element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
-        <Route path="/finance/dashboard"  element={<RoleGuard allowed={[...FINANCE_ROLES]}><Index /></RoleGuard>} />
+        <Route path="/finance/dashboard"  element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntityOverview /></RoleGuard>} />
         <Route path="/checks"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Checks /></RoleGuard>} />
         <Route path="/checks/new"         element={<RoleGuard allowed={[...FINANCE_ROLES]}><CheckNew /></RoleGuard>} />
         <Route path="/income"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="income" /></RoleGuard>} />
@@ -133,9 +144,9 @@ function FinanceRoutes() {
         <Route path="/projects"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Projects /></RoleGuard>} />
         <Route path="/projects/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><ProjectDetail /></RoleGuard>} />
         <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
-        <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Concierge /></RoleGuard>} />
+        <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="concierge"><Concierge /></ModuleGuard></RoleGuard>} />
         <Route path="/charts"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Charts /></RoleGuard>} />
-        <Route path="/finance/controls"   element={<RoleGuard allowed={[...FINANCE_ROLES]}><FinanceControls /></RoleGuard>} />
+        <Route path="/finance/controls"   element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="controls"><FinanceControls /></ModuleGuard></RoleGuard>} />
         <Route path="/changelog"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Changelog /></RoleGuard>} />
         <Route path="/invoices"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Invoices /></RoleGuard>} />
         <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />

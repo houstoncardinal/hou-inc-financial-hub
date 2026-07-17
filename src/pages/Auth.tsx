@@ -308,10 +308,11 @@ export default function Auth() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Email */}
                 <div>
-                  <label className="block text-[9px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: MU }}>
+                  <label htmlFor="auth-email" className="block text-[9px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: MU }}>
                     Email Address
                   </label>
                   <input
+                    id="auth-email"
                     type="email"
                     required
                     value={email}
@@ -335,11 +336,12 @@ export default function Auth() {
 
                 {/* Password */}
                 <div>
-                  <label className="block text-[9px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: MU }}>
+                  <label htmlFor="auth-password" className="block text-[9px] uppercase tracking-[0.3em] font-bold mb-2" style={{ color: MU }}>
                     Password
                   </label>
                   <div className="relative">
                     <input
+                      id="auth-password"
                       type={showPw ? 'text' : 'password'}
                       required
                       value={password}

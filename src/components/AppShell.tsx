@@ -4,6 +4,7 @@ import { useAuth, useRole, ROLE_LABELS } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useEntity, ENTITIES } from '@/contexts/EntityContext';
+import { financeProfileFor, ROUTE_MODULES } from '@/lib/entityFinance';
 import { useFinanceRealtime } from '@/hooks/useFinance';
 import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
@@ -63,6 +64,33 @@ const mobileQuickNav = [
   { to: '/ledger',            label: 'Ledger',   icon: BookOpen },
   { to: '/projects',          label: 'Projects', icon: FolderKanban },
 ];
+
+/* Entity-aware navigation: filters modules the selected entity doesn't use
+   (e.g. construction WIP Controls and the Concierge for HGP/Holdings) and
+   applies that entity's terminology (Install Jobs, Suppliers, Assets & Deals,
+   Corporate Expenses…). Houston Enterprise sees the full unchanged nav. */
+function entityNavGroups(entityId: string | null | undefined) {
+  const profile = financeProfileFor(entityId);
+  return navGroups
+    .map(group => ({
+      ...group,
+      items: group.items
+        .filter(item => {
+          const mod = ROUTE_MODULES[item.to];
+          return !mod || profile.modules.includes(mod);
+        })
+        .map(item => {
+          const mod = ROUTE_MODULES[item.to];
+          if (!mod) return item;
+          return {
+            ...item,
+            label: profile.labels[mod] ?? item.label,
+            desc: profile.descriptions[mod] ?? item.desc,
+          };
+        }),
+    }))
+    .filter(group => group.items.length > 0);
+}
 
 const ENTITY_ICONS: Record<string, React.ComponentType<any>> = {
   'houston-enterprise':           Building2,
@@ -174,7 +202,8 @@ function FullscreenMobileMenu({
   const navigate = useNavigate();
   const overdueCount = invoices.filter((i: any) => i.status === 'overdue').length;
   const accentColor = entity?.color ?? '#9D7E3F';
-  const allNavItems = navGroups.flatMap(group => group.items.map(item => ({ ...item, group: group.label })));
+  const groups = entityNavGroups(entity?.id);
+  const allNavItems = groups.flatMap(group => group.items.map(item => ({ ...item, group: group.label })));
 
   const go = (to: string) => {
     sounds.tap();
@@ -272,7 +301,7 @@ function FullscreenMobileMenu({
               <div style={{ fontSize: 8, color: '#777' }}>{allNavItems.length + 2} destinations</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 7 }}>
-              {navGroups.map(group => (
+              {groups.map(group => (
                 <div key={group.label} style={{ minWidth: 0, background: '#FFFFFF', border: '1px solid #E1DED6', boxShadow: '0 1px 4px rgba(10,10,10,0.035)' }}>
                   <div style={{ height: 2, background: group.label === 'Daily' ? accentColor : '#D8D2C4' }} />
                   <div style={{ padding: '6px 7px 2px', fontSize: 7, fontWeight: 850, letterSpacing: '0.22em', textTransform: 'uppercase', color: group.label === 'Daily' ? accentColor : '#777' }}>{group.label}</div>
@@ -530,7 +559,7 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
       </div>
 
       <nav className="flex-1 py-1.5 overflow-hidden">
-        {navGroups.map(group => (
+        {entityNavGroups(entity?.id).map(group => (
           <div key={group.label} className="mb-1">
             <div className="px-4 py-0.5">
               <span className="text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold">{group.label}</span>

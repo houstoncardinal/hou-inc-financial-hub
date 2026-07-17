@@ -175,7 +175,10 @@ const LDG_CSS = `
 .dark .ldg-stat:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 22px rgba(0,0,0,0.25);}
 .dark .ldg-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
 @media(max-width:767px){
-  .ldg-recon-ring{width:48px;height:48px;}
+  .ldg-recon-ring{width:44px;height:44px;}
+  .ldg-recon-panel>.grid{gap:7px;}
+  .ldg-recon-metric{padding:5px 7px;}
+  .ldg-recon-metric .v{font-size:12px;}
   .ldg-recon-ring:before{inset:6px;}
   .ldg-recon-ring span{font-size:11px;}
   .ldg-recon-action{height:32px;font-size:7.5px;}
@@ -1453,7 +1456,7 @@ export default function Ledger() {
                 ))}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 <button onClick={() => setReconcileMode(m => !m)} className={`ldg-recon-action ${reconcileMode ? 'primary' : ''}`}>
                   <CheckSquare className="w-3.5 h-3.5" /> {reconcileMode ? 'Exit' : 'Review'}
                 </button>
