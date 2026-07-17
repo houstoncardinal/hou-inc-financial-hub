@@ -11,6 +11,7 @@
     "lint:errors": "eslint . --quiet",
     "lint:finance": "eslint src/hooks/useFinance.ts src/pages/Checks.tsx src/pages/Projects.tsx src/pages/Ledger.tsx src/pages/TxnPage.tsx --quiet",
     "preview": "vite preview",
+    "test:launch": "playwright test",
     "test": "vitest run",
     "test:watch": "vitest"
   },

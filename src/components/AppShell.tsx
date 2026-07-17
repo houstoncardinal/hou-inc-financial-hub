@@ -45,6 +45,7 @@ const navGroups = [
     label: 'Analysis',
     items: [
       { to: '/charts',    label: 'Charts',    icon: BarChart3,   desc: 'Visual analytics' },
+      { to: '/finance/controls', label: 'Controls', icon: ShieldCheck, desc: 'WIP, aging, roles & bank matching' },
       { to: '/changelog', label: 'Changelog', icon: History,     desc: 'Finance audit trail' },
       { to: '/concierge', label: 'Concierge', icon: ConciergeBell, desc: 'Guided entry assistant' },
     ],

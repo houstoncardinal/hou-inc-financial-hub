@@ -24,16 +24,15 @@ import {
 import {
   ArrowLeft, Download, FileText, ArrowUpRight, Plus, ExternalLink,
   Users, LayoutDashboard, Upload, Trash2, File, Image, Eye, Camera,
-  ChevronRight, ChevronDown, Pencil, Check, X, FolderOpen, Link2,
-  BarChart3, Receipt, ClipboardList, ShieldCheck, Mail,
-  TrendingUp, Clock, AlertCircle, Wallet,
+  ChevronRight, Pencil, Check, X, FolderOpen, Link2,
+  Receipt, ClipboardList, ShieldCheck, Mail,
+  TrendingUp, Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import ProjectBreakdown from '@/components/ProjectBreakdown';
 import { PDV2_CSS } from '@/components/project-detail/cardStyles';
-import { StatCard } from '@/components/project-detail/StatCard';
 import { DonutChart } from '@/components/project-detail/DonutChart';
 import { TrendLineChart } from '@/components/project-detail/TrendLineChart';
 import { MilestoneTimeline } from '@/components/project-detail/MilestoneTimeline';
@@ -41,6 +40,7 @@ import { ActivityFeedCard } from '@/components/project-detail/ActivityFeedCard';
 import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
 import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
 import { ProjectGantt } from '@/components/project-detail/ProjectGantt';
+import { FlushTabs } from '@/components/project-detail/FlushTabs';
 
 /* ── Status config ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
@@ -71,26 +71,13 @@ const DOC_TYPES: { value: DocType; label: string }[] = [
 
 const PD_CSS = `
 .pd-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.16),transparent 170px);}
-.pd-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;position:relative;overflow:hidden;transition:box-shadow .18s,transform .18s,border-color .18s;}
-.pd-intel-card:hover{box-shadow:0 8px 24px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
-.pd-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
-.pd-tab-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
-.pd-tab-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
-.pd-tab-card-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
 .pd-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
 .pd-section{padding:14px 16px;}
-.pd-tab-strip{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;}
-.pd-tab-btn{height:34px;padding:0 11px;border:1px solid transparent;font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:800;display:flex;align-items:center;gap:7px;white-space:nowrap;transition:background .16s,border-color .16s,color .16s;}
-.pd-tab-btn-active{border-color:hsl(var(--foreground));background:hsl(var(--foreground));color:hsl(var(--background));}
-.pd-tab-btn:not(.pd-tab-btn-active){color:hsl(var(--foreground)/0.66);}
-.pd-tab-btn:not(.pd-tab-btn-active):hover{background:hsl(var(--secondary)/0.48);border-color:hsl(var(--border));color:hsl(var(--foreground));}
 .pd-row:hover td,.pd-row:hover{background-color:rgba(157,126,63,0.032)!important;}
 .pd-doc-row:hover{background-color:rgba(157,126,63,0.025)!important;}
 .pd-compact-table td,.pd-compact-table th{padding-top:9px!important;padding-bottom:9px!important;}
-.pd-nav-select{width:100%;height:44px;padding:0 34px 0 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));appearance:none;}
-.pd-nav-select:focus{outline:none;border-color:hsl(var(--foreground)/0.35);}
-@media(max-width:639px){.pd-section{padding:12px}.pd-tab-btn{height:32px;padding:0 9px;font-size:8px}.pd-panel{box-shadow:0 1px 2px rgba(10,10,10,0.04)}.pd-nav-select{height:40px;font-size:10px}}
-.dark .pd-intel-card,.dark .pd-tab-card,.dark .pd-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
+@media(max-width:639px){.pd-section{padding:12px}.pd-panel{box-shadow:0 1px 2px rgba(10,10,10,0.04)}}
+.dark .pd-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
 function FileIcon({ mimeType, className = 'w-4 h-4' }: { mimeType: string | null; className?: string }) {
@@ -441,24 +428,6 @@ export default function ProjectDetail() {
     }));
   }, [enriched]);
 
-  /* ── Real cumulative trends for the stat-card sparklines (last 8 months). ── */
-  /* ── Cards with no genuine time-series (health score, cost-to-complete   ── */
-  /* ── estimate, forecast profit estimate, open-items count) get no trend. ── */
-  const { budgetUsedTrend, cashPositionTrend } = useMemo(() => {
-    if (!enriched || cashFlowSeries.length === 0) return { budgetUsedTrend: undefined, cashPositionTrend: undefined };
-    const budget = Number(enriched.budget) || 0;
-    let cumSpend = 0, cumNet = 0;
-    const budgetTrend: number[] = [];
-    const cashTrend: number[] = [];
-    cashFlowSeries.forEach(m => {
-      cumSpend += m.outflow;
-      cumNet += m.net;
-      budgetTrend.push(budget > 0 ? Math.min(100, (cumSpend / budget) * 100) : 0);
-      cashTrend.push(cumNet);
-    });
-    return { budgetUsedTrend: budgetTrend.slice(-8), cashPositionTrend: cashTrend.slice(-8) };
-  }, [enriched, cashFlowSeries]);
-
   /* ── Document actions ── */
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -545,26 +514,13 @@ export default function ProjectDetail() {
 
   const statusMeta = STATUS_META[enriched.status as StatusKey] ?? STATUS_META.archived;
   const projectSummary = financeSummary;
-  const healthScore = Math.max(0, Math.min(100,
-    92
-    - Math.max(0, (enriched.spent / Math.max(Number(enriched.budget || 0), 1)) - 0.78) * 95
-    - (enriched.outstanding / Math.max(Number(enriched.budget || 0), 1)) * 28
-    - (enriched.status === 'on_hold' ? 12 : enriched.status === 'archived' ? 22 : 0)
-    + (enriched.net > 0 ? 5 : 0)
-  ));
-  const healthTone = healthScore >= 82 ? { label: 'Strong', color: '#10b981' }
-    : healthScore >= 64 ? { label: 'Stable', color: '#9D7E3F' }
-      : healthScore >= 45 ? { label: 'Watch', color: '#f59e0b' }
-        : { label: 'At Risk', color: '#ef4444' };
-  const TABS: { key: Tab; label: string; short: string; desc: string; count?: number; icon: any }[] = [
-    { key: 'overview',   label: 'Overview', short: 'Overview', desc: 'Health, cash, budget, and project controls', icon: LayoutDashboard },
-    { key: 'breakdown',  label: 'Houston Enterprise Reconciliation', short: 'Reconciliation', desc: 'SOV, draws, COs, payments, and audit', icon: ShieldCheck },
-    { key: 'documents',  label: 'Documents', short: 'Documents', desc: 'Contracts, permits, receipts', count: projectDocs.length, icon: FolderOpen },
-    { key: 'photos',     label: 'Progress Photos', short: 'Photos', desc: 'Site photos synced to the client portal', count: photos.length, icon: Camera },
-    { key: 'activity',   label: 'Activity', short: 'Activity', desc: 'Income, expenses, and check movement', count: sortedActivity.length, icon: Receipt },
+  const TABS: { key: Tab; label: string; short: string; count?: number; icon: any }[] = [
+    { key: 'overview',   label: 'Overview', short: 'Overview', icon: LayoutDashboard },
+    { key: 'breakdown',  label: 'Houston Enterprise Reconciliation', short: 'Reconciliation', icon: ShieldCheck },
+    { key: 'documents',  label: 'Documents', short: 'Documents', count: projectDocs.length, icon: FolderOpen },
+    { key: 'photos',     label: 'Progress Photos', short: 'Photos', count: photos.length, icon: Camera },
+    { key: 'activity',   label: 'Activity', short: 'Activity', count: sortedActivity.length, icon: Receipt },
   ];
-  const activeTabMeta = TABS.find(t => t.key === tab) ?? TABS[0];
-  const ActiveTabIcon = activeTabMeta.icon;
   const openItemsTotal = pendingCounts.changeOrders + pendingCounts.draws + pendingCounts.invoices;
   const clientDisplayName = portalClient?.name || enriched.client_name_snapshot || null;
 
@@ -765,53 +721,15 @@ export default function ProjectDetail() {
 
       <div className="h-[3px]" style={{ backgroundColor: statusMeta.color }} />
 
-      {/* ── Project command center + navigation ── */}
-      <div className="pd-shell border-b border-border/70">
-        <div className="px-4 sm:px-8 py-3 space-y-3">
-          <div className="pd-tab-strip p-2">
-            <div className="sm:hidden relative">
-              <select
-                value={tab}
-                onChange={e => setTab(e.target.value as Tab)}
-                className="pd-nav-select"
-              >
-                {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            </div>
-
-            <div className="hidden sm:flex flex-wrap gap-1.5">
-              {TABS.map(t => {
-                const Icon = t.icon;
-                const active = tab === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
-                    className={`pd-tab-btn ${active ? 'pd-tab-btn-active' : ''}`}
-                  >
-                    <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
-                    {t.short}
-                    {t.count !== undefined && t.count > 0 && (
-                      <span className={`text-[8px] px-1.5 py-0.5 font-black ${active ? 'bg-background/15 text-background' : 'bg-secondary text-muted-foreground'}`}>
-                        {t.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-2 pt-2 border-t border-border flex items-start gap-2.5">
-              <span className="w-8 h-8 border border-border bg-secondary/35 flex items-center justify-center shrink-0">
-                <ActiveTabIcon className="w-4 h-4" strokeWidth={1.7} style={{ color: '#9D7E3F' }} />
-              </span>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-[0.16em] font-black text-foreground">{activeTabMeta.label}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{activeTabMeta.desc}</div>
-              </div>
-            </div>
-          </div>
+      {/* ── Project navigation ── */}
+      <div className="pd-shell">
+        <div className="px-4 sm:px-8">
+          <FlushTabs
+            items={TABS.map(t => ({ key: t.key, label: t.short, icon: t.icon, count: t.count }))}
+            activeKey={tab}
+            onChange={key => setTab(key as Tab)}
+            layoutId="pd-outer-tab-line"
+          />
         </div>
       </div>
 
@@ -820,43 +738,6 @@ export default function ProjectDetail() {
       ══════════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
         <div className="pd-section space-y-4">
-
-          {/* ── Stat cards ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-            <StatCard
-              label="Project Health" value={`${Math.round(healthScore)}`} sub={healthTone.label}
-              subColor="" trendColor={healthTone.color} icon={ShieldCheck} deltaTone="neutral"
-            />
-            <StatCard
-              label="Budget Used" value={`${enriched.used.toFixed(1)}%`}
-              sub={`${fmtUSD(enriched.spent)} of ${fmtUSD(enriched.budget)}`}
-              trend={budgetUsedTrend} trendColor={enriched.used >= 100 ? '#ef4444' : enriched.used >= 80 ? '#f59e0b' : '#9D7E3F'}
-              icon={BarChart3} deltaTone="neutral" deltaMode="absolute"
-            />
-            <StatCard
-              label="Cost to Complete"
-              value={projectSummary ? fmtUSD(projectSummary.estimated_cost_to_complete) : '—'}
-              sub="Estimated" icon={Clock}
-            />
-            <StatCard
-              label="Forecast Profit"
-              value={projectSummary ? fmtUSD(projectSummary.estimated_gross_profit) : '—'}
-              sub={projectSummary ? `${projectSummary.estimated_gross_margin.toFixed(1)}% margin` : 'Awaiting data'}
-              subColor={projectSummary && projectSummary.estimated_gross_profit >= 0 ? 'text-positive' : 'text-accent'}
-              icon={TrendingUp} trendColor={projectSummary && projectSummary.estimated_gross_profit >= 0 ? '#10b981' : '#ef4444'}
-            />
-            <StatCard
-              label="Cash Position" value={fmtUSD(projectSummary?.cash_position ?? enriched.net)}
-              sub="Available" trend={cashPositionTrend} trendColor={(projectSummary?.cash_position ?? enriched.net) >= 0 ? '#10b981' : '#ef4444'}
-              icon={Wallet}
-            />
-            <StatCard
-              label="Open Items" value={String(openItemsTotal)}
-              sub={openItemsTotal > 0 ? 'Requires attention' : 'All caught up'}
-              subColor={openItemsTotal > 0 ? 'text-warning' : 'text-positive'}
-              icon={AlertCircle} trendColor={openItemsTotal > 0 ? '#f59e0b' : '#10b981'}
-            />
-          </div>
 
           {/* ── Financial Summary / Budget vs Actual / Cash Flow / Project Details ── */}
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 items-stretch">

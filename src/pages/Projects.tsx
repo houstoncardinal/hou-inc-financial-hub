@@ -23,17 +23,16 @@ import {
   Trash2, Table2, FileText, ChevronRight, BarChart2,
   Search, Plus, Grid3X3, List, ExternalLink,
   FolderKanban, Download, Home, Building2, BriefcaseBusiness,
-  Activity, CircleDollarSign, ShieldCheck, Settings2, AlertTriangle,
+  CircleDollarSign, Activity, Wallet, TrendingUp, ShieldCheck, AlertTriangle, Receipt, Settings2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { generateProjectReport, savePDF, downloadProjectExcel } from '@/lib/reports';
+import { FinanceRangePicker, isInFinanceRange } from '@/lib/financeTime';
 import {
-  Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
-  Tooltip as RechartsTooltip, XAxis, YAxis,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
+  Tooltip as RechartsTooltip,
 } from 'recharts';
-import { useFinanceChangelog } from '@/hooks/useFinanceChangelog';
-import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 
 /* ── Status metadata ─────────────────────────────────────────────────────── */
 const S = {
@@ -87,15 +86,14 @@ const PROJ_CSS = `
 .proj-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
 .proj-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;background-image:linear-gradient(145deg,rgba(157,126,63,0.045),transparent 42%);}
 .proj-card:hover{box-shadow:0 7px 22px rgba(10,10,10,0.085),0 2px 6px rgba(10,10,10,0.04),0 1px 0 rgba(255,255,255,0.45) inset;transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
-.proj-kpi{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);position:relative;overflow:hidden;}
-.proj-kpi:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(157,126,63,0.08),transparent 42%);pointer-events:none;}
 .proj-intel-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;position:relative;overflow:visible;}
 .proj-intel-card:hover{box-shadow:0 8px 22px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);z-index:30;}
 .proj-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.07),transparent 44%);pointer-events:none;}
 .proj-card-foot{border-top:1px solid hsl(var(--border)/0.65);background:hsl(var(--secondary)/0.24);}
 .proj-spark{height:40px;min-width:92px;}
-.proj-category{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
-.proj-category:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
+.proj-card-toggle{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.45) inset;transition:background .16s,border-color .16s,transform .16s;}
+.proj-card-toggle:hover{background:hsl(var(--secondary)/0.55);border-color:hsl(var(--foreground)/0.18);transform:translateY(-1px);}
+.proj-card-toggle[data-active="true"]{border-color:rgba(157,126,63,0.45);background:rgba(157,126,63,0.08);}
 .proj-category-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
 .proj-health-card{background:hsl(var(--secondary)/0.18);border:1px solid hsl(var(--border));}
 .proj-meter{height:3px;background:hsl(var(--secondary));overflow:hidden;}
@@ -105,19 +103,63 @@ const PROJ_CSS = `
 .proj-export:hover{background:hsl(var(--secondary)/0.62);border-color:hsl(var(--foreground)/0.24);transform:translateY(-1px);}
 .proj-row:hover td{background-color:rgba(157,126,63,0.032)!important;}
 .proj-row:hover{background-color:rgba(157,126,63,0.032)!important;}
+/* Row actions default visible for touch; hide-until-hover only on true mouse/trackpad devices. */
+.proj-row-actions{opacity:1;}
+@media(hover:hover) and (pointer:fine){.proj-row-actions{opacity:0;transition:opacity .15s ease;}.proj-row:hover .proj-row-actions{opacity:1;}}
 @media(max-width:639px){.proj-spark{height:34px}.proj-intel-card{min-height:auto}.proj-card{box-shadow:0 1px 2px rgba(10,10,10,0.045)}}
-.dark .proj-card,.dark .proj-panel,.dark .proj-kpi,.dark .proj-export,.dark .proj-category,.dark .proj-table-shell,.dark .proj-intel-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
+.dark .proj-card,.dark .proj-panel,.dark .proj-export,.dark .proj-table-shell,.dark .proj-intel-card,.dark .proj-card-toggle{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
 const PROJECT_CARD_STORAGE_KEY = 'hou-finance-project-card-selection';
-const DEFAULT_PROJECT_CARDS = ['health', 'contract', 'deployed', 'cash'] as const;
+const DEFAULT_PROJECT_CARDS = ['all', 'residential', 'commercial', 'management'] as const;
+
+function ProjSpark({ data, dataKey, color, type = 'area' }: {
+  data: any[]; dataKey: string; color: string; type?: 'area' | 'bar';
+}) {
+  const gradientId = `proj-${dataKey.replace(/[^a-z0-9]/gi, '-')}`;
+  return (
+    <div className="proj-spark shrink-0">
+      <ResponsiveContainer width="100%" height="100%">
+        {type === 'bar' ? (
+          <BarChart data={data}>
+            <XAxis dataKey="label" hide /><YAxis hide />
+            <RechartsTooltip
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 100, pointerEvents: 'none' }}
+              cursor={{ fill: `${color}14` }}
+              formatter={(value: number) => [dataKey.toLowerCase().includes('value') || dataKey === 'deployed' || dataKey === 'net' || dataKey === 'revenue' ? fmtUSD(value) : value, '']}
+              labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+            />
+            <Bar dataKey={dataKey} fill={color} radius={[3, 3, 0, 0]} />
+          </BarChart>
+        ) : (
+          <AreaChart data={data}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.32} />
+                <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="label" hide /><YAxis hide />
+            <RechartsTooltip
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 100, pointerEvents: 'none' }}
+              formatter={(value: number) => [fmtUSD(value), '']}
+              labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }}
+            />
+            <Area type="monotone" dataKey={dataKey} stroke={color} fill={`url(#${gradientId})`} strokeWidth={2} />
+          </AreaChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function Projects() {
   const navigate  = useNavigate();
   const role      = useRole();
   const isAdmin   = role === 'admin';
   const { entity } = useEntity();
-  const logFinanceChange = useFinanceChangelog();
 
   const { data: projects  = [] } = useProjects();
   const { data: checks    = [] } = useChecks();
@@ -154,7 +196,6 @@ export default function Projects() {
     window.localStorage.setItem(PROJECT_CARD_STORAGE_KEY, JSON.stringify(selectedProjectCardIds));
   }, [selectedProjectCardIds]);
 
-  const selectedRangeLabel = financeRangeLabel(timePeriod);
   const rangedChecks = useMemo(
     () => checks.filter((c: any) => isInFinanceRange(c.issue_date || c.posting_date || c.created_at, timePeriod)),
     [checks, timePeriod],
@@ -205,20 +246,6 @@ export default function Projects() {
     };
   }), [projects, rangedChecks, rangedIncome, rangedExpenses]);
 
-  /* ── Portfolio KPIs ── */
-  const portfolio = useMemo(() => ({
-    total:        enriched.length,
-    active:       enriched.filter((p: any) => p.status === 'active').length,
-    totalBudget:  enriched.reduce((s: number, p: any) => s + Number(p.budget), 0),
-    totalSpent:   enriched.reduce((s: number, p: any) => s + p.spent, 0),
-    totalIncoming:enriched.reduce((s: number, p: any) => s + p.incoming, 0),
-    totalNet:     enriched.reduce((s: number, p: any) => s + p.net, 0),
-    avgHealth:    enriched.length ? enriched.reduce((s: number, p: any) => s + p.healthScore, 0) / enriched.length : 0,
-    atRisk:       enriched.filter((p: any) => p.healthScore < 64).length,
-    overBudget:   enriched.filter((p: any) => p.used >= 100).length,
-    outstanding:  enriched.reduce((s: number, p: any) => s + p.outstanding, 0),
-  }), [enriched]);
-
   const categoryStats = useMemo(() => PROJECT_CATEGORIES.map(category => {
     const list = category.id === 'all' ? enriched : enriched.filter((p: any) => p.projectCategory === category.id);
     return {
@@ -230,219 +257,117 @@ export default function Projects() {
     };
   }), [enriched]);
 
-  const portfolioTrend = useMemo(() => {
+  /* ── Monthly flow — last 8 months of real activity (project creation dates,
+     actual income/expense postings). Cards for point-in-time metrics
+     (Portfolio Health, Watch List, Open Checks) intentionally get no
+     sparkline rather than a fabricated one — only genuine time-series data
+     is charted here. ── */
+  const monthlyTrend = useMemo(() => {
     const now = new Date();
-    return Array.from({ length: 6 }, (_, idx) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
-      const month = d.getMonth();
-      const year = d.getFullYear();
-      const label = d.toLocaleDateString('en-US', { month: 'short' });
-      const revenue = rangedIncome
-        .filter((t: any) => {
-          const td = new Date(t.transaction_date || t.date || t.created_at);
-          return td.getMonth() === month && td.getFullYear() === year;
-        })
-        .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
-      const cost = rangedExpenses
-        .filter((t: any) => {
-          const td = new Date(t.transaction_date || t.date || t.created_at);
-          return td.getMonth() === month && td.getFullYear() === year;
-        })
-        .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
-      return { label, revenue, cost, net: revenue - cost };
+    return Array.from({ length: 8 }, (_, idx) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (7 - idx), 1);
+      const month = d.getMonth(), year = d.getFullYear();
+      const inMonth = (dateStr: string | null | undefined) => {
+        if (!dateStr) return false;
+        const td = new Date(dateStr);
+        return td.getMonth() === month && td.getFullYear() === year;
+      };
+      const newProjects = projects.filter((p: any) => inMonth(p.created_at));
+      const monthExpense = expenses.filter((t: any) => inMonth(t.transaction_date || t.created_at)).reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+      const monthIncome = income.filter((t: any) => inMonth(t.transaction_date || t.created_at)).reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+      return {
+        label: d.toLocaleDateString('en-US', { month: 'short' }),
+        newContractValue: newProjects.reduce((s: number, p: any) => s + Number(p.budget || 0), 0),
+        newProjectCount: newProjects.length,
+        deployed: monthExpense,
+        revenue: monthIncome,
+        net: monthIncome - monthExpense,
+      };
     });
-  }, [rangedIncome, rangedExpenses]);
-
-  const categoryChart = useMemo(
-    () => categoryStats.filter(c => c.id !== 'all').map(c => ({ name: c.short, value: c.count, budget: c.budget, color: c.color })),
-    [categoryStats],
-  );
+  }, [projects, income, expenses]);
 
   const projectCardCatalog = useMemo(() => {
-    const activeCategory = (id: ProjectCategory) => categoryStats.find(c => c.id === id);
-    const collectionCoverage = portfolio.totalBudget > 0 ? (portfolio.totalIncoming / portfolio.totalBudget) * 100 : 0;
-    const deployedPct = portfolio.totalBudget > 0 ? (portfolio.totalSpent / portfolio.totalBudget) * 100 : 0;
-    const healthBars = enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, health: p.healthScore, color: healthTone(p.healthScore).color }));
+    const totalBudget      = enriched.reduce((s: number, p: any) => s + Number(p.budget || 0), 0);
+    const totalSpent       = enriched.reduce((s: number, p: any) => s + p.spent, 0);
+    const totalIncoming    = enriched.reduce((s: number, p: any) => s + p.incoming, 0);
+    const totalNet         = enriched.reduce((s: number, p: any) => s + p.net, 0);
+    const totalOutstanding = enriched.reduce((s: number, p: any) => s + p.outstanding, 0);
+    const avgHealth        = enriched.length ? enriched.reduce((s: number, p: any) => s + p.healthScore, 0) / enriched.length : 0;
+    const atRisk           = enriched.filter((p: any) => p.healthScore < 64).length;
+    const activeCount      = enriched.filter((p: any) => p.status === 'active').length;
+    const collectionPct    = totalBudget > 0 ? (totalIncoming / totalBudget) * 100 : 0;
+
+    const categoryCards = categoryStats.map(category => ({
+      id: category.id as string,
+      label: category.label,
+      value: String(category.count),
+      sub: `${fmtUSD(category.budget)} contract value`,
+      icon: category.icon,
+      color: category.color,
+      chartLabel: `${category.count} project${category.count === 1 ? '' : 's'}`,
+      aux: `${Math.round(category.health || 0)} avg health`,
+    }));
 
     return [
+      ...categoryCards,
       {
-        id: 'health',
-        label: 'Portfolio Health',
-        value: Math.round(portfolio.avgHealth).toString(),
-        sub: `${portfolio.active} active · ${portfolio.atRisk} watch-list`,
-        aux: `${portfolio.overBudget} over budget`,
-        icon: FolderKanban,
-        color: '#9D7E3F',
-        chartLabel: 'Health',
-        chart: (
-          <BarChart data={healthBars}>
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} cursor={{ fill: 'rgba(157,126,63,0.08)' }} formatter={(value: number) => [`${Math.round(value)}`, 'Health']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Bar dataKey="health" radius={[3, 3, 0, 0]}>
-              {healthBars.map((p: any) => <Cell key={p.name} fill={p.color} />)}
-            </Bar>
-          </BarChart>
-        ),
+        id: 'portfolio-value', label: 'Portfolio Value', value: fmtUSD(totalBudget),
+        sub: `${enriched.length} total project${enriched.length === 1 ? '' : 's'} under management`,
+        icon: CircleDollarSign, color: '#2563eb', chartKey: 'newContractValue', chartType: 'bar' as const,
+        chartLabel: 'New contract value', aux: `${fmtUSD(totalIncoming)} collected`,
       },
       {
-        id: 'contract',
-        label: 'Contract Value',
-        value: fmtUSD(portfolio.totalBudget),
-        sub: `${portfolio.total} total projects under management`,
-        aux: `${fmtUSD(portfolio.totalIncoming)} collected`,
-        icon: CircleDollarSign,
-        color: '#2563eb',
-        chartLabel: 'Budget',
-        chart: (
-          <BarChart data={categoryChart}>
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} cursor={{ fill: 'rgba(37,99,235,0.08)' }} formatter={(value: number) => [fmtUSD(value), 'Budget']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Bar dataKey="budget" radius={[3, 3, 0, 0]}>
-              {categoryChart.map((c) => <Cell key={c.name} fill={c.color} />)}
-            </Bar>
-          </BarChart>
-        ),
+        id: 'active-count', label: 'Active Projects', value: String(activeCount),
+        sub: `${enriched.length - activeCount} inactive or complete`,
+        icon: Activity, color: '#111827', chartKey: 'newProjectCount', chartType: 'bar' as const,
+        chartLabel: 'New projects', aux: `${enriched.length} total records`,
       },
       {
-        id: 'deployed',
-        label: 'Capital Deployed',
-        value: fmtUSD(portfolio.totalSpent),
-        sub: `${deployedPct.toFixed(1)}% of approved budgets`,
-        aux: `${fmtUSD(portfolio.totalBudget - portfolio.totalSpent)} remaining`,
-        icon: Activity,
-        color: '#ef4444',
-        chartLabel: 'Costs',
-        chart: (
-          <AreaChart data={portfolioTrend}>
-            <defs><linearGradient id="projectCostCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.32} /><stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} /></linearGradient></defs>
-            <XAxis dataKey="label" hide /><YAxis hide />
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Costs']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Area type="monotone" dataKey="cost" stroke="#ef4444" fill="url(#projectCostCustom)" strokeWidth={2} />
-          </AreaChart>
-        ),
+        id: 'deployed', label: 'Capital Deployed', value: fmtUSD(totalSpent),
+        sub: `${totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(1) : '0.0'}% of approved budgets`,
+        icon: Wallet, color: '#ef4444', chartKey: 'deployed', chartType: 'bar' as const,
+        chartLabel: 'Monthly spend', aux: `${fmtUSD(Math.max(totalBudget - totalSpent, 0))} remaining`,
       },
       {
-        id: 'cash',
-        label: 'Cash Position',
-        value: fmtUSD(portfolio.totalNet),
-        sub: `${fmtUSD(portfolio.outstanding)} outstanding checks`,
-        aux: portfolio.totalNet >= 0 ? 'Positive portfolio cash' : 'Cash pressure visible',
-        icon: ShieldCheck,
-        color: portfolio.totalNet >= 0 ? '#10b981' : '#ef4444',
-        chartLabel: 'Net',
-        chart: (
-          <AreaChart data={portfolioTrend}>
-            <defs><linearGradient id="projectNetCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0.02} /></linearGradient></defs>
-            <XAxis dataKey="label" hide /><YAxis hide />
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Net']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Area type="monotone" dataKey="net" stroke="#10b981" fill="url(#projectNetCustom)" strokeWidth={2} />
-          </AreaChart>
-        ),
+        id: 'cash', label: 'Cash Position', value: fmtUSD(totalNet),
+        sub: `${fmtUSD(totalOutstanding)} outstanding checks`,
+        icon: TrendingUp, color: totalNet >= 0 ? '#10b981' : '#ef4444', chartKey: 'net', chartType: 'area' as const,
+        chartLabel: 'Monthly net', aux: totalNet >= 0 ? 'Positive portfolio cash' : 'Cash pressure visible',
       },
       {
-        id: 'active',
-        label: 'Active Work',
-        value: String(portfolio.active),
-        sub: `${portfolio.total - portfolio.active} inactive or complete`,
-        aux: `${portfolio.total} total records`,
-        icon: Grid3X3,
-        color: '#111827',
-        chartLabel: 'Projects',
-        chart: (
-          <BarChart data={categoryChart}>
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [value, 'Projects']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Bar dataKey="value" radius={[3, 3, 0, 0]} fill="#111827" />
-          </BarChart>
-        ),
+        id: 'health', label: 'Portfolio Health', value: String(Math.round(avgHealth)),
+        sub: `${activeCount} active · ${atRisk} watch-list`,
+        icon: ShieldCheck, color: '#9D7E3F',
+        chartLabel: 'Health', aux: `${enriched.filter((p: any) => p.used >= 100).length} over budget`,
       },
       {
-        id: 'risk',
-        label: 'Watch List',
-        value: String(portfolio.atRisk),
+        id: 'risk', label: 'Watch List', value: String(atRisk),
         sub: 'Projects under health threshold',
-        aux: `${portfolio.overBudget} over budget`,
-        icon: AlertTriangle,
-        color: '#f59e0b',
-        chartLabel: 'Risk',
-        chart: (
-          <BarChart data={healthBars}>
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [`${Math.round(value)}`, 'Health']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Bar dataKey="health" radius={[3, 3, 0, 0]} fill="#f59e0b" />
-          </BarChart>
-        ),
+        icon: AlertTriangle, color: '#f59e0b',
+        chartLabel: 'Risk', aux: `${enriched.filter((p: any) => p.used >= 100).length} over budget`,
       },
       {
-        id: 'open-checks',
-        label: 'Open Checks',
-        value: fmtUSD(portfolio.outstanding),
+        id: 'outstanding', label: 'Open Checks', value: fmtUSD(totalOutstanding),
         sub: 'Pending project obligations',
-        aux: `${portfolio.overBudget} budget alerts`,
-        icon: FileText,
-        color: '#7c3aed',
-        chartLabel: 'Open checks',
-        chart: (
-          <BarChart data={enriched.slice(0, 8).map((p: any) => ({ name: p.code || p.name, outstanding: p.outstanding }))}>
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Open checks']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Bar dataKey="outstanding" radius={[3, 3, 0, 0]} fill="#7c3aed" />
-          </BarChart>
-        ),
+        icon: Receipt, color: '#7c3aed',
+        chartLabel: 'Open checks', aux: `${enriched.filter((p: any) => p.outstanding > 0).length} project${enriched.filter((p: any) => p.outstanding > 0).length === 1 ? '' : 's'} affected`,
       },
       {
-        id: 'collections',
-        label: 'Collection Coverage',
-        value: `${collectionCoverage.toFixed(1)}%`,
-        sub: `${fmtUSD(portfolio.totalIncoming)} collected`,
-        aux: `${fmtUSD(Math.max(portfolio.totalBudget - portfolio.totalIncoming, 0))} uncollected`,
-        icon: Download,
-        color: '#0f766e',
-        chartLabel: 'Revenue',
-        chart: (
-          <AreaChart data={portfolioTrend}>
-            <defs><linearGradient id="projectRevenueCustom" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0f766e" stopOpacity={0.3} /><stop offset="95%" stopColor="#0f766e" stopOpacity={0.02} /></linearGradient></defs>
-            <XAxis dataKey="label" hide /><YAxis hide />
-            <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Revenue']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-            <Area type="monotone" dataKey="revenue" stroke="#0f766e" fill="url(#projectRevenueCustom)" strokeWidth={2} />
-          </AreaChart>
-        ),
+        id: 'collections', label: 'Collection Coverage', value: `${collectionPct.toFixed(1)}%`,
+        sub: `${fmtUSD(totalIncoming)} collected`,
+        icon: Download, color: '#0f766e', chartKey: 'revenue', chartType: 'area' as const,
+        chartLabel: 'Monthly revenue', aux: `${fmtUSD(Math.max(totalBudget - totalIncoming, 0))} uncollected`,
       },
-      ...(['residential', 'commercial', 'management'] as ProjectCategory[]).map((id) => {
-        const category = activeCategory(id)!;
-        return {
-          id,
-          label: category.label,
-          value: String(category.count),
-          sub: `${fmtUSD(category.budget)} contract value`,
-          aux: `${Math.round(category.health || 0)} avg health`,
-          icon: category.icon,
-          color: category.color,
-          chartLabel: category.short,
-          chart: (
-            <BarChart data={[category]}>
-              <RechartsTooltip allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 90, pointerEvents: 'none' }} formatter={(value: number) => [fmtUSD(value), 'Budget']} labelStyle={{ color: '#111827', fontSize: 11, fontWeight: 700 }} />
-              <Bar dataKey="budget" radius={[3, 3, 0, 0]} fill={category.color} />
-            </BarChart>
-          ),
-        };
-      }),
     ];
-  }, [categoryChart, categoryStats, enriched, portfolio, portfolioTrend]);
+  }, [categoryStats, enriched]);
 
   const visibleProjectCards = selectedProjectCardIds
     .map(id => projectCardCatalog.find(card => card.id === id))
-    .filter(Boolean);
+    .filter(Boolean) as typeof projectCardCatalog;
 
-  const updateSelectedProjectCards = (nextIds: string[], reason: string) => {
-    if (!nextIds.length) {
-      toast.error('Keep at least one project card visible.');
-      return;
-    }
-    const previous = selectedProjectCardIds;
+  const updateSelectedProjectCards = (nextIds: string[]) => {
+    if (!nextIds.length) { toast.error('Keep at least one card visible.'); return; }
     setSelectedProjectCardIds(nextIds);
-    void logFinanceChange({
-      action: 'preference_updated',
-      entity: 'projects_dashboard',
-      entityId: 'projects_metric_cards',
-      entityLabel: 'Projects dashboard metric cards',
-      details: { reason, previous, current: nextIds },
-    });
   };
 
   /* ── Status counts ── */
@@ -591,19 +516,17 @@ export default function Projects() {
         description="Budget allocation, capital deployed, and outstanding obligations across all active jobs."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="hidden sm:block">
-              <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
-            </div>
-            <div className="hidden sm:flex items-center gap-1">
+            <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
+            <div className="flex items-center gap-1">
               <button onClick={exportPDF} title="Export PDF"
                 className="proj-export h-9 px-3 flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] font-bold text-foreground transition-all">
                 <FileText className="w-3.5 h-3.5" />
-                PDF
+                <span className="hidden sm:inline">PDF</span>
               </button>
               <button onClick={exportExcel} title="Export Excel"
                 className="proj-export h-9 px-3 flex items-center gap-2 text-[9px] uppercase tracking-[0.16em] font-bold text-foreground transition-all">
                 <Table2 className="w-3.5 h-3.5" />
-                Excel
+                <span className="hidden sm:inline">Excel</span>
               </button>
             </div>
             <Button onClick={() => setShowWizard(true)} className="rounded-none h-8 text-[10px] uppercase tracking-wider">
@@ -614,21 +537,18 @@ export default function Projects() {
       />
 
       <div className="proj-shell border-t border-border/50">
-      <div className="sm:hidden px-4 py-3 border-b border-border">
-        <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} />
-      </div>
       {/* ── Portfolio Intelligence ── */}
-      <div className="px-4 sm:px-8 py-3">
+      <div className="px-4 sm:px-8 pt-4 pb-2">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-3">
           <div>
-            <div className="text-[9px] uppercase tracking-[0.24em] font-black text-foreground/55">Portfolio Intelligence · {selectedRangeLabel}</div>
+            <div className="text-[9px] uppercase tracking-[0.24em] font-black text-foreground/55">Portfolio Intelligence</div>
             <div className="text-sm font-semibold tracking-tight mt-0.5">Choose the project signals that keep operations focused.</div>
           </div>
           <Button
             variant="outline"
             size="sm"
             className="rounded-none h-8 text-[10px] uppercase tracking-[0.16em] font-bold self-start sm:self-auto"
-            onClick={() => setProjectCardPickerOpen(open => !open)}
+            onClick={() => setProjectCardPickerOpen(o => !o)}
           >
             <Settings2 className="w-3.5 h-3.5 mr-1.5" />
             Customize
@@ -645,13 +565,14 @@ export default function Projects() {
                   <button
                     key={card.id}
                     type="button"
+                    data-active={active}
                     onClick={() => {
                       const next = active
                         ? selectedProjectCardIds.filter(id => id !== card.id)
                         : [...selectedProjectCardIds, card.id];
-                      updateSelectedProjectCards(next, active ? `hid ${card.label}` : `showed ${card.label}`);
+                      updateSelectedProjectCards(next);
                     }}
-                    className={`proj-export p-2 text-left min-w-0 ${active ? 'proj-category-active' : ''}`}
+                    className="proj-card-toggle p-2 text-left min-w-0"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: card.color }}>
@@ -667,72 +588,44 @@ export default function Projects() {
               })}
             </div>
             <div className="flex justify-end mt-2">
-              <Button variant="ghost" size="sm" className="rounded-none h-7 text-[10px]" onClick={() => updateSelectedProjectCards([...DEFAULT_PROJECT_CARDS], 'reset project card selection')}>
+              <Button variant="ghost" size="sm" className="rounded-none h-7 text-[10px]" onClick={() => updateSelectedProjectCards([...DEFAULT_PROJECT_CARDS])}>
                 Reset cards
               </Button>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {visibleProjectCards.map((card: any) => {
             const Icon = card.icon;
-            return (
-              <div key={card.id} className="proj-intel-card min-w-0">
-                <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
-                <div className="relative flex items-start justify-between gap-3 p-2.5 sm:p-3 pb-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/60 mb-1">
-                      <Icon className="w-3 h-3" /> {card.label}
-                    </div>
-                    <div className="text-lg font-bold font-mono-tab leading-tight truncate" style={{ color: card.id === 'cash' ? card.color : undefined }}>{card.value}</div>
-                    <div className="text-[9px] text-foreground/60 mt-1 truncate">{card.sub}</div>
-                  </div>
-                  <div className="proj-spark">
-                    <ResponsiveContainer width="100%" height="100%">
-                      {card.chart}
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="proj-card-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
-                  <span className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/48 truncate">{card.chartLabel}</span>
-                  <span className="text-[9px] font-mono-tab font-semibold text-foreground/68 truncate">{card.aux}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Category Intelligence ── */}
-      <div className="px-4 sm:px-8 pb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
-          {categoryStats.map((category) => {
-            const Icon = category.icon;
-            const active = categoryFilter === category.id;
+            const isCategory = (PROJECT_CATEGORIES as readonly { id: string }[]).some(c => c.id === card.id);
+            const active = isCategory && categoryFilter === card.id;
             return (
               <button
-                key={category.id}
-                onClick={() => setCategoryFilter(category.id)}
-                className={`proj-intel-card ${active ? 'proj-category-active' : ''} p-2.5 text-left min-w-0`}
+                key={card.id}
+                onClick={() => { if (isCategory) setCategoryFilter(card.id as ProjectCategory); }}
+                className={`proj-intel-card min-w-0 text-left ${active ? 'proj-category-active' : ''} ${isCategory ? 'cursor-pointer' : 'cursor-default'}`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: category.color }}>
-                        <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-bold tracking-tight truncate text-foreground">{category.label}</div>
-                        <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/55">{category.count} project{category.count === 1 ? '' : 's'}</div>
-                      </div>
+                <div className="p-2.5 sm:p-3">
+                  <div className="flex items-center gap-2 min-w-0 mb-2">
+                    <span className="w-7 h-7 border border-border bg-secondary/40 flex items-center justify-center shrink-0" style={{ color: card.color }}>
+                      <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold tracking-tight truncate text-foreground">{card.label}</div>
+                      <div className="text-[8px] uppercase tracking-[0.18em] font-bold text-foreground/55 truncate">{card.sub}</div>
                     </div>
-                    <div className="text-[13px] font-mono-tab font-bold truncate">{fmtUSD(category.budget)}</div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-[9px] uppercase tracking-[0.16em] font-bold text-foreground/55">Health</div>
-                    <div className="text-sm font-mono-tab font-black" style={{ color: healthTone(category.health).color }}>{Math.round(category.health || 0)}</div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="text-[15px] font-mono-tab font-black truncate">{card.value}</div>
+                    {card.chartKey && (
+                      <ProjSpark data={monthlyTrend} dataKey={card.chartKey} color={card.color} type={card.chartType} />
+                    )}
                   </div>
+                </div>
+                <div className="proj-card-foot px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/48 truncate">{card.chartLabel}</span>
+                  <span className="text-[9px] font-mono-tab font-semibold text-foreground/68 truncate">{card.aux}</span>
                 </div>
               </button>
             );
@@ -783,16 +676,6 @@ export default function Projects() {
         </div>
       </div>
 
-      {/* Mobile export bar */}
-      <div className="sm:hidden px-4 py-2 border-b border-border flex gap-2">
-        <Button variant="outline" size="sm" className="rounded-none text-[10px] flex-1" onClick={exportPDF}>
-          <FileText className="w-3 h-3 mr-1.5" />PDF
-        </Button>
-        <Button variant="outline" size="sm" className="rounded-none text-[10px] flex-1" onClick={exportExcel}>
-          <Download className="w-3 h-3 mr-1.5" />Excel
-        </Button>
-      </div>
-
       {/* ── Empty State ── */}
       {displayed.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
@@ -819,7 +702,7 @@ export default function Projects() {
           GRID VIEW
       ══════════════════════════════════════════════════════════ */}
       {view === 'grid' && displayed.length > 0 && (
-        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {displayed.map((p: any, idx: number) => {
             const meta = getMeta(p.status);
             const category = categoryById(p.projectCategory);
@@ -924,7 +807,6 @@ export default function Projects() {
                       { label: 'Revenue',   value: fmtUSD(p.incoming), cls: 'text-positive' },
                       { label: 'Net Cash',  value: fmtUSD(p.net),      cls: p.net >= 0 ? 'text-positive' : 'text-accent' },
                       { label: 'Open Checks', value: fmtUSD(p.outstanding), cls: p.outstanding > 0 ? 'text-warning' : '' },
-                      { label: 'Category', value: category.short, cls: '' },
                     ].map(m => (
                       <div key={m.label} className="bg-background/95 px-2 py-1.5 min-w-0">
                         <div className="text-[7px] uppercase tracking-[0.15em] font-bold text-foreground/55 mb-0.5">{m.label}</div>
@@ -946,6 +828,14 @@ export default function Projects() {
                     Open Project <ChevronRight className="w-3 h-3" />
                   </button>
                   <div className="flex items-center gap-1">
+                    {p.admin_project_id && (
+                      <button
+                        onClick={() => navigate(`/admin?tab=projects&project=${p.admin_project_id}`)}
+                        className="h-7 px-3 text-[9px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-transparent hover:border-border hover:bg-background transition-all"
+                      >
+                        Admin
+                      </button>
+                    )}
                     <button
                       onClick={() => openEdit(p)}
                       className="h-7 px-3 text-[9px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-transparent hover:border-border hover:bg-background transition-all"
@@ -1076,11 +966,17 @@ export default function Projects() {
                         <td className={`px-4 py-3 font-mono-tab text-right font-semibold text-[12px] ${p.outstanding > 0 ? 'text-warning' : 'text-muted-foreground'}`}>{fmtUSD(p.outstanding)}</td>
                         <td className={`px-4 py-3 font-mono-tab font-bold text-right text-[12px] ${p.net >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(p.net)}</td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="proj-row-actions flex items-center gap-1 justify-end">
                             <button onClick={() => navigate(`/projects/${p.id}`)}
                               className="h-6 px-2 text-[8px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-all">
                               Details
                             </button>
+                            {p.admin_project_id && (
+                              <button onClick={() => navigate(`/admin?tab=projects&project=${p.admin_project_id}`)}
+                                className="h-6 px-2 text-[8px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-all">
+                                Admin
+                              </button>
+                            )}
                             <button onClick={() => openEdit(p)}
                               className="h-6 px-2 text-[8px] uppercase tracking-wider font-bold text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 transition-all">
                               Edit

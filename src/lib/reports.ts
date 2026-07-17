@@ -655,13 +655,17 @@ export function generateProjectReconciliationReport({
       [head[0].length - 2]: { cellWidth: 32 },
       [head[0].length - 1]: { cellWidth: 24 },
     },
+    /* Every footer cell here must equal the sum of the scope-item rows
+       printed above it — using project-level truths (fin.revised, fin.pctDone,
+       fin.balance) would show a total the visible rows don't add up to
+       whenever the Schedule of Values doesn't yet cover the full contract. */
     foot: [[
       { content: 'Totals', styles: { fontStyle: 'bold' } },
-      { content: fmtUSD(fin.revised), styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: `${Number(fin.pctDone || 0).toFixed(1)}%`, styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: fmtUSD(fin.sovRevisedTotal ?? fin.revised), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${Number(fin.sovPctDone ?? fin.pctDone ?? 0).toFixed(1)}%`, styles: { halign: 'right', fontStyle: 'bold' } },
       ...drawCols.map((d: any) => ({ content: fmtUSD(d.draw_amount), styles: { halign: 'right', fontStyle: 'bold' } })),
       { content: fmtUSD(fin.earned), styles: { halign: 'right', fontStyle: 'bold' } },
-      { content: fmtUSD(fin.balance), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } },
+      { content: fmtUSD((fin.sovRevisedTotal ?? fin.revised) - fin.earned), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } },
     ]],
   });
 

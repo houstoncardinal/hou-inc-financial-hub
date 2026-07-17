@@ -11,7 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { useChecks, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
+import { useChecks, useLedgerPage, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { generateLedgerReport, generateLedgerRecordReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
@@ -19,10 +20,11 @@ import { useEntity } from '@/contexts/EntityContext';
 import { supabase } from '@/integrations/supabase/client';
 import { buildFinanceBuckets, FinanceRangePicker, financeRangeLabel, isInFinanceRange, parseFinanceDate } from '@/lib/financeTime';
 import {
-  FileText, Table2, Trash2, CheckSquare, Square,
+  FileText, Table2, Trash2, CheckSquare,
   Search, SlidersHorizontal, ArrowDownToLine, ArrowUpFromLine,
   Activity, Eye, ChevronRight, CircleDollarSign,
   AlertTriangle, Receipt, Layers, X, Copy as CopyIcon, PencilLine,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
@@ -115,8 +117,22 @@ const LDG_CSS = `
 .ldg-export{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 0 rgba(255,255,255,0.45) inset,0 1px 3px rgba(10,10,10,0.04);transition:background 0.16s,border-color 0.16s,transform 0.16s,box-shadow 0.16s;}
 .ldg-export:hover{background:hsl(var(--secondary)/0.62);border-color:hsl(var(--foreground)/0.24);transform:translateY(-1px);box-shadow:0 6px 18px rgba(10,10,10,0.08),0 1px 0 rgba(255,255,255,0.45) inset;}
 .ldg-recon-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;position:relative;overflow:hidden;}
-.ldg-recon-panel:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,#10b981,#34d399,#10b981);}
-.ldg-recon-panel:after{content:"";position:absolute;inset:3px 0 auto 0;height:52px;background:linear-gradient(180deg,rgba(16,185,129,0.08),transparent);pointer-events:none;}
+.ldg-recon-panel:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,#10b981,#34d399,#9D7E3F);}
+.ldg-recon-panel:after{content:"";position:absolute;inset:3px 0 auto 0;height:42px;background:linear-gradient(180deg,rgba(16,185,129,0.07),transparent);pointer-events:none;}
+.ldg-recon-ring{width:54px;height:54px;border:1px solid hsl(var(--border));background:conic-gradient(#10b981 var(--recon-pct),hsl(var(--secondary)) 0);display:grid;place-items:center;position:relative;box-shadow:0 1px 3px rgba(10,10,10,.06) inset;}
+.ldg-recon-ring:before{content:"";position:absolute;inset:6px;background:hsl(var(--background));border:1px solid hsl(var(--border));}
+.ldg-recon-ring span{position:relative;font-size:12px;font-weight:900;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.ldg-recon-metric{border:1px solid hsl(var(--border));background:hsl(var(--background)/.72);padding:7px 8px;min-width:0;}
+.ldg-recon-metric .k{font-size:7.5px;text-transform:uppercase;letter-spacing:.16em;color:hsl(var(--foreground)/.45);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-recon-metric .v{font-size:13px;font-weight:900;line-height:1.05;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-recon-action{height:34px;border:1px solid hsl(var(--border));background:hsl(var(--background));font-size:8px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:background .16s,border-color .16s,transform .16s,color .16s;}
+.ldg-recon-action:hover{background:hsl(var(--secondary)/.54);border-color:hsl(var(--foreground)/.22);transform:translateY(-1px);}
+.ldg-recon-action.primary{background:hsl(var(--foreground));color:hsl(var(--background));border-color:hsl(var(--foreground));}
+.ldg-recon-action.positive{border-color:rgba(16,185,129,.35);color:#059669;background:rgba(16,185,129,.08);}
+.ldg-recon-action.warning{border-color:rgba(245,158,11,.38);color:#b45309;background:rgba(245,158,11,.08);}
+.ldg-live-dot{width:7px;height:7px;border-radius:999px;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.13);}
+.ldg-recon-row-action{height:30px;min-width:30px;border:1px solid hsl(var(--border));background:hsl(var(--background));display:inline-flex;align-items:center;justify-content:center;color:hsl(var(--foreground)/.58);transition:background .16s,border-color .16s,color .16s;}
+.ldg-recon-row-action:hover{background:hsl(var(--secondary)/.55);border-color:hsl(var(--foreground)/.22);color:hsl(var(--foreground));}
 .ldg-op-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045);transition:background .16s,border-color .16s,box-shadow .16s;}
 .ldg-op-card:hover{background:hsl(var(--secondary)/0.22);border-color:hsl(var(--foreground)/0.18);box-shadow:0 4px 14px rgba(10,10,10,0.06);}
 .ldg-op-card.active{background:hsl(var(--secondary)/0.45);border-color:hsl(var(--foreground)/0.26);box-shadow:inset 0 0 0 1px hsl(var(--foreground)/0.08),0 4px 14px rgba(10,10,10,0.07);}
@@ -158,6 +174,12 @@ const LDG_CSS = `
 .dark .ldg-record-card{background:#fff;color:#111;box-shadow:0 1px 4px rgba(0,0,0,0.10),0 1px 0 rgba(255,255,255,0.6) inset;}
 .dark .ldg-stat:hover{background:hsl(var(--secondary))!important;box-shadow:0 4px 22px rgba(0,0,0,0.25);}
 .dark .ldg-row:hover{background-color:hsl(var(--accent) / 0.07)!important;}
+@media(max-width:767px){
+  .ldg-recon-ring{width:48px;height:48px;}
+  .ldg-recon-ring:before{inset:6px;}
+  .ldg-recon-ring span{font-size:11px;}
+  .ldg-recon-action{height:32px;font-size:7.5px;}
+}
 `;
 
 function LedgerMiniTooltip({ active, payload, label }: any) {
@@ -711,6 +733,7 @@ function LedgerMobileSheet({
 
 export default function Ledger() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { entity } = useEntity();
   const { user } = useAuth();
   const { data: checks = [] } = useChecks();
@@ -745,6 +768,30 @@ export default function Ledger() {
     external_invoice_number: '', currency: 'USD', notes: '', internal_memo: '', public_memo: '', department: '', location: '',
   });
   const [reconcileMode, setReconcileMode] = useState(false);
+  const [lastLedgerSync, setLastLedgerSync] = useState<Date | null>(null);
+  const serverPagedEnabled = timePeriod === 'all' && queueFilter === 'all';
+  const { data: ledgerPageRows = [] } = useLedgerPage({
+    page,
+    pageSize,
+    search: q,
+    projectId: project,
+    type,
+  });
+
+  useEffect(() => {
+    if (!entity?.id) return;
+    const refreshLedger = () => {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['checks'] });
+      setLastLedgerSync(new Date());
+    };
+    const channel = supabase
+      .channel(`ledger-reconcile-${entity.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `entity_id=eq.${entity.id}` }, refreshLedger)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checks', filter: `entity_id=eq.${entity.id}` }, refreshLedger)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [entity?.id, qc]);
 
   /* ── Per-form step state ── */
   const [incomeStep,  setIncomeStep]  = useState(1);
@@ -959,11 +1006,51 @@ export default function Ledger() {
   const selectedQueueLabel = queueFilter === 'all'
     ? 'All Ledger'
     : operationalMetrics.find(m => m.key === queueFilter)?.label ?? 'Filtered Queue';
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const serverRows = useMemo(() => (ledgerPageRows as any[]).map((r: any) => {
+    const kind = r.row_kind === 'check' ? 'check' : r.ledger_type;
+    const amount = Number(r.amount || 0);
+    return {
+      id: r.source_id,
+      rowId: `${kind}-${r.source_id}`,
+      date: r.ledger_date,
+      type: kind === 'check' ? 'Check' : kind === 'income' ? 'Income' : 'Expense',
+      ref: r.reference || '—',
+      party: r.counterparty || '—',
+      project: r.project_name,
+      project_id: r.project_id,
+      amount,
+      status: r.status || (r.reconciled ? 'reconciled' : 'open'),
+      reconciled: Boolean(r.reconciled || r.reconciliation_status === 'reconciled'),
+      _kind: kind === 'check' ? 'check' as const : kind === 'income' ? 'income' as const : 'expense' as const,
+      raw: {
+        id: r.source_id,
+        project_id: r.project_id,
+        projects: { name: r.project_name },
+        transaction_date: r.row_kind === 'transaction' ? r.ledger_date : undefined,
+        issue_date: r.row_kind === 'check' ? r.ledger_date : undefined,
+        check_number: r.row_kind === 'check' ? r.reference : undefined,
+        check_reference: r.row_kind !== 'check' ? r.reference : undefined,
+        source_name: r.row_kind !== 'check' ? r.counterparty : undefined,
+        payee_name: r.row_kind === 'check' ? r.counterparty : undefined,
+        amount: Math.abs(amount),
+        total_amount: Math.abs(amount),
+        status: r.status,
+        reconciliation_status: r.reconciliation_status,
+        cleared_date: r.cleared_date,
+      },
+      total_count: Number(r.total_count || 0),
+    };
+  }), [ledgerPageRows]);
+  const visibleRows = serverPagedEnabled && serverRows.length ? serverRows : rows;
+  const visibleTotalCount = serverPagedEnabled && serverRows.length ? Number(serverRows[0]?.total_count || serverRows.length) : rows.length;
+  const totalPages = Math.max(1, Math.ceil(visibleTotalCount / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageStart = rows.length ? (safePage - 1) * pageSize + 1 : 0;
-  const pageEnd = Math.min(rows.length, safePage * pageSize);
-  const pagedRows = useMemo(() => rows.slice((safePage - 1) * pageSize, safePage * pageSize), [rows, safePage, pageSize]);
+  const pageStart = visibleTotalCount ? (safePage - 1) * pageSize + 1 : 0;
+  const pageEnd = Math.min(visibleTotalCount, safePage * pageSize);
+  const pagedRows = useMemo(
+    () => (serverPagedEnabled && serverRows.length ? serverRows : rows.slice((safePage - 1) * pageSize, safePage * pageSize)),
+    [serverPagedEnabled, serverRows, rows, safePage, pageSize],
+  );
 
   const activateQueue = (metricKey: LedgerQueueKey) => {
     const next = queueFilter === metricKey ? 'all' : metricKey;
@@ -996,6 +1083,9 @@ export default function Ledger() {
       return { label, Inflow: inflow, Outflow: outflow, Net: inflow - outflow };
     });
   }, [rows, checks, income, expenses, timePeriod]);
+
+  const pageOpenCount = pagedRows.filter(r => !r.reconciled).length;
+  const nextReviewRow = rows.find(r => !r.reconciled) ?? rows.find(r => ['draft', 'submitted', 'under_review', 'pending_approval'].includes(String(r.raw?.approval_status || r.status || '').toLowerCase())) ?? null;
 
   const exportPDF = () => {
     const proj = project !== 'all' ? projects.find((p: any) => p.id === project)?.name : undefined;
@@ -1240,10 +1330,10 @@ export default function Ledger() {
       <style>{LDG_CSS}</style>
       <PageHeader eyebrow="Financial Operations" title="Transaction Ledger" description="Complete chronological record of every financial movement within the company."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             <FinanceRangePicker value={timePeriod} onChange={setTimePeriod} accentColor={entity?.color} className="w-[9.25rem] sm:w-auto" />
-            <div className="hidden sm:flex items-center gap-2">
-              <button className="h-10 px-3 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold text-foreground/70 hover:text-foreground">Import</button>
+            <div className="hidden sm:contents">
+              <button onClick={() => navigate('/finance/controls')} className="h-10 px-3 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold text-foreground/70 hover:text-foreground">Import</button>
               <ExportButton label="PDF" detail="Audit report" icon={FileText} color="#9D7E3F" onClick={exportPDF} />
               <ExportButton label="Excel" detail="Workbook" icon={Table2} color="#0891b2" onClick={exportExcel} />
               <button onClick={() => navigate('/concierge')} className="h-10 px-3 border border-foreground bg-foreground text-background text-[10px] uppercase tracking-[0.14em] font-bold">New Transaction</button>
@@ -1315,7 +1405,7 @@ export default function Ledger() {
               <div className="flex items-center justify-between lg:justify-end gap-2 lg:ml-auto">
                 <div className="flex items-center gap-1.5 text-[10px] text-foreground/60 font-mono-tab">
                   <SlidersHorizontal className="w-3 h-3" />
-                  {pageStart}-{pageEnd} of {rows.length}
+                  {pageStart}-{pageEnd} of {visibleTotalCount}
                 </div>
                 {(q || type !== 'all' || project !== 'all' || queueFilter !== 'all') && (
                   <button onClick={() => { setQ(''); setType('all'); setProject('all'); setQueueFilter('all'); }} className="text-[10px] uppercase tracking-[0.14em] text-foreground/60 hover:text-foreground font-bold">
@@ -1328,47 +1418,53 @@ export default function Ledger() {
         </div>
 
         <div className="px-4 sm:px-8 pt-3 pb-3 border-b border-border/60">
-          <div className="ldg-recon-panel p-3 sm:p-4">
-            <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="w-10 h-10 flex items-center justify-center border border-border bg-secondary/35 text-foreground/70 shrink-0">
-                    <CheckSquare className="w-4.5 h-4.5" strokeWidth={1.6} />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-[9px] uppercase tracking-[0.22em] text-foreground/60 font-bold">Reconciliation Center</div>
-                    <div className="text-xs sm:text-sm font-semibold truncate">{totals.unreconciledCount} open entries · {fmtUSD(totals.unreconciledAmount)} requiring review</div>
-                    <div className="text-[10px] text-foreground/50 mt-0.5 hidden sm:block">Review the current page, clear matched bank activity, or reopen entries that need correction.</div>
+          <div className="ldg-recon-panel p-2.5">
+            <div className="relative grid grid-cols-1 xl:grid-cols-[minmax(220px,.95fr)_minmax(360px,1.05fr)_minmax(420px,1.1fr)] gap-2.5 xl:items-center">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="ldg-recon-ring shrink-0" style={{ '--recon-pct': `${Math.min(100, Math.max(0, totals.reconcilePct))}%` } as any}>
+                  <span>{totals.reconcilePct.toFixed(0)}%</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                    <div className="text-[8px] uppercase tracking-[0.2em] text-foreground/60 font-black">Reconciliation Center</div>
+                    <span className="inline-flex items-center gap-1 text-[7px] uppercase tracking-[0.12em] font-black text-positive border border-positive/25 bg-positive/5 px-1.5 py-0.5">
+                      <span className="ldg-live-dot" /> Live
+                    </span>
+                  </div>
+                  <div className="text-[16px] font-black leading-tight text-foreground">
+                    {totals.unreconciledCount} open · {fmtUSD(totals.unreconciledAmount)}
+                  </div>
+                  <div className="text-[9px] text-foreground/50 truncate">
+                    {selectedQueueLabel} queue · {lastLedgerSync ? `updated ${lastLedgerSync.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'waiting for activity'}
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono-tab">
-                <div className="border border-border bg-background/65 px-2 py-2">
-                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Cleared</div>
-                  <div className="text-sm font-bold text-positive">{totals.reconciledCount}</div>
-                </div>
-                <div className="border border-border bg-background/65 px-2 py-2">
-                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Open</div>
-                  <div className="text-sm font-bold text-warning">{totals.unreconciledCount}</div>
-                </div>
-                <div className="border border-border bg-background/65 px-2 py-2">
-                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Rate</div>
-                  <div className={totals.reconcilePct > 85 ? 'text-sm font-bold text-positive' : 'text-sm font-bold text-warning'}>{totals.reconcilePct.toFixed(0)}%</div>
-                </div>
-                <div className="border border-border bg-background/65 px-2 py-2">
-                  <div className="text-[8px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Cleared $</div>
-                  <div className="text-sm font-bold text-foreground">{fmtUSD(totals.reconciledAmount)}</div>
-                </div>
+
+              <div className="grid grid-cols-3 gap-1.5 font-mono-tab">
+                {[
+                  ['Cleared', totals.reconciledCount, 'text-positive'],
+                  ['Page Open', pageOpenCount, pageOpenCount ? 'text-warning' : 'text-positive'],
+                  ['Cleared $', fmtUSD(totals.reconciledAmount), 'text-foreground'],
+                ].map(([label, value, cls]) => (
+                  <div key={String(label)} className="ldg-recon-metric compact">
+                    <div className="k">{label}</div>
+                    <div className={`v ${cls}`}>{value}</div>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-2 sm:flex gap-2">
-                <button onClick={() => setReconcileMode(m => !m)} className={`h-10 px-3 border text-[10px] uppercase tracking-[0.14em] font-bold ${reconcileMode ? 'bg-foreground text-background border-foreground' : 'bg-background/70 text-foreground/75 border-border hover:text-foreground'}`}>
-                  {reconcileMode ? 'Exit Review' : 'Review Entries'}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <button onClick={() => setReconcileMode(m => !m)} className={`ldg-recon-action ${reconcileMode ? 'primary' : ''}`}>
+                  <CheckSquare className="w-3.5 h-3.5" /> {reconcileMode ? 'Exit' : 'Review'}
                 </button>
-                <button onClick={() => bulkReconcileVisible(true)} className="h-10 px-3 border border-border bg-background/70 text-foreground/75 text-[10px] uppercase tracking-[0.14em] font-bold hover:text-foreground hover:bg-secondary/40">
-                  Clear Page
+                <button onClick={() => bulkReconcileVisible(true)} className="ldg-recon-action positive">
+                  <CheckSquare className="w-3.5 h-3.5" /> Clear Page
                 </button>
-                <button onClick={() => bulkReconcileVisible(false)} className="h-10 px-3 border border-border bg-background/70 text-foreground/75 text-[10px] uppercase tracking-[0.14em] font-bold hover:text-foreground hover:bg-secondary/40 col-span-2 sm:col-span-1">
-                  Reopen Page
+                <button onClick={() => bulkReconcileVisible(false)} className="ldg-recon-action warning">
+                  <RotateCcw className="w-3.5 h-3.5" /> Reopen
+                </button>
+                <button onClick={() => nextReviewRow && setDetailRow(nextReviewRow)} disabled={!nextReviewRow} className="ldg-recon-action disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Eye className="w-3.5 h-3.5" /> Next
                 </button>
               </div>
             </div>
@@ -1379,7 +1475,7 @@ export default function Ledger() {
         <div className="min-w-0">
         {/* Mobile card view */}
         <div className="sm:hidden space-y-2.5">
-          {rows.length === 0 ? (
+          {visibleTotalCount === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No entries match.</div>
           ) : pagedRows.map(r => (
             <div key={r.rowId} role="button" tabIndex={0} onClick={() => setDetailRow(r)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setDetailRow(r); }} className={`ldg-panel relative w-full p-2 space-y-1.5 text-left cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-75' : ''}`}>
@@ -1426,15 +1522,15 @@ export default function Ledger() {
                 <button className="h-8 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold" onClick={() => setDetailRow(r)}>View</button>
                 <button className="h-8 border border-border bg-background text-[10px] uppercase tracking-[0.14em] font-bold" onClick={() => openEdit(r)}>Edit</button>
               </div>
-              {reconcileMode && (
+              <div onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
-                  onClick={e => { e.stopPropagation(); toggleReconcile(r); }}
+                  onClick={() => toggleReconcile(r)}
                   className={`w-full h-9 border text-[10px] uppercase tracking-[0.14em] font-bold ${r.reconciled ? 'border-warning/30 bg-warning/10 text-warning' : 'border-positive/30 bg-positive/10 text-positive'}`}
                 >
-                  {r.reconciled ? 'Mark Open' : 'Mark Reconciled'}
+                  {r.reconciled ? 'Reopen Entry' : 'Mark Reconciled'}
                 </button>
-              )}
+              </div>
             </div>
           ))}
         </div>
@@ -1465,17 +1561,17 @@ export default function Ledger() {
               <button onClick={() => setQueueFilter('all')} className="text-[9px] uppercase tracking-[0.14em] font-bold text-foreground/50 hover:text-foreground">Show all</button>
             </div>
           )}
-          <div className="min-w-[1180px] grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_54px] gap-2 px-4 py-2 border-b border-border bg-secondary/45 text-[9px] uppercase tracking-[0.14em] text-foreground/55 font-bold items-center">
+          <div className="min-w-[1240px] grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border bg-secondary/45 text-[9px] uppercase tracking-[0.14em] text-foreground/55 font-bold items-center">
             <div>Date</div><div>Type</div><div>Reference</div><div>Counterparty</div><div>Project</div><div>Method</div><div>Status</div><div className="text-right">Debit</div><div className="text-right">Credit</div><div className="text-right">Balance</div><div className="text-right">Action</div>
           </div>
-          {rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
+          {visibleTotalCount === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             pagedRows.map((r, index) => {
               const absoluteIndex = (safePage - 1) * pageSize + index;
-              const runningBalance = rows.slice(absoluteIndex).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+              const runningBalance = (serverPagedEnabled ? pagedRows.slice(index) : visibleRows.slice(absoluteIndex)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
               const debit = r.amount < 0 ? Math.abs(r.amount) : 0;
               const credit = r.amount >= 0 ? r.amount : 0;
               return (
-                <div key={r.rowId} className={`min-w-[1180px] relative grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_54px] gap-2 px-4 py-2 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-70' : ''}`} onClick={() => setDetailRow(r)}>
+                <div key={r.rowId} className={`min-w-[1240px] relative grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-70' : ''}`} onClick={() => setDetailRow(r)}>
                 <div className="text-foreground/62 text-[11px]">{r.date ? fmtDate(r.date) : '—'}</div>
                   <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span></div>
                   <div className="truncate text-foreground/55 text-[11px]">{r.ref}</div>
@@ -1491,42 +1587,37 @@ export default function Ledger() {
                   <div className="text-right font-bold text-[12px] text-destructive">{debit ? fmtUSD(debit) : '—'}</div>
                   <div className="text-right font-bold text-[12px] text-positive">{credit ? fmtUSD(credit) : '—'}</div>
                   <div className={`text-right font-bold text-[12px] ${runningBalance >= 0 ? 'text-foreground' : 'text-destructive'}`}>{fmtUSD(runningBalance)}</div>
-                  <div className="flex justify-end items-center gap-2" onClick={e => e.stopPropagation()}>
-                    {reconcileMode ? (
-                      <button onClick={() => toggleReconcile(r)} className="text-muted-foreground hover:text-positive transition-colors">
-                        {r.reconciled ? <CheckSquare className="w-3.5 h-3.5 text-positive" /> : <Square className="w-3.5 h-3.5" />}
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={() => setDetailRow(r)} className="text-foreground/45 group-hover:text-foreground transition-colors" title="View details">
-                          <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
-                        </button>
-                        <button onClick={() => openEdit(r)} className="text-foreground/45 group-hover:text-foreground transition-colors" title="Edit with signature">
-                          <PencilLine className="w-3.5 h-3.5" strokeWidth={1.5} />
-                        </button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild><button className="text-foreground/0 group-hover:text-foreground/45 hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
-                          <AlertDialogContent className="rounded-none">
-                            <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
-                              <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={async () => { try { if (r._kind==='check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch(err:any){toast.error(err.message);} }}>Confirm</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </>
-                    )}
+                  <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => toggleReconcile(r)} className={`ldg-recon-row-action ${r.reconciled ? 'text-warning' : 'text-positive'}`} title={r.reconciled ? 'Reopen entry' : 'Mark reconciled'}>
+                      {r.reconciled ? <RotateCcw className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => setDetailRow(r)} className="ldg-recon-row-action" title="View details">
+                      <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    </button>
+                    <button onClick={() => openEdit(r)} className="ldg-recon-row-action" title="Edit with signature">
+                      <PencilLine className="w-3.5 h-3.5" strokeWidth={1.5} />
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild><button className="ldg-recon-row-action hover:text-destructive" title="Delete"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /></button></AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-none">
+                        <AlertDialogHeader><AlertDialogTitle>Delete this {r.type.toLowerCase()}?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="rounded-none bg-destructive text-destructive-foreground" onClick={async () => { try { if (r._kind==='check') await deleteCheck.mutateAsync(r.id); else await deleteTxn.mutateAsync(r.id); toast.success('Deleted'); } catch(err:any){toast.error(err.message);} }}>Confirm</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               );
             })}
         </div>
 
-        {rows.length > 0 && (
+        {visibleTotalCount > 0 && (
           <div className="ldg-panel mt-3 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center justify-between sm:justify-start gap-3">
               <div className="text-[10px] font-mono-tab text-foreground/60">
-                Showing <span className="font-bold text-foreground">{pageStart}-{pageEnd}</span> of <span className="font-bold text-foreground">{rows.length}</span>
+                Showing <span className="font-bold text-foreground">{pageStart}-{pageEnd}</span> of <span className="font-bold text-foreground">{visibleTotalCount}</span>
               </div>
               <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
                 <SelectTrigger className="rounded-none w-28 h-8 text-[10px]"><SelectValue /></SelectTrigger>

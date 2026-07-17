@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
@@ -14,11 +13,10 @@ import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
   Layers, TrendingUp, Receipt, Calendar, History, PackagePlus,
   ClipboardCheck, FileSpreadsheet, CreditCard, MessageSquare, ShieldCheck,
-  RefreshCw, Wallet,
+  RefreshCw, Wallet, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { generateProjectReconciliationReport, savePDF } from '@/lib/reports';
 import { invoiceTotal } from '@/hooks/useInvoices';
 import { PDV2_CSS } from '@/components/project-detail/cardStyles';
@@ -28,9 +26,12 @@ import { MiniTable } from '@/components/project-detail/MiniTable';
 import { ActivityFeedCard } from '@/components/project-detail/ActivityFeedCard';
 import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
 import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
+import { KpiGrid, PanelHeader, EmptyState, GuidedEntryIntro, WorkflowDialog } from '@/components/project-detail/formPrimitives';
+import { FlushTabs } from '@/components/project-detail/FlushTabs';
+import { ProjectTransactionLedger } from '@/components/project-detail/ProjectTransactionLedger';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
-type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'addons' | 'payments' | 'reconciliation' | 'notes' | 'audit';
+type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'addons' | 'payments' | 'expenses' | 'reconciliation' | 'notes' | 'audit';
 
 type ScopeItem = {
   id: string;
@@ -122,25 +123,27 @@ type DrawSchedule = {
   created_at: string;
 };
 
+type SavedDraw = DrawSchedule & {
+  project_id?: string;
+};
+
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-const SUB_TABS: { key: SubTab; label: string; short: string; desc: string; icon: any; group: string }[] = [
-  { key: 'overview',       label: 'Reconciliation Summary', short: 'Summary', desc: 'Contract, billing, balance', icon: ShieldCheck, group: 'Control' },
-  { key: 'sov',            label: 'Scope / SOV', short: 'SOV', desc: 'Line-item scope values', icon: FileSpreadsheet, group: 'Scope' },
-  { key: 'milestones',     label: 'Milestones', short: 'Milestones', desc: 'Schedule and progress', icon: ClipboardCheck, group: 'Scope' },
-  { key: 'draws',          label: 'Draws & Billing', short: 'Draws', desc: 'Funding and billing dates', icon: Calendar, group: 'Money' },
-  { key: 'cos',            label: 'Change Orders', short: 'COs', desc: 'Additions, credits, approvals', icon: TrendingUp, group: 'Money' },
-  { key: 'addons',         label: 'Add Ons', short: 'Add Ons', desc: 'Extra work, unit pricing, credits', icon: PackagePlus, group: 'Money' },
-  { key: 'payments',       label: 'Payments', short: 'Payments', desc: 'Client receipts and collections', icon: CreditCard, group: 'Money' },
-  { key: 'reconciliation', label: 'Reconciliation', short: 'Reconcile', desc: 'Per-line over/under status', icon: Layers, group: 'Control' },
-  { key: 'notes',          label: 'Notes', short: 'Notes', desc: 'Client and internal notes', icon: MessageSquare, group: 'Records' },
-  { key: 'audit',          label: 'Audit', short: 'Audit', desc: 'System activity log', icon: History, group: 'Records' },
+const SUB_TABS: { key: SubTab; label: string; short: string; icon: any }[] = [
+  { key: 'overview',       label: 'Reconciliation Summary', short: 'Summary', icon: ShieldCheck },
+  { key: 'sov',            label: 'Scope / SOV', short: 'SOV', icon: FileSpreadsheet },
+  { key: 'milestones',     label: 'Milestones', short: 'Milestones', icon: ClipboardCheck },
+  { key: 'draws',          label: 'Draws & Billing', short: 'Draws', icon: Calendar },
+  { key: 'cos',            label: 'Change Orders', short: 'COs', icon: TrendingUp },
+  { key: 'addons',         label: 'Add Ons', short: 'Add Ons', icon: PackagePlus },
+  { key: 'payments',       label: 'Payments', short: 'Payments', icon: CreditCard },
+  { key: 'expenses',       label: 'Project Expenses', short: 'Expenses', icon: Receipt },
+  { key: 'reconciliation', label: 'Reconciliation', short: 'Reconcile', icon: Layers },
+  { key: 'notes',          label: 'Notes', short: 'Notes', icon: MessageSquare },
+  { key: 'audit',          label: 'Audit', short: 'Audit', icon: History },
 ];
 
 const PB_CSS = `
 .pb-shell{background:linear-gradient(180deg,hsl(var(--secondary)/0.14),transparent 150px);}
-.pb-nav-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045),0 1px 0 rgba(255,255,255,0.45) inset;transition:transform .16s,border-color .16s,box-shadow .16s,background .16s;}
-.pb-nav-card:hover{transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);box-shadow:0 8px 22px rgba(10,10,10,0.08);}
-.pb-nav-active{border-color:rgba(157,126,63,0.52);background:linear-gradient(180deg,rgba(157,126,63,0.105),hsl(var(--background)));}
 .pb-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
 .pb-entry-panel{padding:10px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--secondary)/0.14);}
 .pb-entry-grid{display:grid;grid-template-columns:1fr;gap:8px;}
@@ -152,11 +155,9 @@ const PB_CSS = `
 .pb-workflow-head{padding:15px 16px 12px;border-bottom:1px solid hsl(var(--border));background:linear-gradient(180deg,hsl(var(--secondary)/0.34),hsl(var(--background)));position:relative;}
 .pb-workflow-body{max-height:calc(100vh - 138px);overflow:auto;padding:10px;background:linear-gradient(180deg,hsl(var(--secondary)/0.12),transparent 130px);}
 .pb-workflow-body .micro-label{font-size:7.5px;letter-spacing:.18em;}
-.pb-nav-select{width:100%;height:44px;padding:0 34px 0 13px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--foreground));appearance:none;}
-.pb-nav-select:focus{outline:none;border-color:hsl(var(--foreground)/0.35);}
 @media(min-width:640px){.pb-entry-grid{grid-template-columns:repeat(4,minmax(0,1fr));}.pb-span-2{grid-column:span 2 / span 2}.pb-span-4{grid-column:span 4 / span 4}.pb-workflow-body{padding:12px;}.pb-entry-panel{padding:12px;}}
-@media(max-width:639px){.pb-workflow-head{padding:13px 12px 10px}.pb-workflow-body{max-height:calc(100vh - 128px)}.pb-entry-panel{padding:9px}.pb-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 8px}.pb-span-2,.pb-span-4{grid-column:span 2 / span 2}.pb-entry-grid input,.pb-entry-grid select{height:34px;font-size:12px}.pb-entry-grid textarea{font-size:12px}.pb-advanced summary{padding:7px 9px}.pb-workflow-body button{min-height:34px}.pb-nav-select{height:40px;font-size:10px}}
-.dark .pb-nav-card,.dark .pb-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
+@media(max-width:639px){.pb-workflow-head{padding:13px 12px 10px}.pb-workflow-body{max-height:calc(100vh - 128px)}.pb-entry-panel{padding:9px}.pb-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 8px}.pb-span-2,.pb-span-4{grid-column:span 2 / span 2}.pb-entry-grid input,.pb-entry-grid select{height:34px;font-size:12px}.pb-entry-grid textarea{font-size:12px}.pb-advanced summary{padding:7px 9px}.pb-workflow-body button{min-height:34px}}
+.dark .pb-panel{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 `;
 
 const SOV_CATEGORIES = [
@@ -215,16 +216,62 @@ const blankDraw  = () => ({ milestone_name: '', draw_amount: '', scheduled_date:
 const blankAddOn = () => ({ line_item: '', kind: 'addition', unit_cost: '', unit_quantity: '', unit_label: '', amount: '', status: 'pending', approval_method: '', requested_date: '', approved_date: '', client_visible: true, client_visible_notes: '', internal_notes: '', custom_fields: [] as { key: string; value: string }[] });
 
 /* ── Shared mini-components ────────────────────────────────────────────────── */
-function KpiGrid({ items }: { items: { label: string; value: string; sub?: string; accent?: boolean }[] }) {
+/* ── SOV ↔ Contract reconciliation banner ─────────────────────────────────────
+   The Schedule of Values is a BREAKDOWN of the signed contract, not a
+   replacement for it — SOV coverage should climb toward 100% as line items
+   are added, while the contract value itself stays fixed. This surfaces
+   that relationship explicitly instead of letting an incomplete SOV read
+   as "the contract shrank." ── */
+function SOVReconciliationBanner({ fin }: { fin: any }) {
+  const { originalContractValue, sovAllocated, sovVariance, sovCoveragePct, sovStatus } = fin;
+
+  if (sovStatus === 'no-contract') {
+    return (
+      <div className="border border-border bg-secondary/30 px-4 py-3 flex items-start gap-3">
+        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          <span className="font-semibold text-foreground">No contract value set on this project.</span>{' '}
+          Set a Budget or Original Contract Value on the project record so the Schedule of Values can be validated against it.
+        </p>
+      </div>
+    );
+  }
+
+  const meta = {
+    reconciled: {
+      border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', text: 'text-emerald-600 dark:text-emerald-400', bar: '#10b981',
+      headline: 'Schedule of Values is fully reconciled with the contract.',
+      sub: `${fmtUSD(sovAllocated)} allocated across scope lines — matches the ${fmtUSD(originalContractValue)} contract.`,
+    },
+    under: {
+      border: 'border-amber-500/30', bg: 'bg-amber-500/5', text: 'text-amber-600 dark:text-amber-400', bar: '#f59e0b',
+      headline: `${fmtUSD(sovVariance)} of the contract is not yet broken into scope lines.`,
+      sub: `Schedule of Values covers ${fmtUSD(sovAllocated)} of the ${fmtUSD(originalContractValue)} contract (${sovCoveragePct.toFixed(1)}%). Add scope items to fully account for the remaining value.`,
+    },
+    over: {
+      border: 'border-destructive/30', bg: 'bg-destructive/5', text: 'text-destructive', bar: 'hsl(var(--destructive))',
+      headline: `Schedule of Values exceeds the contract by ${fmtUSD(Math.abs(sovVariance))}.`,
+      sub: `Scope lines total ${fmtUSD(sovAllocated)} against a ${fmtUSD(originalContractValue)} contract. Review line items for duplicates, or log a change order to capture the difference.`,
+    },
+  }[sovStatus];
+
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-${items.length <= 4 ? items.length : 4} gap-px bg-border`}>
-      {items.map(item => (
-        <div key={item.label} className="bg-background px-4 sm:px-5 py-3">
-          <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-muted-foreground mb-1 leading-tight">{item.label}</div>
-          <div className={`text-base font-bold font-mono-tab leading-tight ${item.accent ? 'text-accent' : 'text-foreground'}`}>{item.value}</div>
-          {item.sub && <div className="text-[10px] text-muted-foreground mt-0.5">{item.sub}</div>}
+    <div className={`border ${meta.border} ${meta.bg} px-4 py-3`}>
+      <div className="flex items-start gap-3">
+        {sovStatus === 'reconciled'
+          ? <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${meta.text}`} />
+          : <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${meta.text}`} />}
+        <div className="min-w-0 flex-1">
+          <div className={`text-xs font-semibold ${meta.text}`}>{meta.headline}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{meta.sub}</p>
         </div>
-      ))}
+        <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 w-28">
+          <span className={`text-sm font-bold font-mono-tab ${meta.text}`}>{sovCoveragePct.toFixed(0)}%</span>
+          <div className="w-full h-1.5 bg-border overflow-hidden rounded-full">
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, sovCoveragePct)}%`, backgroundColor: meta.bar }} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -238,78 +285,10 @@ function Bar({ value, max, hex }: { value: number; max: number; hex?: string }) 
   );
 }
 
-function PanelHeader({ label, action }: { label: string; action?: React.ReactNode }) {
-  return (
-    <div className="px-4 py-2.5 border-b border-border bg-secondary/40 flex items-center justify-between">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">{label}</div>
-      {action}
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return <div className="px-4 py-12 text-center text-sm text-muted-foreground">{text}</div>;
-}
-
-function GuidedEntryIntro({ title, intent, steps }: { title: string; intent: string; steps: string[] }) {
-  return (
-    <div className="border border-border bg-background px-3 py-2.5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.16em] text-[#9D7E3F] font-bold">{title}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug max-w-2xl">{intent}</p>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 sm:min-w-[280px]">
-          {steps.map((step, index) => (
-            <div key={step} className="border border-border bg-secondary/30 px-2 py-1.5">
-              <div className="text-[8px] uppercase tracking-[0.14em] text-muted-foreground font-bold">Step {index + 1}</div>
-              <div className="text-[10px] font-semibold text-foreground leading-snug mt-0.5">{step}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WorkflowDialog({
-  open,
-  onOpenChange,
-  kicker,
-  title,
-  description,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  kicker: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="pb-workflow-dialog rounded-none">
-        <DialogHeader className="pb-workflow-head text-left">
-          <div className="text-[8px] uppercase tracking-[0.28em] font-black text-[#9D7E3F]">{kicker}</div>
-          <DialogTitle className="text-lg sm:text-xl font-semibold tracking-tight text-foreground">{title}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-            {description}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="pb-workflow-body">
-          {children}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function ProjectBreakdown({ project, enriched, projectDocs = [] }: { project: any; enriched: any; projectDocs?: any[] }) {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { entity } = useEntity();
   const entityId  = entity?.id ?? 'houston-enterprise';
@@ -331,6 +310,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const [notes,       setNotes]       = useState<string>(project?.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
   const [showNotes,   setShowNotes]   = useState(false);
+
+  /* ── Payments / Expenses — lets Quick Actions open the log dialog immediately
+     after switching tabs, instead of navigating away to a separate page ── */
+  const [autoOpenLog, setAutoOpenLog] = useState<'income' | 'expense' | null>(null);
 
   /* ── SOV form ────────────────────────────────────────────────────────────── */
   const [sovForm,    setSovForm]    = useState(blankSOV());
@@ -400,9 +383,43 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     return () => { supabase.removeChannel(channel); };
   }, [projectId]);
 
-  /* ── calculation engine ──────────────────────────────────────────────────── */
+  /* ── calculation engine ───────────────────────────────────────────────────
+     The ORIGINAL CONTRACT VALUE is the signed contract amount stored on the
+     project record — it is never derived from the Schedule of Values. SOV
+     line items are a breakdown OF the contract, not a substitute for it: as
+     scope lines get added over time the SOV total climbs toward the
+     contract value, but the contract value itself must never move just
+     because the SOV isn't fully built out yet. (Falls back to `budget`
+     exactly like the get_project_financial_summary RPC that feeds the
+     Overview tab, so the two views always agree.)                        ── */
   const fin = useMemo(() => {
-    const originalContractValue = scopeItems.reduce((s, i) => s + Number(i.contract_amount), 0);
+    const originalContractValue = Number(project?.original_contract_value) || Number(project?.budget) || 0;
+
+    /* Schedule of Values coverage — how much of the contract has actually
+       been broken into scope lines so far. A coverage metric, distinct
+       from the contract value itself, with an intelligent status + a
+       floating-point-safe tolerance so near-exact matches read as
+       "reconciled" rather than off by a fraction of a cent. */
+    const sovAllocated   = scopeItems.reduce((s, i) => s + Number(i.contract_amount), 0);
+    const sovVariance     = originalContractValue - sovAllocated; // + = under-allocated, − = over-allocated
+    const sovCoveragePct  = originalContractValue > 0 ? Math.min(100, (sovAllocated / originalContractValue) * 100) : 0;
+    const sovStatus: 'no-contract' | 'reconciled' | 'under' | 'over' =
+      originalContractValue <= 0 ? 'no-contract'
+      : Math.abs(sovVariance) < 1 ? 'reconciled'
+      : sovVariance > 0 ? 'under' : 'over';
+
+    /* Column-sum totals for the SOV / Reconciliation tables — each is the
+       literal sum of the scope-item rows displayed above it, so a table
+       footer can never show a number its own rows don't add up to. */
+    const sovRevisedTotal = scopeItems.reduce((s, i) => s + Number(i.contract_amount) + Number(i.change_order_amount) - Number(i.approved_credit_amount || 0), 0);
+    const sovBilledTotal  = scopeItems.reduce((s, i) => s + Number(i.total_billed || 0), 0);
+    const sovRemainingTotal = sovRevisedTotal - sovBilledTotal;
+    const sovEarnedTotal = scopeItems.reduce((s, i) => {
+      const r = Number(i.contract_amount) + Number(i.change_order_amount) - Number(i.approved_credit_amount || 0);
+      return s + (r * Number(i.percent_complete) / 100);
+    }, 0);
+    const sovPctDone = sovRevisedTotal > 0 ? Math.min(100, sovEarnedTotal / sovRevisedTotal * 100) : 0;
+
     const approvd    = changeOrders.filter(co => co.status === 'approved');
     const additions  = approvd.filter(co => co.type === 'addition' || co.type === 'allowance').reduce((s, co) => s + Number(co.amount), 0);
     const credits    = approvd.filter(co => co.type === 'deduction' || co.type === 'credit').reduce((s, co) => s + Number(co.amount), 0);
@@ -412,11 +429,14 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     const addOnsCredits    = approvedAddOns.filter(a => a.kind === 'credit').reduce((s, a) => s + Number(a.amount), 0);
     const addOnsNet        = addOnsAdditions - addOnsCredits;
     const pendingAddOns    = addOns.filter(a => a.status === 'pending').reduce((s, a) => s + Number(a.amount), 0);
+    /* Revised Project Total is built from the TRUE contract value, so it is
+       accurate the moment a project is created — before a single scope
+       line exists — and never appears to shrink as SOV entry catches up. */
     const revised    = originalContractValue + net + addOnsNet;
-    const earned     = scopeItems.reduce((s, i) => {
-      const r = Number(i.contract_amount) + Number(i.change_order_amount) - Number(i.approved_credit_amount || 0);
-      return s + (r * Number(i.percent_complete) / 100);
-    }, 0);
+    const earned     = sovEarnedTotal;
+    /* % complete is earned work measured against the FULL contract, so an
+       incomplete SOV correctly shows a lower % rather than a misleading
+       100% for the sliver of scope that happens to be entered so far. */
     const pctDone    = revised > 0 ? Math.min(100, earned / revised * 100) : 0;
     const billed     = draws.filter(d => d.status === 'funded').reduce((s, d) => s + Number(d.draw_amount), 0);
     const paid       = (enriched?.incomeList ?? []).reduce((s: number, t: any) => s + Number(t.amount), 0);
@@ -432,15 +452,18 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
       collectPct:    revised > 0 ? Math.min(100, paid / revised * 100) : 0,
       billedPct:     revised > 0 ? Math.min(100, billed / revised * 100) : 0,
       pendingCOs:    pending,
+      /* Schedule of Values reconciliation intelligence */
+      sovAllocated, sovVariance, sovCoveragePct, sovStatus,
+      sovRevisedTotal, sovBilledTotal, sovRemainingTotal, sovPctDone,
     };
-  }, [scopeItems, changeOrders, addOns, draws, enriched?.incomeList]);
+  }, [project?.original_contract_value, project?.budget, scopeItems, changeOrders, addOns, draws, enriched?.incomeList]);
 
   /* ── Unified activity feed — shared by the Audit sub-tab and the Reconciliation ── */
   /* ── Summary sub-tab's Project Activity card (single source, no duplication).   ── */
   type AuditEntry = {
     id: string;
     created_at: string;
-    kind: 'sov' | 'milestone' | 'co' | 'addon' | 'draw';
+    kind: 'sov' | 'milestone' | 'co' | 'addon' | 'draw' | 'payment' | 'expense';
     title: string;
     subtitle: string | null;
     status: string;
@@ -523,7 +546,33 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
         badgeBg: 'bg-emerald-500/10 text-emerald-400',
       };
     }),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [scopeItems, milestones, changeOrders, addOns, draws]);
+    ...(enriched?.incomeList ?? []).map((t: any) => ({
+      id: t.id,
+      created_at: t.transaction_date ?? t.created_at,
+      kind: 'payment' as const,
+      title: t.source_name || 'Client payment',
+      subtitle: t.category ?? null,
+      status: (t.reconciliation_status ?? (t.reconciled ? 'reconciled' : 'unreconciled')).replace(/_/g, ' '),
+      statusColor: t.reconciled || t.reconciliation_status === 'reconciled' ? 'text-emerald-500' : t.reconciliation_status === 'pending' ? 'text-amber-500' : 'text-muted-foreground',
+      value: fmtUSD(t.amount),
+      icon: <Wallet className="w-3.5 h-3.5" />,
+      badge: 'Payment',
+      badgeBg: 'bg-emerald-500/10 text-emerald-400',
+    })),
+    ...(enriched?.expenseList ?? []).map((t: any) => ({
+      id: t.id,
+      created_at: t.transaction_date ?? t.created_at,
+      kind: 'expense' as const,
+      title: t.source_name || 'Project expense',
+      subtitle: t.category ?? null,
+      status: (t.reconciliation_status ?? (t.reconciled ? 'reconciled' : 'unreconciled')).replace(/_/g, ' '),
+      statusColor: t.reconciled || t.reconciliation_status === 'reconciled' ? 'text-emerald-500' : t.reconciliation_status === 'pending' ? 'text-amber-500' : 'text-muted-foreground',
+      value: fmtUSD(t.amount),
+      icon: <CreditCard className="w-3.5 h-3.5" />,
+      badge: 'Expense',
+      badgeBg: 'bg-destructive/10 text-destructive',
+    })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [scopeItems, milestones, changeOrders, addOns, draws, enriched?.incomeList, enriched?.expenseList]);
 
   /* ── Monthly billed-vs-paid series (last 12 months) for the Billing vs Payments chart. ── */
   const billingVsPaymentsSeries = useMemo(() => {
@@ -573,6 +622,16 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     });
     return map;
   }, [enriched?.incomeList]);
+
+  /* Per-line "Collected" is only payments explicitly tied to a scope item —
+     narrower than fin.paid (every payment on the project, linked or not) —
+     so the Reconciliation table's own footer must sum only what its own
+     "Collected" column shows, not the wider project-level total. */
+  const sovCollectedTotal = useMemo(
+    () => Object.values(incomeByScope).reduce((s, v) => s + v, 0),
+    [incomeByScope]
+  );
+  const sovBalanceTotal = fin.sovRevisedTotal - sovCollectedTotal;
 
   /* ── CRUD helpers ────────────────────────────────────────────────────────── */
   const sov  = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setSovForm(p => ({ ...p, [k]: e.target.value }));
@@ -698,19 +757,106 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   /* Draw */
   const openAddDraw = () => { setDrawForm(blankDraw()); setEditDrawId(null); setShowDraw(true); };
   const openEditDraw = (d: DrawSchedule) => { setDrawForm({ milestone_name: d.milestone_name, draw_amount: String(d.draw_amount), scheduled_date: d.scheduled_date ?? '', status: d.status, notes: d.notes ?? '', invoice_number: d.invoice_number ?? '', billing_period_start: d.billing_period_start ?? '', billing_period_end: d.billing_period_end ?? '' }); setEditDrawId(d.id); setShowDraw(true); };
+  const syncFundedDrawIncome = async (draw: SavedDraw) => {
+    if (!user?.id || !projectId) throw new Error('Sign in and open an active project before syncing funded draw income');
+
+    const externalReference = `draw_schedule:${draw.id}`;
+    const { data: existing, error: lookupError } = await (supabase as any)
+      .from('transactions')
+      .select('id')
+      .eq('external_reference', externalReference)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+
+    if (draw.status !== 'funded') {
+      if (existing?.id) {
+        const { error } = await (supabase as any)
+          .from('transactions')
+          .update({
+            status: 'voided',
+            payment_status: 'voided',
+            notes: `Draw request changed to ${draw.status}; linked income voided to prevent revenue overstatement.`,
+            updated_by: user.id,
+          })
+          .eq('id', existing.id);
+        if (error) throw error;
+      }
+      return;
+    }
+
+    const amount = Number(draw.draw_amount || 0);
+    if (amount <= 0) throw new Error('Funded draw amount must be greater than zero to create income');
+
+    const transactionDate = draw.scheduled_date || draw.billing_period_end || new Date().toISOString().slice(0, 10);
+    const payload = {
+      user_id: user.id,
+      entity_id: entityId,
+      type: 'income',
+      amount,
+      amount_before_tax: amount,
+      tax_amount: 0,
+      total_amount: amount,
+      net_amount: amount,
+      transaction_date: transactionDate,
+      posting_date: transactionDate,
+      source_name: project?.client_name || project?.customer_name || project?.name || 'Project draw funding',
+      project_id: projectId,
+      category: 'Project Draw Funding',
+      description: `Funded draw request: ${draw.milestone_name}`,
+      notes: draw.notes || `Auto-created from funded draw request${draw.invoice_number ? ` ${draw.invoice_number}` : ''}.`,
+      payment_method: 'financing_draw',
+      status: 'posted',
+      approval_status: 'approved',
+      payment_status: 'paid',
+      reconciliation_status: 'unreconciled',
+      external_reference: externalReference,
+      external_invoice_number: draw.invoice_number || null,
+      created_by: user.id,
+      updated_by: user.id,
+    };
+
+    const result = existing?.id
+      ? await (supabase as any).from('transactions').update(payload).eq('id', existing.id)
+      : await (supabase as any).from('transactions').insert(payload);
+    if (result.error) throw result.error;
+  };
   const saveDraw = async () => {
     if (!drawForm.milestone_name.trim()) return toast.error('Draw name is required');
-    if (!projectId) return toast.error('Open an active project before saving');
+    if (!user?.id || !projectId) return toast.error('Sign in and open an active project before saving');
     setSavingDraw(true);
     try {
       const p = { project_id: projectId, milestone_name: drawForm.milestone_name.trim(), draw_amount: parseFloat(drawForm.draw_amount) || 0, scheduled_date: drawForm.scheduled_date || null, status: drawForm.status, notes: drawForm.notes || null, invoice_number: drawForm.invoice_number || null, billing_period_start: drawForm.billing_period_start || null, billing_period_end: drawForm.billing_period_end || null };
-      const { error } = editDrawId ? await (supabase as any).from('draw_schedules').update(p).eq('id', editDrawId) : await (supabase as any).from('draw_schedules').insert(p);
-      if (error) dbError('Draw request save failed', error); else { toast.success(editDrawId ? 'Draw request updated' : 'Draw request added'); setShowDraw(false); await load(); }
+      const { data, error } = editDrawId
+        ? await (supabase as any).from('draw_schedules').update(p).eq('id', editDrawId).select('*').single()
+        : await (supabase as any).from('draw_schedules').insert(p).select('*').single();
+      if (error) dbError('Draw request save failed', error);
+      else {
+        await syncFundedDrawIncome(data as SavedDraw);
+        toast.success(drawForm.status === 'funded' ? 'Draw saved and income ledger updated' : editDrawId ? 'Draw request updated' : 'Draw request added');
+        setShowDraw(false);
+        await load();
+      }
     } finally {
       setSavingDraw(false);
     }
   };
-  const deleteDraw = async (id: string) => { if (!confirm('Delete this draw?')) return; await (supabase as any).from('draw_schedules').delete().eq('id', id); toast.success('Deleted'); load(); };
+  const deleteDraw = async (id: string) => {
+    if (!confirm('Delete this draw?')) return;
+    const { error: txnError } = await (supabase as any)
+      .from('transactions')
+      .update({
+        status: 'voided',
+        payment_status: 'voided',
+        notes: 'Linked draw request was deleted; income voided to prevent revenue overstatement.',
+        updated_by: user?.id ?? null,
+      })
+      .eq('external_reference', `draw_schedule:${id}`);
+    if (txnError) return dbError('Linked income void failed', txnError);
+    const { error } = await (supabase as any).from('draw_schedules').delete().eq('id', id);
+    if (error) return dbError('Draw delete failed', error);
+    toast.success('Deleted and linked income voided');
+    load();
+  };
 
   /* Notes */
   const saveNotes = async () => {
@@ -730,21 +876,17 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const TA = 'w-full rounded-none border border-border bg-background text-foreground text-sm px-3 py-2 resize-none focus:outline-none focus:border-foreground/40 placeholder:text-muted-foreground';
   const saveBtn = 'h-9 px-5 rounded-none bg-foreground text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-40';
   const cancelBtn = 'h-9 px-4 rounded-none border border-border text-xs text-muted-foreground hover:text-foreground transition-colors';
-  const outlineBtn = 'h-9 px-4 rounded-none border border-border bg-background text-xs font-bold hover:bg-secondary/50 transition-colors';
   const iconBtn   = 'p-1.5 text-muted-foreground hover:text-foreground transition-colors';
   const delBtn    = 'p-1.5 text-muted-foreground hover:text-destructive transition-colors';
 
   if (!project) return null;
 
-  const activeSubTab = SUB_TABS.find(t => t.key === subTab) ?? SUB_TABS[0];
-  const ActiveSubIcon = activeSubTab.icon;
   const contextualAction = (() => {
     if (subTab === 'sov') return { label: 'Add Scope Item', onClick: openAddSOV };
     if (subTab === 'milestones') return { label: 'Add Milestone', onClick: openAddMS };
     if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
     if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
     if (subTab === 'addons') return { label: 'Add Add-On', onClick: openAddAddOn };
-    if (subTab === 'payments') return { label: 'Log Payment', onClick: () => navigate(`/concierge?start=income&project=${projectId}`) };
     if (subTab === 'notes') return { label: 'Edit Notes', onClick: () => setShowNotes(true), disabled: savingNotes };
     return null;
   })();
@@ -753,71 +895,34 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     <div className="pb-shell">
       <style>{PB_CSS}</style>
       <style>{PDV2_CSS}</style>
+
       {/* ── Sub-tab navigation ────────────────────────────────────────────── */}
-      <div className="sm:hidden px-4 pt-4 pb-2">
-        <div className="relative">
-          <select
-            value={subTab}
-            onChange={e => setSubTab(e.target.value as SubTab)}
-            className="pb-nav-select"
-          >
-            {SUB_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-        </div>
+      <div className="px-4 sm:px-8">
+        <FlushTabs
+          items={SUB_TABS.map(t => ({ key: t.key, label: t.short, icon: t.icon }))}
+          activeKey={subTab}
+          onChange={key => setSubTab(key as SubTab)}
+          size="sm"
+          layoutId="pb-inner-tab-line"
+        />
       </div>
 
-      <div className="px-4 sm:px-8 py-3 border-b border-border bg-secondary/20 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[9px] uppercase tracking-[0.24em] text-[#9D7E3F] font-bold">Houston Enterprise Reconciliation</div>
-          <div className="flex items-start gap-2.5 mt-1 max-w-3xl">
-            <span className="hidden sm:flex w-7 h-7 border border-border bg-background items-center justify-center shrink-0">
-              <ActiveSubIcon className="w-3.5 h-3.5" strokeWidth={1.7} style={{ color: '#9D7E3F' }} />
-            </span>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-foreground">{activeSubTab.label}</div>
-              <div className="text-[10px] text-muted-foreground leading-snug">{activeSubTab.desc}</div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {contextualAction && (
-            <button
-              onClick={contextualAction.onClick}
-              disabled={contextualAction.disabled}
-              className="h-9 px-3 border border-foreground bg-foreground text-background hover:opacity-90 text-[9px] uppercase tracking-[0.14em] font-bold transition-opacity disabled:opacity-45"
-            >
-              <Plus className="inline w-3 h-3 mr-1" /> {contextualAction.label}
-            </button>
-          )}
+      <div className="px-4 sm:px-8 py-2.5 border-b border-border bg-secondary/20 flex items-center justify-end gap-2">
+        {contextualAction && (
           <button
-            onClick={exportReconciliationPDF}
-            className="h-9 px-3 border border-border bg-background hover:bg-secondary/60 text-[9px] uppercase tracking-[0.14em] font-bold text-foreground transition-colors"
+            onClick={contextualAction.onClick}
+            disabled={contextualAction.disabled}
+            className="h-9 px-3 border border-foreground bg-foreground text-background hover:opacity-90 text-[9px] uppercase tracking-[0.14em] font-bold transition-opacity disabled:opacity-45"
           >
-            Export PDF
+            <Plus className="inline w-3 h-3 mr-1" /> {contextualAction.label}
           </button>
-        </div>
-      </div>
-
-      <div className="hidden sm:block px-4 sm:px-8 py-2.5 border-b border-border">
-        <div className="flex overflow-x-auto gap-1.5 pb-0.5">
-          {SUB_TABS.map(t => {
-            const Icon = t.icon;
-            const active = subTab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setSubTab(t.key)}
-                className={`h-9 px-3 border text-[9px] uppercase tracking-[0.14em] font-bold flex items-center gap-2 whitespace-nowrap transition-all ${
-                  active ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary/45'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" strokeWidth={1.7} />
-                {t.short}
-              </button>
-            );
-          })}
-        </div>
+        )}
+        <button
+          onClick={exportReconciliationPDF}
+          className="h-9 px-3 border border-border bg-background hover:bg-secondary/60 text-[9px] uppercase tracking-[0.14em] font-bold text-foreground transition-colors"
+        >
+          Export PDF
+        </button>
       </div>
 
       {/* ── Content ───────────────────────────────────────────────────────── */}
@@ -875,7 +980,8 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         { label: 'Reconcile Now', sub: 'Match transactions', icon: RefreshCw, color: '#3b82f6', onClick: () => setSubTab('reconciliation') },
                         { label: 'Create Draw', sub: 'New draw request', icon: Wallet, color: '#9D7E3F', onClick: () => { setSubTab('draws'); openAddDraw(); } },
                         { label: 'Create CO', sub: 'New change order', icon: TrendingUp, color: '#f59e0b', onClick: () => { setSubTab('cos'); openAddCO(); } },
-                        { label: 'Record Payment', sub: 'Log incoming payment', icon: Receipt, color: '#10b981', onClick: () => { setSubTab('payments'); navigate(`/concierge?start=income&project=${projectId}`); } },
+                        { label: 'Record Payment', sub: 'Log incoming payment', icon: Receipt, color: '#10b981', onClick: () => { setSubTab('payments'); setAutoOpenLog('income'); } },
+                        { label: 'Record Expense', sub: 'Log project expense', icon: Wallet, color: '#ef4444', onClick: () => { setSubTab('expenses'); setAutoOpenLog('expense'); } },
                       ].map(a => (
                         <button key={a.label} onClick={a.onClick} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-secondary/50 rounded-md transition-colors group">
                           <span className="pdv2-icon-chip" style={{ backgroundColor: `${a.color}1a` }}>
@@ -928,6 +1034,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     <div className="grid grid-cols-2 gap-px bg-border">
                       {[
                         { label: 'Original Contract', value: fmtUSD(fin.originalContractValue) },
+                        { label: 'SOV Allocated', value: fmtUSD(fin.sovAllocated), sub: `${fin.sovCoveragePct.toFixed(1)}% of contract` },
                         { label: 'Change Orders', value: fmtUSD(fin.net), sub: `${fin.originalContractValue > 0 ? (fin.net / fin.originalContractValue * 100).toFixed(1) : '0.0'}% of contract` },
                         { label: 'Revised Contract', value: fmtUSD(fin.revised), accent: true },
                         { label: 'Pending Change Orders', value: fmtUSD(fin.pendingCOs), sub: 'awaiting approval' },
@@ -1030,11 +1137,14 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                 <div className="border border-border">
                   <KpiGrid items={[
                     { label: 'Original Contract', value: fmtUSD(fin.originalContractValue) },
+                    { label: 'SOV Allocated',     value: fmtUSD(fin.sovAllocated), sub: `${fin.sovCoveragePct.toFixed(1)}% of contract` },
                     { label: 'Revised Total',     value: fmtUSD(fin.revised), accent: true },
                     { label: 'Total Earned',      value: fmtUSD(fin.earned), sub: `${fin.pctDone.toFixed(1)}% complete` },
                     { label: 'Remaining to Bill', value: fmtUSD(fin.remainToBill) },
                   ]} />
                 </div>
+
+                <SOVReconciliationBanner fin={fin} />
 
 	                <div className="border border-border">
 	                  <PanelHeader
@@ -1183,7 +1293,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                       })}
                       <div className="px-4 py-3 border-t-2 border-border bg-secondary/30 flex items-center justify-between">
                         <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">{scopeItems.length} line item{scopeItems.length !== 1 ? 's' : ''}</span>
-                        <span className="font-mono-tab text-sm font-bold text-foreground">{fmtUSD(fin.revised)}</span>
+                        <span className="font-mono-tab text-sm font-bold text-foreground">{fmtUSD(fin.sovRevisedTotal)}</span>
                       </div>
                     </div>
 
@@ -1230,12 +1340,12 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         <tfoot>
                           <tr className="border-t-2 border-border">
                             <td className="px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">Totals</td>
-                            <td className="px-4 py-3 text-right font-mono-tab text-muted-foreground font-semibold">{fmtUSD(fin.originalContractValue)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab text-foreground font-bold">{fmtUSD(fin.revised)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab text-foreground">{fin.pctDone.toFixed(1)}%</td>
+                            <td className="px-4 py-3 text-right font-mono-tab text-muted-foreground font-semibold">{fmtUSD(fin.sovAllocated)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab text-foreground font-bold">{fmtUSD(fin.sovRevisedTotal)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab text-foreground">{fin.sovPctDone.toFixed(1)}%</td>
                             <td className="px-4 py-3 text-right font-mono-tab text-accent font-bold">{fmtUSD(fin.earned)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab text-muted-foreground font-semibold">{fmtUSD(fin.billed)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab text-foreground font-bold">{fmtUSD(fin.remainToBill)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab text-muted-foreground font-semibold">{fmtUSD(fin.sovBilledTotal)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab text-foreground font-bold">{fmtUSD(fin.sovRemainingTotal)}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -1251,10 +1361,20 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                 MILESTONES
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'milestones' && (
-	              <div className="border border-border">
-	                <PanelHeader
-	                  label={`Milestones — ${milestones.length}`}
-	                />
+              <div className="space-y-4">
+                <div className="pdv2-card overflow-hidden">
+                  <KpiGrid items={[
+                    { label: 'Total Milestones', value: String(milestones.length) },
+                    { label: 'Completed', value: String(milestones.filter(m => m.status === 'completed').length), accent: true },
+                    { label: 'In Progress', value: String(milestones.filter(m => m.status === 'in_progress').length) },
+                    { label: 'Overdue', value: String(milestones.filter(m => m.status !== 'completed' && m.planned_completion_date && new Date(m.planned_completion_date) < new Date()).length), sub: 'past planned completion' },
+                  ]} />
+                </div>
+
+                <div className="pdv2-card overflow-hidden">
+                <PanelHeader
+                  label={`Milestones — ${milestones.length}`}
+                />
 
                 {showMS && (
                   <WorkflowDialog
@@ -1369,6 +1489,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     })}
                   </div>
                 )}
+                </div>
               </div>
             )}
 
@@ -1377,7 +1498,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'draws' && (
               <div className="space-y-4">
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <KpiGrid items={[
                     { label: 'Total Draw Requests', value: fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0)) },
                     { label: 'Funded',               value: fmtUSD(fin.billed), sub: `${draws.filter(d => d.status === 'funded').length} funded`, accent: true },
@@ -1386,7 +1507,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                   ]} />
                 </div>
 
-	                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
 	                  <PanelHeader
 	                    label={`Draw Schedule — ${draws.length} Request${draws.length !== 1 ? 's' : ''}`}
 	                  />
@@ -1549,7 +1670,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'cos' && (
               <div className="space-y-4">
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <KpiGrid items={[
                     { label: 'Approved Additions', value: fmtUSD(fin.additions) },
                     { label: 'Approved Credits',   value: fmtUSD(fin.credits) },
@@ -1558,7 +1679,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                   ]} />
                 </div>
 
-	                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
 	                  <PanelHeader
 	                    label={`Change Orders — ${changeOrders.length}`}
 	                  />
@@ -1726,7 +1847,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'addons' && (
               <div className="space-y-4">
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <KpiGrid items={[
                     { label: 'Approved Add-Ons', value: fmtUSD(fin.addOnsAdditions) },
                     { label: 'Approved Credits', value: fmtUSD(fin.addOnsCredits) },
@@ -1735,7 +1856,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                   ]} />
                 </div>
 
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <PanelHeader label={`Add Ons — ${addOns.length}`} />
 
                   {showAddOn && (
@@ -1942,75 +2063,28 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                 PAYMENTS RECEIVED
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'payments' && (
-              <div className="space-y-4">
-                <div className="border border-border">
-                  <KpiGrid items={[
-                    { label: 'Total Received',    value: fmtUSD(fin.paid), accent: true },
-                    { label: 'Accounts Receivable', value: fmtUSD(fin.ar), sub: fin.ar > 0 ? 'billed, not yet collected' : 'fully collected' },
-                    { label: 'Balance Remaining', value: fmtUSD(fin.balance), sub: `${fin.collectPct.toFixed(1)}% of contract collected` },
-                  ]} />
-                </div>
+              <ProjectTransactionLedger
+                kind="income"
+                projectId={projectId!}
+                transactions={enriched?.incomeList ?? []}
+                scopeItems={scopeItems.map(s => ({ id: s.id, name: s.name }))}
+                autoOpenLog={autoOpenLog === 'income'}
+                onAutoOpenLogHandled={() => setAutoOpenLog(null)}
+              />
+            )}
 
-                <div className="border border-border">
-                  <PanelHeader
-                    label={`Client Payments — ${(enriched?.incomeList ?? []).length} Record${(enriched?.incomeList ?? []).length !== 1 ? 's' : ''}`}
-                    action={
-                      <button
-                        onClick={() => navigate(`/concierge?start=income&project=${projectId}`)}
-                        className={outlineBtn}
-                      >
-                        Log Payment
-                      </button>
-                    }
-                  />
-                  <div className="px-4 py-3 border-b border-border bg-secondary/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <div className="text-[9px] uppercase tracking-[0.18em] font-black text-foreground">Guided collection workflow</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">Record payments through Income so Stripe, QuickBooks, invoice links, SOV allocation, and client portal visibility stay connected.</div>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/concierge?start=income&project=${projectId}`)}
-                      className={`${saveBtn} shrink-0`}
-                    >
-                      Open Income Concierge
-                    </button>
-                  </div>
-                  {(enriched?.incomeList ?? []).length === 0 ? (
-                    <EmptyState text="No payments recorded yet. Record client payments through the Income section." />
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm" style={{ minWidth: 440 }}>
-                        <thead>
-                          <tr className="border-b border-border">
-                            {['Date', 'Source / Reference', 'SOV Line', 'Amount'].map(h => (
-                              <th key={h} className={`px-4 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium ${h === 'Amount' ? 'text-right' : 'text-left'}`}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(enriched.incomeList as any[]).map((t: any) => {
-                            const linked = t.scope_item_id ? scopeItems.find(i => i.id === t.scope_item_id) : null;
-                            return (
-                              <tr key={t.id} className="border-b border-border pd-row">
-                                <td className="px-4 py-3 text-muted-foreground font-mono-tab">{fmtDate(t.transaction_date)}</td>
-                                <td className="px-4 py-3 text-foreground">{t.source_name || t.description || '—'}</td>
-                                <td className="px-4 py-3 text-muted-foreground">{linked?.name ?? '—'}</td>
-                                <td className="px-4 py-3 text-right font-mono-tab font-semibold text-emerald-600 dark:text-emerald-400">{fmtUSD(Number(t.amount))}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-border">
-                            <td colSpan={3} className="px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">Total Received</td>
-                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-foreground">{fmtUSD(fin.paid)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
+            {/* ══════════════════════════════════════════════════════════════
+                PROJECT EXPENSES
+            ══════════════════════════════════════════════════════════════ */}
+            {subTab === 'expenses' && (
+              <ProjectTransactionLedger
+                kind="expense"
+                projectId={projectId!}
+                transactions={enriched?.expenseList ?? []}
+                scopeItems={scopeItems.map(s => ({ id: s.id, name: s.name }))}
+                autoOpenLog={autoOpenLog === 'expense'}
+                onAutoOpenLogHandled={() => setAutoOpenLog(null)}
+              />
             )}
 
             {/* ══════════════════════════════════════════════════════════════
@@ -2018,12 +2092,31 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'reconciliation' && (
               <div className="space-y-4">
+                <div className="pdv2-card overflow-hidden">
+                  <KpiGrid items={[
+                    { label: 'Revised Contract', value: fmtUSD(fin.revised), accent: true },
+                    { label: 'Total Earned',     value: fmtUSD(fin.earned), sub: `${fin.pctDone.toFixed(1)}% complete` },
+                    { label: 'Total Collected',  value: fmtUSD(fin.paid), sub: `${fin.collectPct.toFixed(1)}% of contract` },
+                    { label: 'Balance Remaining', value: fmtUSD(fin.balance) },
+                  ]} />
+                </div>
+
                 {/* Waterfall */}
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <PanelHeader label="Contract Reconciliation" />
                   <div className="divide-y divide-border">
-                    {[
+                    {([
                       { label: 'Original Contract Value',        value: fin.originalContractValue, indent: false, bold: false },
+                      { label: 'Schedule of Values Allocated',   value: fin.sovAllocated,           indent: true,  bold: false,
+                        sub: `${fin.sovCoveragePct.toFixed(1)}% of contract broken into ${scopeItems.length} scope line${scopeItems.length !== 1 ? 's' : ''}` },
+                      ...(fin.sovStatus === 'under' ? [{
+                        label: 'Unallocated to Schedule of Values', value: fin.sovVariance, indent: true, bold: false, warn: 'amber' as const,
+                        sub: 'Not yet broken into scope lines — add SOV items to fully account for the contract.',
+                      }] : []),
+                      ...(fin.sovStatus === 'over' ? [{
+                        label: 'Schedule of Values Exceeds Contract', value: Math.abs(fin.sovVariance), indent: true, bold: false, warn: 'destructive' as const,
+                        sub: 'Scope lines total more than the signed contract — review for duplicates or log a change order.',
+                      }] : []),
                       { label: '+ Approved CO Additions',        value: fin.additions,             indent: true,  bold: false, sign: '+' },
                       { label: '− Approved CO Credits',          value: fin.credits,               indent: true,  bold: false, sign: '−' },
                       { label: 'Revised Project Total',          value: fin.revised,               indent: false, bold: true },
@@ -2036,16 +2129,29 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                       { label: 'Accounts Receivable (AR)',       value: fin.ar,                    indent: true,  bold: false },
                       { label: 'Project Balance Remaining',      value: fin.balance,               indent: false, bold: true, accent: true },
                       { label: 'Collection %',                   value: null, pct: fin.collectPct, indent: true,  bold: false },
-                    ].map((row, i) => (
-                      <div key={i} className={`px-4 sm:px-5 py-3 flex items-center justify-between ${row.indent ? 'pl-8 sm:pl-10 bg-secondary/20' : ''}`}>
-                        <span className={`text-sm ${row.bold ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{row.label}</span>
-                        {row.value !== undefined && row.value !== null ? (
-                          <span className={`font-mono-tab ${row.bold ? 'font-bold text-lg' : 'text-sm'} ${row.accent ? 'text-accent' : row.bold ? 'text-foreground' : 'text-foreground'}`}>
-                            {row.sign ? `${row.sign} ` : ''}{fmtUSD(Math.abs(row.value))}
+                    ] as any[]).map((row, i) => (
+                      <div key={i} className={`px-4 sm:px-5 py-3 ${row.indent ? 'pl-8 sm:pl-10 bg-secondary/20' : ''}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className={`text-sm ${
+                            row.warn === 'amber' ? 'font-semibold text-amber-600 dark:text-amber-400'
+                            : row.warn === 'destructive' ? 'font-semibold text-destructive'
+                            : row.bold ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                          }`}>
+                            {row.label}
                           </span>
-                        ) : (
-                          <span className="font-mono-tab text-sm text-foreground">{row.pct?.toFixed(1)}%</span>
-                        )}
+                          {row.value !== undefined && row.value !== null ? (
+                            <span className={`font-mono-tab shrink-0 ${row.bold ? 'font-bold text-lg' : 'text-sm'} ${
+                              row.warn === 'amber' ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                              : row.warn === 'destructive' ? 'text-destructive font-semibold'
+                              : row.accent ? 'text-accent' : 'text-foreground'
+                            }`}>
+                              {row.sign ? `${row.sign} ` : ''}{fmtUSD(Math.abs(row.value))}
+                            </span>
+                          ) : (
+                            <span className="font-mono-tab text-sm text-foreground shrink-0">{row.pct?.toFixed(1)}%</span>
+                          )}
+                        </div>
+                        {row.sub && <div className="text-[10.5px] text-muted-foreground mt-1">{row.sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -2053,7 +2159,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
 
                 {/* Per-SOV breakdown */}
                 {scopeItems.length > 0 && (
-                  <div className="border border-border">
+                  <div className="pdv2-card overflow-hidden">
                     <PanelHeader label="Per-Line Reconciliation" />
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm" style={{ minWidth: 620 }}>
@@ -2085,11 +2191,11 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         <tfoot>
                           <tr className="border-t-2 border-border">
                             <td className="px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">Totals</td>
-                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-foreground">{fmtUSD(fin.revised)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-foreground">{fmtUSD(fin.sovRevisedTotal)}</td>
                             <td className="px-4 py-3 text-right font-mono-tab font-bold text-accent">{fmtUSD(fin.earned)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-muted-foreground">{fmtUSD(fin.billed)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-emerald-600 dark:text-emerald-400">{fmtUSD(fin.paid)}</td>
-                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-foreground">{fmtUSD(fin.balance)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-muted-foreground">{fmtUSD(fin.sovBilledTotal)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-emerald-600 dark:text-emerald-400">{fmtUSD(sovCollectedTotal)}</td>
+                            <td className="px-4 py-3 text-right font-mono-tab font-bold text-foreground">{fmtUSD(sovBalanceTotal)}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -2103,7 +2209,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                 NOTES
             ══════════════════════════════════════════════════════════════ */}
             {subTab === 'notes' && (
-              <div className="border border-border">
+              <div className="pdv2-card overflow-hidden">
                 <PanelHeader
                   label="Project Notes"
                   action={<button onClick={() => setShowNotes(true)} className="text-[10px] text-accent hover:opacity-80 font-bold">Edit Notes</button>}
@@ -2159,18 +2265,20 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
               };
 
               return (
-                <div className="border border-border">
+                <div className="pdv2-card overflow-hidden">
                   <PanelHeader label="Record Audit Log" />
 
                   {/* Summary strip */}
                   {auditEntries.length > 0 && (
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-px bg-border border-b border-border">
+                    <div className="grid grid-cols-3 sm:grid-cols-7 gap-px bg-border border-b border-border">
                       {[
                         { label: 'SOV Lines',    val: scopeItems.length },
                         { label: 'Milestones',   val: milestones.length },
                         { label: 'Change Orders', val: changeOrders.length },
                         { label: 'Add Ons',      val: addOns.length },
                         { label: 'Draws',        val: draws.length },
+                        { label: 'Payments',     val: (enriched?.incomeList ?? []).length },
+                        { label: 'Expenses',     val: (enriched?.expenseList ?? []).length },
                       ].map(s => (
                         <div key={s.label} className="bg-secondary/40 px-3 py-2.5 text-center">
                           <div className="font-mono-tab text-base font-bold text-foreground">{s.val}</div>

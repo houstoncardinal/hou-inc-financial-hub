@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, X, Trash2, Edit3, Star, Image as ImageIcon,
   Video, Upload, CheckCircle2, AlertCircle, Loader2,
   ImagePlus, PlayCircle, MapPin, Search, Copy, ExternalLink,
   DollarSign, User, Maximize2, Calendar, ChevronDown,
+  LayoutGrid, List, SlidersHorizontal, Eye, BarChart3, Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -18,6 +19,27 @@ const G500 = '#8A8480';
 const AC   = '#9D7E3F';
 const ACL  = '#C4A76B';
 const SERIF = "'Cormorant Garamond', Georgia, serif";
+
+const PORTFOLIO_CSS = `
+.portfolio-command{border:1px solid hsl(var(--border));background:linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/0.32));box-shadow:0 1px 3px rgba(10,10,10,.05),0 18px 40px rgba(10,10,10,.05);}
+.portfolio-card,.portfolio-preview{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.05),0 12px 34px rgba(10,10,10,.045);}
+.portfolio-card{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+.portfolio-card:hover{transform:translateY(-2px);border-color:hsl(var(--foreground)/.2);box-shadow:0 10px 28px rgba(10,10,10,.085);}
+.portfolio-media{position:relative;height:210px;overflow:hidden;background:hsl(var(--secondary));}
+.portfolio-media-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.36),transparent 42%,rgba(10,10,10,.5));}
+.portfolio-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.28);background:rgba(10,10,10,.42);color:#fff;backdrop-filter:blur(12px);font-size:8px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;padding:5px 8px;}
+.portfolio-action,.portfolio-primary,.portfolio-icon-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid hsl(var(--border));background:hsl(var(--background));color:hsl(var(--muted-foreground));font-size:9px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;transition:all .16s ease;}
+.portfolio-action{height:32px;padding:0 11px;}
+.portfolio-primary{height:34px;padding:0 13px;background:hsl(var(--foreground));color:hsl(var(--background));border-color:hsl(var(--foreground));}
+.portfolio-icon-button{width:32px;height:32px;}
+.portfolio-action:hover,.portfolio-icon-button:hover{color:hsl(var(--foreground));border-color:hsl(var(--foreground)/.28);background:hsl(var(--secondary)/.58);}
+.portfolio-primary:hover{opacity:.86;}
+.portfolio-segment{display:inline-flex;border:1px solid hsl(var(--border));background:hsl(var(--background));}
+.portfolio-segment button{height:34px;width:38px;display:flex;align-items:center;justify-content:center;color:hsl(var(--muted-foreground));border-right:1px solid hsl(var(--border));}
+.portfolio-segment button:last-child{border-right:0;}
+.portfolio-segment button[data-active="true"]{background:hsl(var(--foreground));color:hsl(var(--background));}
+@media(max-width:640px){.portfolio-media{height:185px}.portfolio-command{padding:14px!important}.portfolio-card{border-left:0;border-right:0}}
+`;
 
 const CATEGORIES = [
   'Luxury Residential', 'Commercial Industrial', 'Retail & Mixed-Use',
@@ -1148,6 +1170,137 @@ function ProjectRow({ project, onEdit, onDelete, onToggleFeatured }: {
   );
 }
 
+function PortfolioCard({ project, onEdit, onDelete, onToggleFeatured, onView }: {
+  project: PortfolioProject;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleFeatured: () => void;
+  onView: () => void;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="portfolio-card group overflow-hidden"
+    >
+      <button onClick={onView} className="portfolio-media block w-full text-left">
+        {project.cover_url ? (
+          <img src={project.cover_url} alt={project.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.035]" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-secondary/50">
+            <ImageIcon className="w-8 h-8 text-muted-foreground/35" strokeWidth={1.2} />
+          </div>
+        )}
+        <div className="portfolio-media-shade" />
+        <div className="absolute left-3 top-3 flex items-center gap-1.5">
+          {project.featured && (
+            <span className="portfolio-chip !text-[#0A0A0A] !bg-white/92">
+              <Star className="w-3 h-3 fill-current" strokeWidth={0} /> Featured
+            </span>
+          )}
+          <span className="portfolio-chip">{project.category}</span>
+        </div>
+        <div className="absolute right-3 bottom-3 portfolio-chip">
+          <Eye className="w-3 h-3" /> Preview
+        </div>
+      </button>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <button onClick={onView} className="text-left text-[15px] font-bold leading-tight text-foreground hover:text-accent transition-colors line-clamp-1">
+              {project.title}
+            </button>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
+              <MapPin className="w-3 h-3 shrink-0" strokeWidth={1.5} />
+              <span className="truncate">{project.location || project.city}</span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">Year</div>
+            <div className="text-[12px] font-mono-tab font-bold">{project.year}</div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-px bg-border border border-border">
+          {[
+            ['Budget', project.budget || '—'],
+            ['Size', project.sqft ? `${project.sqft} SF` : '—'],
+            ['Client', project.client_name || '—'],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-background px-2 py-1.5 min-w-0">
+              <div className="text-[7px] uppercase tracking-[0.15em] font-bold text-muted-foreground">{label}</div>
+              <div className="text-[10px] font-semibold truncate">{value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <button onClick={onToggleFeatured} className="portfolio-action">
+            <Star className="w-3.5 h-3.5" style={{ fill: project.featured ? AC : 'none', color: project.featured ? AC : undefined }} />
+            {project.featured ? 'Featured' : 'Feature'}
+          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={onView} className="portfolio-icon-button" title="Preview"><Maximize2 className="w-3.5 h-3.5" /></button>
+            <button onClick={onEdit} className="portfolio-icon-button" title="Edit"><Edit3 className="w-3.5 h-3.5" /></button>
+            <button onClick={onDelete} className="portfolio-icon-button hover:!text-destructive" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function PortfolioPreview({ project, onClose, onEdit }: {
+  project: PortfolioProject;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 18, opacity: 0 }}
+        className="portfolio-preview w-full max-w-5xl overflow-hidden bg-background">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.65fr]">
+          <div className="relative min-h-[300px] lg:min-h-[560px] bg-secondary">
+            {project.cover_url ? <img src={project.cover_url} alt={project.title} className="absolute inset-0 w-full h-full object-cover" /> : (
+              <div className="absolute inset-0 flex items-center justify-center"><ImageIcon className="w-12 h-12 text-muted-foreground/35" /></div>
+            )}
+          </div>
+          <div className="p-5 lg:p-6 flex flex-col">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[8px] uppercase tracking-[0.26em] font-black text-accent mb-2">{project.category}</div>
+                <h2 className="text-2xl font-semibold leading-tight" style={{ fontFamily: SERIF }}>{project.title}</h2>
+              </div>
+              <button onClick={onClose} className="portfolio-icon-button"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">{project.description || 'No project story has been added yet.'}</p>
+            <div className="mt-5 grid grid-cols-2 gap-px bg-border border border-border">
+              {[
+                ['Location', project.location || project.city],
+                ['Year', project.year],
+                ['Budget', project.budget || '—'],
+                ['Size', project.sqft ? `${project.sqft} SF` : '—'],
+                ['Client', project.client_name || '—'],
+                ['Featured', project.featured ? 'Yes' : 'No'],
+              ].map(([label, value]) => (
+                <div key={label} className="bg-background p-3 min-w-0">
+                  <div className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">{label}</div>
+                  <div className="text-[12px] font-semibold mt-1 truncate">{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-auto pt-5 flex flex-wrap gap-2">
+              <button onClick={onEdit} className="portfolio-primary"><Edit3 className="w-3.5 h-3.5" /> Edit Project</button>
+              <a href="/portfolio" target="_blank" rel="noreferrer" className="portfolio-action"><ExternalLink className="w-3.5 h-3.5" /> Public Portfolio</a>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 /* ── Main export ─────────────────────────────────────────────────────── */
 export default function PortfolioManager({ onCountChange }: { onCountChange?: (n: number) => void }) {
   const [projects, setProjects]   = useState<PortfolioProject[]>([]);
@@ -1155,7 +1308,12 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   const [loadError, setLoadError] = useState('');
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [modalProject, setModalProject] = useState<PortfolioProject | null | undefined>(undefined);
+  const [previewProject, setPreviewProject] = useState<PortfolioProject | null>(null);
   const [filter, setFilter]       = useState('All');
+  const [query, setQuery] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [featuredOnly, setFeaturedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'sort_order' | 'year' | 'title' | 'featured'>('sort_order');
 
   const refresh = useCallback(async () => {
     setLoading(true); setLoadError(''); setSetupNeeded(false);
@@ -1176,6 +1334,15 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
   }, [onCountChange]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (setupNeeded) return;
+    const ch = supabase.channel('portfolio-manager-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_projects' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolio_media' }, () => refresh())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [refresh, setupNeeded]);
 
   const handleSaved = useCallback((p: PortfolioProject) => {
     setProjects(prev => {
@@ -1198,45 +1365,139 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
     setProjects(prev => prev.map(x => x.id === p.id ? updated : x));
   };
 
-  const allCats = ['All', ...Array.from(new Set(projects.map(p => p.category)))];
-  const filtered = filter === 'All' ? projects : projects.filter(p => p.category === filter);
+  const allCats = ['All', ...Array.from(new Set(projects.map(p => p.category).filter(Boolean)))];
+  const portfolioStats = useMemo(() => {
+    const featured = projects.filter(p => p.featured).length;
+    const withCovers = projects.filter(p => !!p.cover_url).length;
+    const years = projects.map(p => Number(p.year)).filter(Boolean);
+    return {
+      total: projects.length,
+      featured,
+      withCovers,
+      categories: allCats.length - 1,
+      newest: years.length ? Math.max(...years) : null,
+      readiness: projects.length ? Math.round((withCovers / projects.length) * 100) : 0,
+    };
+  }, [projects, allCats.length]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects
+      .filter(p => filter === 'All' || p.category === filter)
+      .filter(p => !featuredOnly || p.featured)
+      .filter(p => !q || [p.title, p.category, p.location, p.city, p.client_name, p.year, p.description].filter(Boolean).join(' ').toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (sortBy === 'featured') return Number(b.featured) - Number(a.featured) || a.title.localeCompare(b.title);
+        if (sortBy === 'year') return Number(b.year || 0) - Number(a.year || 0);
+        if (sortBy === 'title') return a.title.localeCompare(b.title);
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.title.localeCompare(b.title);
+      });
+  }, [projects, filter, featuredOnly, query, sortBy]);
 
   return (
-    <div>
+    <div className="space-y-5">
+      <style>{PORTFOLIO_CSS}</style>
       {/* Setup banner */}
       {setupNeeded && !loading && <SetupBanner onRetry={refresh} />}
 
       {/* Toolbar */}
       {!setupNeeded && (
         <>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: AC }}>
-              Portfolio Projects ({projects.length})
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Category filter */}
-              {allCats.length > 2 && allCats.map(c => (
-                <button key={c} onClick={() => setFilter(c)}
-                  className="text-[8px] uppercase tracking-[0.2em] font-bold px-3 py-1.5 transition-all"
-                  style={{
-                    border: `1px solid ${filter === c ? B : G200}`,
-                    color: filter === c ? W : G500,
-                    backgroundColor: filter === c ? B : 'transparent',
-                    cursor: 'pointer',
-                  }}>
-                  {c}
+          <div className="portfolio-command p-4 md:p-5">
+            <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+              <div className="min-w-0">
+                <div className="text-[8px] uppercase tracking-[0.34em] font-black text-accent mb-1.5">Portfolio Studio</div>
+                <div className="text-2xl md:text-3xl font-semibold leading-tight" style={{ fontFamily: SERIF }}>
+                  Portfolio Management
+                </div>
+                <p className="text-[12px] text-muted-foreground mt-1 max-w-2xl">
+                  Curate public case studies, featured work, media, project metadata, and visual presentation from one responsive workspace.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="portfolio-segment">
+                  <button type="button" data-active={view === 'grid'} onClick={() => setView('grid')} title="Grid view"><LayoutGrid className="w-3.5 h-3.5" /></button>
+                  <button type="button" data-active={view === 'list'} onClick={() => setView('list')} title="List view"><List className="w-3.5 h-3.5" /></button>
+                </div>
+                <button onClick={refresh} className="portfolio-action"><Loader2 className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh</button>
+                <button onClick={() => setModalProject(null)} className="portfolio-primary">
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add Project
                 </button>
-              ))}
-              <button onClick={refresh}
-                className="text-[9px] uppercase tracking-[0.2em] font-bold px-3 py-2 transition-colors"
-                style={{ border: `1px solid ${G200}`, color: G500, background: 'none', cursor: 'pointer' }}>
-                Refresh
-              </button>
-              <button onClick={() => setModalProject(null)}
-                className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-black px-4 py-2.5 hover:opacity-85 transition-opacity"
-                style={{ backgroundColor: B, color: W, border: 'none', cursor: 'pointer' }}>
-                <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Add Project
-              </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 mt-5">
+              {[
+                { label: 'Total Projects', value: portfolioStats.total, sub: `${portfolioStats.categories} categories`, icon: BarChart3, color: AC },
+                { label: 'Featured', value: portfolioStats.featured, sub: 'Homepage-ready highlights', icon: Star, color: '#f59e0b' },
+                { label: 'Media Ready', value: `${portfolioStats.readiness}%`, sub: `${portfolioStats.withCovers} with covers`, icon: ImageIcon, color: '#0f766e' },
+                { label: 'Newest Year', value: portfolioStats.newest ?? '—', sub: 'Latest portfolio entry', icon: Calendar, color: '#2563eb' },
+                { label: 'Filtered View', value: filtered.length, sub: filter === 'All' ? 'All categories' : filter, icon: Sparkles, color: '#7c3aed' },
+              ].map(item => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="border border-border bg-background/80 p-3 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground truncate">{item.label}</div>
+                      <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: item.color }} />
+                    </div>
+                    <div className="text-[18px] font-mono-tab font-black mt-1 truncate">{item.value}</div>
+                    <div className="text-[9px] text-muted-foreground truncate">{item.sub}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pdv2-card p-3 md:p-4">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search portfolio by title, category, location, client, year..."
+                  className="w-full h-10 pl-9 pr-3 text-[12px] border border-border bg-background outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={() => setFeaturedOnly(v => !v)} className="portfolio-action" style={featuredOnly ? { borderColor: AC, color: AC, backgroundColor: 'rgba(157,126,63,.08)' } : undefined}>
+                  <Star className="w-3.5 h-3.5" /> Featured
+                </button>
+                <div className="flex items-center gap-1 border border-border bg-background h-10 px-2">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+                    className="bg-transparent text-[10px] uppercase tracking-[0.14em] font-bold outline-none">
+                    <option value="sort_order">Sort Order</option>
+                    <option value="featured">Featured First</option>
+                    <option value="year">Newest Year</option>
+                    <option value="title">Title A-Z</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)] gap-2 mt-3">
+              <div className="flex items-center gap-2 border border-border bg-background h-10 px-2.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                <select
+                  value={filter}
+                  onChange={e => setFilter(e.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-[10px] uppercase tracking-[0.14em] font-bold outline-none"
+                >
+                  {allCats.map(c => (
+                    <option key={c} value={c}>
+                      {c} ({c === 'All' ? projects.length : projects.filter(p => p.category === c).length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center border border-border bg-secondary/25 px-3 py-2 min-w-0">
+                <div className="min-w-0">
+                  <div className="text-[8px] uppercase tracking-[0.16em] font-black text-muted-foreground truncate">Category Scope</div>
+                  <div className="text-[10px] font-mono-tab font-bold truncate">
+                    {filter === 'All' ? `${projects.length} portfolio projects` : `${filtered.length} ${filter} project${filtered.length === 1 ? '' : 's'}`}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1262,26 +1523,41 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
 
           {/* Project list */}
           {!loading && !loadError && (
-            <div className="space-y-2">
+            <div>
               {filtered.length === 0
                 ? (
-                  <div className="text-center py-16" style={{ color: G500, border: `1px dashed ${G200}` }}>
+                  <div className="text-center py-16 bg-background border border-dashed border-border" style={{ color: G500 }}>
                     <Upload className="w-8 h-8 mx-auto mb-3" style={{ color: G200 }} strokeWidth={1} />
                     <div className="text-[13px] font-semibold mb-2" style={{ color: B }}>
-                      {filter !== 'All' ? `No ${filter} projects` : 'No portfolio projects yet'}
+                      {query || filter !== 'All' || featuredOnly ? 'No matching portfolio projects' : 'No portfolio projects yet'}
                     </div>
                     <div className="text-[11px]">
-                      {filter !== 'All' ? 'Try a different category filter' : 'Click "Add Project" to create your first one'}
+                      {query || filter !== 'All' || featuredOnly ? 'Try changing filters or search.' : 'Click "Add Project" to create your first one'}
                     </div>
                   </div>
                 )
-                : filtered.map(p => (
-                  <ProjectRow key={p.id} project={p}
-                    onEdit={() => setModalProject(p)}
-                    onDelete={() => handleDelete(p.id)}
-                    onToggleFeatured={() => handleToggleFeatured(p)}
-                  />
-                ))
+                : view === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {filtered.map(p => (
+                      <PortfolioCard key={p.id} project={p}
+                        onView={() => setPreviewProject(p)}
+                        onEdit={() => setModalProject(p)}
+                        onDelete={() => handleDelete(p.id)}
+                        onToggleFeatured={() => handleToggleFeatured(p)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filtered.map(p => (
+                      <ProjectRow key={p.id} project={p}
+                        onEdit={() => setModalProject(p)}
+                        onDelete={() => handleDelete(p.id)}
+                        onToggleFeatured={() => handleToggleFeatured(p)}
+                      />
+                    ))}
+                  </div>
+                )
               }
             </div>
           )}
@@ -1290,6 +1566,13 @@ export default function PortfolioManager({ onCountChange }: { onCountChange?: (n
 
       {/* Modal */}
       <AnimatePresence>
+        {previewProject && (
+          <PortfolioPreview
+            project={previewProject}
+            onClose={() => setPreviewProject(null)}
+            onEdit={() => { setModalProject(previewProject); setPreviewProject(null); }}
+          />
+        )}
         {modalProject !== undefined && !setupNeeded && (
           <ProjectModal
             initial={modalProject}

@@ -43,6 +43,14 @@ button.av4-chiprow:hover{color:${AC};border-color:rgba(157,126,63,.5);}
 .av4-toggle{display:inline-flex;align-items:center;gap:5px;border-radius:9999px;border:1px solid hsl(var(--border));padding:3px 9px;font-size:9.5px;font-weight:700;color:hsl(var(--muted-foreground));transition:all .18s ease;cursor:pointer;}
 .av4-toggle.off{opacity:.38;}
 .av4-toggle:hover{border-color:hsl(var(--foreground)/.3);}
+@media(max-width:767px){
+  .av4-mobile-kpi{min-height:58px;border-radius:9px;}
+  .av4-mobile-kpi-row{gap:7px!important;padding:7px 8px!important;}
+  .av4-mobile-kpi-icon{width:26px!important;height:26px!important;border-radius:8px!important;}
+  .av4-mobile-kpi-title{font-size:10px!important;}
+  .av4-mobile-kpi-sub{font-size:8.5px!important;}
+  .av4-mobile-kpi-value{font-size:16px!important;}
+}
 `;
 
 function timeAgo(ts: string | null | undefined): string {
@@ -371,9 +379,9 @@ export function OverviewDashboard({
       </div>
 
       {/* ══ Stat intelligence rail ══ */}
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         {STATS.map(s => (
-          <button key={s.label} onClick={() => onSelectTab(s.tab)} className="av4-int text-left min-w-0 group overflow-hidden">
+          <button key={s.label} onClick={() => onSelectTab(s.tab)} className="av4-int av4-mobile-kpi text-left min-w-0 group overflow-hidden">
             {/* Desktop / tablet: intel card */}
             <div className="hidden md:block">
               <div className="relative p-2.5 pb-2">
@@ -393,16 +401,16 @@ export function OverviewDashboard({
               </div>
             </div>
             {/* Mobile: thin horizontal row */}
-            <div className="md:hidden relative flex items-center gap-3 px-3 py-2">
+            <div className="av4-mobile-kpi-row md:hidden relative flex items-center gap-3 px-3 py-2">
               <span className="absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}16` }}>
+              <span className="av4-mobile-kpi-icon w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}16` }}>
                 <s.icon className="w-3.5 h-3.5" style={{ color: s.color }} strokeWidth={1.9} />
               </span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[11.5px] font-bold text-foreground truncate leading-tight">{s.label}</span>
-                <span className={`block text-[9.5px] truncate ${s.urgent ? 'font-bold' : 'text-muted-foreground'}`} style={s.urgent ? { color: LUX.copper } : undefined}>{s.sub}</span>
+                <span className="av4-mobile-kpi-title block text-[11.5px] font-bold text-foreground truncate leading-tight">{s.label}</span>
+                <span className={`av4-mobile-kpi-sub block text-[9.5px] truncate ${s.urgent ? 'font-bold' : 'text-muted-foreground'}`} style={s.urgent ? { color: LUX.copper } : undefined}>{s.sub}</span>
               </span>
-              <span className="text-[18px] font-bold font-mono-tab text-foreground shrink-0">{s.value}</span>
+              <span className="av4-mobile-kpi-value text-[18px] font-bold font-mono-tab text-foreground shrink-0">{s.value}</span>
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={2} />
             </div>
             <span className="absolute inset-x-0 bottom-0 h-[2px] hidden md:block" style={{ backgroundColor: s.color }} />

@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, MessageSquare, BarChart3, Image,
   ArrowUpRight, TrendingUp,
@@ -16,7 +16,7 @@ import {
   ArrowLeft, ClipboardList, UserCheck, UserX, ShieldCheck,
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus,
-  FolderKanban, Bell, CheckSquare,
+  FolderKanban, Bell, CheckSquare, Plus, BriefcaseBusiness,
   History, FileDown, Menu,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
@@ -143,6 +143,43 @@ async function adminUpdateMeetingStatus(clientId: string, meetingId: string, sta
   await supabase.from('portal_meetings').update({ status }).eq('id', meetingId);
 }
 
+async function adminCreateMeeting(clientId: string, meeting: {
+  type: string;
+  date: string;
+  time: string;
+  format: 'In-Person' | 'Video Call' | 'Phone Call';
+  notes: string;
+  status?: 'requested' | 'confirmed' | 'completed' | 'cancelled';
+}) {
+  await supabase.from('portal_meetings').insert({
+    client_id: clientId,
+    type: meeting.type,
+    date: meeting.date,
+    time: meeting.time,
+    format: meeting.format,
+    notes: meeting.notes || null,
+    status: meeting.status ?? 'confirmed',
+  });
+}
+
+async function adminUpdateMeeting(meetingId: string, meeting: {
+  type: string;
+  date: string;
+  time: string;
+  format: 'In-Person' | 'Video Call' | 'Phone Call';
+  notes: string;
+  status: 'requested' | 'confirmed' | 'completed' | 'cancelled';
+}) {
+  await supabase.from('portal_meetings').update({
+    type: meeting.type,
+    date: meeting.date,
+    time: meeting.time,
+    format: meeting.format,
+    notes: meeting.notes || null,
+    status: meeting.status,
+  }).eq('id', meetingId);
+}
+
 /* Check if the portal-documents storage bucket exists, then open the URL.
    Shows a clear toast if the bucket hasn't been created yet. */
 async function viewDocument(url: string, showToast: (opts: { title: string; description?: string }) => void) {
@@ -256,6 +293,28 @@ function exportCSV(filename: string, headers: string[], rows: (string | number |
 const ADMIN_PIN = '011491';
 const ADMIN_KEY = 'hou-admin-unlocked';
 const ADMIN_USER = { name: 'Hunain Qureshi', role: 'Admin' };
+const COMMON_DOCUMENT_REQUESTS = {
+  residential: [
+    'Signed Construction Agreement',
+    'Architectural Plans / Drawings',
+    'Survey or Site Plan',
+    'HOA Approval Letter',
+    'Permit Application Documents',
+    'Selections / Finish Schedule',
+    'Proof of Funds or Financing Letter',
+    'Homeowner Insurance Certificate',
+  ],
+  commercial: [
+    'Signed Construction Agreement',
+    'Commercial Lease or Ownership Documents',
+    'Architectural / Engineering Plans',
+    'Certificate of Occupancy Requirements',
+    'Tenant Improvement Scope',
+    'Insurance Certificate',
+    'W-9 / Billing Information',
+    'Permit Application Package',
+  ],
+} as const;
 
 /* ── Glass card helpers ──────────────────────────────────────────────── */
 const ADMIN_CSS = `
@@ -263,6 +322,11 @@ const ADMIN_CSS = `
     linear-gradient(180deg,hsl(var(--secondary)/0.35),hsl(var(--background)) 220px),
     hsl(var(--background));}
   .admin-dashboard .pdv2-card{border-radius:8px;box-shadow:0 1px 2px rgba(10,10,10,0.035),0 10px 28px rgba(10,10,10,0.04);}
+  .admin-dashboard .pdv2-card:has(.pdv2-label){position:relative;overflow:hidden;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;background-image:linear-gradient(145deg,rgba(157,126,63,0.045),transparent 42%);padding:12px!important;}
+  .admin-dashboard .pdv2-card:has(.pdv2-label)::after{content:'';position:absolute;inset-x:0;bottom:0;height:2px;background:linear-gradient(90deg,rgba(157,126,63,.85),rgba(157,126,63,.18));}
+  .admin-dashboard .pdv2-card:has(.pdv2-label):hover{box-shadow:0 8px 22px rgba(10,10,10,0.08),0 2px 8px rgba(10,10,10,0.035);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
+  .admin-dashboard .pdv2-card:has(.pdv2-label) .text-xl{font-size:18px!important;line-height:1.1!important;}
+  .admin-dashboard .pdv2-card:has(.pdv2-label) .pdv2-label{font-size:8px!important;letter-spacing:.16em!important;font-weight:800!important;color:hsl(var(--foreground)/.62)!important;}
   .admin-dashboard .pdv2-card:hover{transform:none;border-color:hsl(var(--foreground)/0.16);}
   .admin-page-wrap{width:100%;max-width:1680px;margin:0 auto;}
   .admin-command-bar{background:hsl(var(--background)/0.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 1px 0 hsl(var(--border)),0 12px 34px rgba(10,10,10,0.045);}
@@ -286,6 +350,36 @@ const ADMIN_CSS = `
   .snav-item:hover::after{opacity:1;}
   .snav-active::after{opacity:1;background:linear-gradient(90deg,rgba(157,126,63,0.20) 0%,transparent 80%)!important;}
   .status-pill{border-radius:9999px!important;padding:3px 10px!important;font-size:8px!important;letter-spacing:.18em!important;font-weight:800!important;border:1px solid currentColor;line-height:1.35;}
+  .admin-dashboard table{border-collapse:separate;border-spacing:0;}
+  .admin-dashboard,.admin-dashboard *{box-sizing:border-box;}
+  .admin-dashboard main,.admin-dashboard section,.admin-dashboard article,.admin-dashboard .pdv2-card{max-width:100%;}
+  .admin-dashboard .grid,.admin-dashboard .flex{min-width:0;}
+  .admin-dashboard .grid>*,.admin-dashboard .flex>*{min-width:0;}
+  .admin-dashboard button,.admin-dashboard a,.admin-dashboard input,.admin-dashboard select,.admin-dashboard textarea{max-width:100%;}
+  .admin-dashboard .admin-table-wrap,.admin-dashboard .overflow-x-auto{max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;}
+  @media(max-width:767px){
+    .admin-dashboard{height:auto!important;min-height:100vh;overflow:visible!important;}
+    .admin-dashboard main{height:auto!important;min-height:100vh;overflow:visible!important;}
+    .admin-page-wrap{max-width:100%;padding-left:12px!important;padding-right:12px!important;padding-top:12px!important;padding-bottom:12px!important;}
+    .admin-command-bar{position:sticky;top:0;}
+    .admin-command-bar .admin-page-wrap{gap:10px!important;padding-top:10px!important;padding-bottom:10px!important;}
+    .admin-dashboard .pdv2-card{border-radius:8px!important;}
+    .admin-dashboard .space-y-5 > :not([hidden]) ~ :not([hidden]){margin-top:12px!important;}
+    .admin-dashboard .space-y-4 > :not([hidden]) ~ :not([hidden]){margin-top:10px!important;}
+    .admin-dashboard .space-y-3 > :not([hidden]) ~ :not([hidden]){margin-top:8px!important;}
+    .admin-dashboard table{width:100%;}
+    .admin-dashboard .admin-table-wrap table,.admin-dashboard .overflow-x-auto table{min-width:680px;}
+    .admin-dashboard th,.admin-dashboard td{white-space:nowrap;}
+    .admin-dashboard input,.admin-dashboard select,.admin-dashboard textarea{font-size:16px!important;}
+    .admin-dashboard button,.admin-dashboard a{min-height:34px;}
+    .admin-dashboard .status-pill{font-size:7px!important;padding:3px 7px!important;letter-spacing:.12em!important;}
+    .admin-dashboard [class*="tracking-[0.3em]"],.admin-dashboard [class*="tracking-[0.34em]"],.admin-dashboard [class*="tracking-[0.4em]"]{letter-spacing:.18em!important;}
+  }
+  @media(max-width:480px){
+    .admin-dashboard .admin-table-wrap table,.admin-dashboard .overflow-x-auto table{min-width:620px;}
+    .admin-page-wrap{padding-left:10px!important;padding-right:10px!important;}
+    .admin-dashboard .pdv2-card{box-shadow:0 1px 2px rgba(10,10,10,.045)!important;}
+  }
 `;
 
 /* ── Status helpers ──────────────────────────────────────────────────── */
@@ -328,9 +422,21 @@ export default function Admin() {
   const pinRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   /* ── Nav ── */
-  const [tab, setTab] = useState<AdminTab>('overview');
+  const tabParam = searchParams.get('tab') as AdminTab | null;
+  const initialTab: AdminTab = tabParam && ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog'].includes(tabParam)
+    ? tabParam
+    : 'overview';
+  const [tab, setTab] = useState<AdminTab>(initialTab);
+
+  useEffect(() => {
+    const next = searchParams.get('tab') as AdminTab | null;
+    if (next && ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog'].includes(next)) {
+      setTab(next);
+    }
+  }, [searchParams]);
 
   /* ── Portal data state ── */
   const [clients,      setClients]      = useState<any[]>([]);
@@ -344,14 +450,16 @@ export default function Admin() {
   const [finChecks,    setFinChecks]    = useState<any[]>([]);
   const [finTxns,      setFinTxns]      = useState<any[]>([]);
   const [finVendors,   setFinVendors]   = useState<any[]>([]);
+  const [adminProjects, setAdminProjects] = useState<any[]>([]);
 
   const refreshData = useCallback(async () => {
-    const [portal, leads, finance, helpRes, clRes] = await Promise.all([
+    const [portal, leads, finance, helpRes, clRes, adminProjRes] = await Promise.all([
       loadPortalData(),
       loadLeadsData(),
       loadFinanceData(),
       supabase.from('portal_help_requests').select('*, portal_clients(name, email)').order('created_at', { ascending: false }),
       (supabase as any).from('admin_changelog').select('*').order('created_at', { ascending: false }).limit(500),
+      (supabase as any).from('admin_projects').select('*').eq('entity', HE_ENTITY_ID).order('created_at', { ascending: false }),
     ]);
     setClients(portal.clients);
     setBriefs(portal.briefs);
@@ -364,6 +472,7 @@ export default function Admin() {
     setFinChecks(finance.finChecks);
     setFinTxns(finance.finTxns);
     setFinVendors(finance.finVendors);
+    setAdminProjects(adminProjRes.data ?? []);
     setPortfolioCount(finance.portfolioCount);
     setHelpRequests(helpRes.data ?? []);
     setChangelogEntries(clRes.data ?? []);
@@ -379,7 +488,7 @@ export default function Admin() {
     const ch = supabase.channel('admin-live');
     ['portal_clients', 'portal_briefs', 'portal_documents', 'portal_meetings', 'portal_messages',
       'portal_help_requests', 'contact_submissions', 'start_project_submissions',
-      'transactions', 'checks', 'projects', 'vendors', 'invoices'].forEach(table => {
+      'transactions', 'checks', 'projects', 'vendors', 'invoices', 'admin_projects'].forEach(table => {
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, queueRefresh);
     });
     ch.subscribe();
@@ -391,7 +500,7 @@ export default function Admin() {
 
   /* ── Client detail state ── */
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [clientSubTab, setClientSubTab] = useState<'brief' | 'messages' | 'docs' | 'meetings' | 'notes' | 'milestones' | 'profile'>('brief');
+  const [clientSubTab, setClientSubTab] = useState<'brief' | 'projects' | 'messages' | 'docs' | 'meetings' | 'notes' | 'milestones' | 'profile'>('brief');
   const [replyDraft, setReplyDraft] = useState('');
 
   /* ── Client profile editing ── */
@@ -412,6 +521,20 @@ export default function Admin() {
   const [reqDocName, setReqDocName] = useState('');
   const [reqDocDesc, setReqDocDesc] = useState('');
   const [reqDocSaving, setReqDocSaving] = useState(false);
+  const [reqDocPreset, setReqDocPreset] = useState('');
+
+  /* ── Client meeting management ── */
+  const [meetingOpen, setMeetingOpen] = useState(false);
+  const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+  const [meetingForm, setMeetingForm] = useState({
+    type: 'Project Consultation',
+    date: '',
+    time: '10:00',
+    format: 'Video Call' as 'In-Person' | 'Video Call' | 'Phone Call',
+    status: 'confirmed' as 'requested' | 'confirmed' | 'completed' | 'cancelled',
+    notes: '',
+  });
+  const [meetingSaving, setMeetingSaving] = useState(false);
 
   /* ── #8 Client search/filter ── */
   const [clientSearch, setClientSearch] = useState('');
@@ -574,10 +697,56 @@ export default function Admin() {
     if (!selectedClientId || !reqDocName.trim()) return;
     setReqDocSaving(true);
     await adminRequestDocument(selectedClientId, reqDocName.trim(), reqDocDesc.trim());
+    await adminSendMessage(selectedClientId, `Document request: "${reqDocName.trim()}". ${reqDocDesc.trim() ? `${reqDocDesc.trim()} ` : ''}Please upload it in your Documents tab when available. — ${BUILDER.name}`);
     await logAdminAction('doc_requested', selectedClientId, reqDocName.trim());
     await logChangelog('created', 'document_request', 'admin', selectedClientId, reqDocName.trim(), BUILDER.name, { client: clientName(selectedClientId) });
-    setReqDocName(''); setReqDocDesc(''); setReqDocOpen(false);
+    setReqDocName(''); setReqDocDesc(''); setReqDocPreset(''); setReqDocOpen(false);
     setReqDocSaving(false);
+    await refreshData();
+  };
+
+  const openMeetingEditor = (meeting?: any) => {
+    if (meeting) {
+      setEditingMeetingId(meeting.id);
+      setMeetingForm({
+        type: meeting.type || 'Project Consultation',
+        date: meeting.date || '',
+        time: meeting.time || '10:00',
+        format: meeting.format || 'Video Call',
+        status: meeting.status || 'confirmed',
+        notes: meeting.notes || '',
+      });
+    } else {
+      setEditingMeetingId(null);
+      setMeetingForm({
+        type: 'Project Consultation',
+        date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+        time: '10:00',
+        format: 'Video Call',
+        status: 'confirmed',
+        notes: '',
+      });
+    }
+    setMeetingOpen(true);
+  };
+
+  const handleSaveMeeting = async () => {
+    if (!selectedClientId || !meetingForm.type.trim() || !meetingForm.date || !meetingForm.time) return;
+    setMeetingSaving(true);
+    const payload = { ...meetingForm, type: meetingForm.type.trim(), notes: meetingForm.notes.trim() };
+    if (editingMeetingId) {
+      await adminUpdateMeeting(editingMeetingId, payload);
+      await logAdminAction('meeting_updated', selectedClientId, `${payload.type} ${payload.date} ${payload.time}`);
+      await logChangelog('updated', 'meeting', 'admin', editingMeetingId, payload.type, BUILDER.name, { client: clientName(selectedClientId), ...payload });
+    } else {
+      await adminCreateMeeting(selectedClientId, payload);
+      await adminSendMessage(selectedClientId, `Meeting scheduled: ${payload.type} on ${payload.date} at ${payload.time} via ${payload.format}.${payload.notes ? ` ${payload.notes}` : ''} — ${BUILDER.name}`);
+      await logAdminAction('meeting_created', selectedClientId, `${payload.type} ${payload.date} ${payload.time}`);
+      await logChangelog('created', 'meeting', 'admin', selectedClientId, payload.type, BUILDER.name, { client: clientName(selectedClientId), ...payload });
+    }
+    setMeetingOpen(false);
+    setEditingMeetingId(null);
+    setMeetingSaving(false);
     await refreshData();
   };
 
@@ -974,15 +1143,23 @@ export default function Admin() {
             const messages = allMsgs[selectedClientId] ?? [];
             const docs     = allDocs[selectedClientId] ?? [];
             const meets    = allMeetings[selectedClientId] ?? [];
+            const clientProjects = adminProjects.filter((p: any) =>
+              p.portal_client_id === selectedClientId ||
+              (p.client_email && client.email && String(p.client_email).toLowerCase() === String(client.email).toLowerCase()) ||
+              (p.client_name && client.name && String(p.client_name).toLowerCase() === String(client.name).toLowerCase())
+            );
+            const activeClientProjects = clientProjects.filter((p: any) => p.status === 'active' || p.status === 'planning').length;
+            const docPresetGroup = (client.projectType || brief?.type || '').toLowerCase().includes('commercial') ? 'commercial' : 'residential';
+            const docPresetOptions = COMMON_DOCUMENT_REQUESTS[docPresetGroup];
             return (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Client header */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 p-4 sm:p-5 mb-5 pdv2-card">
-                  <div className="flex items-center gap-3 sm:contents">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] gap-3 xl:gap-5 p-4 sm:p-5 mb-5 pdv2-card">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center text-[14px] sm:text-[16px] font-black shrink-0 rounded-full bg-accent/10 text-accent">
                       {client.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
                     </div>
-                    <div className="flex-1 sm:flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="text-[16px] sm:text-[18px] font-bold mb-0.5 text-foreground">{client.name}</div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground">
                         <span>{client.email}</span>
@@ -990,10 +1167,11 @@ export default function Admin() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 items-center sm:shrink-0">
+                  <div className="flex flex-wrap gap-2 items-center min-w-0 xl:justify-end">
                     <StatusBadge label={`${messages.length} msgs`} style={{ bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' }} />
                     <StatusBadge label={`${docs.length} docs`} style={{ bg: 'rgba(139,92,246,0.08)', color: '#8b5cf6' }} />
                     <StatusBadge label={`${meets.length} meets`} style={{ bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' }} />
+                    <StatusBadge label={`${clientProjects.length} projects`} style={{ bg: 'rgba(157,126,63,0.08)', color: AC }} />
                     <ActionButton variant="neutral" icon={Receipt} className="!border-accent/30 !text-accent"
                       onClick={() => navigate('/invoices/new', { state: { clientName: client.name, clientEmail: client.email } })}>
                       Invoice
@@ -1052,13 +1230,13 @@ export default function Admin() {
                 )}
 
                 {/* Sub-tab pills */}
-                <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap scrollbar-none">
-                  {([['profile', 'Profile'], ['brief', 'Brief'], ['messages', 'Msgs'], ['docs', 'Docs'], ['meetings', 'Meets'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 mb-5">
+                  {([['profile', 'Profile'], ['brief', 'Brief'], ['projects', 'Projects'], ['messages', 'Msgs'], ['docs', 'Docs'], ['meetings', 'Meets'], ['notes', 'Notes'], ['milestones', 'Milestones']] as const).map(([k, l]) => (
                     <button key={k} onClick={() => setClientSubTab(k)}
-                      className={`text-[9px] uppercase tracking-[0.22em] font-bold px-3 md:px-4 py-2 rounded-lg transition-all shrink-0 border ${
+                      className={`text-[9px] uppercase tracking-[0.18em] font-bold px-3 md:px-4 py-2 rounded-lg transition-all shrink-0 border ${
                         clientSubTab === k ? 'bg-foreground text-background border-foreground' : 'bg-background text-muted-foreground border-border hover:border-accent hover:text-accent'
                       }`}>
-                      {l}{k === 'notes' && adminNotes.length > 0 ? ` (${adminNotes.length})` : ''}
+                      {l}{k === 'notes' && adminNotes.length > 0 ? ` (${adminNotes.length})` : k === 'projects' && clientProjects.length > 0 ? ` (${clientProjects.length})` : ''}
                     </button>
                   ))}
                 </div>
@@ -1260,6 +1438,105 @@ export default function Admin() {
                   </div>
                 )}
 
+                {/* Projects sub-tab */}
+                {clientSubTab === 'projects' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                      {[
+                        { label: 'Assigned Projects', value: clientProjects.length, sub: `${activeClientProjects} active/planning`, icon: FolderKanban, color: AC },
+                        { label: 'Contract Value', value: `$${clientProjects.reduce((s: number, p: any) => s + Number(p.contract_amount ?? p.budget ?? 0), 0).toLocaleString()}`, sub: 'Admin delivery scope', icon: DollarSign, color: '#2563eb' },
+                        { label: 'Avg Progress', value: `${clientProjects.length ? Math.round(clientProjects.reduce((s: number, p: any) => s + Number(p.progress_pct || 0), 0) / clientProjects.length) : 0}%`, sub: 'Across client projects', icon: TrendingUp, color: '#0f766e' },
+                        { label: 'Linked Docs', value: docs.length, sub: 'Client document vault', icon: FileText, color: '#7c3aed' },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        return (
+                          <div key={item.label} className="pdv2-card p-3 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[8px] uppercase tracking-[0.16em] font-black text-muted-foreground truncate">{item.label}</div>
+                              <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: item.color }} />
+                            </div>
+                            <div className="text-[18px] font-mono-tab font-black mt-1 truncate">{item.value}</div>
+                            <div className="text-[9px] text-muted-foreground truncate">{item.sub}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="pdv2-card overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-border">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wide">Client Projects</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">Manage all delivery records assigned to {client.name}.</div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <ActionButton variant="neutral" icon={BriefcaseBusiness} className="!border-accent/30 !text-accent" onClick={() => { setTab('projects'); setSelectedClientId(null); }}>
+                            Open Projects
+                          </ActionButton>
+                          <ActionButton variant="primary" icon={Plus} onClick={() => { setTab('projects'); setSelectedClientId(null); }}>
+                            New Project
+                          </ActionButton>
+                        </div>
+                      </div>
+
+                      {clientProjects.length === 0 ? (
+                        <div className="px-5 py-14 text-center">
+                          <FolderKanban className="w-9 h-9 mx-auto mb-3 text-muted-foreground/35" strokeWidth={1} />
+                          <div className="text-[13px] font-semibold text-foreground">No projects assigned yet</div>
+                          <div className="text-[11px] text-muted-foreground mt-1 mb-5">Create or link an admin project to make this client workspace project-aware.</div>
+                          <ActionButton variant="primary" icon={Plus} onClick={() => { setTab('projects'); setSelectedClientId(null); }}>Create Project</ActionButton>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
+                          {clientProjects.map((p: any) => {
+                            const statusColor = p.status === 'completed' ? '#10b981' : p.status === 'on_hold' ? '#f59e0b' : p.status === 'archived' ? '#8A8580' : AC;
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => { setTab('projects'); setSelectedClientId(null); navigate(`/admin?tab=projects&project=${p.id}`); }}
+                                className="text-left border border-border bg-background p-3.5 hover:border-accent/45 hover:bg-secondary/25 transition-colors min-w-0"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                      {p.project_code && <span className="text-[8px] uppercase tracking-[0.16em] font-black bg-secondary px-2 py-0.5 text-muted-foreground">{p.project_code}</span>}
+                                      <span className="text-[8px] uppercase tracking-[0.16em] font-black px-2 py-0.5 border" style={{ color: statusColor, borderColor: `${statusColor}55`, backgroundColor: `${statusColor}12` }}>{String(p.status || 'active').replace(/_/g, ' ')}</span>
+                                    </div>
+                                    <div className="text-[14px] font-bold text-foreground truncate">{p.title}</div>
+                                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">{[p.type, p.city, p.state].filter(Boolean).join(' · ')}</div>
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                                </div>
+                                <div className="mt-3">
+                                  <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.16em] font-black text-muted-foreground mb-1">
+                                    <span>Progress</span>
+                                    <span className="font-mono-tab text-foreground">{Number(p.progress_pct || 0)}%</span>
+                                  </div>
+                                  <div className="h-1.5 bg-secondary overflow-hidden">
+                                    <div className="h-full" style={{ width: `${Math.min(Number(p.progress_pct || 0), 100)}%`, backgroundColor: statusColor }} />
+                                  </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-3 gap-px bg-border border border-border">
+                                  {[
+                                    ['Budget', Number(p.budget || 0) ? `$${Number(p.budget || 0).toLocaleString()}` : '—'],
+                                    ['Contract', Number(p.contract_amount || 0) ? `$${Number(p.contract_amount || 0).toLocaleString()}` : '—'],
+                                    ['Manager', p.project_manager || '—'],
+                                  ].map(([label, value]) => (
+                                    <div key={label} className="bg-background px-2 py-2 min-w-0">
+                                      <div className="text-[7px] uppercase tracking-[0.14em] font-black text-muted-foreground truncate">{label}</div>
+                                      <div className="text-[10px] font-semibold truncate">{value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Messages sub-tab */}
                 {clientSubTab === 'messages' && (
                   <div className="pdv2-card overflow-hidden">
@@ -1304,30 +1581,56 @@ export default function Admin() {
                 {/* Documents sub-tab */}
                 {clientSubTab === 'docs' && (
                   <div className="pdv2-card overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-                      <span className="text-[11px] font-bold uppercase tracking-wide">{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-border">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wide">{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">Request, review, approve, and manage client files.</div>
+                      </div>
                       <ActionButton variant="neutral" icon={FilePlus} className="!border-accent/30 !text-accent" onClick={() => { setReqDocOpen(o => !o); setReqDocName(''); setReqDocDesc(''); }}>
                         Request Document
                       </ActionButton>
                     </div>
                     {reqDocOpen && (
-                      <div className="px-5 py-4 flex flex-wrap items-end gap-3 bg-accent/5 border-b border-border">
-                        <div className="flex-1 min-w-[160px]">
+                      <div className="px-5 py-4 bg-accent/5 border-b border-border">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1 text-muted-foreground">Common Request</div>
+                          <select
+                            value={reqDocPreset}
+                            onChange={e => {
+                              const value = e.target.value;
+                              setReqDocPreset(value);
+                              if (value) setReqDocName(value);
+                            }}
+                            className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-2.5 py-2.5 focus:border-accent transition-colors"
+                          >
+                            <option value="">Choose from {docPresetGroup} checklist...</option>
+                            {docPresetOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                          </select>
+                        </div>
+                        <div>
                           <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1 text-muted-foreground">Document Name *</div>
                           <input value={reqDocName} onChange={e => setReqDocName(e.target.value)}
-                            placeholder="e.g. Updated Insurance Certificate"
-                            className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-2.5 py-2 focus:border-accent transition-colors" />
+                            placeholder="Type a custom document request..."
+                            className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-2.5 py-2.5 focus:border-accent transition-colors" />
                         </div>
-                        <div className="flex-1 min-w-[160px]">
+                        <div className="lg:col-span-2">
                           <div className="text-[8px] uppercase tracking-[0.28em] font-bold mb-1 text-muted-foreground">Instructions (optional)</div>
-                          <input value={reqDocDesc} onChange={e => setReqDocDesc(e.target.value)}
+                          <textarea value={reqDocDesc} onChange={e => setReqDocDesc(e.target.value)}
                             placeholder="What to include or how to format"
-                            className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-2.5 py-2 focus:border-accent transition-colors" />
+                            rows={2}
+                            className="w-full text-[12px] outline-none resize-none rounded-lg border border-border bg-background text-foreground px-2.5 py-2.5 focus:border-accent transition-colors" />
                         </div>
-                        <ActionButton variant="primary" disabled={reqDocSaving || !reqDocName.trim()} onClick={handleRequestDoc}>
-                          {reqDocSaving ? 'Sending…' : 'Send Request'}
-                        </ActionButton>
-                        <ActionButton variant="neutral" onClick={() => setReqDocOpen(false)}>Cancel</ActionButton>
+                        </div>
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="text-[10px] text-muted-foreground">The request is created in the portal and a message is sent to the client.</div>
+                          <div className="flex flex-wrap gap-2 sm:justify-end min-w-0">
+                            <ActionButton variant="primary" disabled={reqDocSaving || !reqDocName.trim()} onClick={handleRequestDoc}>
+                              {reqDocSaving ? 'Sending…' : 'Send Request'}
+                            </ActionButton>
+                            <ActionButton variant="neutral" onClick={() => setReqDocOpen(false)}>Cancel</ActionButton>
+                          </div>
+                        </div>
                       </div>
                     )}
                     <div className="divide-y divide-border">
@@ -1366,7 +1669,72 @@ export default function Admin() {
 
                 {/* Meetings sub-tab */}
                 {clientSubTab === 'meetings' && (
-                  <div className="pdv2-card overflow-hidden divide-y divide-border">
+                  <div className="pdv2-card overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-border">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wide">Meetings ({meets.length})</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">Schedule, update, confirm, and manage client meetings in real time.</div>
+                      </div>
+                      <ActionButton variant="primary" icon={Calendar} onClick={() => openMeetingEditor()}>Schedule Meeting</ActionButton>
+                    </div>
+
+                    {meetingOpen && (
+                      <div className="px-5 py-4 bg-accent/5 border-b border-border">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                          <div>
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Meeting Type</div>
+                            <input value={meetingForm.type} onChange={e => setMeetingForm(f => ({ ...f, type: e.target.value }))}
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors" />
+                          </div>
+                          <div>
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Date</div>
+                            <input type="date" value={meetingForm.date} onChange={e => setMeetingForm(f => ({ ...f, date: e.target.value }))}
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors" />
+                          </div>
+                          <div>
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Time</div>
+                            <input type="time" value={meetingForm.time} onChange={e => setMeetingForm(f => ({ ...f, time: e.target.value }))}
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors" />
+                          </div>
+                          <div>
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Method</div>
+                            <select value={meetingForm.format} onChange={e => setMeetingForm(f => ({ ...f, format: e.target.value as any }))}
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors">
+                              <option value="Video Call">Video Call</option>
+                              <option value="Phone Call">Phone Call</option>
+                              <option value="In-Person">In-Person</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Status</div>
+                            <select value={meetingForm.status} onChange={e => setMeetingForm(f => ({ ...f, status: e.target.value as any }))}
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors">
+                              <option value="requested">Requested</option>
+                              <option value="confirmed">Confirmed</option>
+                              <option value="completed">Completed</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </div>
+                          <div className="md:col-span-2 xl:col-span-3">
+                            <div className="text-[8px] uppercase tracking-[0.26em] font-bold mb-1 text-muted-foreground">Meeting Details</div>
+                            <input value={meetingForm.notes} onChange={e => setMeetingForm(f => ({ ...f, notes: e.target.value }))}
+                              placeholder="Agenda, location, video link, prep notes..."
+                              className="w-full text-[12px] outline-none rounded-lg border border-border bg-background text-foreground px-3 py-2.5 focus:border-accent transition-colors" />
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="text-[10px] text-muted-foreground">{editingMeetingId ? 'Updates are saved to the client portal schedule.' : 'New meetings are added to the client portal and the client receives a message.'}</div>
+                          <div className="flex flex-wrap gap-2 sm:justify-end min-w-0">
+                            <ActionButton variant="primary" disabled={meetingSaving || !meetingForm.type.trim() || !meetingForm.date || !meetingForm.time} onClick={handleSaveMeeting}>
+                              {meetingSaving ? 'Saving…' : editingMeetingId ? 'Save Meeting' : 'Create Meeting'}
+                            </ActionButton>
+                            <ActionButton variant="neutral" onClick={() => { setMeetingOpen(false); setEditingMeetingId(null); }}>Cancel</ActionButton>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="divide-y divide-border">
                     {meets.map((m: any) => {
                       const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
                       return (
@@ -1380,18 +1748,25 @@ export default function Admin() {
                               </div>
                               <div className="text-[10px] text-muted-foreground">{m.date} at {m.time} · {m.format}</div>
                               {m.notes && <div className="text-[10px] mt-0.5 text-muted-foreground">{m.notes}</div>}
-                              {m.status === 'requested' && (
-                                <div className="flex gap-2 mt-2">
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                <ActionButton variant="neutral" icon={Edit3} className="!border-accent/30 !text-accent" onClick={() => openMeetingEditor(m)}>Edit</ActionButton>
+                                {m.status === 'requested' && (
+                                  <>
                                   <ActionButton variant="neutral" icon={CheckCircle2} className="!border-blue-500/30 !text-blue-500" onClick={() => handleMeetingConfirm(selectedClientId!, m.id, m.type, m.date, m.time)}>Confirm</ActionButton>
                                   <ActionButton variant="negative" icon={XCircle} onClick={() => handleMeetingCancel(selectedClientId!, m.id, m.type)}>Cancel</ActionButton>
-                                </div>
-                              )}
+                                  </>
+                                )}
+                                {m.status === 'confirmed' && (
+                                  <ActionButton variant="positive" icon={CheckCircle2} onClick={async () => { await supabase.from('portal_meetings').update({ status: 'completed' }).eq('id', m.id); await refreshData(); }}>Complete</ActionButton>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       );
                     })}
                     {meets.length === 0 && <div className="px-5 py-14 text-center text-[12px] text-muted-foreground">No meetings yet.</div>}
+                    </div>
                   </div>
                 )}
 

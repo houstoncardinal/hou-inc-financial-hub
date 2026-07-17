@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
 import { BrowserRouter, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import Protected from "@/components/Protected";
 import RoleGuard from "@/components/RoleGuard";
 import { EntityProvider } from "@/contexts/EntityContext";
+import { isSchemaCacheError, recordSystemHealthEvent } from "@/lib/systemHealth";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -85,11 +86,35 @@ import Invoices      from "./pages/Invoices";
 import InvoiceNew    from "./pages/InvoiceNew";
 import Documents     from "./pages/Documents";
 import OpsCenter     from "./pages/OpsCenter";
+import FinanceControls from "./pages/FinanceControls";
 import NotFound      from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      const message = error instanceof Error ? error.message : String(error);
+      recordSystemHealthEvent({
+        area: 'react-query:query',
+        severity: isSchemaCacheError(message) ? 'critical' : 'warning',
+        message,
+        details: { queryKey: query.queryKey },
+      });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      const message = error instanceof Error ? error.message : String(error);
+      recordSystemHealthEvent({
+        area: 'react-query:mutation',
+        severity: isSchemaCacheError(message) ? 'critical' : 'error',
+        message,
+        details: { mutationKey: mutation.options.mutationKey },
+      });
+    },
+  }),
+});
 
-const FINANCE_ROLES = ['admin', 'finance', 'viewer'] as const;
+const FINANCE_ROLES = ['admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer'] as const;
 const ADMIN_ROLES   = ['admin'] as const;
 
 // All finance routes share ONE EntityProvider so entity state is never stale
@@ -110,6 +135,7 @@ function FinanceRoutes() {
         <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
         <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Concierge /></RoleGuard>} />
         <Route path="/charts"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Charts /></RoleGuard>} />
+        <Route path="/finance/controls"   element={<RoleGuard allowed={[...FINANCE_ROLES]}><FinanceControls /></RoleGuard>} />
         <Route path="/changelog"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Changelog /></RoleGuard>} />
         <Route path="/invoices"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Invoices /></RoleGuard>} />
         <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />

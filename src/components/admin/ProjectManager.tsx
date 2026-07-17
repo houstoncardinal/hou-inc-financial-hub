@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -8,6 +9,8 @@ import {
   ArrowLeft, Pin, Eye, EyeOff, Target, MessageSquare,
   UserCheck, Users, Loader2, Zap, Building2, AlertTriangle,
   Wand2, ChevronRight, ChevronLeft, MapPin, Clock, TrendingUp,
+  Wallet, Receipt, ShieldCheck, Home, BriefcaseBusiness, ExternalLink,
+  LayoutGrid, List,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +27,23 @@ import { PDV2_CSS } from '@/components/project-detail/cardStyles';
 const AC    = '#9D7E3F';
 const SERIF = "'Cormorant Garamond', Georgia, serif";
 const HE_ENTITY = 'houston-enterprise';
+
+const ADMIN_PROJECT_CSS = `
+.ap-kpi{position:relative;overflow:hidden;border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.045),0 1px 0 rgba(255,255,255,.7) inset;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
+.ap-kpi::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--ap-color-soft),transparent 46%);pointer-events:none;}
+.ap-kpi:hover{border-color:hsl(var(--foreground)/.16);box-shadow:0 12px 30px rgba(10,10,10,.08);transform:translateY(-1px);}
+.ap-kpi-icon{width:34px;height:34px;border:1px solid hsl(var(--border));background:var(--ap-color-soft);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.ap-kpi-foot{border-top:1px solid hsl(var(--border)/.65);background:hsl(var(--secondary)/.24);}
+.ap-command{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.04);}
+.ap-project-card{position:relative;border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.04),0 1px 0 rgba(255,255,255,.65) inset;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
+.ap-project-card::before{content:'';position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,.045),transparent 42%);pointer-events:none;}
+.ap-project-card:hover{border-color:hsl(var(--foreground)/.18);box-shadow:0 14px 34px rgba(10,10,10,.08);transform:translateY(-1px);}
+@media(max-width:767px){
+  .ap-kpi{min-height:68px;}
+  .ap-kpi-icon{width:30px;height:30px;}
+  .ap-command{padding:10px!important;}
+}
+`;
 
 /* ── Types ──────────────────────────────────────────────────────── */
 interface AdminProject {
@@ -48,6 +68,8 @@ interface AdminProject {
   superintendent: string | null;
   architect: string | null;
   entity: string;
+  finance_project_id: string | null;
+  deleted_at?: string | null;
   description: string | null;
   internal_notes: string | null;
   zip_code: string | null;
@@ -69,6 +91,20 @@ interface ProjectUpdate {
 }
 
 interface PortalClientRow { id: string; name: string; email: string; status: string; }
+
+interface FinanceProject {
+  id: string;
+  name: string;
+  code: string | null;
+  budget: number | null;
+  status: string;
+  notes: string | null;
+  department?: string | null;
+  location?: string | null;
+  client_name_snapshot?: string | null;
+  admin_project_id?: string | null;
+  created_at?: string | null;
+}
 
 /* ── Constants ──────────────────────────────────────────────────── */
 const PROJECT_STATUSES = [
@@ -117,6 +153,68 @@ function fmtDate(d: string | null | undefined) {
 function statusMeta(s: string) {
   return PROJECT_STATUSES.find(x => x.value === s) ?? PROJECT_STATUSES[4];
 }
+const PROJECT_CATEGORIES = [
+  { id: 'all', label: 'All Work', short: 'All', icon: FolderKanban, color: AC },
+  { id: 'residential', label: 'Residential Construction', short: 'Residential', icon: Home, color: '#0f766e' },
+  { id: 'commercial', label: 'Commercial Construction', short: 'Commercial', icon: Building2, color: '#2563eb' },
+  { id: 'management', label: 'Project Management', short: 'Management', icon: BriefcaseBusiness, color: '#7c3aed' },
+] as const;
+type ProjectCategory = typeof PROJECT_CATEGORIES[number]['id'];
+type WorkCategory = Exclude<ProjectCategory, 'all'>;
+const categoryById = (id: ProjectCategory) => PROJECT_CATEGORIES.find(c => c.id === id) ?? PROJECT_CATEGORIES[0];
+const inferProjectCategory = (p: any): WorkCategory => {
+  const haystack = [
+    p.department, p.project_type, p.service_type, p.category, p.type, p.name, p.title, p.notes, p.description, p.location,
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (/management|owner rep|owner's rep|project management|consult|coordination|\bpm\b/.test(haystack)) return 'management';
+  if (/commercial|tenant|retail|restaurant|office|industrial|warehouse|medical|buildout|build-out/.test(haystack)) return 'commercial';
+  return 'residential';
+};
+const healthTone = (score: number) => (
+  score >= 82 ? { label: 'Strong', color: '#10b981' }
+    : score >= 64 ? { label: 'Stable', color: AC }
+      : score >= 45 ? { label: 'Watch', color: '#f59e0b' }
+        : { label: 'At Risk', color: '#ef4444' }
+);
+const missingDbColumn = (error: any, column: string) => {
+  const msg = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`;
+  return msg.toLowerCase().includes(column.toLowerCase()) || msg.includes(`'${column}'`);
+};
+const isSyntheticFinanceId = (id: string | null | undefined) => !!id && id.startsWith('finance:');
+const financeStatusToAdmin = (status: string) => (
+  status === 'on_hold' || status === 'completed' || status === 'archived' ? status : 'active'
+);
+const financeToAdminProject = (p: FinanceProject, userId: string): AdminProject => ({
+  id: `finance:${p.id}`,
+  title: p.name,
+  project_code: p.code,
+  type: p.department || inferProjectCategory(p),
+  address: null,
+  city: p.location || 'Houston',
+  state: 'TX',
+  portal_client_id: null,
+  client_name: p.client_name_snapshot || null,
+  client_email: null,
+  status: financeStatusToAdmin(p.status),
+  progress_pct: 0,
+  start_date: null,
+  estimated_completion: null,
+  actual_completion: null,
+  contract_amount: p.budget,
+  budget: p.budget,
+  project_manager: null,
+  superintendent: null,
+  architect: null,
+  entity: HE_ENTITY,
+  finance_project_id: p.id,
+  deleted_at: null,
+  description: p.notes,
+  internal_notes: null,
+  zip_code: null,
+  custom_fields: null,
+  created_at: p.created_at || new Date().toISOString(),
+  updated_at: p.created_at || new Date().toISOString(),
+});
 function autoCode(title: string, count: number) {
   const words = title.trim().split(/\s+/).filter(w => w.length > 1);
   const initials = words.slice(0, 3).map(w => w[0].toUpperCase()).join('');
@@ -924,16 +1022,25 @@ function NewProjectWizard({
    MAIN COMPONENT
 ════════════════════════════════════════════════════════════════════ */
 export default function ProjectManager() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [projects,      setProjects]      = useState<AdminProject[]>([]);
+  const [financeProjects, setFinanceProjects] = useState<FinanceProject[]>([]);
+  const [financeTxns, setFinanceTxns] = useState<any[]>([]);
+  const [financeChecks, setFinanceChecks] = useState<any[]>([]);
   const [milestones,    setMilestones]    = useState<Milestone[]>([]);
   const [updates,       setUpdates]       = useState<ProjectUpdate[]>([]);
   const [portalClients, setPortalClients] = useState<PortalClientRow[]>([]);
   const [loading,       setLoading]       = useState(true);
+  const [bridgeWarning, setBridgeWarning] = useState('');
+  const userIdRef = useRef<string | null>(null);
 
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [detailTab,    setDetailTab]    = useState<'overview' | 'milestones' | 'updates' | 'settings'>('overview');
   const [search,       setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<ProjectCategory>('all');
+  const [portfolioView, setPortfolioView] = useState<'cards' | 'list'>('cards');
 
   const [showNew,       setShowNew]       = useState(false);
   const [showInvite,    setShowInvite]    = useState(false);
@@ -953,32 +1060,72 @@ export default function ProjectManager() {
   const [upForm, setUpForm] = useState({ title: '', body: '', update_type: 'general', is_client_visible: true, pinned: false });
 
   const selectedProject = projects.find(p => p.id === selectedId) ?? null;
+  const selectedFinanceProject = selectedProject?.finance_project_id
+    ? financeProjects.find(p => p.id === selectedProject.finance_project_id) ?? null
+    : null;
 
   /* ── Load ─────────────────────────────────────────────────────── */
   const load = useCallback(async () => {
     setLoading(true);
+    setBridgeWarning('');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
-    const [projRes, clientsRes] = await Promise.all([
-      supabase.from('admin_projects').select('*').eq('admin_user_id', user.id).eq('entity', HE_ENTITY).order('created_at', { ascending: false }),
+    userIdRef.current = user.id;
+    let adminQuery = supabase.from('admin_projects').select('*').eq('admin_user_id', user.id).eq('entity', HE_ENTITY).is('deleted_at', null).order('created_at', { ascending: false });
+    let projRes = await adminQuery;
+    if (projRes.error && missingDbColumn(projRes.error, 'deleted_at')) {
+      setBridgeWarning('Admin project archive/link columns are missing in Supabase. Finance projects are visible, but admin delivery management requires the admin-finance bridge migration.');
+      projRes = await supabase.from('admin_projects').select('*').eq('admin_user_id', user.id).eq('entity', HE_ENTITY).order('created_at', { ascending: false });
+    }
+
+    const [clientsRes, finProjRes, finTxnRes, finCheckRes] = await Promise.all([
       supabase.from('portal_clients').select('id, name, email, status').order('name'),
+      supabase.from('projects').select('*').eq('entity_id', HE_ENTITY).is('deleted_at', null).order('created_at', { ascending: false }),
+      supabase.from('transactions').select('*').eq('entity_id', HE_ENTITY).is('deleted_at', null),
+      supabase.from('checks').select('*').eq('entity_id', HE_ENTITY).is('deleted_at', null),
     ]);
-    setProjects(projRes.data ?? []);
+    if (projRes.error) {
+      setBridgeWarning(projRes.error.message || 'Could not load admin delivery projects.');
+    }
+    const adminRows = (projRes.data ?? []) as AdminProject[];
+    const financeRows = (finProjRes.data ?? []) as FinanceProject[];
+    const adminFinanceIds = new Set(adminRows.map(p => p.finance_project_id).filter(Boolean));
+    const financeOnly = financeRows
+      .filter(p => !p.admin_project_id && !adminFinanceIds.has(p.id) && !adminRows.some(ap => ap.title === p.name || ap.project_code === p.code))
+      .map(p => financeToAdminProject(p, user.id));
+    setProjects([...adminRows, ...financeOnly]);
     setPortalClients(clientsRes.data ?? []);
+    setFinanceProjects(financeRows);
+    setFinanceTxns(finTxnRes.data ?? []);
+    setFinanceChecks(finCheckRes.data ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const requested = searchParams.get('project');
+    if (!requested || !projects.length) return;
+    const match = projects.find(p => p.id === requested || p.finance_project_id === requested);
+    if (match && selectedId !== match.id) openProject(match.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, searchParams, selectedId]);
+
   /* ── Realtime ─────────────────────────────────────────────────── */
   useEffect(() => {
     const ch = supabase.channel('pm-rt')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_projects' },
-        ({ new: row }) => setProjects(prev => prev.some(p => p.id === row.id) ? prev : [row as AdminProject, ...prev]))
+        ({ new: row }) => setProjects(prev => row.deleted_at ? prev : (prev.some(p => p.id === row.id) ? prev : [row as AdminProject, ...prev])))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'admin_projects' },
-        ({ new: row }) => setProjects(prev => prev.map(p => p.id === row.id ? row as AdminProject : p)))
+        ({ new: row }) => setProjects(prev => row.deleted_at ? prev.filter(p => p.id !== row.id) : prev.map(p => p.id === row.id ? row as AdminProject : p)))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'admin_projects' },
         ({ old: row }) => setProjects(prev => prev.filter(p => p.id !== row.id)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `entity_id=eq.${HE_ENTITY}` },
+        () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `entity_id=eq.${HE_ENTITY}` },
+        () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checks', filter: `entity_id=eq.${HE_ENTITY}` },
+        () => load())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_project_milestones' },
         ({ new: row }) => { if (row.project_id === selectedId) setMilestones(prev => [...prev, row as Milestone]); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'admin_project_milestones' },
@@ -991,11 +1138,11 @@ export default function ProjectManager() {
         ({ old: row }) => setUpdates(prev => prev.filter(u => u.id !== row.id)))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [selectedId]);
+  }, [load, selectedId]);
 
   /* ── Sub-data on selection ────────────────────────────────────── */
   useEffect(() => {
-    if (!selectedId) { setMilestones([]); setUpdates([]); return; }
+    if (!selectedId || isSyntheticFinanceId(selectedId)) { setMilestones([]); setUpdates([]); return; }
     Promise.all([
       supabase.from('admin_project_milestones').select('*').eq('project_id', selectedId).order('sort_order'),
       supabase.from('admin_project_updates').select('*').eq('project_id', selectedId)
@@ -1029,11 +1176,18 @@ export default function ProjectManager() {
   };
 
   const deleteProject = async (id: string) => {
-    if (!confirm('Delete this project and all milestones/updates?')) return;
-    await supabase.from('admin_projects').delete().eq('id', id);
+    if (!confirm('Archive this project in admin and finance? Milestones, updates, transactions, and checks are preserved.')) return;
+    const { error } = await supabase.from('admin_projects').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error && missingDbColumn(error, 'deleted_at')) {
+      await supabase.from('admin_projects').delete().eq('id', id);
+      setBridgeWarning('Supabase is missing admin_projects.deleted_at, so this project used legacy delete behavior. Run the bridge migration for archive-safe syncing.');
+    } else if (error) {
+      toast({ title: 'Archive failed', description: error.message, variant: 'destructive' });
+      return;
+    }
     setProjects(prev => prev.filter(p => p.id !== id));
     if (selectedId === id) setSelectedId(null);
-    toast({ title: 'Project deleted' });
+    toast({ title: 'Project archived', description: 'Hidden from active admin and finance project views' });
   };
 
   const openEdit = () => setEditForm({
@@ -1116,11 +1270,77 @@ export default function ProjectManager() {
 
   const inviteUrl = inviteToken ? `${window.location.origin}/portal/invite?token=${inviteToken}` : '';
 
+  const financeById = useMemo(() => new Map(financeProjects.map(p => [p.id, p])), [financeProjects]);
+
+  const enrichedProjects = useMemo(() => projects.map(p => {
+    const finance = p.finance_project_id ? financeById.get(p.finance_project_id) : null;
+    const financeId = finance?.id ?? p.finance_project_id;
+    const pChecks = financeId ? financeChecks.filter((c: any) => c.project_id === financeId) : [];
+    const pTxns = financeId ? financeTxns.filter((t: any) => t.project_id === financeId) : [];
+    const incoming = pTxns
+      .filter((t: any) => t.type === 'income')
+      .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+    const expenses = pTxns
+      .filter((t: any) => t.type === 'expense')
+      .reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
+    const cleared = pChecks
+      .filter((c: any) => c.status === 'cleared')
+      .reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
+    const outstanding = pChecks
+      .filter((c: any) => c.status === 'pending')
+      .reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
+    const budget = Number(finance?.budget ?? p.budget ?? p.contract_amount ?? 0);
+    const spent = expenses + cleared;
+    const used = budget > 0 ? Math.min(150, (spent / budget) * 100) : 0;
+    const collectionPct = budget > 0 ? Math.min(150, (incoming / budget) * 100) : 0;
+    const outstandingRatio = budget > 0 ? outstanding / budget : 0;
+    const cashRatio = incoming > 0 ? (incoming - spent) / Math.max(incoming, 1) : 0;
+    const category = inferProjectCategory({ ...finance, ...p, name: finance?.name, notes: finance?.notes });
+    const healthScore = Math.max(0, Math.min(100,
+      92
+      - Math.max(0, (spent / Math.max(budget, 1)) - 0.78) * 95
+      - outstandingRatio * 28
+      - (p.status === 'on_hold' ? 12 : p.status === 'archived' ? 22 : 0)
+      + (cashRatio > 0.12 ? 5 : 0)
+    ));
+
+    return {
+      ...p,
+      finance,
+      budget,
+      incoming,
+      spent,
+      outstanding,
+      net: incoming - spent,
+      used,
+      collectionPct,
+      healthScore,
+      healthLabel: healthTone(healthScore).label,
+      projectCategory: category,
+    };
+  }), [projects, financeById, financeChecks, financeTxns]);
+
+  const categoryStats = useMemo(() => PROJECT_CATEGORIES.map(category => {
+    const list = category.id === 'all' ? enrichedProjects : enrichedProjects.filter((p: any) => p.projectCategory === category.id);
+    return {
+      ...category,
+      count: list.length,
+      budget: list.reduce((s: number, p: any) => s + Number(p.budget || 0), 0),
+      active: list.filter((p: any) => p.status === 'active').length,
+      net: list.reduce((s: number, p: any) => s + p.net, 0),
+      health: list.length ? list.reduce((s: number, p: any) => s + p.healthScore, 0) / list.length : 0,
+    };
+  }), [enrichedProjects]);
+  const selectedCategoryStats = categoryStats.find(c => c.id === categoryFilter) ?? categoryStats[0];
+
+  const selectedProjectMetrics = selectedId ? enrichedProjects.find(p => p.id === selectedId) ?? null : null;
+
   /* ── Filtered list ────────────────────────────────────────────── */
-  const filtered = projects.filter(p => {
+  const filtered = enrichedProjects.filter(p => {
     const q = search.toLowerCase();
     return (!q || p.title.toLowerCase().includes(q) || p.client_name?.toLowerCase().includes(q) || p.project_code?.toLowerCase().includes(q))
-      && (filterStatus === 'all' || p.status === filterStatus);
+      && (filterStatus === 'all' || p.status === filterStatus)
+      && (categoryFilter === 'all' || p.projectCategory === categoryFilter);
   });
 
   const clientDisplay = (p: AdminProject) => {
@@ -1128,8 +1348,71 @@ export default function ProjectManager() {
     return p.client_name ?? null;
   };
 
-  const openProject = (id: string) => {
-    setSelectedId(id); setDetailTab('overview'); setEditMode(false); setEditForm(null);
+  const materializeFinanceProject = async (p: AdminProject) => {
+    if (!p.id.startsWith('finance:') || !p.finance_project_id) return p.id;
+    const userId = userIdRef.current ?? (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) return null;
+
+    const { data: existing, error: existingError } = await supabase
+      .from('admin_projects')
+      .select('*')
+      .eq('finance_project_id', p.finance_project_id)
+      .maybeSingle();
+    if (existingError && missingDbColumn(existingError, 'finance_project_id')) {
+      setBridgeWarning('Supabase is missing admin_projects.finance_project_id. Run the admin-finance bridge migration to manage finance-created projects inside Admin.');
+      toast({
+        title: 'Project bridge migration needed',
+        description: 'Opening the finance project detail instead. Admin delivery management needs the bridge columns in Supabase.',
+        variant: 'destructive',
+      });
+      navigate(`/projects/${p.finance_project_id}`);
+      return null;
+    }
+    if (existing) {
+      setProjects(prev => prev.map(row => row.id === p.id ? existing as AdminProject : row));
+      return existing.id;
+    }
+
+    const { data, error } = await supabase.from('admin_projects').insert({
+      admin_user_id: userId,
+      entity: HE_ENTITY,
+      title: p.title,
+      project_code: p.project_code,
+      type: p.type || 'Other',
+      city: p.city || 'Houston',
+      state: p.state || 'TX',
+      client_name: p.client_name,
+      status: p.status,
+      progress_pct: p.progress_pct || 0,
+      contract_amount: p.contract_amount,
+      budget: p.budget,
+      description: p.description,
+      custom_fields: {},
+      finance_project_id: p.finance_project_id,
+    }).select().single();
+    if (error) {
+      const bridgeMissing = missingDbColumn(error, 'finance_project_id');
+      if (bridgeMissing) {
+        setBridgeWarning('Supabase is missing the admin-finance bridge columns. Finance projects are visible here, but admin management requires the bridge migration.');
+        navigate(`/projects/${p.finance_project_id}`);
+      }
+      toast({
+        title: bridgeMissing ? 'Project bridge migration needed' : 'Could not open delivery workspace',
+        description: bridgeMissing ? 'Opening the finance project detail instead.' : error.message,
+        variant: 'destructive',
+      });
+      return null;
+    }
+    setProjects(prev => prev.map(row => row.id === p.id ? data as AdminProject : row));
+    toast({ title: 'Delivery workspace linked', description: 'This finance project can now be managed in admin.' });
+    return data.id;
+  };
+
+  const openProject = async (id: string) => {
+    const requested = projects.find(p => p.id === id);
+    const nextId = requested ? await materializeFinanceProject(requested) : id;
+    if (!nextId || isSyntheticFinanceId(nextId)) return;
+    setSelectedId(nextId); setDetailTab('overview'); setEditMode(false); setEditForm(null);
     // Scroll the admin content pane (and window, when standalone) back to the top
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0 });
@@ -1138,10 +1421,14 @@ export default function ProjectManager() {
   };
 
   /* ── Portfolio metrics ────────────────────────────────────────── */
-  const activeCount    = projects.filter(p => p.status === 'active').length;
-  const planningCount  = projects.filter(p => p.status === 'planning').length;
-  const completedCount = projects.filter(p => p.status === 'completed').length;
-  const totalContract  = projects.reduce((s, p) => s + (Number(p.contract_amount) || 0), 0);
+  const activeCount    = enrichedProjects.filter(p => p.status === 'active').length;
+  const planningCount  = enrichedProjects.filter(p => p.status === 'planning').length;
+  const completedCount = enrichedProjects.filter(p => p.status === 'completed').length;
+  const totalContract  = enrichedProjects.reduce((s, p) => s + (Number(p.budget) || 0), 0);
+  const totalSpent     = enrichedProjects.reduce((s, p) => s + (Number(p.spent) || 0), 0);
+  const totalIncoming  = enrichedProjects.reduce((s, p) => s + (Number(p.incoming) || 0), 0);
+  const totalOpenChecks = enrichedProjects.reduce((s, p) => s + (Number(p.outstanding) || 0), 0);
+  const watchCount     = enrichedProjects.filter(p => p.healthScore < 64 || p.used >= 90).length;
   const avgProgress    = projects.length ? Math.round(projects.reduce((s, p) => s + (p.progress_pct || 0), 0) / projects.length) : 0;
 
   /* ── Selected-project derived data ────────────────────────────── */
@@ -1175,41 +1462,139 @@ export default function ProjectManager() {
     toast({ title: `Progress synced to ${pct}%`, description: 'Based on completed milestones' });
   };
 
+  const SelectedCategoryIcon = selectedCategoryStats?.icon ?? FolderKanban;
+  const portfolioKpis = [
+    { label: 'Total Projects', value: String(projects.length), sub: `${planningCount} planning · ${completedCount} completed`, foot: 'Admin + finance register', icon: FolderKanban, color: AC },
+    { label: 'Active Builds', value: String(activeCount), sub: activeCount > 0 ? 'Currently in delivery' : 'No active builds', foot: 'Live Houston Enterprise', icon: Zap, color: '#10b981' },
+    { label: 'Portfolio Value', value: fmtUSD(totalContract), sub: 'Finance budget', foot: `${categoryStats[0]?.count ?? 0} scoped records`, icon: DollarSign, color: '#3b82f6' },
+    { label: 'Capital Deployed', value: fmtUSD(totalSpent), sub: `${totalContract > 0 ? ((totalSpent / totalContract) * 100).toFixed(1) : '0.0'}% of budget`, foot: 'Checks + expenses', icon: Wallet, color: '#ef4444' },
+    { label: 'Revenue', value: fmtUSD(totalIncoming), sub: `${fmtUSD(totalOpenChecks)} open checks`, foot: 'Transactions linked', icon: Receipt, color: '#0f766e' },
+    { label: 'Watch List', value: String(watchCount), sub: `${avgProgress}% avg progress`, foot: 'Risk intelligence', icon: ShieldCheck, color: '#f59e0b' },
+  ];
+
   /* ═══════════════════════════════════════════════════════════════
      RENDER
   ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="text-foreground">
-      <style>{PDV2_CSS}</style>
+      <style>{PDV2_CSS}{ADMIN_PROJECT_CSS}</style>
 
       {!selectedProject ? (
         /* ═══ PORTFOLIO — KPI rail + project register ═══ */
         <div className="space-y-5">
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard label="Total Projects" value={String(projects.length)}
-              sub={`${planningCount} planning · ${completedCount} completed`} icon={FolderKanban} trendColor={AC} />
-            <StatCard label="Active Builds" value={String(activeCount)}
-              sub={activeCount > 0 ? 'Currently in delivery' : 'No active builds'}
-              subColor={activeCount > 0 ? 'text-positive font-semibold' : undefined} icon={Zap} trendColor="#10b981" />
-            <StatCard label="Contract Value" value={fmtUSD(totalContract)} sub="Combined portfolio" icon={DollarSign} trendColor="#3b82f6" />
-            <StatCard label="Avg Progress" value={`${avgProgress}%`} sub="Across all projects" icon={TrendingUp} trendColor="#8b5cf6" />
+          {bridgeWarning && (
+            <div className="pdv2-card !border-warning/35 bg-warning/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0" strokeWidth={2} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-[0.18em] font-black text-warning">Admin-Finance Bridge Needs Database Migration</div>
+                <div className="text-[12px] text-muted-foreground mt-0.5">{bridgeWarning}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/projects')}
+                className="h-8 px-3 border border-warning/30 text-warning text-[9px] uppercase tracking-[0.16em] font-black hover:bg-warning/10 transition-colors"
+              >
+                Open Finance Projects
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-2.5">
+            {portfolioKpis.map(card => {
+              const Icon = card.icon;
+              return (
+                <button
+                  key={card.label}
+                  type="button"
+                  className="ap-kpi text-left min-w-0"
+                  style={{ '--ap-color-soft': `${card.color}14` } as any}
+                >
+                  <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: card.color }} />
+                  <div className="relative flex items-center gap-2.5 p-2.5 sm:p-3">
+                    <span className="ap-kpi-icon" style={{ color: card.color }}>
+                      <Icon className="w-3.5 h-3.5" strokeWidth={1.8} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[8px] uppercase tracking-[0.16em] font-black text-foreground/60 truncate">{card.label}</span>
+                      <span className="block text-[17px] sm:text-[18px] font-mono-tab font-black leading-tight truncate text-foreground">{card.value}</span>
+                      <span className="block text-[9px] text-muted-foreground truncate">{card.sub}</span>
+                    </span>
+                  </div>
+                  <div className="ap-kpi-foot relative hidden sm:flex px-3 py-1.5 items-center justify-between gap-2">
+                    <span className="text-[7.5px] uppercase tracking-[0.15em] font-black text-foreground/45 truncate">{card.foot}</span>
+                    <ChevronRight className="w-3 h-3 shrink-0" style={{ color: card.color }} />
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           <div className="pdv2-card overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-border">
-              <div className="text-[11px] font-bold uppercase tracking-wide flex-1 min-w-[150px]">
-                Project Portfolio ({filtered.length}{filtered.length !== projects.length ? ` of ${projects.length}` : ''})
+            <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-3 px-3 sm:px-5 py-3 border-b border-border">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold uppercase tracking-wide">
+                  Project Portfolio ({filtered.length}{filtered.length !== projects.length ? ` of ${projects.length}` : ''})
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  Finance-linked delivery view with realtime cash, progress, and risk signals.
+                </div>
               </div>
-              <div className="relative flex items-center">
-                <Search className="absolute left-2.5 w-3 h-3 pointer-events-none text-muted-foreground" strokeWidth={2} />
-                <input value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Search title, client, or code…"
-                  className="text-[11px] outline-none rounded-lg border border-border bg-background text-foreground pl-6 pr-2.5 py-1.5 w-[150px] sm:w-[200px] focus:border-accent transition-colors" />
+              <div className="ap-command flex flex-col lg:flex-row lg:items-center gap-2 min-w-0 p-2">
+                <div className="relative flex items-center min-w-0 lg:w-[245px]">
+                  <Search className="absolute left-2.5 w-3 h-3 pointer-events-none text-muted-foreground" strokeWidth={2} />
+                  <input value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Search projects…"
+                    className="text-[11px] outline-none border border-border bg-background text-foreground pl-6 pr-2.5 py-2 w-full h-10 focus:border-accent transition-colors" />
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:w-[330px] min-w-0">
+                  <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as ProjectCategory)}>
+                    <SelectTrigger className="h-10 rounded-none border-border text-left">
+                      <SelectValue placeholder="Work type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryStats.map(category => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.label} · {category.count}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="hidden sm:flex items-center gap-2 border border-border bg-secondary/25 px-2.5 min-w-[148px]">
+                    <SelectedCategoryIcon className="w-3.5 h-3.5 shrink-0" style={{ color: selectedCategoryStats.color }} />
+                    <div className="min-w-0">
+                      <div className="text-[8px] uppercase tracking-[0.14em] font-black text-muted-foreground truncate">{selectedCategoryStats.short}</div>
+                      <div className="text-[9px] font-mono-tab font-bold truncate">{fmtUSD(selectedCategoryStats.budget)} · {selectedCategoryStats.active} active</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] sm:flex sm:items-center gap-2">
+                  <div className="inline-flex border border-border bg-background overflow-hidden shrink-0 h-10">
+                    {[
+                      { key: 'cards' as const, label: 'Cards', Icon: LayoutGrid },
+                      { key: 'list' as const, label: 'List', Icon: List },
+                    ].map(v => {
+                      const active = portfolioView === v.key;
+                      return (
+                        <button
+                          key={v.key}
+                          type="button"
+                          onClick={() => setPortfolioView(v.key)}
+                          className={`px-3 inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] font-black transition-colors border-r border-border last:border-r-0 ${
+                            active ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                          }`}
+                        >
+                          <v.Icon className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">{v.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <ActionButton variant="primary" icon={Plus} onClick={() => setShowNew(true)}>New Project</ActionButton>
+                </div>
               </div>
-              <ActionButton variant="primary" icon={Plus} onClick={() => setShowNew(true)}>New Project</ActionButton>
             </div>
 
-            <div className="flex gap-1.5 px-5 py-2.5 border-b border-border overflow-x-auto scrollbar-none">
+            <div className="flex flex-wrap gap-1.5 px-3 sm:px-5 py-2 border-b border-border">
               {['all', 'planning', 'active', 'on_hold', 'completed', 'archived'].map(s => {
                 const on = filterStatus === s;
                 const m  = s !== 'all' ? statusMeta(s) : null;
@@ -1240,15 +1625,128 @@ export default function ProjectManager() {
                   <ActionButton variant="primary" icon={Plus} onClick={() => setShowNew(true)}>Create First Project</ActionButton>
                 )}
               </div>
+            ) : portfolioView === 'cards' ? (
+              <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                {filtered.map((p: any, idx: number) => {
+                  const m = statusMeta(p.status);
+                  const client = clientDisplay(p);
+                  const category = categoryById(p.projectCategory);
+                  const CategoryIcon = category.icon;
+                  const health = healthTone(p.healthScore);
+                  const overBudget = p.used >= 100;
+                  const nearLimit = p.used >= 80 && p.used < 100;
+                  return (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: idx * 0.025 }}
+                      onClick={() => openProject(p.id)}
+                      className="ap-project-card group cursor-pointer overflow-hidden"
+                    >
+                      <div className="h-[3px]" style={{ backgroundColor: m.color }} />
+                      <div className="p-3.5 sm:p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                              {p.project_code && (
+                                <span className="text-[8px] font-black uppercase tracking-[0.18em] text-muted-foreground font-mono-tab bg-secondary px-2 py-0.5">
+                                  {p.project_code}
+                                </span>
+                              )}
+                              <span className="text-[8px] uppercase tracking-[0.18em] font-black px-2 py-0.5 border" style={{ color: m.color, borderColor: `${m.color}55`, backgroundColor: `${m.color}12` }}>
+                                {m.label}
+                              </span>
+                              <span className="text-[8px] uppercase tracking-[0.16em] font-black px-2 py-0.5 border border-border bg-secondary/45 text-foreground/70 inline-flex items-center gap-1">
+                                <CategoryIcon className="w-2.5 h-2.5" style={{ color: category.color }} />
+                                {category.short}
+                              </span>
+                            </div>
+                            <div className="text-[15px] font-bold leading-tight truncate group-hover:text-accent transition-colors">{p.title}</div>
+                            <div className="text-[10px] text-muted-foreground truncate mt-1">
+                              {[client, p.city, p.state].filter(Boolean).join(' · ') || p.type}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">Health</div>
+                            <div className="text-[22px] font-mono-tab font-black leading-none mt-1" style={{ color: health.color }}>
+                              {Math.round(p.healthScore)}
+                            </div>
+                            <div className="text-[9px] font-semibold" style={{ color: health.color }}>{health.label}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 border border-border bg-secondary/20 p-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">Delivery Progress</span>
+                            <span className="text-[10px] font-mono-tab font-bold" style={{ color: m.color }}>{p.progress_pct}%</span>
+                          </div>
+                          <div className="h-1.5 bg-background border border-border overflow-hidden">
+                            <div className="h-full" style={{ width: `${Math.min(p.progress_pct || 0, 100)}%`, backgroundColor: m.color }} />
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 mt-2">
+                            {[
+                              ['Budget Used', `${Math.min(p.used, 150).toFixed(0)}%`, overBudget ? '#ef4444' : nearLimit ? '#f59e0b' : category.color],
+                              ['Collections', `${Math.min(p.collectionPct, 150).toFixed(0)}%`, '#10b981'],
+                              ['Open Checks', fmtUSD(p.outstanding), p.outstanding > 0 ? '#f59e0b' : 'hsl(var(--muted-foreground))'],
+                            ].map(([label, value, color]) => (
+                              <div key={label as string} className="min-w-0">
+                                <div className="text-[7px] uppercase tracking-[0.13em] font-black text-muted-foreground truncate">{label}</div>
+                                <div className="text-[10px] font-mono-tab font-bold truncate" style={{ color: color as string }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border">
+                          {[
+                            ['Budget', fmtUSD(p.budget), ''],
+                            ['Deployed', fmtUSD(p.spent), ''],
+                            ['Revenue', fmtUSD(p.incoming), 'text-positive'],
+                            ['Net', fmtUSD(p.net), p.net >= 0 ? 'text-positive' : 'text-accent'],
+                          ].map(([label, value, cls]) => (
+                            <div key={label} className="bg-background px-2 py-2 min-w-0">
+                              <div className="text-[7px] uppercase tracking-[0.14em] font-black text-muted-foreground">{label}</div>
+                              <div className={`text-[11px] font-mono-tab font-bold truncate ${cls}`}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap gap-1.5 min-w-0">
+                            {overBudget && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-destructive/10 text-destructive">Over Budget</span>}
+                            {nearLimit && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-warning/10 text-warning">Near Limit</span>}
+                            {p.finance_project_id && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-accent/10 text-accent">Finance Linked</span>}
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.16em] font-black text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
+                            Manage <ChevronRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
             ) : (
               <>
                 {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-[12px]">
+                <div className="hidden xl:block overflow-hidden">
+                  <table className="w-full table-fixed text-[12px]">
+                    <colgroup>
+                      <col className="w-[24%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[6%]" />
+                    </colgroup>
                     <thead className="bg-secondary/45">
                       <tr className="border-b border-border">
-                        {['Project', 'Client', 'Status', 'Progress', 'Contract', 'Est. Complete', ''].map((h, i) => (
-                          <th key={h + i} className={`px-4 py-3.5 text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-black whitespace-nowrap ${h === 'Contract' ? 'text-right' : 'text-left'}`}>{h}</th>
+                        {['Project', 'Client', 'Category', 'Status', 'Progress', 'Budget', 'Deployed', 'Revenue', 'Net'].map((h, i) => (
+                          <th key={h + i} className={`px-4 py-3.5 text-[8px] uppercase tracking-[0.24em] text-muted-foreground font-black whitespace-nowrap ${['Budget', 'Deployed', 'Revenue', 'Net'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1256,10 +1754,12 @@ export default function ProjectManager() {
                       {filtered.map(p => {
                         const m = statusMeta(p.status);
                         const client = clientDisplay(p);
+                        const category = categoryById(p.projectCategory);
+                        const CategoryIcon = category.icon;
                         return (
                           <tr key={p.id} onClick={() => openProject(p.id)}
                             className="border-b border-border last:border-b-0 pdv2-row-hover transition-colors cursor-pointer">
-                            <td className="px-4 py-3.5">
+                            <td className="px-4 py-3.5 min-w-0">
                               <div className="flex items-center gap-3 min-w-0">
                                 <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${m.color}14` }}>
                                   <Building2 className="w-3.5 h-3.5" style={{ color: m.color }} strokeWidth={1.6} />
@@ -1270,7 +1770,7 @@ export default function ProjectManager() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3.5">
+                            <td className="px-4 py-3.5 min-w-0">
                               {client ? (
                                 <div className="flex items-center gap-1.5 text-[11px] text-foreground">
                                   {p.portal_client_id
@@ -1279,6 +1779,12 @@ export default function ProjectManager() {
                                   <span className="truncate max-w-[150px]">{client}</span>
                                 </div>
                               ) : <span className="text-[11px] text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="inline-flex items-center gap-1.5 text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/70 whitespace-nowrap">
+                                <CategoryIcon className="w-3 h-3" style={{ color: category.color }} />
+                                {category.short}
+                              </span>
                             </td>
                             <td className="px-4 py-3.5"><StatusBadge status={p.status} /></td>
                             <td className="px-4 py-3.5 min-w-[130px]">
@@ -1289,9 +1795,10 @@ export default function ProjectManager() {
                                 <span className="text-[10px] font-bold font-mono-tab w-8 text-right" style={{ color: m.color }}>{p.progress_pct}%</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3.5 text-right font-mono-tab font-semibold whitespace-nowrap">{fmtUSD(p.contract_amount)}</td>
-                            <td className="px-4 py-3.5 text-[11px] text-muted-foreground whitespace-nowrap">{fmtDate(p.estimated_completion)}</td>
-                            <td className="px-4 py-3.5 text-right"><ChevronRight className="w-3.5 h-3.5 text-muted-foreground inline-block" strokeWidth={1.5} /></td>
+                            <td className="px-4 py-3.5 text-right font-mono-tab font-semibold whitespace-nowrap truncate">{fmtUSD(p.budget)}</td>
+                            <td className="px-4 py-3.5 text-right font-mono-tab font-semibold whitespace-nowrap truncate">{fmtUSD(p.spent)}</td>
+                            <td className="px-4 py-3.5 text-right font-mono-tab font-semibold text-positive whitespace-nowrap truncate">{fmtUSD(p.incoming)}</td>
+                            <td className={`px-4 py-3.5 text-right font-mono-tab font-bold whitespace-nowrap truncate ${p.net >= 0 ? 'text-positive' : 'text-accent'}`}>{fmtUSD(p.net)}</td>
                           </tr>
                         );
                       })}
@@ -1300,10 +1807,11 @@ export default function ProjectManager() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-border">
+                <div className="xl:hidden divide-y divide-border">
                   {filtered.map(p => {
                     const m = statusMeta(p.status);
                     const client = clientDisplay(p);
+                    const category = categoryById(p.projectCategory);
                     return (
                       <button key={p.id} onClick={() => openProject(p.id)} className="w-full text-left px-4 py-4 pdv2-row-hover transition-colors">
                         <div className="flex items-start justify-between gap-3 mb-2">
@@ -1322,10 +1830,23 @@ export default function ProjectManager() {
                           <span className="text-[10px] font-bold font-mono-tab" style={{ color: m.color }}>{p.progress_pct}%</span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span className="font-mono-tab font-semibold text-foreground">{fmtUSD(p.contract_amount)}</span>
+                          <span className="font-mono-tab font-semibold text-foreground">{fmtUSD(p.budget)}</span>
+                          <span>{category.short}</span>
                           {p.estimated_completion && (
                             <span className="flex items-center gap-1"><CalendarDays className="w-2.5 h-2.5" strokeWidth={1.7} />{fmtDate(p.estimated_completion)}</span>
                           )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-px bg-border border border-border mt-3">
+                          {[
+                            ['Deployed', fmtUSD(p.spent), ''],
+                            ['Revenue', fmtUSD(p.incoming), 'text-positive'],
+                            ['Net', fmtUSD(p.net), p.net >= 0 ? 'text-positive' : 'text-accent'],
+                          ].map(([label, value, cls]) => (
+                            <div key={label} className="bg-background px-2 py-1.5 min-w-0">
+                              <div className="text-[7px] uppercase tracking-[0.15em] font-bold text-muted-foreground">{label}</div>
+                              <div className={`text-[10px] font-bold font-mono-tab truncate ${cls}`}>{value}</div>
+                            </div>
+                          ))}
                         </div>
                       </button>
                     );
@@ -1384,6 +1905,13 @@ export default function ProjectManager() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0 pl-11 lg:pl-2">
+                    {selectedProject.finance_project_id && (
+                      <ActionButton variant="neutral" icon={ExternalLink}
+                        className="!border-accent/30 !text-accent"
+                        onClick={() => navigate(`/projects/${selectedProject.finance_project_id}`)}>
+                        Finance View
+                      </ActionButton>
+                    )}
                     <ActionButton variant="neutral" icon={selectedProject.portal_client_id ? UserCheck : Link2}
                       className={selectedProject.portal_client_id ? '!border-positive/30 !text-positive' : '!border-accent/30 !text-accent'}
                       onClick={() => setShowInvite(true)}>
@@ -1565,9 +2093,13 @@ export default function ProjectManager() {
                     <div className="space-y-5">
                       {/* KPI rail */}
                       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                        <StatCard label="Contract Value" value={fmtUSD(selectedProject.contract_amount)}
-                          sub={selectedProject.budget != null ? `Budget ${fmtUSD(selectedProject.budget)}` : 'No budget set'}
+                        <StatCard label="Budget" value={fmtUSD(selectedProjectMetrics?.budget ?? selectedProject.budget ?? selectedProject.contract_amount)}
+                          sub={selectedFinanceProject ? 'Synced finance project' : 'Admin project'}
                           icon={DollarSign} trendColor={AC} />
+                        <StatCard label="Deployed" value={fmtUSD(selectedProjectMetrics?.spent ?? 0)}
+                          sub={`${(selectedProjectMetrics?.used ?? 0).toFixed(1)}% used`} icon={Wallet} trendColor="#ef4444" />
+                        <StatCard label="Revenue" value={fmtUSD(selectedProjectMetrics?.incoming ?? 0)}
+                          sub={`Net ${fmtUSD(selectedProjectMetrics?.net ?? 0)}`} icon={Receipt} trendColor="#0f766e" />
                         <StatCard label="Progress" value={`${selectedProject.progress_pct}%`}
                           sub={selMeta!.label} icon={TrendingUp} trendColor={selMeta!.color} />
                         <StatCard label="Days Remaining"
@@ -1575,15 +2107,9 @@ export default function ProjectManager() {
                           sub={selectedProject.estimated_completion ? `Est. ${fmtDate(selectedProject.estimated_completion)}` : 'No target date'}
                           subColor={schedule && schedule.daysLeft < 0 ? 'text-destructive font-semibold' : schedule && schedule.daysLeft <= 30 ? 'text-warning font-semibold' : undefined}
                           icon={Clock} trendColor={schedule && schedule.daysLeft < 0 ? '#ef4444' : schedule && schedule.daysLeft <= 30 ? '#f59e0b' : '#3b82f6'} />
-                        <StatCard label="Milestones" value={milestones.length ? `${msDone}/${milestones.length}` : '0'}
-                          sub={milestones.length ? `${Math.round((msDone / milestones.length) * 100)}% complete` : 'None yet'}
-                          icon={Target} trendColor="#10b981" />
-                        <StatCard label="Updates" value={String(updates.length)}
-                          sub={`${updates.filter(u => u.is_client_visible).length} client-visible`}
-                          icon={MessageSquare} trendColor="#3b82f6" />
-                        <StatCard label="Start Date" value={selectedProject.start_date ? fmtDate(selectedProject.start_date) : '—'}
-                          sub={schedule ? `${schedule.totalDays}-day schedule` : 'Timeline open'}
-                          icon={CalendarDays} trendColor="#8b5cf6" />
+                        <StatCard label="Health" value={String(Math.round(selectedProjectMetrics?.healthScore ?? 0))}
+                          sub={`${fmtUSD(selectedProjectMetrics?.outstanding ?? 0)} open checks`}
+                          icon={ShieldCheck} trendColor={healthTone(selectedProjectMetrics?.healthScore ?? 0).color} />
                       </div>
 
                       {/* Milestone timeline + project details */}
@@ -1665,6 +2191,7 @@ export default function ProjectManager() {
                             {[
                               { label: 'Post Client Update', icon: MessageSquare, onClick: () => { setDetailTab('updates'); setShowUpdateForm(true); } },
                               { label: 'Add Milestone', icon: Target, onClick: () => { setDetailTab('milestones'); setShowMilestoneForm(true); } },
+                              ...(selectedProject.finance_project_id ? [{ label: 'Open Finance Detail', icon: ExternalLink, onClick: () => navigate(`/projects/${selectedProject.finance_project_id}`) }] : []),
                               { label: selectedProject.portal_client_id ? 'Manage Portal Link' : 'Invite Client to Portal', icon: Link2, onClick: () => setShowInvite(true) },
                               { label: 'Edit Project Details', icon: Edit3, onClick: () => { setEditMode(true); openEdit(); } },
                             ].map(a => (

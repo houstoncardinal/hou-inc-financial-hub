@@ -619,6 +619,7 @@ export default function ClientMap() {
   const mapClickRef    = useRef<((e: mapboxgl.MapMouseEvent) => void) | null>(null);
   const previewMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
+  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [ready,        setReady]        = useState(false);
   const [pins,         setPins]         = useState<MapPin[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -630,18 +631,33 @@ export default function ClientMap() {
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(false);
   const [confirmId,    setConfirmId]    = useState<string | null>(null);
-  const [sideOpen,     setSideOpen]     = useState(true);
+  const [sideOpen,     setSideOpen]     = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PinStatus>('all');
+
+  useEffect(() => {
+    const onResize = () => {
+      const compact = window.innerWidth < 768;
+      setIsCompact(compact);
+      if (compact) setSideOpen(false);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   /* ── Load pins ── */
   const loadPins = useCallback(async () => {
     try {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from('map_pins')
         .select('*')
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
+      if (error) {
+        setPins([]);
+        return;
+      }
       setPins((data ?? []) as MapPin[]);
     } catch { /* table may not exist yet */ }
     setLoading(false);
@@ -914,9 +930,9 @@ export default function ClientMap() {
       <AnimatePresence>
         {sideOpen && (
           <motion.aside
-            initial={{ width: 0, opacity: 0 }} animate={{ width: 295, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
+            initial={{ width: 0, opacity: 0 }} animate={{ width: isCompact ? Math.min(window.innerWidth, 340) : 295, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', backgroundColor: G100, borderRight: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', position: 'relative', zIndex: 5 }}
+            style={{ flexShrink: 0, maxWidth: '100vw', display: 'flex', flexDirection: 'column', backgroundColor: G100, borderRight: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', position: isCompact ? 'absolute' : 'relative', inset: isCompact ? '0 auto 0 0' : undefined, zIndex: isCompact ? 15 : 5 }}
           >
             {/* Header */}
             <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
@@ -1121,8 +1137,8 @@ export default function ClientMap() {
         )}
 
         {/* Summary chips */}
-        {!addMode && (
-          <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 9, display: 'flex', gap: 8, pointerEvents: 'none' }}>
+        {!addMode && !(isCompact && sideOpen) && (
+          <div style={{ position: 'absolute', top: isCompact ? 58 : 14, left: isCompact ? 10 : '50%', right: isCompact ? 10 : undefined, transform: isCompact ? 'none' : 'translateX(-50%)', zIndex: 9, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, pointerEvents: 'none', maxWidth: isCompact ? 'none' : 'calc(100% - 28px)' }}>
             {([
               { icon: Users,      label: `${filtered.length} Pins` },
               { icon: TrendingUp, label: totalValue > 0 ? `$${totalValue.toFixed(0)}M Portfolio` : 'Portfolio' },

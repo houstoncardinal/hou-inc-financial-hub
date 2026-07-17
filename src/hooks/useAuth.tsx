@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/integrations/supabase/client';
 import type { Session, User } from '@supabase/supabase-js';
 
-export type AppRole = 'admin' | 'finance' | 'client' | 'viewer';
+export type AppRole = 'admin' | 'finance_manager' | 'finance' | 'project_manager' | 'client' | 'read_only_auditor' | 'viewer';
 
 export interface AppUser {
   id: string;
@@ -13,14 +13,17 @@ export interface AppUser {
 
 // Role capability helpers
 export const canAccessAdmin   = (r: AppRole) => r === 'admin';
-export const canAccessFinance = (r: AppRole) => r === 'admin' || r === 'finance' || r === 'viewer';
+export const canAccessFinance = (r: AppRole) => ['admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer'].includes(r);
 export const isClientOnly     = (r: AppRole) => r === 'client';
 
 export const ROLE_LABELS: Record<AppRole, string> = {
-  admin:   'Admin',
-  finance: 'Finance',
-  client:  'Client',
-  viewer:  'Viewer',
+  admin:             'Admin',
+  finance_manager:   'Finance Manager',
+  finance:           'Finance',
+  project_manager:   'Project Manager',
+  client:            'Client',
+  read_only_auditor: 'Auditor',
+  viewer:            'Viewer',
 };
 
 // Kept for import compat — no longer used for auth logic
@@ -29,11 +32,27 @@ export const DEFAULT_PASS  = '';
 export const VIEWER_EMAIL  = '';
 export const VIEWER_PASS   = '';
 
-const VALID_ROLES: AppRole[] = ['admin', 'finance', 'client', 'viewer'];
+const VALID_ROLES: AppRole[] = ['admin', 'finance_manager', 'finance', 'project_manager', 'client', 'read_only_auditor', 'viewer'];
+const ROLE_PRIORITY: AppRole[] = ['admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer', 'client'];
 
-function toAppUser(user: User): AppUser {
+function metadataRole(user: User): AppRole {
   const raw = user.user_metadata?.role;
-  const role: AppRole = VALID_ROLES.includes(raw) ? raw : 'admin';
+  return VALID_ROLES.includes(raw) ? raw : 'admin';
+}
+
+async function resolveRole(user: User): Promise<AppRole> {
+  const { data, error } = await supabase
+    .from('app_user_roles' as any)
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('is_active', true);
+  if (error || !data?.length) return metadataRole(user);
+  const roles = data.map((r: any) => r.role).filter((r: AppRole) => VALID_ROLES.includes(r));
+  return ROLE_PRIORITY.find(r => roles.includes(r)) ?? metadataRole(user);
+}
+
+async function toAppUser(user: User): Promise<AppUser> {
+  const role = await resolveRole(user);
   return {
     id: user.id,
     email: user.email ?? '',
@@ -62,15 +81,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ? toAppUser(session.user) : null);
+      setUser(session?.user ? await toAppUser(session.user) : null);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ? toAppUser(session.user) : null);
+      if (!session?.user) setUser(null);
+      else setTimeout(async () => setUser(await toAppUser(session.user)), 0);
     });
 
     return () => subscription.unsubscribe();

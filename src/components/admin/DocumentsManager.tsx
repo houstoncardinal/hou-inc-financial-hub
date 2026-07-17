@@ -461,24 +461,24 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
 
       {/* ── Library ── */}
       <div className="pdv2-card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2.5 px-5 py-3.5 border-b border-border">
-          <div className="text-[11px] font-bold uppercase tracking-wide flex-1 min-w-[140px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-wrap xl:items-center gap-2.5 px-3.5 sm:px-5 py-3.5 border-b border-border">
+          <div className="text-[11px] font-bold uppercase tracking-wide md:col-span-2 xl:col-span-1 xl:flex-1 min-w-[140px]">
             Document Library ({filtered.length}{filtered.length !== docs.length ? ` of ${docs.length}` : ''})
           </div>
-          <div className="relative flex items-center">
+          <div className="relative flex items-center min-w-0">
             <Search className="absolute left-2.5 w-3 h-3 pointer-events-none text-muted-foreground" strokeWidth={2} />
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…"
-              className="text-[11px] outline-none rounded-lg border border-border bg-background text-foreground pl-6 pr-2.5 py-1.5 w-[140px] sm:w-[180px] focus:border-accent transition-colors" />
+              className="text-[11px] outline-none rounded-lg border border-border bg-background text-foreground pl-6 pr-2.5 py-2 w-full xl:w-[180px] focus:border-accent transition-colors" />
           </div>
-          <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-1.5 cursor-pointer">
+          <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-2 cursor-pointer w-full xl:w-auto">
             <option value="all">All Statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s === 'pending' ? 'Awaiting upload' : s === 'uploaded' ? 'Needs review' : s}</option>)}
           </select>
-          <select value={fCategory} onChange={e => setFCategory(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-1.5 cursor-pointer">
+          <select value={fCategory} onChange={e => setFCategory(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-2 cursor-pointer w-full xl:w-auto">
             <option value="all">All Categories</option>
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
-          <select value={fClient} onChange={e => setFClient(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-1.5 cursor-pointer max-w-[130px]">
+          <select value={fClient} onChange={e => setFClient(e.target.value)} className="text-[10px] outline-none rounded-lg border border-border bg-background text-muted-foreground px-2 py-2 cursor-pointer w-full xl:w-[130px]">
             <option value="all">All Clients</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -504,7 +504,7 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden xl:block overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead className="bg-secondary/45">
                   <tr className="border-b border-border">
@@ -532,7 +532,7 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
             </div>
 
             {/* Mobile cards */}
-            <div className="md:hidden divide-y divide-border">
+            <div className="xl:hidden divide-y divide-border">
               {filtered.map(d => (
                 <div key={d.id} className="px-4 py-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-3">

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
+import { isSchemaCacheError, recordSystemHealthEvent } from '@/lib/systemHealth';
 
 type TableName = 'vendors' | 'projects' | 'checks' | 'transactions';
 type SaveMode = 'insert' | 'update';
@@ -77,8 +78,22 @@ const writeWithSchemaCacheFallback = async (
     }
 
     const missing = missingColumnFromSchemaCache(result.error.message);
-    if (!missing || !(missing in current)) throw result.error;
+    if (!missing || !(missing in current)) {
+      recordSystemHealthEvent({
+        area: `finance:${table}:write`,
+        severity: isSchemaCacheError(result.error.message) ? 'critical' : 'error',
+        message: result.error.message,
+        details: { mode, attempt, payloadKeys: Object.keys(current) },
+      });
+      throw result.error;
+    }
     if (CRITICAL_FINANCE_COLUMNS.has(missing)) {
+      recordSystemHealthEvent({
+        area: `finance:${table}:schema`,
+        severity: 'critical',
+        message: `Missing required finance column "${missing}"`,
+        details: { mode, attempt },
+      });
       throw new Error(`Database is missing required finance column "${missing}". Run supabase/migrations/20260715000002_finance_logging_repair.sql, then reload the app.`);
     }
 
@@ -231,6 +246,14 @@ export const useFinanceRealtime = () => {
       qc.invalidateQueries({ queryKey: ['vendors'] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['project-financial-summary'] });
+      qc.invalidateQueries({ queryKey: ['finance-reconciliation-audit'] });
+      qc.invalidateQueries({ queryKey: ['finance-bank-activity'] });
+      qc.invalidateQueries({ queryKey: ['finance-bank-match-suggestions'] });
+      qc.invalidateQueries({ queryKey: ['finance-control-summary'] });
+      qc.invalidateQueries({ queryKey: ['finance-aging-summary'] });
+      qc.invalidateQueries({ queryKey: ['finance-commitments'] });
+      qc.invalidateQueries({ queryKey: ['ledger-page'] });
+      qc.invalidateQueries({ queryKey: ['system-health-events'] });
     };
 
     const channel = supabase
@@ -240,10 +263,126 @@ export const useFinanceRealtime = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_reconciliation_audit', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_bank_activity', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_bank_match_suggestions', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_commitments', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_health_events', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .subscribe(status => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          recordSystemHealthEvent({
+            area: 'finance:realtime',
+            severity: 'warning',
+            entityId,
+            message: `Finance realtime subscription ${status.toLowerCase().replace('_', ' ')}`,
+            details: { channel: `finance-realtime-${entityId}` },
+          });
+        }
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [ready, entityId, qc]);
+};
+
+export const useLedgerPage = ({
+  page,
+  pageSize,
+  search,
+  projectId,
+  type,
+}: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  projectId?: string;
+  type?: string;
+}) => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['ledger-page', entityId, page, pageSize, search ?? '', projectId ?? 'all', type ?? 'all'],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_ledger_page' as any, {
+        p_entity_id: entityId,
+        p_limit: pageSize,
+        p_offset: Math.max(0, (page - 1) * pageSize),
+        p_search: search?.trim() || null,
+        p_project_id: projectId && projectId !== 'all' ? projectId : null,
+        p_type: type && type !== 'all' ? type : null,
+      });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceControlSummary = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-control-summary', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_finance_control_summary' as any, { p_entity_id: entityId });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceAgingSummary = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-aging-summary', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_finance_aging_summary' as any, { p_entity_id: entityId });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useFinanceCommitments = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-commitments', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_commitments' as any)
+        .select('*, projects:project_id(name), vendors:vendor_id(name)')
+        .eq('entity_id', entityId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useBankMatchSuggestions = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-bank-match-suggestions', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_bank_match_suggestions' as any)
+        .select('*, finance_bank_activity:bank_activity_id(*)')
+        .eq('entity_id', entityId)
+        .eq('status', 'suggested')
+        .order('confidence', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 };
 
 export const useProjects = () => {
