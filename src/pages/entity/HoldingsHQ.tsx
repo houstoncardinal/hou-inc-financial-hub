@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useAuth } from '@/hooks/useAuth';
 import { ENTITIES } from '@/contexts/EntityContext';
 import {
-  useHoldingsNotes, useCapitalActivity, useConsolidatedEntityTotals, useNotePayments,
+  useHoldingsNotes, useCapitalActivity, useConsolidatedEntityTotals, useNotePayments, useHoldingsCovenants,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
 import { fmtDate, fmtUSD } from '@/lib/format';
@@ -23,7 +23,9 @@ import { toast } from 'sonner';
 import {
   Landmark, Banknote, Scale, PiggyBank, ArrowLeftRight, Percent,
   Plus, Pencil, Trash2, Building2, TrendingUp, FileText, ShieldCheck,
+  CalendarRange, Loader2, ShieldAlert, Download, AlarmClock,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const HEH_BLUE = '#2C5F8A';
 
@@ -92,7 +94,7 @@ const BLANK_NOTE = {
 
 const BLANK_ACTIVITY = {
   id: '', activity_type: 'distribution', related_entity_id: '', amount: '',
-  activity_date: new Date().toISOString().slice(0, 10), memo: '',
+  activity_date: new Date().toISOString().slice(0, 10), memo: '', approval_status: 'approved',
 };
 
 const BLANK_PAYMENT = {
@@ -134,6 +136,125 @@ export default function HoldingsHQ() {
   const [activityForm, setActivityForm] = useState({ ...BLANK_ACTIVITY });
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ ...BLANK_PAYMENT });
+  const [amortNote, setAmortNote] = useState<any | null>(null);
+  const [amortRows, setAmortRows] = useState<any[]>([]);
+  const [amortLoading, setAmortLoading] = useState(false);
+
+  const { data: covenants = [] } = useHoldingsCovenants();
+  const upsertCovenant = useEntityOpsUpsert('holdings_covenants');
+  const deleteCovenant = useEntityOpsSoftDelete('holdings_covenants');
+  const [covenantDialog, setCovenantDialog] = useState(false);
+  const [covenantForm, setCovenantForm] = useState({
+    id: '', name: '', covenant_type: 'financial', requirement: '', status: 'compliant',
+    note_id: '', next_review_date: '', notes: '',
+  });
+
+  const covenantStats = useMemo(() => {
+    const live = covenants as any[];
+    const breached = live.filter(c => c.status === 'breached').length;
+    const warning = live.filter(c => c.status === 'warning').length;
+    const dueSoon = live.filter(c => {
+      if (!c.next_review_date || ['waived'].includes(c.status)) return false;
+      const d = Math.ceil((new Date(c.next_review_date + 'T12:00:00').getTime() - Date.now()) / 86400000);
+      return d <= 30;
+    }).length;
+    return { total: live.length, breached, warning, dueSoon };
+  }, [covenants]);
+
+  /* Notes maturing within 12 months — refinance/payoff runway. */
+  const maturityRisk = useMemo(() => {
+    const horizon = Date.now() + 365 * 86400000;
+    return (notes as any[])
+      .filter(n => n.status === 'active' && n.maturity_date)
+      .map(n => ({ ...n, daysToMaturity: Math.ceil((new Date(n.maturity_date + 'T12:00:00').getTime() - Date.now()) / 86400000) }))
+      .filter(n => new Date(n.maturity_date + 'T12:00:00').getTime() <= horizon)
+      .sort((a, b) => a.daysToMaturity - b.daysToMaturity);
+  }, [notes]);
+
+  const openCovenant = (c?: any) => {
+    setCovenantForm(c ? {
+      id: c.id, name: c.name ?? '', covenant_type: c.covenant_type ?? 'financial',
+      requirement: c.requirement ?? '', status: c.status ?? 'compliant',
+      note_id: c.note_id ?? '', next_review_date: c.next_review_date ?? '', notes: c.notes ?? '',
+    } : { id: '', name: '', covenant_type: 'financial', requirement: '', status: 'compliant', note_id: '', next_review_date: '', notes: '' });
+    setCovenantDialog(true);
+  };
+
+  const saveCovenant = async () => {
+    if (!user?.id) return toast.error('Sign in required');
+    if (!covenantForm.name.trim()) return toast.error('Covenant name is required');
+    try {
+      await upsertCovenant.mutateAsync({
+        ...(covenantForm.id ? { id: covenantForm.id } : {}),
+        user_id: user.id,
+        entity_id: 'houston-enterprise-holdings',
+        name: covenantForm.name.trim(),
+        covenant_type: covenantForm.covenant_type,
+        requirement: covenantForm.requirement.trim() || null,
+        status: covenantForm.status,
+        note_id: covenantForm.note_id || null,
+        next_review_date: covenantForm.next_review_date || null,
+        last_reviewed_date: covenantForm.id ? new Date().toISOString().slice(0, 10) : null,
+        notes: covenantForm.notes.trim() || null,
+      });
+      toast.success(covenantForm.id ? 'Covenant updated' : 'Covenant added');
+      setCovenantDialog(false);
+    } catch (e: any) {
+      toast.error(e.message?.includes('holdings_covenants') ? 'Run migration 20260717000005 to enable covenant tracking' : e.message);
+    }
+  };
+
+  const exportAmortizationCsv = () => {
+    if (!amortNote || !amortRows.length) return;
+    const header = 'Period,Due Date,Payment,Interest,Principal,Ending Balance';
+    const lines = amortRows.map((r: any) =>
+      [r.period, r.due_date, num(r.payment).toFixed(2), num(r.interest).toFixed(2), num(r.principal).toFixed(2), num(r.ending_balance).toFixed(2)].join(','));
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `amortization-${amortNote.counterparty_name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const openAmortization = async (note: any) => {
+    setAmortNote(note);
+    setAmortRows([]);
+    setAmortLoading(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('get_holdings_note_amortization', { p_note_id: note.id, p_max_periods: 60 });
+      if (error) throw error;
+      setAmortRows(data ?? []);
+    } catch (e: any) {
+      toast.error(e.message?.includes('function') ? 'Run migration 20260717000004 to enable amortization schedules' : e.message);
+    } finally {
+      setAmortLoading(false);
+    }
+  };
+
+  /* Scheduled debt service over the next 12 months, from each active note's
+     stated payment amount and frequency. */
+  const debtService = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(new Date().getFullYear(), new Date().getMonth() + i + 1, 1);
+      return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('en-US', { month: 'short' }), inflow: 0, outflow: 0 };
+    });
+    const hits = (freq: string, monthIdx: number) =>
+      freq === 'monthly' ? 1 : freq === 'quarterly' ? (monthIdx % 3 === 0 ? 1 : 0) : freq === 'annual' ? (monthIdx === 0 ? 1 : 0) : 0;
+    for (const n of notes as any[]) {
+      if (n.status !== 'active' || !num(n.payment_amount)) continue;
+      months.forEach((m, idx) => {
+        const count = hits(n.payment_frequency, idx);
+        if (!count) return;
+        if (n.direction === 'receivable') m.inflow += num(n.payment_amount) * count;
+        else m.outflow += num(n.payment_amount) * count;
+      });
+    }
+    const totalIn = months.reduce((s, m) => s + m.inflow, 0);
+    const totalOut = months.reduce((s, m) => s + m.outflow, 0);
+    const max = Math.max(1, ...months.map(m => Math.max(m.inflow, m.outflow)));
+    return { months, totalIn, totalOut, max, any: totalIn + totalOut > 0 };
+  }, [notes]);
 
   const stats = useMemo(() => {
     const live = (notes as any[]).filter(n => n.status === 'active');
@@ -145,7 +266,8 @@ export default function HoldingsHQ() {
     const annualInterestOut = payable.reduce((s, n) => s + num(n.outstanding_balance) * num(n.interest_rate) / 100, 0);
 
     const year = new Date().getFullYear();
-    const ytd = (activity as any[]).filter(a => new Date(a.activity_date + 'T12:00:00').getFullYear() === year);
+    const isApproved = (a: any) => !a.approval_status || a.approval_status === 'approved';
+    const ytd = (activity as any[]).filter(a => isApproved(a) && new Date(a.activity_date + 'T12:00:00').getFullYear() === year);
     const ytdBy = (type: string) => ytd.filter(a => a.activity_type === type).reduce((s, a) => s + num(a.amount), 0);
 
     const consolidatedNet = Object.values(consolidated as Record<string, { income: number; expense: number; clearedChecks: number }>)
@@ -257,6 +379,23 @@ export default function HoldingsHQ() {
     } catch (e: any) { toast.error(e.message); }
   };
 
+  const pendingApprovals = (activity as any[]).filter(a => a.approval_status === 'pending');
+
+  const decideApproval = async (a: any, decision: 'approved' | 'rejected') => {
+    try {
+      await upsertActivity.mutateAsync({
+        id: a.id, user_id: a.user_id, entity_id: a.entity_id,
+        activity_type: a.activity_type, amount: a.amount, activity_date: a.activity_date,
+        approval_status: decision,
+        approved_by: user?.email ?? null,
+        approved_at: new Date().toISOString(),
+      });
+      toast.success(decision === 'approved' ? 'Capital activity approved' : 'Capital activity rejected');
+    } catch (e: any) {
+      toast.error(e.message?.includes('approval_status') ? 'Run migration 20260717000006 to enable approvals' : e.message);
+    }
+  };
+
   const paymentNote = (notes as any[]).find(n => n.id === paymentForm.note_id) ?? null;
 
   const saveActivity = async () => {
@@ -312,6 +451,100 @@ export default function HoldingsHQ() {
             <Metric label="Distributions YTD" value={fmtUSD(stats.ytdDistributions)} sub="Distributions + dividends out" icon={ArrowLeftRight} color="#dc2626" />
             <Metric label="Mgmt Fees YTD" value={fmtUSD(stats.ytdManagementFees)} sub="Fees charged to subsidiaries" icon={FileText} color="#0891b2" />
             <Metric label="Tax Reserves YTD" value={fmtUSD(stats.ytdTaxReserves)} sub="Set aside for tax obligations" icon={ShieldCheck} color="#7c3aed" />
+          </div>
+
+          {/* ── Debt service — next 12 months ── */}
+          {debtService.any && (
+            <section className="heh-panel p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="heh-k">Debt Service · Next 12 Months</div>
+                <div className="text-[9px] font-mono-tab text-muted-foreground">
+                  <span className="text-positive font-bold">{fmtUSD(debtService.totalIn)} in</span>
+                  {' · '}
+                  <span className="text-destructive font-bold">{fmtUSD(debtService.totalOut)} out</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-12 gap-1">
+                {debtService.months.map(m => (
+                  <div key={m.key} className="min-w-0" title={`${m.label}: ${fmtUSD(m.inflow)} in · ${fmtUSD(m.outflow)} out`}>
+                    <div className="h-14 flex items-end gap-[2px] justify-center">
+                      <div className="w-2 bg-[#059669]/75" style={{ height: `${(m.inflow / debtService.max) * 100}%` }} />
+                      <div className="w-2 bg-[#dc2626]/70" style={{ height: `${(m.outflow / debtService.max) * 100}%` }} />
+                    </div>
+                    <div className="text-[7px] font-bold text-center text-muted-foreground uppercase mt-0.5">{m.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[8.5px] text-muted-foreground mt-1.5">
+                Scheduled from each active note's stated payment and frequency — green receivable collections, red payable obligations.
+              </div>
+            </section>
+          )}
+
+          {/* ── Covenant compliance + maturity risk ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+            <section className="heh-panel p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="heh-k">Covenant Compliance</div>
+                <div className="flex items-center gap-2">
+                  {covenantStats.breached > 0 && <span className="text-[9px] font-black uppercase text-destructive">{covenantStats.breached} breached</span>}
+                  {covenantStats.warning > 0 && <span className="text-[9px] font-black uppercase text-warning">{covenantStats.warning} at risk</span>}
+                  {covenantStats.dueSoon > 0 && <span className="text-[9px] font-mono-tab text-muted-foreground">{covenantStats.dueSoon} reviews ≤30d</span>}
+                  <button className="heh-action" onClick={() => openCovenant()}><Plus className="w-3 h-3" /> Add</button>
+                </div>
+              </div>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {(covenants as any[]).map(c => {
+                  const color = c.status === 'breached' ? '#dc2626' : c.status === 'warning' ? '#d97706' : c.status === 'waived' ? '#8A8580' : '#059669';
+                  const note = (notes as any[]).find(n => n.id === c.note_id);
+                  return (
+                    <div key={c.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-2 cursor-pointer hover:bg-secondary/30" onClick={() => openCovenant(c)}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[8px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5" style={{ backgroundColor: color + '16', color }}>{c.status}</span>
+                          <span className="font-bold truncate">{c.name}</span>
+                          <span className="text-[9px] text-muted-foreground capitalize">{c.covenant_type}</span>
+                        </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5 truncate">
+                          {note ? `${note.counterparty_name} · ` : ''}{c.requirement || 'No requirement text'}
+                          {c.next_review_date ? ` · review ${fmtDate(c.next_review_date)}` : ''}
+                        </div>
+                      </div>
+                      <button className="p-1 text-muted-foreground hover:text-destructive shrink-0" title="Remove covenant"
+                        onClick={e => { e.stopPropagation(); if (confirm('Remove this covenant?')) deleteCovenant.mutate(c.id, { onSuccess: () => toast.success('Covenant removed') }); }}>
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {!(covenants as any[]).length && (
+                  <div className="text-xs text-muted-foreground border border-border p-3 flex items-start gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: HEH_BLUE }} />
+                    Track lender covenants — DSCR minimums, reporting deadlines, insurance requirements — with status and review dates. Requires migration 20260717000005.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="heh-panel p-3 sm:p-4">
+              <div className="heh-k mb-2">Maturity Risk · Next 12 Months</div>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {maturityRisk.map((n: any) => (
+                  <div key={n.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold truncate">{n.counterparty_name}</div>
+                      <div className="text-[9px] text-muted-foreground">{fmtUSD(num(n.outstanding_balance))} · {n.direction === 'receivable' ? 'we hold' : 'we owe'} · matures {fmtDate(n.maturity_date)}</div>
+                    </div>
+                    <span className={`text-[9px] font-black uppercase tracking-[0.1em] whitespace-nowrap flex items-center gap-1 ${n.daysToMaturity <= 90 ? 'text-destructive' : 'text-warning'}`}>
+                      <AlarmClock className="w-3 h-3" />{n.daysToMaturity <= 0 ? 'Matured' : `${n.daysToMaturity}d`}
+                    </span>
+                  </div>
+                ))}
+                {!maturityRisk.length && (
+                  <div className="text-xs text-muted-foreground border border-border p-3">No active notes mature within 12 months.</div>
+                )}
+              </div>
+            </section>
           </div>
 
           {/* ── Entity performance comparison ── */}
@@ -386,6 +619,9 @@ export default function HoldingsHQ() {
                           <Banknote className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      <button className="p-1 text-muted-foreground hover:text-foreground" onClick={() => openAmortization(n)} title="Projected amortization schedule">
+                        <CalendarRange className="w-3.5 h-3.5" />
+                      </button>
                       <button className="p-1 text-muted-foreground hover:text-foreground" onClick={() => openNote(n)} title="Edit note"><Pencil className="w-3 h-3" /></button>
                       <button className="p-1 text-muted-foreground hover:text-destructive" title="Remove note"
                         onClick={() => { if (confirm('Remove this note?')) deleteNote.mutate(n.id, { onSuccess: () => toast.success('Note removed') }); }}>
@@ -438,8 +674,32 @@ export default function HoldingsHQ() {
                 <Plus className="w-3 h-3" /> Log Activity
               </button>
             </div>
+            {pendingApprovals.length > 0 && (
+              <div className="mb-3 border border-warning/40 bg-warning/5 p-2.5">
+                <div className="heh-k mb-1.5" style={{ color: '#d97706' }}>Pending Approval ({pendingApprovals.length})</div>
+                <div className="space-y-1.5">
+                  {pendingApprovals.map(a => {
+                    const meta = ACTIVITY_TYPES[a.activity_type] ?? ACTIVITY_TYPES.distribution;
+                    return (
+                      <div key={a.id} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="min-w-0 flex-1 truncate">
+                          <span className="font-bold">{meta.label}</span>
+                          {a.related_entity_id ? <span className="text-muted-foreground"> → {entityName(a.related_entity_id)}</span> : null}
+                          <span className="font-mono-tab font-bold ml-1.5">{fmtUSD(num(a.amount))}</span>
+                          {a.memo ? <span className="text-muted-foreground"> · {a.memo}</span> : null}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button className="heh-action !text-positive" onClick={() => decideApproval(a, 'approved')}>Approve</button>
+                          <button className="heh-action !text-destructive" onClick={() => decideApproval(a, 'rejected')}>Reject</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5 max-h-80 overflow-y-auto">
-              {(activity as any[]).map(a => {
+              {(activity as any[]).filter(a => a.approval_status !== 'pending').map(a => {
                 const meta = ACTIVITY_TYPES[a.activity_type] ?? ACTIVITY_TYPES.distribution;
                 return (
                   <div key={a.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-3">
@@ -450,6 +710,9 @@ export default function HoldingsHQ() {
                         </span>
                         {a.related_entity_id && (
                           <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-[0.1em]">→ {entityName(a.related_entity_id)}</span>
+                        )}
+                        {a.approval_status === 'rejected' && (
+                          <span className="text-[8px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 bg-destructive/10 text-destructive">Rejected</span>
                         )}
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-1 truncate">{fmtDate(a.activity_date)}{a.memo ? ` · ${a.memo}` : ''}</div>
@@ -625,6 +888,16 @@ export default function HoldingsHQ() {
               <Input className="heh-field" type="date" value={activityForm.activity_date} onChange={e => setActivityForm(f => ({ ...f, activity_date: e.target.value }))} />
             </div>
             <div className="col-span-2">
+              <div className="heh-k mb-1">Approval</div>
+              <Select value={activityForm.approval_status} onValueChange={v => setActivityForm(f => ({ ...f, approval_status: v }))}>
+                <SelectTrigger className="heh-field"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved">Approved — post immediately</SelectItem>
+                  <SelectItem value="pending">Pending — route for approval</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
               <div className="heh-k mb-1">Memo</div>
               <Input className="heh-field" placeholder="e.g. Q3 distribution to owners" value={activityForm.memo} onChange={e => setActivityForm(f => ({ ...f, memo: e.target.value }))} />
             </div>
@@ -678,6 +951,128 @@ export default function HoldingsHQ() {
           </div>
           <button className="heh-primary w-full mt-2" onClick={savePayment} disabled={upsertPayment.isPending}>
             Log Payment
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Amortization schedule dialog ── */}
+      <Dialog open={!!amortNote} onOpenChange={open => { if (!open) setAmortNote(null); }}>
+        <DialogContent className="max-w-lg rounded-none max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Amortization — {amortNote?.counterparty_name}</DialogTitle>
+          </DialogHeader>
+          {amortNote && (
+            <div className="text-[10px] text-muted-foreground -mt-1 mb-1">
+              {fmtUSD(num(amortNote.outstanding_balance))} at {num(amortNote.interest_rate).toFixed(2)}% ·
+              {' '}{String(amortNote.payment_frequency).replace('_', ' ')}
+              {amortNote.maturity_date ? ` · matures ${fmtDate(amortNote.maturity_date)}` : ''}
+            </div>
+          )}
+          {amortLoading ? (
+            <div className="py-10 flex items-center justify-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Projecting schedule…
+            </div>
+          ) : amortRows.length ? (
+            <div className="overflow-x-auto border border-border">
+              <div className="min-w-[440px]">
+                <div className="grid grid-cols-[.4fr_.9fr_.9fr_.9fr_.9fr_1fr] gap-2 px-2.5 py-1.5 bg-secondary/45 heh-k">
+                  <div>#</div><div>Due</div><div>Payment</div><div>Interest</div><div>Principal</div><div>Balance</div>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {amortRows.map((r: any) => (
+                    <div key={r.period} className="grid grid-cols-[.4fr_.9fr_.9fr_.9fr_.9fr_1fr] gap-2 px-2.5 py-1 border-t border-border/60 text-[10.5px] font-mono-tab">
+                      <div className="text-muted-foreground">{r.period}</div>
+                      <div>{fmtDate(r.due_date)}</div>
+                      <div>{fmtUSD(num(r.payment))}</div>
+                      <div className="text-warning">{fmtUSD(num(r.interest))}</div>
+                      <div className="text-positive">{fmtUSD(num(r.principal))}</div>
+                      <div className="font-bold">{fmtUSD(num(r.ending_balance))}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-[.4fr_.9fr_.9fr_.9fr_.9fr_1fr] gap-2 px-2.5 py-1.5 bg-secondary/30 border-t border-border text-[10.5px] font-mono-tab font-bold">
+                  <div /><div>Total</div>
+                  <div>{fmtUSD(amortRows.reduce((s: number, r: any) => s + num(r.payment), 0))}</div>
+                  <div className="text-warning">{fmtUSD(amortRows.reduce((s: number, r: any) => s + num(r.interest), 0))}</div>
+                  <div className="text-positive">{fmtUSD(amortRows.reduce((s: number, r: any) => s + num(r.principal), 0))}</div>
+                  <div />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground border border-border p-4">
+              No schedule could be projected — set a payment amount (or a maturity date for a derived level payment) on this note.
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[9px] text-muted-foreground flex-1">
+              Projection from the current balance, APR, and payment terms. Logged payments (principal/interest split) remain the source of truth for the actual balance.
+            </div>
+            {amortRows.length > 0 && (
+              <button className="heh-action shrink-0" onClick={exportAmortizationCsv}>
+                <Download className="w-3 h-3" /> CSV
+              </button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Covenant dialog ── */}
+      <Dialog open={covenantDialog} onOpenChange={setCovenantDialog}>
+        <DialogContent className="max-w-md rounded-none max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="text-base">{covenantForm.id ? 'Edit Covenant' : 'Add Covenant'}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="col-span-2">
+              <div className="heh-k mb-1">Name *</div>
+              <Input className="heh-field" placeholder="e.g. Minimum DSCR 1.25x" value={covenantForm.name} onChange={e => setCovenantForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <div className="heh-k mb-1">Type</div>
+              <Select value={covenantForm.covenant_type} onValueChange={v => setCovenantForm(f => ({ ...f, covenant_type: v }))}>
+                <SelectTrigger className="heh-field"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['financial', 'reporting', 'insurance', 'operational', 'other'].map(t => (
+                    <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="heh-k mb-1">Status</div>
+              <Select value={covenantForm.status} onValueChange={v => setCovenantForm(f => ({ ...f, status: v }))}>
+                <SelectTrigger className="heh-field"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['compliant', 'warning', 'breached', 'waived'].map(s => (
+                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <div className="heh-k mb-1">Linked Note</div>
+              <Select value={covenantForm.note_id || '__none__'} onValueChange={v => setCovenantForm(f => ({ ...f, note_id: v === '__none__' ? '' : v }))}>
+                <SelectTrigger className="heh-field"><SelectValue placeholder="Standalone" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Standalone</SelectItem>
+                  {(notes as any[]).map(n => <SelectItem key={n.id} value={n.id}>{n.counterparty_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <div className="heh-k mb-1">Requirement</div>
+              <Input className="heh-field" placeholder="What the lender requires" value={covenantForm.requirement} onChange={e => setCovenantForm(f => ({ ...f, requirement: e.target.value }))} />
+            </div>
+            <div>
+              <div className="heh-k mb-1">Next Review</div>
+              <Input className="heh-field" type="date" value={covenantForm.next_review_date} onChange={e => setCovenantForm(f => ({ ...f, next_review_date: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <div className="heh-k mb-1">Notes</div>
+              <Textarea className="rounded-none text-xs" rows={2} value={covenantForm.notes} onChange={e => setCovenantForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <button className="heh-primary w-full mt-2" onClick={saveCovenant} disabled={upsertCovenant.isPending}>
+            {covenantForm.id ? 'Save Covenant' : 'Add Covenant'}
           </button>
         </DialogContent>
       </Dialog>

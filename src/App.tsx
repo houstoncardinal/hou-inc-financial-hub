@@ -71,6 +71,9 @@ import Admin from "./pages/Admin";
 // Finance dashboard
 import EntitySelect  from "./pages/EntitySelect";
 import EntityOverview from "./pages/EntityOverview";
+import HgpJobs from "./pages/entity/HgpJobs";
+import StormResponse from "./pages/entity/StormResponse";
+import HgpInventory from "./pages/entity/HgpInventory";
 import Auth          from "./pages/Auth";
 import Checks        from "./pages/Checks";
 import CheckNew      from "./pages/CheckNew";
@@ -128,6 +131,13 @@ function ModuleGuard({ module, children }: { module: FinanceModuleKey; children:
   return <>{children}</>;
 }
 
+function EntityProjects() {
+  const { entity, ready } = useEntity();
+  if (!ready) return null;
+  if (entity?.id === 'houston-generator-pros') return <HgpJobs />;
+  return <Projects />;
+}
+
 // All finance routes share ONE EntityProvider so entity state is never stale
 function FinanceRoutes() {
   return (
@@ -141,7 +151,7 @@ function FinanceRoutes() {
         <Route path="/income"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="income" /></RoleGuard>} />
         <Route path="/expenses"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="expense" /></RoleGuard>} />
         <Route path="/ledger"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Ledger /></RoleGuard>} />
-        <Route path="/projects"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Projects /></RoleGuard>} />
+        <Route path="/projects"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntityProjects /></RoleGuard>} />
         <Route path="/projects/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><ProjectDetail /></RoleGuard>} />
         <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
         <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="concierge"><Concierge /></ModuleGuard></RoleGuard>} />
@@ -153,6 +163,8 @@ function FinanceRoutes() {
         <Route path="/invoices/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
         <Route path="/settings"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Settings /></RoleGuard>} />
         <Route path="/documents"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Documents /></RoleGuard>} />
+        <Route path="/storm"              element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="storm"><StormResponse /></ModuleGuard></RoleGuard>} />
+        <Route path="/inventory"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="inventory"><HgpInventory /></ModuleGuard></RoleGuard>} />
         <Route path="/ops"                element={<RoleGuard allowed={[...ADMIN_ROLES]}><OpsCenter /></RoleGuard>} />
         <Route path="*"                   element={<NotFound />} />
       </Routes>

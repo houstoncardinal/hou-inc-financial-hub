@@ -305,7 +305,7 @@ export const useLedgerPage = ({
     queryKey: ['ledger-page', entityId, page, pageSize, search ?? '', projectId ?? 'all', type ?? 'all'],
     enabled: ready,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_ledger_page' as any, {
+      const { data, error } = await supabase.rpc('get_ledger_page' as never, {
         p_entity_id: entityId,
         p_limit: pageSize,
         p_offset: Math.max(0, (page - 1) * pageSize),
@@ -326,7 +326,7 @@ export const useFinanceControlSummary = () => {
     queryKey: ['finance-control-summary', entityId],
     enabled: ready,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_finance_control_summary' as any, { p_entity_id: entityId });
+      const { data, error } = await supabase.rpc('get_finance_control_summary' as never, { p_entity_id: entityId });
       if (error) throw error;
       return data ?? [];
     },
@@ -340,7 +340,7 @@ export const useFinanceAgingSummary = () => {
     queryKey: ['finance-aging-summary', entityId],
     enabled: ready,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_finance_aging_summary' as any, { p_entity_id: entityId });
+      const { data, error } = await supabase.rpc('get_finance_aging_summary' as never, { p_entity_id: entityId });
       if (error) throw error;
       return data ?? [];
     },
@@ -355,7 +355,7 @@ export const useFinanceCommitments = () => {
     enabled: ready,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('finance_commitments' as any)
+        .from('finance_commitments' as never)
         .select('*, projects:project_id(name), vendors:vendor_id(name)')
         .eq('entity_id', entityId)
         .is('deleted_at', null)
@@ -374,7 +374,7 @@ export const useBankMatchSuggestions = () => {
     enabled: ready,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('finance_bank_match_suggestions' as any)
+        .from('finance_bank_match_suggestions' as never)
         .select('*, finance_bank_activity:bank_activity_id(*)')
         .eq('entity_id', entityId)
         .eq('status', 'suggested')

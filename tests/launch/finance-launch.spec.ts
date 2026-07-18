@@ -205,6 +205,503 @@ test('ledger context labels surface trigger-mirrored business meaning', async ()
   expect(row.context_label).toContain(customer);
 });
 
+test('HGP outage workflow: site match and emergency dispatch create real rows', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000003 is applied.
+  const verify = await client.rpc('verify_hgp_field_ops' as any);
+  test.skip(!!verify.error, `HGP field-ops migration missing — run 20260717000003 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  const zip = `77${String(Date.now()).slice(-3)}`;
+  const { data: site, error: siteError } = await client
+    .from('hgp_customer_sites' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      customer_name: `Storm QA Customer ${Date.now()}`, city: 'Houston', zip,
+      utility_provider: 'CenterPoint Energy',
+    })
+    .select('*')
+    .single();
+  expect(siteError).toBeNull();
+
+  const { data: event, error: eventError } = await client
+    .from('hgp_outage_events' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      provider: 'CenterPoint Energy', status: 'active',
+      affected_customers: 1200, zip, cause: 'Launch QA storm',
+      outage_started_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  expect(eventError).toBeNull();
+
+  // ZIP matching pulls the site into the outage.
+  const match = await client.rpc('match_hgp_outage_impacts' as any, { p_outage_event_id: (event as any).id });
+  expect(match.error).toBeNull();
+  expect(Number(match.data)).toBeGreaterThanOrEqual(1);
+
+  // One-click dispatch creates a real emergency job in the pipeline.
+  const dispatch = await client.rpc('create_hgp_emergency_job' as any, {
+    p_outage_event_id: (event as any).id, p_site_id: (site as any).id,
+  });
+  expect(dispatch.error).toBeNull();
+
+  const { data: job } = await client
+    .from('hgp_jobs' as any)
+    .select('job_type, emergency, stage, outage_event_id, customer_name')
+    .eq('id', dispatch.data as any)
+    .single();
+  expect((job as any)?.job_type).toBe('emergency');
+  expect((job as any)?.emergency).toBe(true);
+  expect((job as any)?.outage_event_id).toBe((event as any).id);
+
+  // The impact's outreach workflow advanced to 'scheduled'.
+  const { data: impact } = await client
+    .from('hgp_outage_impacts' as any)
+    .select('outreach_status')
+    .eq('outage_event_id', (event as any).id)
+    .eq('site_id', (site as any).id)
+    .single();
+  expect((impact as any)?.outreach_status).toBe('scheduled');
+});
+
+test('Holdings amortization projects a converging schedule and HGP job completion auto-registers the site', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000004 is applied.
+  const verify = await client.rpc('verify_entity_finance_depth2' as any);
+  test.skip(!!verify.error, `Depth-2 migration missing — run 20260717000004 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  // Amortization: $12,000 at 6% APR, $500/month → first-period interest $60,
+  // principal $440, and the balance strictly decreases to zero.
+  const { data: note, error: noteError } = await client
+    .from('holdings_notes' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-enterprise-holdings',
+      direction: 'payable', counterparty_name: `Amort QA ${Date.now()}`,
+      principal: 12000, outstanding_balance: 12000, interest_rate: 6,
+      payment_amount: 500, payment_frequency: 'monthly',
+    })
+    .select('*')
+    .single();
+  expect(noteError).toBeNull();
+
+  const sched = await client.rpc('get_holdings_note_amortization' as any, { p_note_id: (note as any).id, p_max_periods: 60 });
+  expect(sched.error).toBeNull();
+  const rows = sched.data as any[];
+  expect(rows.length).toBeGreaterThan(20);
+  expect(Number(rows[0].interest)).toBeCloseTo(60, 1);
+  expect(Number(rows[0].principal)).toBeCloseTo(440, 1);
+  expect(Number(rows[rows.length - 1].ending_balance)).toBe(0);
+  const principalSum = rows.reduce((s, r) => s + Number(r.principal), 0);
+  expect(principalSum).toBeCloseTo(12000, 0);
+
+  // Job completion automation: completing an install registers the customer
+  // site for Storm Response matching.
+  const customer = `Lifecycle QA ${Date.now()}`;
+  const { data: job, error: jobError } = await client
+    .from('hgp_jobs' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_type: 'install', stage: 'installing', customer_name: customer,
+      site_address: '1 QA Way', city: 'Houston', zip: '77002',
+      utility_provider: 'CenterPoint Energy',
+    })
+    .select('*')
+    .single();
+  expect(jobError).toBeNull();
+
+  const { error: completeError } = await client
+    .from('hgp_jobs' as any)
+    .update({ stage: 'completed', completed_date: new Date().toISOString().slice(0, 10) })
+    .eq('id', (job as any).id);
+  expect(completeError).toBeNull();
+
+  const { data: site } = await client
+    .from('hgp_customer_sites' as any)
+    .select('customer_name, zip, utility_provider')
+    .eq('customer_name', customer)
+    .maybeSingle();
+  expect((site as any)?.zip).toBe('77002');
+  expect((site as any)?.utility_provider).toBe('CenterPoint Energy');
+});
+
+test('Holdings covenant tracking writes real rows with status workflow', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000005 is applied.
+  const verify = await client.rpc('verify_holdings_covenants' as any);
+  test.skip(!!verify.error, `Covenants migration missing — run 20260717000005 (${verify.error?.message ?? ''})`);
+  expect((verify.data as any[])?.[0]?.ok).toBe(true);
+
+  const name = `Covenant QA ${Date.now()}`;
+  const { data: covenant, error: covError } = await client
+    .from('holdings_covenants' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-enterprise-holdings',
+      name, covenant_type: 'financial', requirement: 'Minimum DSCR 1.25x',
+      status: 'compliant', next_review_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+    })
+    .select('*')
+    .single();
+  expect(covError).toBeNull();
+
+  const { error: breachError } = await client
+    .from('holdings_covenants' as any)
+    .update({ status: 'breached' })
+    .eq('id', (covenant as any).id);
+  expect(breachError).toBeNull();
+
+  const { data: after } = await client
+    .from('holdings_covenants' as any)
+    .select('status, name')
+    .eq('id', (covenant as any).id)
+    .single();
+  expect((after as any)?.status).toBe('breached');
+  expect((after as any)?.name).toBe(name);
+});
+
+test('HGP dispatch fields and Holdings capital approvals persist real state', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000006 is applied.
+  const verify = await client.rpc('verify_dispatch_capital_approvals' as any);
+  test.skip(!!verify.error, `Dispatch/approvals migration missing — run 20260717000006 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  // Technician + dispatch status persist on a job.
+  const { data: job, error: jobError } = await client
+    .from('hgp_jobs' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_type: 'emergency', stage: 'scheduled', emergency: true,
+      customer_name: `Dispatch QA ${Date.now()}`,
+      technician: 'QA Tech', dispatch_status: 'en_route',
+    })
+    .select('technician, dispatch_status')
+    .single();
+  expect(jobError).toBeNull();
+  expect((job as any).technician).toBe('QA Tech');
+  expect((job as any).dispatch_status).toBe('en_route');
+
+  // Capital activity: pending → approved with approver stamp.
+  const { data: capital, error: capError } = await client
+    .from('holdings_capital_activity' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-enterprise-holdings',
+      activity_type: 'distribution', amount: 1234.56,
+      activity_date: new Date().toISOString().slice(0, 10),
+      approval_status: 'pending', memo: 'Approval QA',
+    })
+    .select('*')
+    .single();
+  expect(capError).toBeNull();
+  expect((capital as any).approval_status).toBe('pending');
+
+  const { error: approveError } = await client
+    .from('holdings_capital_activity' as any)
+    .update({ approval_status: 'approved', approved_by: email, approved_at: new Date().toISOString() })
+    .eq('id', (capital as any).id);
+  expect(approveError).toBeNull();
+
+  const { data: after } = await client
+    .from('holdings_capital_activity' as any)
+    .select('approval_status, approved_by, approved_at')
+    .eq('id', (capital as any).id)
+    .single();
+  expect((after as any).approval_status).toBe('approved');
+  expect((after as any).approved_by).toBe(email);
+  expect((after as any).approved_at).toBeTruthy();
+});
+
+test('HGP job coordinates persist for the dispatch map', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000007 is applied.
+  const verify = await client.rpc('verify_hgp_command_map' as any);
+  test.skip(!!verify.error, `Command-map migration missing — run 20260717000007 (${verify.error?.message ?? ''})`);
+  expect((verify.data as any[])?.[0]?.ok).toBe(true);
+
+  // A job stores coordinates (map-plottable) and they round-trip exactly.
+  const { data: job, error: jobError } = await client
+    .from('hgp_jobs' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_type: 'install', stage: 'scheduled',
+      customer_name: `Map QA ${Date.now()}`,
+      site_address: '901 Bagby St', city: 'Houston', zip: '77002',
+      latitude: 29.7604, longitude: -95.3698,
+    })
+    .select('latitude, longitude')
+    .single();
+  expect(jobError).toBeNull();
+  expect(Number((job as any).latitude)).toBeCloseTo(29.7604, 4);
+  expect(Number((job as any).longitude)).toBeCloseTo(-95.3698, 4);
+});
+
+test('HGP inventory: receive and consume maintain quantities and job materials cost', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260717000008 is applied.
+  const verify = await client.rpc('verify_hgp_inventory' as any);
+  test.skip(!!verify.error, `Inventory migration missing — run 20260717000008 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  // Part starts at zero on hand.
+  const { data: part, error: partError } = await client
+    .from('hgp_parts' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      name: `Inventory QA Battery ${Date.now()}`, category: 'batteries',
+      unit_cost: 0, reorder_point: 2,
+    })
+    .select('*')
+    .single();
+  expect(partError).toBeNull();
+
+  // Receive 5 @ $40 → qty 5, carrying cost updates to last cost.
+  const { error: recvError } = await client
+    .from('hgp_inventory_movements' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      part_id: (part as any).id, movement_type: 'received',
+      quantity: 5, unit_cost: 40, total_cost: 200,
+    });
+  expect(recvError).toBeNull();
+
+  const { data: afterRecv } = await client
+    .from('hgp_parts' as any).select('qty_on_hand, unit_cost').eq('id', (part as any).id).single();
+  expect(Number((afterRecv as any).qty_on_hand)).toBe(5);
+  expect(Number((afterRecv as any).unit_cost)).toBe(40);
+
+  // Consume 2 to a job → qty 3 and $80 lands in the job's materials cost.
+  const { data: job, error: jobError } = await client
+    .from('hgp_jobs' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_type: 'service', stage: 'scheduled',
+      customer_name: `Inventory QA Job ${Date.now()}`, materials_cost: 0,
+    })
+    .select('*')
+    .single();
+  expect(jobError).toBeNull();
+
+  const { error: consumeError } = await client
+    .from('hgp_inventory_movements' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      part_id: (part as any).id, job_id: (job as any).id,
+      movement_type: 'consumed', quantity: 2, unit_cost: 40, total_cost: 80,
+    });
+  expect(consumeError).toBeNull();
+
+  const { data: afterConsume } = await client
+    .from('hgp_parts' as any).select('qty_on_hand').eq('id', (part as any).id).single();
+  expect(Number((afterConsume as any).qty_on_hand)).toBe(3);
+
+  const { data: jobAfter } = await client
+    .from('hgp_jobs' as any).select('materials_cost').eq('id', (job as any).id).single();
+  expect(Number((jobAfter as any).materials_cost)).toBe(80);
+
+  // Unit lifecycle writes into the same ledger automatically.
+  const { data: unit, error: unitError } = await client
+    .from('hgp_equipment_units' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      model: `Inventory QA Gen ${Date.now()}`, unit_cost: 9000,
+    })
+    .select('*')
+    .single();
+  expect(unitError).toBeNull();
+
+  const { data: unitMovement } = await client
+    .from('hgp_inventory_movements' as any)
+    .select('movement_type, total_cost')
+    .eq('equipment_unit_id', (unit as any).id)
+    .maybeSingle();
+  expect((unitMovement as any)?.movement_type).toBe('received');
+  expect(Number((unitMovement as any)?.total_cost)).toBe(9000);
+});
+
+test('HGP job payments post to income and own the collected total', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260718000001 is applied.
+  const verify = await client.rpc('verify_hgp_job_payments' as any);
+  test.skip(!!verify.error, `Job-payments migration missing — run 20260718000001 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  const { data: job, error: jobError } = await client
+    .from('hgp_jobs' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_type: 'install', stage: 'scheduled',
+      customer_name: `Payments QA ${Date.now()}`, generator_model: 'Guardian 26kW',
+      quoted_amount: 15000, deposit_amount: 0,
+    })
+    .select('*')
+    .single();
+  expect(jobError).toBeNull();
+
+  // Deposit payment → income entry with the HGP catalog category.
+  const { data: deposit, error: depError } = await client
+    .from('hgp_job_payments' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_id: (job as any).id, payment_type: 'deposit', amount: 5000, method: 'ach_wire',
+    })
+    .select('*')
+    .single();
+  expect(depError).toBeNull();
+
+  const { data: incomeRow } = await client
+    .from('transactions')
+    .select('amount, category, type, source_name, status')
+    .eq('external_reference', `hgp_job_payment:${(deposit as any).id}`)
+    .maybeSingle();
+  expect(Number((incomeRow as any)?.amount)).toBe(5000);
+  expect((incomeRow as any)?.category).toBe('Generator Deposit');
+  expect((incomeRow as any)?.type).toBe('income');
+
+  // Progress payment stacks the collected total on the job.
+  const { error: progError } = await client
+    .from('hgp_job_payments' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      job_id: (job as any).id, payment_type: 'progress', amount: 4000, method: 'check',
+    });
+  expect(progError).toBeNull();
+
+  const { data: jobAfter } = await client
+    .from('hgp_jobs' as any).select('deposit_amount').eq('id', (job as any).id).single();
+  expect(Number((jobAfter as any).deposit_amount)).toBe(9000);
+
+  // Voiding the deposit reverses the total and voids its income entry.
+  const { error: voidError } = await client
+    .from('hgp_job_payments' as any)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', (deposit as any).id);
+  expect(voidError).toBeNull();
+
+  const { data: jobFinal } = await client
+    .from('hgp_jobs' as any).select('deposit_amount').eq('id', (job as any).id).single();
+  expect(Number((jobFinal as any).deposit_amount)).toBe(4000);
+
+  const { data: voidedIncome } = await client
+    .from('transactions')
+    .select('status')
+    .eq('external_reference', `hgp_job_payment:${(deposit as any).id}`)
+    .maybeSingle();
+  expect((voidedIncome as any)?.status).toBe('voided');
+});
+
+test('HGP purchase orders post expenses and scheduled visits defer income until completed', async () => {
+  test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set PLAYWRIGHT_USER_EMAIL, PLAYWRIGHT_USER_PASSWORD, VITE_SUPABASE_URL, and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY).');
+
+  const client = createClient(supabaseUrl!, supabaseAnon!);
+  const { data: auth, error: authError } = await client.auth.signInWithPassword({ email: email!, password: password! });
+  expect(authError).toBeNull();
+  const userId = auth.user!.id;
+
+  // Skip cleanly until migration 20260718000002 is applied.
+  const verify = await client.rpc('verify_hgp_procurement_scheduling' as any);
+  test.skip(!!verify.error, `Procurement/scheduling migration missing — run 20260718000002 (${verify.error?.message ?? ''})`);
+  for (const row of (verify.data as any[]) ?? []) expect(row.ok).toBe(true);
+
+  // PO → expense with the HGP catalog category.
+  const { data: po, error: poError } = await client
+    .from('hgp_purchase_orders' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      po_number: `PO-QA-${Date.now()}`, total_amount: 8750.25, status: 'received',
+    })
+    .select('*')
+    .single();
+  expect(poError).toBeNull();
+
+  const { data: expense } = await client
+    .from('transactions')
+    .select('amount, category, type')
+    .eq('external_reference', `hgp_po:${(po as any).id}`)
+    .maybeSingle();
+  expect(Number((expense as any)?.amount)).toBeCloseTo(8750.25, 2);
+  expect((expense as any)?.category).toBe('Generator Equipment Purchase');
+  expect((expense as any)?.type).toBe('expense');
+
+  // Scheduled visit with expected revenue: NO income until completed.
+  const { data: visit, error: visitError } = await client
+    .from('hgp_service_visits' as any)
+    .insert({
+      user_id: userId, entity_id: 'houston-generator-pros',
+      customer_name: `Schedule QA ${Date.now()}`, visit_type: 'scheduled',
+      status: 'scheduled', revenue: 325,
+      visit_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+    })
+    .select('*')
+    .single();
+  expect(visitError).toBeNull();
+
+  const { data: early } = await client
+    .from('transactions')
+    .select('id, status')
+    .eq('external_reference', `hgp_visit:${(visit as any).id}`)
+    .maybeSingle();
+  expect(early === null || (early as any)?.status === 'voided').toBe(true);
+
+  // Completing the visit posts the income.
+  const { error: completeError } = await client
+    .from('hgp_service_visits' as any)
+    .update({ status: 'completed' })
+    .eq('id', (visit as any).id);
+  expect(completeError).toBeNull();
+
+  const { data: posted } = await client
+    .from('transactions')
+    .select('amount, status, category')
+    .eq('external_reference', `hgp_visit:${(visit as any).id}`)
+    .maybeSingle();
+  expect(Number((posted as any)?.amount)).toBe(325);
+  expect((posted as any)?.status).toBe('posted');
+});
+
 test('funded draw and reconciliation audit database workflow', async () => {
   test.skip(!email || !password || !supabaseUrl || !supabaseAnon, 'Set Supabase and Playwright credentials for database launch workflow test.');
 

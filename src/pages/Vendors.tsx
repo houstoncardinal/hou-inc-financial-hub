@@ -4,6 +4,8 @@ import PhoneInput from '@/components/ui/smart/PhoneInput';
 import EmailInput from '@/components/ui/smart/EmailInput';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import { useEntity } from '@/contexts/EntityContext';
+import { screenHeaderFor } from '@/lib/entityFinance';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,6 +58,8 @@ const VND_CSS = `
 `;
 
 export default function Vendors() {
+  const { entity } = useEntity();
+  const vendorsHeader = screenHeaderFor(entity?.id, 'vendors', { title: 'Vendors', description: 'Structured registry of payees with linked transaction history and total disbursement.' });
   const { data: vendors = [] } = useVendors();
   const { data: checks = [] } = useChecks();
   const { data: expenses = [] } = useTransactions('expense');
@@ -147,7 +151,7 @@ export default function Vendors() {
   return (
     <AppShell>
       <style>{VND_CSS}</style>
-      <PageHeader eyebrow="Counterparties" title="Vendors" description="Structured registry of payees with linked transaction history and total disbursement."
+      <PageHeader eyebrow="Counterparties" title={vendorsHeader.title} description={vendorsHeader.description}
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">

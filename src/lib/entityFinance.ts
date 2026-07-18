@@ -9,7 +9,7 @@
 export type FinanceModuleKey =
   | 'overview' | 'ledger' | 'checks' | 'income' | 'expenses'
   | 'projects' | 'vendors' | 'invoices' | 'charts' | 'controls'
-  | 'changelog' | 'concierge' | 'documents' | 'storm';
+  | 'changelog' | 'concierge' | 'documents' | 'storm' | 'inventory';
 
 export type OverviewVariant = 'construction' | 'generator' | 'holdings';
 
@@ -31,6 +31,8 @@ export interface EntityFinanceProfile {
   documentTags: string[];
   /** Projects-screen header copy. */
   projectsHeader: { title: string; description: string };
+  /** Shared-screen header copy keyed by screen (falls back to shared copy). */
+  screenHeaders: Partial<Record<'vendors' | 'checks' | 'invoices', { title: string; description: string }>>;
 }
 
 const ALL_MODULES: FinanceModuleKey[] = [
@@ -69,6 +71,7 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       title: 'Project Portfolio',
       description: 'Budget allocation, capital deployed, and outstanding obligations across all active jobs.',
     },
+    screenHeaders: {},
   },
 
   /* Generator sales, installs, inventory, and recurring service — no
@@ -76,7 +79,7 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
   'houston-generator-pros': {
     modules: [
       'overview', 'ledger', 'checks', 'income', 'expenses', 'projects',
-      'vendors', 'invoices', 'charts', 'changelog', 'documents', 'storm',
+      'vendors', 'invoices', 'charts', 'changelog', 'documents', 'storm', 'inventory',
     ],
     overview: 'generator',
     labels: {
@@ -84,12 +87,14 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       projects: 'Install Jobs',
       vendors: 'Suppliers',
       storm: 'Storm Response',
+      inventory: 'Inventory',
     },
     descriptions: {
       overview: 'Sales, inventory, service & margin',
       projects: 'Installation & service jobs',
       vendors: 'Distributors & suppliers',
       storm: 'Outage intelligence & dispatch',
+      inventory: 'Parts, stock & movement ledger',
     },
     terms: { project: 'Job', projects: 'Install Jobs', vendor: 'Supplier', vendors: 'Suppliers' },
     /* 'Service Maintenance'/'Emergency Service' match the categories written
@@ -114,6 +119,11 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
     projectsHeader: {
       title: 'Install Jobs',
       description: 'Generator sales, installation jobs, and service work — equipment, labor, and margin per job.',
+    },
+    screenHeaders: {
+      vendors: { title: 'Suppliers & Distributors', description: 'Generator distributors, electrical suppliers, subcontract electricians, and parts sources with spend history.' },
+      checks: { title: 'Check Ledger', description: 'Distributor, subcontractor, and permit payments — issuance and clearance state.' },
+      invoices: { title: 'Customer Invoices', description: 'Deposit, install, service, maintenance-plan, and emergency invoices with payment tracking.' },
     },
   },
 
@@ -162,6 +172,11 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       title: 'Assets & Deals',
       description: 'Investments, development deals, and strategic initiatives across the holding portfolio.',
     },
+    screenHeaders: {
+      vendors: { title: 'Counterparties', description: 'Lenders, attorneys, CPAs, insurers, and corporate service providers with disbursement history.' },
+      checks: { title: 'Disbursements', description: 'Distributions, debt service, and corporate payments — issuance and clearance state.' },
+      invoices: { title: 'Fee & Chargeback Billing', description: 'Management fees, intercompany invoices, and entity chargebacks with payment tracking.' },
+    },
   },
 };
 
@@ -191,6 +206,7 @@ export const ROUTE_MODULES: Record<string, FinanceModuleKey> = {
   '/concierge': 'concierge',
   '/documents': 'documents',
   '/storm': 'storm',
+  '/inventory': 'inventory',
 };
 
 export function moduleLabel(entityId: string | null | undefined, module: FinanceModuleKey, fallback: string): string {
@@ -199,4 +215,12 @@ export function moduleLabel(entityId: string | null | undefined, module: Finance
 
 export function moduleDescription(entityId: string | null | undefined, module: FinanceModuleKey, fallback: string): string {
   return financeProfileFor(entityId).descriptions[module] ?? fallback;
+}
+
+export function screenHeaderFor(
+  entityId: string | null | undefined,
+  screen: 'vendors' | 'checks' | 'invoices',
+  fallback: { title: string; description: string },
+): { title: string; description: string } {
+  return financeProfileFor(entityId).screenHeaders[screen] ?? fallback;
 }

@@ -26,8 +26,28 @@ import { fmtDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   CloudLightning, Plus, MapPin, Users, Siren, ExternalLink,
-  RadioTower, Trash2, Zap, RefreshCw, ShieldCheck,
+  RadioTower, Trash2, Zap, RefreshCw, ShieldCheck, Crosshair, X,
 } from 'lucide-react';
+import DispatchMap, { type MapPoint } from '@/components/hgp/DispatchMap';
+
+const JOB_COLORS: Record<string, string> = {
+  install: '#1B72B5', service: '#0891b2', maintenance: '#059669',
+  emergency: '#dc2626', warranty: '#7c3aed', survey: '#d97706',
+};
+
+/* Mapbox forward geocode — same authorized pattern as the admin Client Map. */
+async function geocodeAddress(q: string): Promise<{ lat: number; lng: number } | null> {
+  const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
+  if (!token || !q.trim()) return null;
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json` +
+    `?access_token=${token}&country=us&limit=1&proximity=-95.3698,29.7604`,
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  const center = data?.features?.[0]?.center;
+  return center ? { lng: center[0], lat: center[1] } : null;
+}
 
 const STORM_CSS = `
 .st-shell{background:linear-gradient(180deg,rgba(220,38,38,0.04),transparent 180px);}
@@ -82,6 +102,99 @@ export default function StormResponse() {
   const deleteEvent = useEntityOpsSoftDelete('hgp_outage_events');
   const upsertSite = useEntityOpsUpsert('hgp_customer_sites');
   const upsertImpact = useEntityOpsUpsert('hgp_outage_impacts');
+  const upsertJob = useEntityOpsUpsert('hgp_jobs');
+
+  /* ── Dispatch map state ── */
+  const [selectedPoint, setSelectedPoint] = useState<MapPoint | null>(null);
+  const [showSites, setShowSites] = useState(true);
+  const [showJobs, setShowJobs] = useState(true);
+  const [showOutages, setShowOutages] = useState(true);
+  const [mapEmergencyOnly, setMapEmergencyOnly] = useState(false);
+  const [locating, setLocating] = useState<string | null>(null);
+
+  const activeJobs = useMemo(
+    () => (jobs as any[]).filter(j => !['completed', 'lost'].includes(j.stage)),
+    [jobs],
+  );
+
+  const mapPoints = useMemo<MapPoint[]>(() => {
+    const pts: MapPoint[] = [];
+    if (showSites && !mapEmergencyOnly) {
+      for (const s of sites as any[]) {
+        if (s.latitude == null || s.longitude == null) continue;
+        pts.push({ id: `site-${s.id}`, kind: 'site', lat: Number(s.latitude), lng: Number(s.longitude), label: s.customer_name, sub: [s.city, s.zip].filter(Boolean).join(' '), color: '#64748b' });
+      }
+    }
+    if (showJobs) {
+      for (const j of activeJobs) {
+        if (j.latitude == null || j.longitude == null) continue;
+        if (mapEmergencyOnly && !j.emergency) continue;
+        pts.push({
+          id: `job-${j.id}`, kind: 'job', lat: Number(j.latitude), lng: Number(j.longitude),
+          label: j.customer_name, sub: `${j.job_type} · ${j.stage}`,
+          color: JOB_COLORS[j.job_type] ?? '#1B72B5', pulse: !!j.emergency,
+        });
+      }
+    }
+    if (showOutages) {
+      for (const e of (events as any[]).filter(e => e.status !== 'restored')) {
+        if (e.latitude == null || e.longitude == null) continue;
+        pts.push({ id: `outage-${e.id}`, kind: 'outage', lat: Number(e.latitude), lng: Number(e.longitude), label: e.provider, sub: `${num(e.affected_customers).toLocaleString()} affected`, color: '#dc2626' });
+      }
+    }
+    return pts;
+  }, [sites, activeJobs, events, showSites, showJobs, showOutages, mapEmergencyOnly]);
+
+  /* Records with an address but no coordinates — locate via Mapbox geocoding
+     or enter coordinates manually. */
+  const needsCoords = useMemo(() => {
+    const rows: { key: string; kind: 'site' | 'job'; row: any; address: string }[] = [];
+    for (const s of sites as any[]) {
+      if (s.latitude != null || (!s.site_address && !s.zip)) continue;
+      rows.push({ key: `site-${s.id}`, kind: 'site', row: s, address: [s.site_address, s.city, 'TX', s.zip].filter(Boolean).join(', ') });
+    }
+    for (const j of activeJobs) {
+      if (j.latitude != null || (!j.site_address && !j.zip)) continue;
+      rows.push({ key: `job-${j.id}`, kind: 'job', row: j, address: [j.site_address, j.city, 'TX', j.zip].filter(Boolean).join(', ') });
+    }
+    return rows;
+  }, [sites, activeJobs]);
+
+  const locate = async (entry: { key: string; kind: 'site' | 'job'; row: any; address: string }) => {
+    setLocating(entry.key);
+    try {
+      const hit = await geocodeAddress(entry.address);
+      if (!hit) { toast.error('No geocoding match — enter coordinates manually'); return; }
+      const upsert = entry.kind === 'site' ? upsertSite : upsertJob;
+      await upsert.mutateAsync({
+        id: entry.row.id, user_id: entry.row.user_id, entity_id: entry.row.entity_id,
+        ...(entry.kind === 'site' ? { customer_name: entry.row.customer_name } : { customer_name: entry.row.customer_name, job_type: entry.row.job_type, stage: entry.row.stage }),
+        latitude: hit.lat, longitude: hit.lng,
+      });
+      toast.success(`${entry.row.customer_name} placed on the map`);
+    } catch (e: any) {
+      toast.error(e.message?.includes('latitude') ? 'Run migration 20260717000007 to enable job coordinates' : e.message);
+    } finally { setLocating(null); }
+  };
+
+  const selectedJob = selectedPoint?.kind === 'job'
+    ? (jobs as any[]).find(j => `job-${j.id}` === selectedPoint.id) ?? null : null;
+  const selectedSite = selectedPoint?.kind === 'site'
+    ? (sites as any[]).find(s => `site-${s.id}` === selectedPoint.id) ?? null : null;
+  const selectedOutage = selectedPoint?.kind === 'outage'
+    ? (events as any[]).find(e => `outage-${e.id}` === selectedPoint.id) ?? null : null;
+
+  const updateJobDispatch = async (patch: Record<string, unknown>) => {
+    if (!selectedJob) return;
+    try {
+      await upsertJob.mutateAsync({
+        id: selectedJob.id, user_id: selectedJob.user_id, entity_id: selectedJob.entity_id,
+        customer_name: selectedJob.customer_name, job_type: selectedJob.job_type, stage: selectedJob.stage,
+        ...patch,
+      });
+      toast.success('Dispatch updated');
+    } catch (e: any) { toast.error(e.message); }
+  };
 
   const [eventDialog, setEventDialog] = useState(false);
   const [eventForm, setEventForm] = useState({ ...BLANK_EVENT });
@@ -120,11 +233,14 @@ export default function StormResponse() {
       return toast.error('Give at least a ZIP, county, or city so customers can be matched');
     }
     try {
+      // Best-effort geocode so the outage plots on the dispatch map.
+      const hit = await geocodeAddress([eventForm.city, eventForm.county, 'TX', eventForm.zip].filter(Boolean).join(', '));
       await upsertEvent.mutateAsync({
         user_id: user.id,
         entity_id: 'houston-generator-pros',
         source_id: eventForm.source_id || null,
         provider,
+        ...(hit ? { latitude: hit.lat, longitude: hit.lng } : {}),
         status: eventForm.status,
         affected_customers: Number(eventForm.affected_customers) || 0,
         outage_started_at: eventForm.outage_started_at ? new Date(eventForm.outage_started_at).toISOString() : new Date().toISOString(),
@@ -227,6 +343,108 @@ export default function StormResponse() {
               </div>
             ))}
           </div>
+
+          {/* ── Dispatch map ── */}
+          <section className="st-panel p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="st-k">Dispatch Map</div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  ['Sites', showSites, setShowSites, '#64748b'],
+                  ['Jobs', showJobs, setShowJobs, '#1B72B5'],
+                  ['Outages', showOutages, setShowOutages, '#dc2626'],
+                ].map(([label, on, set, color]: any) => (
+                  <button key={label} className="st-action" style={on ? { borderColor: color + '80', color } : undefined} onClick={() => set((v: boolean) => !v)}>
+                    {label}
+                  </button>
+                ))}
+                <button className="st-action" style={mapEmergencyOnly ? { borderColor: '#dc262680', color: '#dc2626', background: '#dc262610' } : undefined} onClick={() => setMapEmergencyOnly(v => !v)}>
+                  <Siren className="w-3 h-3" /> Emergency
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-3">
+              <DispatchMap points={mapPoints} selectedId={selectedPoint?.id ?? null} onSelect={setSelectedPoint} height={400} />
+              <div className="space-y-2.5 min-w-0">
+                {selectedPoint ? (
+                  <div className="border border-border p-2.5">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-bold truncate">{selectedPoint.label}</div>
+                        <div className="text-[9px] text-muted-foreground uppercase tracking-[0.12em]">{selectedPoint.kind}{selectedPoint.sub ? ` · ${selectedPoint.sub}` : ''}</div>
+                      </div>
+                      <button className="p-1 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setSelectedPoint(null)}><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {selectedJob && (
+                      <div className="space-y-2">
+                        <div className="text-[10px] text-muted-foreground">{[selectedJob.site_address, selectedJob.city, selectedJob.zip].filter(Boolean).join(', ')}</div>
+                        <div>
+                          <div className="st-k mb-1">Technician</div>
+                          <Input className="st-field !h-8 !text-[11px]" defaultValue={selectedJob.technician ?? ''} key={selectedJob.id}
+                            onBlur={e => { if (e.target.value !== (selectedJob.technician ?? '')) updateJobDispatch({ technician: e.target.value.trim() || null }); }} />
+                        </div>
+                        <div>
+                          <div className="st-k mb-1">Dispatch Status</div>
+                          <Select value={selectedJob.dispatch_status ?? 'unassigned'} onValueChange={v => updateJobDispatch({ dispatch_status: v })}>
+                            <SelectTrigger className="st-field !h-8 !text-[11px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {['unassigned', 'assigned', 'en_route', 'on_site', 'done'].map(s => (
+                                <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Link to="/projects" className="st-action w-full justify-center">Open in Install Jobs</Link>
+                      </div>
+                    )}
+                    {selectedSite && (
+                      <div className="space-y-1.5 text-[10px] text-muted-foreground">
+                        <div>{[selectedSite.site_address, selectedSite.city, selectedSite.zip].filter(Boolean).join(', ')}</div>
+                        {selectedSite.utility_provider && <div>Utility: {selectedSite.utility_provider}</div>}
+                        {selectedSite.agreement_id
+                          ? <div className="text-positive font-bold uppercase text-[9px]">Maintenance plan customer</div>
+                          : <div className="text-warning font-bold uppercase text-[9px]">No maintenance plan</div>}
+                      </div>
+                    )}
+                    {selectedOutage && (
+                      <div className="space-y-2">
+                        <div className="text-[10px] text-muted-foreground">
+                          {num(selectedOutage.affected_customers).toLocaleString()} affected · {[selectedOutage.city, selectedOutage.county, selectedOutage.zip].filter(Boolean).join(' · ')}
+                        </div>
+                        <button className="st-action w-full justify-center" disabled={matching === selectedOutage.id} onClick={() => runMatch(selectedOutage.id)}>
+                          <RefreshCw className={`w-3 h-3 ${matching === selectedOutage.id ? 'animate-spin' : ''}`} /> Match Customers
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border border-border p-3 text-[10px] text-muted-foreground leading-relaxed">
+                    Click a marker to assign a technician, update dispatch status, or match an outage to customers.
+                    Emergencies pulse red; grey dots are registered customer sites.
+                  </div>
+                )}
+
+                {needsCoords.length > 0 && (
+                  <div className="border border-warning/40 bg-warning/5 p-2.5">
+                    <div className="st-k mb-1.5" style={{ color: '#d97706' }}>Needs Coordinates ({needsCoords.length})</div>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {needsCoords.slice(0, 12).map(entry => (
+                        <div key={entry.key} className="flex items-center justify-between gap-2 text-[10.5px]">
+                          <div className="min-w-0 truncate">
+                            <span className="font-bold">{entry.row.customer_name}</span>
+                            <span className="text-muted-foreground"> · {entry.kind}</span>
+                          </div>
+                          <button className="st-action shrink-0" disabled={locating === entry.key} onClick={() => locate(entry)}>
+                            <Crosshair className={`w-3 h-3 ${locating === entry.key ? 'animate-pulse' : ''}`} /> Locate
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
 
           <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_.85fr] gap-3.5">
             {/* ── Outage events + impacts ── */}

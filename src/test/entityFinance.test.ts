@@ -51,11 +51,26 @@ describe('entity-aware finance profiles', () => {
     }
   });
 
-  it('route→module map only names modules that exist in every profile shape', () => {
-    const knownModules = new Set(ENTITY_FINANCE_PROFILES['houston-enterprise'].modules);
+  it('route→module map only names modules configured for at least one entity profile', () => {
+    const knownModules = new Set(
+      Object.values(ENTITY_FINANCE_PROFILES).flatMap(profile => profile.modules),
+    );
     for (const mod of Object.values(ROUTE_MODULES)) {
       expect(knownModules.has(mod)).toBe(true);
     }
+  });
+
+  it('storm response is intentionally scoped to Houston Generator Pros', () => {
+    expect(entityHasModule('houston-generator-pros', 'storm')).toBe(true);
+    expect(entityHasModule('houston-enterprise', 'storm')).toBe(false);
+    expect(entityHasModule('houston-enterprise-holdings', 'storm')).toBe(false);
+  });
+
+  it('inventory module is scoped to Houston Generator Pros', () => {
+    expect(entityHasModule('houston-generator-pros', 'inventory')).toBe(true);
+    expect(entityHasModule('houston-enterprise', 'inventory')).toBe(false);
+    expect(entityHasModule('houston-enterprise-holdings', 'inventory')).toBe(false);
+    expect(moduleLabel('houston-generator-pros', 'inventory', 'Inventory')).toBe('Inventory');
   });
 
   it('every profile ships non-empty category catalogs, document tags, and a projects header', () => {
@@ -79,6 +94,17 @@ describe('entity-aware finance profiles', () => {
     const heh = financeProfileFor('houston-enterprise-holdings');
     expect(heh.incomeCategories).toContain('Interest Income');
     expect(heh.expenseCategories).toContain('Interest Expense');
+  });
+
+  it('shared screens adapt headers per entity while HE keeps original copy', () => {
+    const he = financeProfileFor('houston-enterprise');
+    const hgp = financeProfileFor('houston-generator-pros');
+    const heh = financeProfileFor('houston-enterprise-holdings');
+    expect(he.screenHeaders).toEqual({});
+    expect(hgp.screenHeaders.vendors?.title).toBe('Suppliers & Distributors');
+    expect(heh.screenHeaders.vendors?.title).toBe('Counterparties');
+    expect(heh.screenHeaders.checks?.title).toBe('Disbursements');
+    expect(hgp.screenHeaders.invoices?.title).toBe('Customer Invoices');
   });
 
   it('entity catalogs are actually differentiated per business model', () => {

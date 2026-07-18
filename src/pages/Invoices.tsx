@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
+import { useEntity } from '@/contexts/EntityContext';
+import { screenHeaderFor } from '@/lib/entityFinance';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,6 +27,8 @@ const INV_CSS = `
 
 export default function Invoices() {
   const navigate = useNavigate();
+  const { entity } = useEntity();
+  const invoicesHeader = screenHeaderFor(entity?.id, 'invoices', { title: 'Invoices', description: 'Create, track, and export professional invoices with one-click integrations.' });
   const { invoices, remove, update } = useInvoices();
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -81,8 +85,8 @@ export default function Invoices() {
       <style>{INV_CSS}</style>
       <PageHeader
         eyebrow="Billing"
-        title="Invoices"
-        description="Create, track, and export professional invoices with one-click integrations."
+        title={invoicesHeader.title}
+        description={invoicesHeader.description}
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">

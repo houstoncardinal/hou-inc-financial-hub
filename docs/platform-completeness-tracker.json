@@ -1,0 +1,324 @@
+{
+  "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
+  "updated": "2026-07-18",
+  "pass": "hgp-procurement-scheduling",
+  "overall": {
+    "completion": 93,
+    "status": "launch-ready"
+  },
+  "apps": {
+    "public_website": {
+      "completion": 90,
+      "status": "launch-ready"
+    },
+    "client_portal": {
+      "completion": 85,
+      "status": "launch-ready"
+    },
+    "admin_dashboard": {
+      "completion": 90,
+      "status": "launch-ready"
+    },
+    "finance_dashboard": {
+      "completion": 95,
+      "status": "launch-ready"
+    }
+  },
+  "entities": {
+    "houston-enterprise": {
+      "completion": 95,
+      "status": "launch-ready"
+    },
+    "houston-generator-pros": {
+      "completion": 96,
+      "status": "launch-ready"
+    },
+    "houston-enterprise-holdings": {
+      "completion": 92,
+      "status": "launch-ready"
+    }
+  },
+  "workflows": [
+    {
+      "id": "lead-capture",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null
+    },
+    {
+      "id": "client-onboarding",
+      "completion": 90,
+      "status": "launch-ready",
+      "remaining": [
+        "invite-flow automated test"
+      ],
+      "priority": "low",
+      "complexity": "S"
+    },
+    {
+      "id": "portal-communication",
+      "completion": 85,
+      "status": "launch-ready",
+      "remaining": [
+        "realtime message test",
+        "meeting reminder emails"
+      ],
+      "priority": "medium",
+      "complexity": "M"
+    },
+    {
+      "id": "document-requests-uploads",
+      "completion": 90,
+      "status": "launch-ready",
+      "remaining": [
+        "portal upload automated test"
+      ],
+      "priority": "low",
+      "complexity": "S"
+    },
+    {
+      "id": "project-management-sync",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null
+    },
+    {
+      "id": "construction-finance",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [
+        "cost-code/phase report polish"
+      ],
+      "priority": "low",
+      "complexity": "M"
+    },
+    {
+      "id": "generator-operations",
+      "completion": 94,
+      "status": "complete",
+      "remaining": [
+        "equipment lifecycle report"
+      ],
+      "priority": "medium",
+      "complexity": "M"
+    },
+    {
+      "id": "storm-response",
+      "completion": 94,
+      "status": "complete",
+      "remaining": [
+        "edge-function polling (terms-gated)"
+      ],
+      "priority": "medium",
+      "complexity": "L"
+    },
+    {
+      "id": "hgp-dispatch",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": "S",
+      "verification": "verify_dispatch_capital_approvals"
+    },
+    {
+      "id": "holdings-notes-debt-capital",
+      "completion": 94,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null
+    },
+    {
+      "id": "holdings-covenants",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "high",
+      "complexity": "S",
+      "verification": "verify_holdings_covenants"
+    },
+    {
+      "id": "holdings-capital-approvals",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "high",
+      "complexity": "S",
+      "verification": "verify_dispatch_capital_approvals"
+    },
+    {
+      "id": "ledger-reconciliation",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [
+        "AP aging depends on unpaid-bill logging discipline"
+      ],
+      "priority": "low",
+      "complexity": null
+    },
+    {
+      "id": "invoices-payments",
+      "completion": 90,
+      "status": "launch-ready",
+      "remaining": [
+        "recurring service billing automation"
+      ],
+      "priority": "medium",
+      "complexity": "M"
+    },
+    {
+      "id": "reporting-exports",
+      "completion": 85,
+      "status": "partial",
+      "remaining": [
+        "HGP job report",
+        "Holdings covenant report",
+        "WIP PDF"
+      ],
+      "priority": "medium",
+      "complexity": "M"
+    },
+    {
+      "id": "security-rls-roles",
+      "completion": 92,
+      "status": "launch-ready",
+      "remaining": [
+        "role-management UI test",
+        "storage policy review"
+      ],
+      "priority": "high",
+      "complexity": "M"
+    },
+    {
+      "id": "mobile-responsiveness",
+      "completion": 92,
+      "status": "launch-ready",
+      "remaining": [
+        "tablet screenshot sweep"
+      ],
+      "priority": "medium",
+      "complexity": "S"
+    },
+    {
+      "id": "performance-scaling",
+      "completion": 88,
+      "status": "launch-ready",
+      "remaining": [
+        "documents/admin pagination at scale"
+      ],
+      "priority": "medium",
+      "complexity": "M"
+    },
+    {
+      "id": "launch-documentation",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [
+        "keep in sync per pass"
+      ],
+      "priority": "low",
+      "complexity": null
+    },
+    {
+      "id": "hgp-command-map",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": "S",
+      "verification": "verify_hgp_command_map"
+    },
+    {
+      "id": "hgp-inventory",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": "M",
+      "verification": "verify_hgp_inventory"
+    },
+    {
+      "id": "hgp-job-payments",
+      "completion": 85,
+      "status": "needs-migration",
+      "remaining": [
+        "apply 20260718000001"
+      ],
+      "priority": "high",
+      "complexity": "S",
+      "verification": "verify_hgp_job_payments"
+    },
+    {
+      "id": "hgp-procurement-scheduling",
+      "completion": 85,
+      "status": "needs-migration",
+      "remaining": [
+        "apply 20260718000002"
+      ],
+      "priority": "high",
+      "complexity": "S",
+      "verification": "verify_hgp_procurement_scheduling"
+    }
+  ],
+  "deferred": [
+    {
+      "id": "outage-polling-edge-function",
+      "foundation": "provider registry with terms notes",
+      "complexity": "L"
+    },
+    {
+      "id": "technician-scheduling-board",
+      "foundation": "technician/dispatch columns (mig 22)",
+      "complexity": "M"
+    },
+    {
+      "id": "recurring-maintenance-billing",
+      "foundation": "agreements + renewal pipeline",
+      "complexity": "M"
+    },
+    {
+      "id": "cost-code-phase-reporting",
+      "foundation": "cost code/division tables + hooks",
+      "complexity": "M"
+    }
+  ],
+  "migrations": {
+    "applied_verified": [
+      "20260716000010",
+      "20260716000011",
+      "20260716000012",
+      "20260716000013",
+      "20260716000014",
+      "20260716000015",
+      "20260716000016",
+      "20260717000001",
+      "20260717000002",
+      "20260717000003",
+      "20260717000004",
+      "20260717000005",
+      "20260717000006",
+      "20260717000007",
+      "20260717000008"
+    ],
+    "pending_apply": [
+      "20260718000001",
+      "20260718000002"
+    ]
+  },
+  "test_battery": {
+    "typescript": "clean",
+    "eslint": "clean",
+    "unit": "13/13",
+    "build": "clean",
+    "playwright": {
+      "passed": 28,
+      "skipped": 0,
+      "note": "zero skips \u2014 full chain 10-24 live-verified incl. inventory"
+    }
+  }
+}

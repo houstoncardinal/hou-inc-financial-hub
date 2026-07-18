@@ -50,6 +50,61 @@ export const useHgpJobs = () =>
     queryFn: ownedList('hgp_jobs', HGP_ID, { column: 'created_at' }),
   });
 
+export const useHgpJobPayments = () =>
+  useQuery({
+    queryKey: ['hgp-job-payments'],
+    queryFn: ownedList('hgp_job_payments', HGP_ID, { column: 'payment_date' }),
+  });
+
+export const usePurchaseOrders = () =>
+  useQuery({
+    queryKey: ['hgp-purchase-orders'],
+    queryFn: ownedList('hgp_purchase_orders', HGP_ID, { column: 'order_date' }),
+  });
+
+export const useHgpParts = () =>
+  useQuery({
+    queryKey: ['hgp-parts'],
+    queryFn: ownedList('hgp_parts', HGP_ID, { column: 'name', ascending: true }),
+  });
+
+export const useInventoryMovements = (limit = 60) =>
+  useQuery({
+    queryKey: ['hgp-inventory-movements', limit],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('hgp_inventory_movements')
+        .select('*, hgp_parts:part_id(name, sku), hgp_equipment_units:equipment_unit_id(model, serial_number), hgp_jobs:job_id(customer_name)')
+        .eq('entity_id', HGP_ID)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+/* Inventory valuation rollup — null until migration 20260717000008 is live,
+   in which case the inventory page computes client-side fallbacks. */
+export const useHgpInventoryPosition = () =>
+  useQuery({
+    queryKey: ['hgp-inventory-position'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_hgp_inventory_position');
+      if (error) return null;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return null;
+      return {
+        unitsOnHand: Number(row.units_on_hand ?? 0),
+        unitsValue: Number(row.units_value ?? 0),
+        partSkus: Number(row.part_skus ?? 0),
+        partsValue: Number(row.parts_value ?? 0),
+        lowStockCount: Number(row.low_stock_count ?? 0),
+        consumed30d: Number(row.consumed_30d ?? 0),
+      };
+    },
+  });
+
 export const useCustomerSites = () =>
   useQuery({
     queryKey: ['hgp-customer-sites'],
@@ -107,6 +162,12 @@ export const useNotePayments = () =>
   useQuery({
     queryKey: ['holdings-note-payments'],
     queryFn: ownedList('holdings_note_payments', HOLDINGS_ID, { column: 'payment_date' }),
+  });
+
+export const useHoldingsCovenants = () =>
+  useQuery({
+    queryKey: ['holdings-covenants'],
+    queryFn: ownedList('holdings_covenants', HOLDINGS_ID, { column: 'next_review_date', ascending: true }),
   });
 
 /* Consolidated cross-entity cash for the Holdings portfolio view. Prefers
@@ -187,7 +248,8 @@ export const useHgpFinanceSummary = () =>
 type EntityOpsTable =
   | 'hgp_equipment_units' | 'hgp_service_agreements' | 'hgp_service_visits'
   | 'hgp_jobs' | 'hgp_customer_sites' | 'hgp_outage_events' | 'hgp_outage_impacts'
-  | 'holdings_notes' | 'holdings_capital_activity' | 'holdings_note_payments';
+  | 'hgp_parts' | 'hgp_inventory_movements' | 'hgp_job_payments' | 'hgp_purchase_orders'
+  | 'holdings_notes' | 'holdings_capital_activity' | 'holdings_note_payments' | 'holdings_covenants';
 
 /* Visit revenue and note-payment interest mirror into transactions via DB
    triggers, and note payments recompute their note's balance — so those
@@ -200,9 +262,14 @@ const ENTITY_OPS_KEYS: Record<EntityOpsTable, string[][]> = {
   hgp_customer_sites: [['hgp-customer-sites'], ['hgp-outage-impacts']],
   hgp_outage_events: [['hgp-outage-events'], ['hgp-outage-impacts']],
   hgp_outage_impacts: [['hgp-outage-impacts']],
+  hgp_parts: [['hgp-parts'], ['hgp-inventory-position']],
+  hgp_inventory_movements: [['hgp-inventory-movements'], ['hgp-parts'], ['hgp-jobs'], ['hgp-inventory-position']],
+  hgp_job_payments: [['hgp-job-payments'], ['hgp-jobs'], ['transactions'], ['ledger-page'], ['hgp-finance-summary']],
+  hgp_purchase_orders: [['hgp-purchase-orders'], ['transactions'], ['ledger-page'], ['hgp-finance-summary']],
   holdings_notes: [['holdings-notes']],
   holdings_capital_activity: [['holdings-capital-activity']],
   holdings_note_payments: [['holdings-note-payments'], ['holdings-notes'], ['transactions'], ['ledger-page']],
+  holdings_covenants: [['holdings-covenants']],
 };
 
 export function useEntityOpsUpsert(table: EntityOpsTable) {
@@ -244,17 +311,24 @@ export function useEntityOpsRealtime() {
       qc.invalidateQueries({ queryKey: ['holdings-notes'] });
       qc.invalidateQueries({ queryKey: ['holdings-capital-activity'] });
       qc.invalidateQueries({ queryKey: ['holdings-note-payments'] });
+      qc.invalidateQueries({ queryKey: ['holdings-covenants'] });
       qc.invalidateQueries({ queryKey: ['holdings-consolidated-totals'] });
       qc.invalidateQueries({ queryKey: ['hgp-finance-summary'] });
       qc.invalidateQueries({ queryKey: ['hgp-jobs'] });
       qc.invalidateQueries({ queryKey: ['hgp-customer-sites'] });
       qc.invalidateQueries({ queryKey: ['hgp-outage-events'] });
       qc.invalidateQueries({ queryKey: ['hgp-outage-impacts'] });
+      qc.invalidateQueries({ queryKey: ['hgp-parts'] });
+      qc.invalidateQueries({ queryKey: ['hgp-inventory-movements'] });
+      qc.invalidateQueries({ queryKey: ['hgp-inventory-position'] });
+      qc.invalidateQueries({ queryKey: ['hgp-job-payments'] });
+      qc.invalidateQueries({ queryKey: ['hgp-purchase-orders'] });
     };
     const ch = supabase.channel('entity-ops-rt');
     ['hgp_equipment_units', 'hgp_service_agreements', 'hgp_service_visits',
       'hgp_jobs', 'hgp_customer_sites', 'hgp_outage_events', 'hgp_outage_impacts',
-      'holdings_notes', 'holdings_capital_activity', 'holdings_note_payments'].forEach(table => {
+      'hgp_parts', 'hgp_inventory_movements', 'hgp_job_payments', 'hgp_purchase_orders',
+      'holdings_notes', 'holdings_capital_activity', 'holdings_note_payments', 'holdings_covenants'].forEach(table => {
       ch.on('postgres_changes', { event: '*', schema: 'public', table }, invalidate);
     });
     ch.subscribe();

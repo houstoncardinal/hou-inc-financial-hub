@@ -22,6 +22,7 @@ import {
 import { generateCheckRegisterReport, savePDF, downloadCheckExcel } from '@/lib/reports';
 import { toast } from 'sonner';
 import { useEntity } from '@/contexts/EntityContext';
+import { screenHeaderFor } from '@/lib/entityFinance';
 import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 import { useFinanceChangelog } from '@/hooks/useFinanceChangelog';
 import {
@@ -581,7 +582,9 @@ export default function Checks() {
   return (
     <AppShell>
       <style>{CHK_CSS}</style>
-      <PageHeader eyebrow="Instruments" title="Check Ledger" description="Issued instruments, payee assignment, and clearance state."
+      <PageHeader eyebrow="Instruments"
+        title={screenHeaderFor(entity?.id, 'checks', { title: 'Check Ledger', description: 'Issued instruments, payee assignment, and clearance state.' }).title}
+        description={screenHeaderFor(entity?.id, 'checks', { title: 'Check Ledger', description: 'Issued instruments, payee assignment, and clearance state.' }).description}
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">

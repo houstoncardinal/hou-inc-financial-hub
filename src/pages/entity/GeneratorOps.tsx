@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
-import { useTransactions } from '@/hooks/useFinance';
+import { useTransactions, useVendors } from '@/hooks/useFinance';
 import {
   useEquipmentUnits, useServiceAgreements, useServiceVisits, useHgpFinanceSummary,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import {
   Zap, Package, Wrench, CalendarClock, ShieldCheck, TrendingUp,
   Plus, Pencil, Trash2, AlertTriangle, PhoneCall, BookOpen,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 const HGP_BLUE = '#1B72B5';
@@ -103,11 +104,12 @@ const BLANK_UNIT = {
   status: 'in_stock', unit_cost: '', sale_price: '', customer_name: '',
   purchase_date: '', install_date: '', warranty_end: '', permit_number: '', notes: '',
   deposit_amount: '', install_labor_cost: '', inspection_status: '',
+  log_po: true, po_vendor_id: '', po_number: '', po_total: '', po_date: new Date().toISOString().slice(0, 10),
 };
 
 const BLANK_VISIT = {
   id: '', agreement_id: '', customer_name: '', visit_date: new Date().toISOString().slice(0, 10),
-  visit_type: 'scheduled', technician: '', labor_hours: '', revenue: '', cost: '', summary: '',
+  visit_type: 'scheduled', status: 'completed', technician: '', labor_hours: '', revenue: '', cost: '', summary: '',
 };
 
 const BLANK_AGREEMENT = {
@@ -133,6 +135,9 @@ export default function GeneratorOps() {
   const deleteAgreement = useEntityOpsSoftDelete('hgp_service_agreements');
   const upsertVisit = useEntityOpsUpsert('hgp_service_visits');
   const deleteVisit = useEntityOpsSoftDelete('hgp_service_visits');
+  const upsertPO = useEntityOpsUpsert('hgp_purchase_orders');
+  const { data: vendors = [] } = useVendors();
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
 
   const [unitDialog, setUnitDialog] = useState(false);
   const [unitForm, setUnitForm] = useState({ ...BLANK_UNIT });
@@ -167,6 +172,29 @@ export default function GeneratorOps() {
       const d = daysUntil(u.warranty_end);
       return d !== null && d >= 0 && d <= 90;
     });
+    /* Renewal pipeline: active plans ending within 60 days are revenue to
+       save; expired-but-active plans need immediate renewal outreach. */
+    const renewals = active
+      .filter(a => a.end_date)
+      .map(a => ({ ...a, endsIn: daysUntil(a.end_date) }))
+      .filter(a => a.endsIn !== null && a.endsIn <= 60)
+      .sort((a, b) => (a.endsIn ?? 0) - (b.endsIn ?? 0));
+    const renewalValue = renewals.reduce((s, a) => s + num(a.annual_value), 0);
+
+    /* Contracted service revenue: each active agreement's annual value
+       prorated over the coverage days that fall inside the horizon (capped
+       at the agreement's end date when one is set) — contracted dollars,
+       not a projection of renewals. */
+    const contractedOver = (horizonDays: number) =>
+      active.reduce((s, a) => {
+        const coverage = a.end_date != null
+          ? Math.min(horizonDays, Math.max(daysUntil(a.end_date) ?? 0, 0))
+          : horizonDays;
+        return s + num(a.annual_value) * (coverage / 365);
+      }, 0);
+    const contracted90 = contractedOver(90);
+    const contracted180 = contractedOver(180);
+    const contracted365 = contractedOver(365);
 
     /* Prefer the server-side rollup (get_hgp_finance_summary, migration
        20260717000001); fall back to client-side math over the fetched
@@ -189,7 +217,8 @@ export default function GeneratorOps() {
     return {
       onHandCount: onHand.length, installedCount: installed.length, inventoryValue, depositsHeld,
       soldRevenue, soldCogs, avgMarginPct, activeCount: active.length, arr,
-      upcoming, overdueVisits, warrantyExpiring,
+      upcoming, overdueVisits, warrantyExpiring, renewals, renewalValue,
+      contracted90, contracted180, contracted365,
       totalIncome, totalExpense, serviceRevenue, emergencyRevenue,
     };
   }, [units, agreements, income, expenses, rpcSummary]);
@@ -219,6 +248,7 @@ export default function GeneratorOps() {
       deposit_amount: u.deposit_amount != null && num(u.deposit_amount) !== 0 ? String(u.deposit_amount) : '',
       install_labor_cost: u.install_labor_cost != null && num(u.install_labor_cost) !== 0 ? String(u.install_labor_cost) : '',
       inspection_status: u.inspection_status ?? '',
+      log_po: false, po_vendor_id: '', po_number: '', po_total: '', po_date: new Date().toISOString().slice(0, 10),
     } : { ...BLANK_UNIT });
     setUnitDialog(true);
   };
@@ -248,18 +278,61 @@ export default function GeneratorOps() {
       inspection_status: unitForm.inspection_status.trim() || null,
     };
     try {
+      // New intake with a purchase order: the PO row mirrors straight into
+      // HGP expenses ('Generator Equipment Purchase') via the DB trigger.
+      if (!unitForm.id && unitForm.log_po) {
+        const poTotal = Number(unitForm.po_total) || Number(unitForm.unit_cost) || 0;
+        if (poTotal > 0) {
+          try {
+            const po: any = await upsertPO.mutateAsync({
+              user_id: user.id,
+              entity_id: 'houston-generator-pros',
+              vendor_id: unitForm.po_vendor_id || null,
+              po_number: unitForm.po_number.trim() || null,
+              order_date: unitForm.po_date || new Date().toISOString().slice(0, 10),
+              total_amount: poTotal,
+              status: 'received',
+              memo: `Equipment intake — ${unitForm.model.trim()}`,
+            });
+            row.po_id = po?.id ?? null;
+            row.vendor_id = unitForm.po_vendor_id || null;
+          } catch {
+            toast.info('Unit will save, but run migration 20260718000002 so purchase orders post to expenses.');
+          }
+        }
+      }
       await upsertUnit.mutateAsync(row);
-      toast.success(unitForm.id ? 'Unit updated' : 'Unit added to inventory');
+      toast.success(unitForm.id
+        ? 'Unit updated'
+        : (!unitForm.id && unitForm.log_po && (Number(unitForm.po_total) || Number(unitForm.unit_cost)) > 0 && row.po_id)
+          ? 'Unit received — purchase expense posted to HGP financials'
+          : 'Unit added to inventory');
       setUnitDialog(false);
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const openVisit = (presetAgreement?: any) => {
-    setVisitForm({
-      ...BLANK_VISIT,
-      agreement_id: presetAgreement?.id ?? '',
-      customer_name: presetAgreement?.customer_name ?? '',
-    });
+  const openVisit = (preset?: any) => {
+    if (preset?.visit) {
+      const v = preset.visit;
+      setVisitForm({
+        id: v.id, agreement_id: v.agreement_id ?? '', customer_name: v.customer_name ?? '',
+        visit_date: v.visit_date ?? new Date().toISOString().slice(0, 10),
+        visit_type: v.visit_type ?? 'scheduled', status: v.status ?? 'completed',
+        technician: v.technician ?? '', labor_hours: num(v.labor_hours) ? String(v.labor_hours) : '',
+        revenue: num(v.revenue) ? String(v.revenue) : '', cost: num(v.cost) ? String(v.cost) : '',
+        summary: v.summary ?? '',
+      });
+    } else if (preset?.date) {
+      setVisitForm({ ...BLANK_VISIT, visit_date: preset.date, status: 'scheduled' });
+    } else {
+      setVisitForm({
+        ...BLANK_VISIT,
+        agreement_id: preset?.id ?? '',
+        customer_name: preset?.customer_name ?? '',
+        visit_date: preset?.next_visit_date ?? BLANK_VISIT.visit_date,
+        status: preset?.id ? 'scheduled' : 'completed',
+      });
+    }
     setVisitDialog(true);
   };
 
@@ -274,6 +347,7 @@ export default function GeneratorOps() {
       customer_name: visitForm.customer_name.trim(),
       visit_date: visitForm.visit_date,
       visit_type: visitForm.visit_type,
+      status: visitForm.status,
       technician: visitForm.technician.trim() || null,
       labor_hours: Number(visitForm.labor_hours) || 0,
       revenue: Number(visitForm.revenue) || 0,
@@ -282,7 +356,11 @@ export default function GeneratorOps() {
     };
     try {
       await upsertVisit.mutateAsync(row);
-      toast.success(Number(visitForm.revenue) > 0 ? 'Visit logged — income posted to the ledger' : 'Visit logged');
+      toast.success(
+        visitForm.status === 'scheduled' ? 'Visit scheduled'
+        : visitForm.status === 'cancelled' ? 'Visit cancelled'
+        : Number(visitForm.revenue) > 0 ? 'Visit completed — income posted to the ledger'
+        : 'Visit completed');
       setVisitDialog(false);
     } catch (e: any) { toast.error(e.message); }
   };
@@ -332,7 +410,7 @@ export default function GeneratorOps() {
         description="Sales, inventory COGS, install margin, maintenance plans, and service revenue."
         actions={
           <div className="flex items-center gap-2">
-            <button className="hgp-action" onClick={() => openVisit()}><CalendarClock className="w-3 h-3" /> Log Visit</button>
+            <button className="hgp-action" onClick={() => openVisit()}><CalendarClock className="w-3 h-3" /> Log / Schedule Visit</button>
             <button className="hgp-action" onClick={() => openAgreement()}><Wrench className="w-3 h-3" /> New Plan</button>
             <button className="hgp-primary" onClick={() => openUnit()}><Plus className="w-3.5 h-3.5" /> Add Unit</button>
           </div>
@@ -341,14 +419,13 @@ export default function GeneratorOps() {
 
       <div className="hgp-shell border-t border-border/50">
         <div className="px-4 sm:px-8 py-4 space-y-4">
-          {/* ── KPI rail ── */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+          {/* ── KPI rail — one dense row on desktop ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
             <Metric label="Revenue (Entity)" value={fmtUSD(stats.totalIncome)} sub={`${fmtUSD(stats.totalExpense)} costs recorded`} icon={TrendingUp} color="#059669" />
-            <Metric label="Recurring Service" value={fmtUSD(stats.arr)} sub={`${stats.activeCount} active agreement${stats.activeCount === 1 ? '' : 's'} / yr`} icon={Wrench} />
+            <Metric label="Recurring Service" value={fmtUSD(stats.arr)}
+              sub={`${fmtUSD(stats.contracted90)} contracted 90d · ${fmtUSD(stats.contracted365)} 12mo`} icon={Wrench} />
             <Metric label="Inventory On Hand" value={String(stats.onHandCount)} sub={`${fmtUSD(stats.inventoryValue)} at cost · ${fmtUSD(stats.depositsHeld)} deposits held`} icon={Package} color="#7c3aed" />
             <Metric label="Install Margin" value={`${stats.avgMarginPct.toFixed(1)}%`} sub={`${fmtUSD(stats.soldRevenue - stats.soldCogs)} on ${stats.installedCount} installs`} icon={Zap} color="#d97706" />
-          </div>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
             <Metric label="Service Revenue" value={fmtUSD(stats.serviceRevenue)} sub="Income tagged service / maintenance" icon={BookOpen} color="#0891b2" />
             <Metric label="Emergency Revenue" value={fmtUSD(stats.emergencyRevenue)} sub="After-hours & emergency calls" icon={PhoneCall} color="#dc2626" />
             <Metric label="Visits · Next 30d" value={String(stats.upcoming.length)} sub={stats.overdueVisits.length ? `${stats.overdueVisits.length} overdue — schedule now` : 'No overdue visits'} icon={CalendarClock} color={stats.overdueVisits.length ? '#dc2626' : '#059669'} />
@@ -385,66 +462,139 @@ export default function GeneratorOps() {
 
             <section className="hgp-panel p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="hgp-k">Maintenance Schedule</div>
-                <Link to="/ledger" className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: HGP_BLUE }}>Open Ledger</Link>
+                <div className="hgp-k">Visit Schedule</div>
+                <div className="flex items-center gap-1">
+                  <button className="hgp-action !px-1.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} aria-label="Previous month">
+                    <ChevronLeft className="w-3 h-3" />
+                  </button>
+                  <button className="hgp-action" onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>
+                    {calMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </button>
+                  <button className="hgp-action !px-1.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} aria-label="Next month">
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {[...stats.overdueVisits, ...stats.upcoming].map((a: any) => {
-                  const d = daysUntil(a.next_visit_date);
-                  const overdue = d !== null && d < 0;
-                  return (
-                    <div key={a.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-bold truncate">{a.customer_name}</div>
-                        <div className="text-[10px] text-muted-foreground">{fmtDate(a.next_visit_date)} · {a.plan.replace('_', '-')} plan</div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[9px] font-black uppercase tracking-[0.12em] whitespace-nowrap ${overdue ? 'text-destructive' : 'text-positive'}`}>
-                          {overdue ? `${Math.abs(d!)}d overdue` : d === 0 ? 'Today' : `in ${d}d`}
-                        </span>
-                        <button className="hgp-action" onClick={() => openVisit(a)} title="Log this visit as completed">Log</button>
-                      </div>
+              {(() => {
+                const first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
+                const startPad = first.getDay();
+                const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+                const todayKey = new Date().toISOString().slice(0, 10);
+                const byDay: Record<string, any[]> = {};
+                for (const v of visits as any[]) {
+                  if (!v.visit_date) continue;
+                  (byDay[v.visit_date] ??= []).push(v);
+                }
+                // Plans whose next visit is due but not yet scheduled show as dashed ghosts.
+                const ghostByDay: Record<string, any[]> = {};
+                for (const a of (agreements as any[]).filter(x => x.status === 'active' && x.next_visit_date)) {
+                  const hasScheduled = (byDay[a.next_visit_date] ?? []).some(v => v.agreement_id === a.id && v.status === 'scheduled');
+                  if (!hasScheduled) (ghostByDay[a.next_visit_date] ??= []).push(a);
+                }
+                const cells = [];
+                for (let i = 0; i < startPad; i++) cells.push(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                return (
+                  <>
+                    <div className="grid grid-cols-7 gap-px text-center mb-0.5">
+                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => (
+                        <div key={i} className="text-[7px] font-black uppercase text-muted-foreground py-0.5">{w}</div>
+                      ))}
                     </div>
-                  );
-                })}
-                {!stats.overdueVisits.length && !stats.upcoming.length && (
-                  <div className="text-xs text-muted-foreground border border-border p-3">No visits scheduled in the next 30 days.</div>
-                )}
-              </div>
+                    <div className="grid grid-cols-7 gap-px bg-border/60 border border-border">
+                      {cells.map((d, i) => {
+                        if (d === null) return <div key={`p${i}`} className="bg-secondary/20 min-h-[52px]" />;
+                        const key = `${calMonth.getFullYear()}-${String(calMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const dayVisits = byDay[key] ?? [];
+                        const ghosts = ghostByDay[key] ?? [];
+                        const isToday = key === todayKey;
+                        return (
+                          <div key={key}
+                            className="bg-background min-h-[52px] p-0.5 cursor-pointer hover:bg-secondary/30 transition-colors min-w-0"
+                            style={isToday ? { boxShadow: `inset 0 0 0 1.5px ${HGP_BLUE}` } : undefined}
+                            onClick={() => openVisit({ date: key })}
+                            title={`Schedule a visit on ${key}`}>
+                            <div className={`text-[8px] font-bold px-0.5 ${isToday ? '' : 'text-muted-foreground'}`}
+                              style={isToday ? { color: HGP_BLUE } : undefined}>{d}</div>
+                            <div className="space-y-px">
+                              {dayVisits.slice(0, 3).map(v => {
+                                const color = v.status === 'cancelled' ? '#8A8580'
+                                  : v.visit_type === 'emergency' ? '#dc2626'
+                                  : v.status === 'scheduled' ? HGP_BLUE : '#059669';
+                                return (
+                                  <button key={v.id} type="button"
+                                    className={`block w-full text-left text-[7px] font-bold leading-tight px-0.5 truncate ${v.status === 'cancelled' ? 'line-through opacity-60' : ''}`}
+                                    style={{ backgroundColor: color + '1a', color }}
+                                    onClick={e => { e.stopPropagation(); openVisit({ visit: v }); }}
+                                    title={`${v.customer_name} · ${v.visit_type} · ${v.status}`}>
+                                    {v.customer_name}
+                                  </button>
+                                );
+                              })}
+                              {ghosts.slice(0, 2).map(a => (
+                                <button key={`g${a.id}`} type="button"
+                                  className="block w-full text-left text-[7px] font-bold leading-tight px-0.5 truncate border border-dashed"
+                                  style={{ borderColor: '#d97706aa', color: '#d97706' }}
+                                  onClick={e => { e.stopPropagation(); openVisit(a); }}
+                                  title={`${a.customer_name} — plan visit due, click to schedule`}>
+                                  {a.customer_name}
+                                </button>
+                              ))}
+                              {dayVisits.length > 3 && (
+                                <div className="text-[6.5px] text-muted-foreground px-0.5">+{dayVisits.length - 3} more</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-2.5 mt-1.5 text-[7px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <span><span className="inline-block w-1.5 h-1.5 mr-1" style={{ background: HGP_BLUE }} />Scheduled</span>
+                      <span><span className="inline-block w-1.5 h-1.5 mr-1 bg-[#059669]" />Completed</span>
+                      <span><span className="inline-block w-1.5 h-1.5 mr-1 bg-[#dc2626]" />Emergency</span>
+                      <span><span className="inline-block w-1.5 h-1.5 mr-1 border border-dashed border-[#d97706]" />Plan due</span>
+                      <span className="ml-auto normal-case font-medium">Click a day to schedule · click a chip to edit</span>
+                    </div>
+                  </>
+                );
+              })()}
 
-              <div className="hgp-k mt-4 mb-2">Recent Service Calls</div>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                {(visits as any[]).slice(0, 10).map(v => {
-                  const meta = VISIT_TYPES[v.visit_type] ?? VISIT_TYPES.scheduled;
-                  return (
-                    <div key={v.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[8px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5" style={{ backgroundColor: meta.color + '16', color: meta.color }}>
-                            {meta.label}
-                          </span>
-                          <span className="font-bold truncate">{v.customer_name}</span>
+              {(stats.renewals.length > 0 || stats.warrantyExpiring.length > 0) && (
+                <>
+                  <div className="flex items-center justify-between mt-4 mb-2">
+                    <div className="hgp-k">Renewals & Warranty Watch</div>
+                    {stats.renewalValue > 0 && (
+                      <span className="text-[9px] font-mono-tab font-bold text-warning">{fmtUSD(stats.renewalValue)}/yr at stake</span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                    {stats.renewals.map((a: any) => (
+                      <div key={a.id} className="border border-border px-2.5 py-1.5 text-xs flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="font-bold truncate">{a.customer_name}</span>
+                          <span className="text-[9px] text-muted-foreground"> · plan {fmtUSD(num(a.annual_value))}/yr</span>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                          {fmtDate(v.visit_date)}{v.technician ? ` · ${v.technician}` : ''}{num(v.labor_hours) > 0 ? ` · ${num(v.labor_hours)}h` : ''}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${a.endsIn < 0 ? 'text-destructive' : 'text-warning'}`}>
+                            {a.endsIn < 0 ? `Lapsed ${Math.abs(a.endsIn)}d` : `Renews in ${a.endsIn}d`}
+                          </span>
+                          <button className="hgp-action" title="Open plan to renew" onClick={() => openAgreement(a)}>Renew</button>
                         </div>
                       </div>
-                      {num(v.revenue) > 0 && (
-                        <span className="font-mono-tab font-bold text-positive whitespace-nowrap">{fmtUSD(num(v.revenue))}</span>
-                      )}
-                      <button className="p-1 text-muted-foreground hover:text-destructive shrink-0" title="Remove visit (voids linked income)"
-                        onClick={() => { if (confirm('Remove this visit? Linked income will be voided.')) deleteVisit.mutate(v.id, { onSuccess: () => toast.success('Visit removed, linked income voided') }); }}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-                {!(visits as any[]).length && (
-                  <div className="text-xs text-muted-foreground border border-border p-3">
-                    No service calls logged yet — visit revenue posts straight to the income ledger.
+                    ))}
+                    {stats.warrantyExpiring.map((u: any) => (
+                      <div key={u.id} className="border border-border px-2.5 py-1.5 text-xs flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="font-bold truncate">{u.customer_name || u.model}</span>
+                          <span className="text-[9px] text-muted-foreground"> · warranty ends {fmtDate(u.warranty_end)}</span>
+                        </div>
+                        <button className="hgp-action shrink-0" title="Open unit" onClick={() => openUnit(u)}>Review</button>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
+                </>
+              )}
+
             </section>
           </div>
 
@@ -553,7 +703,7 @@ export default function GeneratorOps() {
       {/* ── Unit dialog ── */}
       <Dialog open={unitDialog} onOpenChange={setUnitDialog}>
         <DialogContent className="max-w-lg rounded-none max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-base">{unitForm.id ? 'Edit Generator Unit' : 'Add Generator Unit'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base">{unitForm.id ? 'Edit Generator Unit' : 'Receive Generator Unit'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-2.5">
             <div className="col-span-2">
               <div className="hgp-k mb-1">Model *</div>
@@ -633,8 +783,46 @@ export default function GeneratorOps() {
               <Textarea className="rounded-none text-xs" rows={2} value={unitForm.notes} onChange={e => setUnitForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
           </div>
+          {!unitForm.id && (
+            <div className="border border-border mt-1">
+              <label className="flex items-center gap-2 px-3 py-2 bg-secondary/30 border-b border-border cursor-pointer select-none">
+                <input type="checkbox" className="w-4 h-4" checked={unitForm.log_po}
+                  onChange={e => setUnitForm(f => ({ ...f, log_po: e.target.checked }))} />
+                <span className="text-xs font-bold">Log purchase order → HGP expense</span>
+                <span className="text-[9px] text-muted-foreground ml-auto">Posts as "Generator Equipment Purchase"</span>
+              </label>
+              {unitForm.log_po && (
+                <div className="p-3 grid grid-cols-2 gap-2.5">
+                  <div className="col-span-2">
+                    <div className="hgp-k mb-1">Distributor / Vendor</div>
+                    <Select value={unitForm.po_vendor_id || '__none__'} onValueChange={v => setUnitForm(f => ({ ...f, po_vendor_id: v === '__none__' ? '' : v }))}>
+                      <SelectTrigger className="hgp-field"><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No vendor</SelectItem>
+                        {(vendors as any[]).map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <div className="hgp-k mb-1">PO Number</div>
+                    <Input className="hgp-field font-mono-tab" placeholder="PO-1042" value={unitForm.po_number} onChange={e => setUnitForm(f => ({ ...f, po_number: e.target.value }))} />
+                  </div>
+                  <div>
+                    <div className="hgp-k mb-1">Order Date</div>
+                    <Input className="hgp-field" type="date" value={unitForm.po_date} onChange={e => setUnitForm(f => ({ ...f, po_date: e.target.value }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <div className="hgp-k mb-1">PO Total (defaults to unit cost)</div>
+                    <Input className="hgp-field !h-11 !text-[14px] font-mono-tab" type="number" inputMode="decimal"
+                      placeholder={unitForm.unit_cost || '0.00'}
+                      value={unitForm.po_total} onChange={e => setUnitForm(f => ({ ...f, po_total: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button className="hgp-primary w-full mt-2" onClick={saveUnit} disabled={upsertUnit.isPending}>
-            {unitForm.id ? 'Save Unit' : 'Add to Inventory'}
+            {unitForm.id ? 'Save Unit' : unitForm.log_po ? 'Receive Unit + Post Expense' : 'Add to Inventory'}
           </button>
         </DialogContent>
       </Dialog>
@@ -709,7 +897,7 @@ export default function GeneratorOps() {
       {/* ── Service visit dialog ── */}
       <Dialog open={visitDialog} onOpenChange={setVisitDialog}>
         <DialogContent className="max-w-lg rounded-none max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-base">Log Service Visit</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base">{visitForm.id ? "Edit Visit" : visitForm.status === "scheduled" ? "Schedule Visit" : "Log Service Visit"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-2.5">
             <div className="col-span-2">
               <div className="hgp-k mb-1">Maintenance Plan (optional)</div>
@@ -748,6 +936,21 @@ export default function GeneratorOps() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="col-span-2">
+              <div className="hgp-k mb-1">Status</div>
+              <div className="flex gap-1.5">
+                {([['scheduled', 'Scheduled', HGP_BLUE], ['completed', 'Completed', '#059669'], ['cancelled', 'Cancelled', '#8A8580']] as const).map(([v, l, c]) => (
+                  <button key={v} type="button" className="hgp-action flex-1 justify-center !h-9"
+                    style={visitForm.status === v ? { borderColor: c + '80', color: c, background: c + '10' } : undefined}
+                    onClick={() => setVisitForm(f => ({ ...f, status: v }))}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {visitForm.status !== 'completed' && Number(visitForm.revenue) > 0 && (
+                <div className="text-[9px] text-warning mt-1">Revenue posts to income only when the visit is completed.</div>
+              )}
+            </div>
             <div>
               <div className="hgp-k mb-1">Technician</div>
               <Input className="hgp-field" value={visitForm.technician} onChange={e => setVisitForm(f => ({ ...f, technician: e.target.value }))} />
@@ -773,9 +976,20 @@ export default function GeneratorOps() {
               (category {visitForm.visit_type === 'emergency' ? '"Emergency Service"' : '"Service Maintenance"'}) and updates the plan's last-visit date.
             </div>
           </div>
-          <button className="hgp-primary w-full mt-2" onClick={saveVisit} disabled={upsertVisit.isPending}>
-            Log Visit
-          </button>
+          <div className="flex gap-2 mt-2">
+            {visitForm.id && (
+              <button className="hgp-action !h-11 px-4 !text-destructive" onClick={() => {
+                if (confirm('Delete this visit? Any linked income will be voided.')) {
+                  deleteVisit.mutate(visitForm.id, { onSuccess: () => { toast.success('Visit removed'); setVisitDialog(false); } });
+                }
+              }}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button className="hgp-primary flex-1 !h-11" onClick={saveVisit} disabled={upsertVisit.isPending}>
+              {visitForm.id ? 'Save Visit' : visitForm.status === 'scheduled' ? 'Schedule Visit' : 'Log Visit'}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </AppShell>

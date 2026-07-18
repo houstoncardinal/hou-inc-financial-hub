@@ -11,7 +11,7 @@ import {
   FolderKanban, Users, BookOpen, LogOut, ConciergeBell, BarChart3,
   Settings, Sun, Moon, Receipt, Globe,
   Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, Check,
-  MoreHorizontal, History, ShieldCheck,
+  MoreHorizontal, History, ShieldCheck, CloudLightning, Package,
 } from 'lucide-react';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
@@ -33,6 +33,8 @@ const navGroups = [
     label: 'Management',
     items: [
       { to: '/projects', label: 'Projects', icon: FolderKanban, desc: 'Active & archived jobs' },
+      { to: '/storm',    label: 'Storm Response', icon: CloudLightning, desc: 'Outage intelligence & dispatch' },
+      { to: '/inventory', label: 'Inventory', icon: Package, desc: 'Parts, stock & movement ledger' },
       { to: '/vendors',  label: 'Vendors',  icon: Users,         desc: 'Vendor directory' },
     ],
   },
