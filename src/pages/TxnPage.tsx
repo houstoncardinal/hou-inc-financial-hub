@@ -41,6 +41,7 @@ import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import { useCreatePortalClient, usePortalClients } from '@/hooks/usePortalClients';
 import { generateTransactionReport, savePDF, downloadTransactionExcel } from '@/lib/reports';
 import { scanReceipt, type ScannedReceipt } from '@/lib/receiptScan';
+import { useUploadDocument } from '@/hooks/useDocuments';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
@@ -485,6 +486,8 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
   /* ── Receipt scanner state (external scan only) ── */
   const [scanning, setScanning] = useState(false);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const uploadDoc = useUploadDocument();
   const quickCamRef    = useRef<HTMLInputElement>(null);
   const quickUploadRef = useRef<HTMLInputElement>(null);
 
@@ -496,13 +499,37 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     if (result.category) { patch.category = result.category;           filled.add('category'); }
     if (result.notes)    { patch.notes = result.notes;                 filled.add('notes'); }
     if (result.merchant && isIncome)  { patch.source_name = result.merchant; filled.add('source_name'); }
-    if (result.merchant && !isIncome && !patch.notes) { patch.notes = result.merchant; filled.add('notes'); }
+
+    const normalize = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const haystack = normalize(`${result.merchant ?? ''} ${result.notes ?? ''}`);
+
+    // Expense documents name the vendor — match it to the registry so the
+    // expense lands assigned, not orphaned. (Still editable in the form.)
+    if (!isIncome && haystack) {
+      const vendorHit = (vendors as any[]).find(v => {
+        const n = normalize(v.name ?? '');
+        return n.length > 2 && (haystack.includes(n) || n.includes(normalize(result.merchant ?? '')) && normalize(result.merchant ?? '').length > 2);
+      });
+      if (vendorHit) { (patch as any).vendor_id = vendorHit.id; filled.add('vendor_id'); }
+      else if (result.merchant && !patch.notes) { patch.notes = result.merchant; filled.add('notes'); }
+    }
+
+    // Project names sometimes appear on POs/invoices — assign when they do.
+    if (haystack) {
+      const projectHit = (projects as any[]).find(pr => {
+        const n = normalize(pr.name ?? '');
+        return n.length > 3 && haystack.includes(n);
+      });
+      if (projectHit) { (patch as any).project_id = projectHit.id; filled.add('project_id'); }
+    }
+
     setForm(f => ({ ...f, ...patch }));
     setAutoFilled(filled);
-  }, [isIncome]);
+  }, [isIncome, vendors, projects]);
 
   const processImage = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+    if (!file.type.startsWith('image/')) { toast.error('Select an image (JPG/PNG) — photograph paper POs and invoices'); return; }
+    setScanFile(file);
     const dataUrl: string = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = ev => resolve(ev.target!.result as string);
@@ -532,6 +559,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   };
 
   const resetDialog = () => {
+    setScanFile(null);
     setForm(blankForm);
     setAllocations([blankAllocation()]);
     setAutoFilled(new Set());
@@ -641,6 +669,20 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         payload.subcontractor_retainage_released = num(form.subcontractor_retainage_released);
       }
       const saved = await upsert.mutateAsync(payload as any);
+      // Keep the scanned source document, linked to this transaction.
+      if (scanFile && (saved as any)?.id) {
+        try {
+          await uploadDoc.mutateAsync({
+            file: scanFile,
+            docType: 'receipt',
+            title: form.description || form.category || undefined,
+            runOcr: false,
+            linked_transaction_id: (saved as any).id,
+          });
+          toast.success('Source document attached to the transaction');
+        } catch { toast.info('Transaction saved; document upload failed — attach it from Documents.'); }
+        setScanFile(null);
+      }
       if (isIncome && form.invoice_id && (form.external_invoice_url || form.external_invoice_provider || form.external_invoice_number || form.portal_client_id)) {
         await updateInvoice(form.invoice_id, {
           stripe_payment_link: form.external_invoice_provider === 'stripe' && form.external_invoice_url ? form.external_invoice_url : undefined,
@@ -880,7 +922,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
             >
               {scanning
                 ? <><div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" /> Scanning…</>
-                : <><Camera className="w-3.5 h-3.5" /> Scan Receipt</>
+                : <><Camera className="w-3.5 h-3.5" /> {isIncome ? 'Scan Receipt' : 'Scan PO / Receipt'}</>
               }
             </Button>
 

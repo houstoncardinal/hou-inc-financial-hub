@@ -21,6 +21,7 @@ import {
   useHgpParts, useInventoryMovements, useHgpInventoryPosition, useHgpJobs, useEquipmentUnits,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
+import { Download, ShoppingCart, X } from 'lucide-react';
 import { fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
 import {
@@ -94,10 +95,15 @@ export default function HgpInventory() {
   const voidMovement = useEntityOpsSoftDelete('hgp_inventory_movements');
   const upsertUnit = useEntityOpsUpsert('hgp_equipment_units');
   const upsertJob = useEntityOpsUpsert('hgp_jobs');
+  const upsertPO = useEntityOpsUpsert('hgp_purchase_orders');
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [lowOnly, setLowOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'alerts' | 'name' | 'qty' | 'value'>('alerts');
+  const [detailPart, setDetailPart] = useState<any | null>(null);
+  const [logPoOnReceive, setLogPoOnReceive] = useState(false);
+  const [poNumber, setPoNumber] = useState('');
   const [partDialog, setPartDialog] = useState(false);
   const [partForm, setPartForm] = useState({ ...BLANK_PART });
   const [movementDialog, setMovementDialog] = useState(false);
@@ -266,8 +272,73 @@ export default function HgpInventory() {
       if (!hay.includes(search.toLowerCase())) return false;
     }
     return true;
-  }).sort((a, b) => Number(isLow(b)) - Number(isLow(a)) || String(a.name).localeCompare(String(b.name))),
-  [livePartsAll, categoryFilter, lowOnly, search]);
+  }).sort((a, b) => {
+    if (sortBy === 'name') return String(a.name).localeCompare(String(b.name));
+    if (sortBy === 'qty') return num(a.qty_on_hand) - num(b.qty_on_hand);
+    if (sortBy === 'value') return num(b.qty_on_hand) * num(b.unit_cost) - num(a.qty_on_hand) * num(a.unit_cost);
+    return Number(isLow(b)) - Number(isLow(a)) || String(a.name).localeCompare(String(b.name));
+  }),
+  [livePartsAll, categoryFilter, lowOnly, search, sortBy]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: livePartsAll.length };
+    for (const pt of livePartsAll) counts[pt.category] = (counts[pt.category] ?? 0) + 1;
+    return counts;
+  }, [livePartsAll]);
+
+  /* Per-part movement stats for the detail drawer. */
+  const partHistory = useMemo(() => {
+    if (!detailPart) return { rows: [] as any[], receivedQty: 0, consumedQty: 0, receivedValue: 0, consumedValue: 0 };
+    const rows = (movements as any[]).filter(m => m.part_id === detailPart.id);
+    const sum = (type: string, field: 'q' | 'v') => rows
+      .filter(m => m.movement_type === type)
+      .reduce((acc, m) => acc + (field === 'q' ? num(m.quantity) : num(m.total_cost ?? num(m.quantity) * num(m.unit_cost))), 0);
+    return {
+      rows,
+      receivedQty: sum('received', 'q'), consumedQty: sum('consumed', 'q'),
+      receivedValue: sum('received', 'v'), consumedValue: sum('consumed', 'v'),
+    };
+  }, [detailPart, movements]);
+
+  /* Low stock → one-click reorder PO at the preferred supplier. Expense
+     posts via the PO trigger; stock adds when the delivery is received. */
+  const reorderPart = async (pt: any) => {
+    if (!user?.id) return;
+    const qty = num(pt.reorder_qty) || Math.max(num(pt.reorder_point) * 2, 1);
+    const total = qty * num(pt.unit_cost);
+    try {
+      await upsertPO.mutateAsync({
+        user_id: user.id,
+        entity_id: 'houston-generator-pros',
+        vendor_id: pt.vendor_id || null,
+        order_date: new Date().toISOString().slice(0, 10),
+        total_amount: total,
+        status: 'ordered',
+        memo: `Reorder ${qty} × ${pt.name}${pt.sku ? ` (${pt.sku})` : ''}`,
+      });
+      toast.success(`PO created for ${qty} × ${pt.name}${total > 0 ? ` — ${fmtUSD(total)} expense posted` : ''}. Receive stock when it arrives.`);
+    } catch (e: any) {
+      toast.error(e.message?.includes('hgp_purchase_orders') ? 'Run migration 20260718000002 to enable purchase orders' : e.message);
+    }
+  };
+
+  const exportPartsCsv = () => {
+    const header = 'Name,SKU,Category,Qty On Hand,Reorder Point,Unit Cost,Value,Bin,Supplier';
+    const lines = filteredParts.map(pt => {
+      const vendor = (vendors as any[]).find(v => v.id === pt.vendor_id);
+      const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      return [cell(pt.name), cell(pt.sku), cell(PART_CATEGORIES[pt.category] ?? pt.category),
+        num(pt.qty_on_hand), num(pt.reorder_point), num(pt.unit_cost).toFixed(2),
+        (Math.max(num(pt.qty_on_hand), 0) * num(pt.unit_cost)).toFixed(2),
+        cell(pt.location), cell(vendor?.name)].join(',');
+    });
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `hgp-parts-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const openPart = (p?: any) => {
     setPartForm(p ? {
@@ -327,7 +398,24 @@ export default function HgpInventory() {
     }
     const unitCost = Number(movementForm.unit_cost) || 0;
     try {
+      let poId: string | null = null;
+      if (movementForm.movement_type === 'received' && logPoOnReceive && Math.abs(qty) * unitCost > 0) {
+        try {
+          const po: any = await upsertPO.mutateAsync({
+            user_id: user.id,
+            entity_id: 'houston-generator-pros',
+            vendor_id: movementForm.vendor_id || null,
+            po_number: poNumber.trim() || null,
+            order_date: new Date().toISOString().slice(0, 10),
+            total_amount: Math.abs(qty) * unitCost,
+            status: 'received',
+            memo: movementForm.memo.trim() || 'Parts receiving',
+          });
+          poId = po?.id ?? null;
+        } catch { toast.info('Run migration 20260718000002 so receipts can post PO expenses.'); }
+      }
       await insertMovement.mutateAsync({
+        ...(poId ? { metadata: { po_id: poId } } : {}),
         user_id: user.id,
         entity_id: 'houston-generator-pros',
         part_id: movementForm.part_id,
@@ -342,8 +430,11 @@ export default function HgpInventory() {
       toast.success(
         movementForm.movement_type === 'consumed' && movementForm.job_id
           ? 'Stock consumed — cost added to the job\'s materials'
+          : poId ? 'Stock received — purchase expense posted to HGP financials'
           : 'Movement recorded');
       setMovementDialog(false);
+      setLogPoOnReceive(false);
+      setPoNumber('');
     } catch (e: any) {
       toast.error(e.message?.includes('hgp_inventory_movements') ? 'Run migration 20260717000008 to enable the inventory system' : e.message);
     }
@@ -425,20 +516,36 @@ export default function HgpInventory() {
                 placeholder="Name, SKU, bin…"
                 className="w-full h-9 pl-7 pr-2.5 text-[16px] sm:text-[12px] border border-border bg-background outline-none focus:border-foreground/30" />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="rounded-none h-9 w-[160px] text-[11px]"><SelectValue /></SelectTrigger>
+            <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+              <SelectTrigger className="rounded-none h-9 w-[130px] text-[11px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {Object.entries(PART_CATEGORIES).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                <SelectItem value="alerts">Alerts First</SelectItem>
+                <SelectItem value="name">Name A–Z</SelectItem>
+                <SelectItem value="qty">Qty Low→High</SelectItem>
+                <SelectItem value="value">Value High→Low</SelectItem>
               </SelectContent>
             </Select>
             <button className="inv-action !h-9 px-3" style={lowOnly ? { borderColor: '#dc262680', color: '#dc2626', background: '#dc262610' } : undefined}
               onClick={() => setLowOnly(v => !v)}>
               <AlertTriangle className="w-3 h-3" /> Low Stock
             </button>
+            <button className="inv-action !h-9 px-3" onClick={exportPartsCsv} title="Export the filtered register as CSV">
+              <Download className="w-3 h-3" /> CSV
+            </button>
             <Link to="/finance/dashboard" className="inv-action !h-9 px-3 ml-auto" title="Serialized generators live on the Generator Ops register">
               <Zap className="w-3 h-3" /> Generator Register
             </Link>
+          </div>
+
+          {/* ── Category chips ── */}
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+            {[['all', 'All'], ...Object.entries(PART_CATEGORIES)].map(([k, l]) => (
+              <button key={k} className="inv-action shrink-0 !h-7"
+                style={categoryFilter === k ? { borderColor: HGP_BLUE + '80', color: HGP_BLUE, background: HGP_BLUE + '0d' } : undefined}
+                onClick={() => setCategoryFilter(k)}>
+                {l} <span className="font-mono-tab opacity-70">{categoryCounts[k] ?? 0}</span>
+              </button>
+            ))}
           </div>
 
           {/* ── Parts register ── */}
@@ -453,10 +560,10 @@ export default function HgpInventory() {
                 const vendor = (vendors as any[]).find(v => v.id === p.vendor_id);
                 return (
                   <div key={p.id} className="inv-row grid grid-cols-[1.6fr_.8fr_.9fr_.6fr_.6fr_.7fr_.8fr_.9fr_1fr] gap-2 items-center">
-                    <div className="min-w-0">
-                      <div className="font-bold truncate">{p.name}</div>
+                    <button className="min-w-0 text-left group" onClick={() => setDetailPart(p)} title="Open part history">
+                      <div className="font-bold truncate group-hover:underline underline-offset-2">{p.name}</div>
                       {p.location && <div className="text-[9px] text-muted-foreground">Bin {p.location}</div>}
-                    </div>
+                    </button>
                     <div className="font-mono-tab text-[10px] truncate">{p.sku || '—'}</div>
                     <div className="text-[10px]">{PART_CATEGORIES[p.category] ?? p.category}</div>
                     <div className={`font-mono-tab font-bold ${negative ? 'text-destructive' : low ? 'text-warning' : ''}`}>
@@ -468,6 +575,12 @@ export default function HgpInventory() {
                     <div className="font-mono-tab font-bold">{fmtUSD(Math.max(num(p.qty_on_hand), 0) * num(p.unit_cost))}</div>
                     <div className="text-[10px] truncate">{vendor?.name || '—'}</div>
                     <div className="flex items-center gap-1 justify-end">
+                      {low && (
+                        <button className="inv-action !text-warning" title={`Reorder ${num(p.reorder_qty) || Math.max(num(p.reorder_point) * 2, 1)} from supplier (creates a PO expense)`}
+                          onClick={() => reorderPart(p)}>
+                          <ShoppingCart className="w-3 h-3" />
+                        </button>
+                      )}
                       <button className="inv-action" title="Receive stock" onClick={() => openMovement('received', p)}><PackagePlus className="w-3 h-3" /></button>
                       <button className="inv-action" title="Consume to a job" onClick={() => openMovement('consumed', p)}><Wrench className="w-3 h-3" /></button>
                       <button className="inv-action" title="Adjust count" onClick={() => openMovement('adjusted', p)}><SlidersHorizontal className="w-3 h-3" /></button>
@@ -650,6 +763,17 @@ export default function HgpInventory() {
               </div>
             )}
             {movementForm.movement_type === 'received' && (
+              <div className="col-span-2 border border-border px-2.5 py-2">
+                <label className="flex items-center gap-2 text-[11px] font-bold cursor-pointer select-none">
+                  <input type="checkbox" className="w-4 h-4" checked={logPoOnReceive} onChange={e => setLogPoOnReceive(e.target.checked)} />
+                  Log purchase order → HGP expense
+                </label>
+                {logPoOnReceive && (
+                  <Input className="inv-field mt-2 font-mono-tab" placeholder="PO number (optional)" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
+                )}
+              </div>
+            )}
+            {movementForm.movement_type === 'received' && (
               <div className="col-span-2">
                 <div className="inv-k mb-1">From Supplier</div>
                 <Select value={movementForm.vendor_id || '__none__'} onValueChange={v => setMovementForm(f => ({ ...f, vendor_id: v === '__none__' ? '' : v }))}>
@@ -787,6 +911,80 @@ export default function HgpInventory() {
           <button className="inv-primary w-full mt-1" onClick={saveDeploy} disabled={!deployJobId || upsertJob.isPending}>
             Deploy to Job
           </button>
+        </DialogContent>
+      </Dialog>
+      {/* ── Part detail drawer ── */}
+      <Dialog open={!!detailPart} onOpenChange={open => { if (!open) setDetailPart(null); }}>
+        <DialogContent className="max-w-lg rounded-none max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              {detailPart?.name}
+              {detailPart && num(detailPart.qty_on_hand) <= num(detailPart.reorder_point) && (
+                <span className="text-[8px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 bg-warning/15 text-warning">Low Stock</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {detailPart && (
+            <>
+              <div className="text-[10px] text-muted-foreground -mt-1 font-mono-tab">
+                SKU {detailPart.sku || '—'} · {PART_CATEGORIES[detailPart.category] ?? detailPart.category}
+                {detailPart.location ? ` · Bin ${detailPart.location}` : ''}
+              </div>
+              <div className="grid grid-cols-4 divide-x divide-border border border-border bg-secondary/25 text-center">
+                {[
+                  ['On Hand', String(num(detailPart.qty_on_hand)), num(detailPart.qty_on_hand) < 0 ? 'text-destructive' : ''],
+                  ['Value', fmtUSD(Math.max(num(detailPart.qty_on_hand), 0) * num(detailPart.unit_cost)), ''],
+                  ['Received', `${partHistory.receivedQty}`, 'text-positive'],
+                  ['Consumed', `${partHistory.consumedQty}`, 'text-warning'],
+                ].map(([label, value, cls]: any) => (
+                  <div key={label} className="px-2 py-2">
+                    <div className="inv-k">{label}</div>
+                    <div className={`font-mono-tab font-black text-[14px] mt-0.5 ${cls}`}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <button className="inv-action flex-1 justify-center !h-9" onClick={() => { const pt = detailPart; setDetailPart(null); openMovement('received', pt); }}>
+                  <PackagePlus className="w-3 h-3" /> Receive
+                </button>
+                <button className="inv-action flex-1 justify-center !h-9" onClick={() => { const pt = detailPart; setDetailPart(null); openMovement('consumed', pt); }}>
+                  <Wrench className="w-3 h-3" /> Consume
+                </button>
+                <button className="inv-action flex-1 justify-center !h-9" onClick={() => { const pt = detailPart; setDetailPart(null); openMovement('adjusted', pt); }}>
+                  <SlidersHorizontal className="w-3 h-3" /> Adjust
+                </button>
+                <button className="inv-action flex-1 justify-center !h-9" onClick={() => { const pt = detailPart; setDetailPart(null); openPart(pt); }}>
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+              </div>
+              <div>
+                <div className="inv-k mb-1.5">Movement History</div>
+                <div className="border border-border divide-y divide-border/60 max-h-56 overflow-y-auto">
+                  {partHistory.rows.map(m => {
+                    const meta = MOVEMENT_META[m.movement_type] ?? MOVEMENT_META.adjusted;
+                    return (
+                      <div key={m.id} className="px-2.5 py-1.5 flex items-center gap-2 text-[11px]">
+                        <span className="text-[8px] font-black uppercase tracking-[0.12em] px-1.5 py-0.5 shrink-0"
+                          style={{ backgroundColor: meta.color + '16', color: meta.color }}>{meta.label}</span>
+                        <span className="font-mono-tab shrink-0">{num(m.quantity)}</span>
+                        <span className="text-muted-foreground truncate flex-1">
+                          {m.hgp_jobs?.customer_name ? `Job · ${m.hgp_jobs.customer_name}` : m.memo || '—'}
+                        </span>
+                        <span className="font-mono-tab text-muted-foreground shrink-0">
+                          {new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {!partHistory.rows.length && (
+                    <div className="px-3 py-6 text-center text-[10px] text-muted-foreground">
+                      No movements yet (ledger shows the most recent 60 movements across all parts).
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </AppShell>

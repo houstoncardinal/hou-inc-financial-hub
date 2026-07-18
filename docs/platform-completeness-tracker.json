@@ -1,9 +1,9 @@
 {
   "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
   "updated": "2026-07-18",
-  "pass": "hgp-procurement-scheduling",
+  "pass": "inventory-enterprise-ocr",
   "overall": {
-    "completion": 93,
+    "completion": 94,
     "status": "launch-ready"
   },
   "apps": {
@@ -26,11 +26,11 @@
   },
   "entities": {
     "houston-enterprise": {
-      "completion": 95,
+      "completion": 96,
       "status": "launch-ready"
     },
     "houston-generator-pros": {
-      "completion": 96,
+      "completion": 97,
       "status": "launch-ready"
     },
     "houston-enterprise-holdings": {
@@ -235,7 +235,7 @@
     },
     {
       "id": "hgp-inventory",
-      "completion": 95,
+      "completion": 97,
       "status": "complete",
       "remaining": [],
       "priority": "low",
@@ -255,14 +255,23 @@
     },
     {
       "id": "hgp-procurement-scheduling",
-      "completion": 85,
-      "status": "needs-migration",
-      "remaining": [
-        "apply 20260718000002"
-      ],
-      "priority": "high",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
       "complexity": "S",
       "verification": "verify_hgp_procurement_scheduling"
+    },
+    {
+      "id": "he-ocr-expense-import",
+      "completion": 95,
+      "status": "complete",
+      "remaining": [
+        "PDF sources need photographing (vision API is image-only)"
+      ],
+      "priority": "low",
+      "complexity": null,
+      "verification": "scanReceipt + vendor/project match + linked document (needs VITE_OPENAI_API_KEY)"
     }
   ],
   "deferred": [
@@ -303,12 +312,11 @@
       "20260717000005",
       "20260717000006",
       "20260717000007",
-      "20260717000008"
-    ],
-    "pending_apply": [
+      "20260717000008",
       "20260718000001",
       "20260718000002"
-    ]
+    ],
+    "pending_apply": []
   },
   "test_battery": {
     "typescript": "clean",
@@ -316,9 +324,9 @@
     "unit": "13/13",
     "build": "clean",
     "playwright": {
-      "passed": 28,
+      "passed": 32,
       "skipped": 0,
-      "note": "zero skips \u2014 full chain 10-24 live-verified incl. inventory"
+      "note": "zero skips \u2014 chain 10-26 fully live-verified"
     }
   }
 }
