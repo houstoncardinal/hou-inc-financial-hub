@@ -14,12 +14,13 @@ import { toast } from 'sonner';
 import {
   Upload, Camera, X, FileText, Image, File, Search,
   Trash2, ExternalLink, RefreshCw, CheckCircle2, AlertCircle,
-  Clock, FolderOpen, Grid3X3, List, ScanLine,
+  Clock, FolderOpen, Grid3X3, List, ScanLine, Filter, ChevronDown,
 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const DOC_TYPES: { value: DocType | 'all'; label: string }[] = [
@@ -472,6 +473,7 @@ export default function Documents() {
   const { entity } = useEntity();
 
   const [filterType, setFilterType] = useState<DocType | 'all'>('all');
+  const [filterTypeOpen, setFilterTypeOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
@@ -588,28 +590,49 @@ export default function Documents() {
 
       {/* ── Filters + search ── */}
       <div className="border-b border-border px-4 sm:px-8 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        {/* Type filter scroll row */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0 flex-1 min-w-0">
-          {DOC_TYPES.map(t => {
-            const count = counts[t.value as keyof typeof counts] ?? 0;
-            const active = filterType === t.value;
-            return (
-              <button
-                key={t.value}
-                onClick={() => setFilterType(t.value)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-medium shrink-0 border transition-all duration-150"
-                style={{
-                  borderColor: active ? (t.value !== 'all' ? (DOC_TYPE_COLORS[t.value as DocType] ?? 'var(--foreground)') : 'var(--foreground)') : 'transparent',
-                  backgroundColor: active ? 'var(--secondary)' : 'transparent',
-                  color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
-                }}
-              >
-                {t.label}
-                {count > 0 && <span className="text-[8px] font-mono-tab opacity-60">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
+        {/* Type filter — consolidated into one popover button instead of an
+            11-option scrolling row, so mobile never has to swipe to find a
+            document type. */}
+        <Popover open={filterTypeOpen} onOpenChange={setFilterTypeOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 h-8 px-2.5 text-[10px] font-bold uppercase tracking-[0.08em] border border-border bg-background hover:bg-secondary/50 transition-colors shrink-0"
+              style={filterType !== 'all' ? { borderColor: DOC_TYPE_COLORS[filterType as DocType] ?? 'hsl(var(--foreground))', color: DOC_TYPE_COLORS[filterType as DocType] } : undefined}
+            >
+              <Filter className="w-3 h-3" />
+              {DOC_TYPES.find(t => t.value === filterType)?.label ?? 'All Documents'}
+              {(counts[filterType as keyof typeof counts] ?? 0) > 0 && (
+                <span className="text-[8px] font-mono-tab opacity-70">{counts[filterType as keyof typeof counts]}</span>
+              )}
+              <ChevronDown className={`w-3 h-3 transition-transform ${filterTypeOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[min(94vw,26rem)] p-2.5 rounded-none border-border" align="start">
+            <div className="text-[8px] uppercase tracking-[0.2em] font-black text-muted-foreground mb-2 px-0.5">Filter by Document Type</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {DOC_TYPES.map(t => {
+                const count = counts[t.value as keyof typeof counts] ?? 0;
+                const active = filterType === t.value;
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => { setFilterType(t.value); setFilterTypeOpen(false); }}
+                    className="flex items-center justify-center gap-1.5 px-2 py-2 text-[10px] font-medium border transition-all duration-150 text-center"
+                    style={{
+                      borderColor: active ? (t.value !== 'all' ? (DOC_TYPE_COLORS[t.value as DocType] ?? 'var(--foreground)') : 'var(--foreground)') : 'hsl(var(--border))',
+                      backgroundColor: active ? 'var(--secondary)' : 'transparent',
+                      color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
+                    }}
+                  >
+                    <span className="truncate">{t.label}</span>
+                    {count > 0 && <span className="text-[8px] font-mono-tab opacity-60 shrink-0">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         {/* Search + view toggle */}
         <div className="flex items-center gap-2 shrink-0">

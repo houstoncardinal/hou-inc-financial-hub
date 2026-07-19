@@ -124,7 +124,7 @@ const LDG_CSS = `
 .ldg-recon-ring span{position:relative;font-size:12px;font-weight:900;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
 .ldg-recon-metric{border:1px solid hsl(var(--border));background:hsl(var(--background)/.72);padding:7px 8px;min-width:0;}
 .ldg-recon-metric .k{font-size:7.5px;text-transform:uppercase;letter-spacing:.16em;color:hsl(var(--foreground)/.45);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ldg-recon-metric .v{font-size:13px;font-weight:900;line-height:1.05;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ldg-recon-metric .v{font-size:13px;font-weight:900;line-height:1.15;margin-top:3px;white-space:normal;overflow:visible;word-break:break-word;}
 .ldg-recon-action{height:34px;border:1px solid hsl(var(--border));background:hsl(var(--background));font-size:8px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:background .16s,border-color .16s,transform .16s,color .16s;}
 .ldg-recon-action:hover{background:hsl(var(--secondary)/.54);border-color:hsl(var(--foreground)/.22);transform:translateY(-1px);}
 .ldg-recon-action.primary{background:hsl(var(--foreground));color:hsl(var(--background));border-color:hsl(var(--foreground));}
@@ -1021,7 +1021,18 @@ export default function Ledger() {
         if (!haystack.includes(q.toLowerCase())) return false;
       }
       return true;
-    }).sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
+    }).sort((x, y) => {
+      // Most recent transaction/issue date first; same-day entries (and any
+      // row that's been edited since, which bumps its updated_at) break ties
+      // by last-touched time so the truly most-recent activity stays on top
+      // instead of falling back to insertion order (checks, then income,
+      // then expenses) within a day.
+      const dateCmp = String(y.date || '').localeCompare(String(x.date || ''));
+      if (dateCmp !== 0) return dateCmp;
+      const yTouch = String(y.raw?.updated_at || y.raw?.created_at || '');
+      const xTouch = String(x.raw?.updated_at || x.raw?.created_at || '');
+      return yTouch.localeCompare(xTouch);
+    });
   }, [checks, income, expenses, project, type, q, timePeriod]);
 
   const rows = useMemo(() => scopedRows.filter(r => queueMatches(r, queueFilter)), [scopedRows, queueFilter, duplicateRefs]);
@@ -1550,7 +1561,12 @@ export default function Ledger() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 font-mono-tab">
+              {/* Dollar figures run much wider than the other two counts —
+                  give that column proportionally more room at every
+                  breakpoint (not an equal 1/3 split) instead of relying on
+                  truncation, which was silently cutting real totals down to
+                  "$27,269,285…" with no way to read the actual number. */}
+              <div className="grid grid-cols-[1fr_1fr_1.7fr] gap-1.5 font-mono-tab">
                 {[
                   ['Cleared', totals.reconciledCount, 'text-positive'],
                   ['Page Open', pageOpenCount, pageOpenCount ? 'text-warning' : 'text-positive'],
@@ -1583,8 +1599,11 @@ export default function Ledger() {
 
       <div className="px-4 sm:px-8 py-4 ldg-workspace">
         <div className="min-w-0">
-        {/* Mobile card view */}
-        <div className="sm:hidden space-y-2.5">
+        {/* Mobile + tablet card view — the desktop table needs 1240px of
+            width for 11 columns, so anything narrower than lg (1024px,
+            including every tablet) gets this card layout instead of a
+            table that forces horizontal scrolling to see every field. */}
+        <div className="lg:hidden space-y-2.5">
           {visibleTotalCount === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No entries match.</div>
           ) : pagedRows.map(r => (
@@ -1651,7 +1670,7 @@ export default function Ledger() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden sm:block ldg-panel overflow-x-auto">
+        <div className="hidden lg:block ldg-panel overflow-x-auto">
           <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-secondary/20">
             <div>
               <div className="text-[9px] uppercase tracking-[0.2em] text-foreground/60 font-bold">Ledger Register</div>
@@ -1676,8 +1695,16 @@ export default function Ledger() {
               <button onClick={() => setQueueFilter('all')} className="text-[9px] uppercase tracking-[0.14em] font-bold text-foreground/50 hover:text-foreground">Show all</button>
             </div>
           )}
-          <div className="min-w-[1240px] grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border bg-secondary/45 text-[9px] uppercase tracking-[0.14em] text-foreground/55 font-bold items-center">
-            <div>Date</div><div>Type</div><div>Reference</div><div>Counterparty</div><div>Project</div><div>Method</div><div>Status</div><div className="text-right">Debit</div><div className="text-right">Credit</div><div className="text-right">Balance</div><div className="text-right">Action</div>
+          {/* 9 columns, not 11 — Reference and Method folded into the
+              Counterparty cell as a subtitle line (still one click away in
+              full in the Inspector). The old 11-column layout needed
+              1240px minimum, which is WIDER than the actual content area on
+              a stock 1440px laptop once the 256px sidebar is subtracted —
+              meaning the table silently scrolled within its own panel by
+              default and hid the action buttons off the right edge
+              entirely, not just visually crowded them. */}
+          <div className="min-w-[1040px] grid grid-cols-[.85fr_.65fr_2fr_1.15fr_.85fr_.95fr_.95fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border bg-secondary/45 text-[9px] uppercase tracking-[0.14em] text-foreground/55 font-bold items-center">
+            <div>Date</div><div>Type</div><div>Counterparty</div><div>Project</div><div>Status</div><div className="text-right">Debit</div><div className="text-right">Credit</div><div className="text-right">Balance</div><div className="text-right">Action</div>
           </div>
           {visibleTotalCount === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             pagedRows.map((r, index) => {
@@ -1685,21 +1712,24 @@ export default function Ledger() {
               const runningBalance = (useServerRows ? pagedRows.slice(index) : visibleRows.slice(absoluteIndex)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
               const debit = r.amount < 0 ? Math.abs(r.amount) : 0;
               const credit = r.amount >= 0 ? r.amount : 0;
+              const methodLabel = r.raw?.payment_method?.replace?.(/_/g, ' ') || r.raw?.delivery_status?.replace?.(/_/g, ' ') || '';
+              const subtitleBits = [r.ref && r.ref !== '—' ? r.ref : null, methodLabel || null].filter(Boolean).join(' · ');
               return (
-                <div key={r.rowId} className={`min-w-[1240px] relative grid grid-cols-[.9fr_.7fr_1fr_1.65fr_1.25fr_.95fr_.9fr_1fr_1fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-70' : ''}`} onClick={() => setDetailRow(r)}>
+                <div key={r.rowId} className={`min-w-[1040px] relative grid grid-cols-[.85fr_.65fr_2fr_1.15fr_.85fr_.95fr_.95fr_1.05fr_110px] gap-2 px-4 py-2 border-b border-border last:border-b-0 text-sm font-mono-tab items-center group ldg-row cursor-pointer overflow-hidden ${r.reconciled ? 'opacity-70' : ''}`} onClick={() => setDetailRow(r)}>
                 <div className="text-foreground/62 text-[11px]">{r.date ? fmtDate(r.date) : '—'}</div>
                   <div><span className={`text-[10px] uppercase tracking-[0.14em] px-1.5 py-0.5 border ldg-badge ${r.type==='Check'?'ldg-type-check':r.type==='Income'?'ldg-type-income':'ldg-type-expense'}`}>{r.type}</span></div>
-                  <div className="truncate text-foreground/55 text-[11px]">{r.ref}</div>
                   <div className="min-w-0">
                     <div className="truncate text-[12px] font-semibold text-foreground">{r.party}</div>
-                    {r.context ? (
-                      <div className="text-[9px] font-bold text-accent mt-0.5 truncate" title={r.context}>{r.context}</div>
-                    ) : (
-                      <div className="text-[9px] text-foreground/45 mt-0.5 truncate">{r.status && r.status !== '—' ? `Status: ${r.status}` : r.reconciled ? 'Reconciled' : 'Open ledger entry'}</div>
-                    )}
+                    <div className="text-[9px] mt-0.5 truncate">
+                      {r.context ? (
+                        <span className="font-bold text-accent" title={r.context}>{r.context}</span>
+                      ) : (
+                        <span className="text-foreground/45">{r.status && r.status !== '—' ? `Status: ${r.status}` : r.reconciled ? 'Reconciled' : 'Open ledger entry'}</span>
+                      )}
+                      {subtitleBits && <span className="text-foreground/40 capitalize"> · {subtitleBits}</span>}
+                    </div>
                   </div>
                   <div className="truncate text-foreground/58 text-[11px]">{r.project||'Unassigned'}</div>
-                  <div className="truncate text-foreground/58 text-[11px] capitalize">{r.raw?.payment_method?.replace?.(/_/g, ' ') || r.raw?.delivery_status?.replace?.(/_/g, ' ') || '—'}</div>
                   <div className={r.reconciled ? 'truncate text-positive text-[10px] font-bold uppercase tracking-[0.08em]' : 'truncate text-warning text-[10px] font-bold uppercase tracking-[0.08em]'}>
                     {r.reconciled ? 'Reconciled' : (r.status || 'Open')}
                   </div>
@@ -1707,11 +1737,12 @@ export default function Ledger() {
                   <div className="text-right font-bold text-[12px] text-positive">{credit ? fmtUSD(credit) : '—'}</div>
                   <div className={`text-right font-bold text-[12px] ${runningBalance >= 0 ? 'text-foreground' : 'text-destructive'}`}>{fmtUSD(runningBalance)}</div>
                   <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    {/* No separate "view" button — clicking anywhere on the
+                        row already opens this same detail inspector, and
+                        that redundant 4th button was wider than the Action
+                        column's track, overflowing left into Balance. */}
                     <button onClick={() => toggleReconcile(r)} className={`ldg-recon-row-action ${r.reconciled ? 'text-warning' : 'text-positive'}`} title={r.reconciled ? 'Reopen entry' : 'Mark reconciled'}>
                       {r.reconciled ? <RotateCcw className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
-                    </button>
-                    <button onClick={() => setDetailRow(r)} className="ldg-recon-row-action" title="View details">
-                      <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
                     </button>
                     <button onClick={() => openEdit(r)} className="ldg-recon-row-action" title="Edit with signature">
                       <PencilLine className="w-3.5 h-3.5" strokeWidth={1.5} />

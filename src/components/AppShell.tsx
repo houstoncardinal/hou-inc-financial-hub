@@ -787,19 +787,18 @@ export default function AppShell({
           </NavLink>
         ))}
 
-        {/* Add Entry slot */}
+        {/* Add Entry slot — same flat, equal-weight tab styling as every
+            other slot (no oversized floating FAB) for a cleaner, more
+            enterprise toolbar. */}
         <button
           onClick={() => { sounds.open(); setAddSheetOpen(true); }}
-          className="flex flex-col items-center justify-center gap-1 transition-colors relative"
+          className="flex flex-col items-center justify-center gap-1 transition-colors text-muted-foreground hover:text-foreground"
           aria-label="Add Entry"
         >
-          <div
-            className="w-11 h-11 -mt-5 flex items-center justify-center rounded-full bg-foreground shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-transform active:scale-95"
-            style={{ boxShadow: '0 8px 18px rgba(0,0,0,0.22), 0 0 0 4px hsl(var(--background))' }}
-          >
-            <Plus className="w-5 h-5 text-background" strokeWidth={2.25} />
+          <div className="h-5 flex items-center justify-center">
+            <Plus className="w-[18px] h-[18px]" strokeWidth={1.8} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.08em] font-bold text-muted-foreground -mt-0.5">Add</span>
+          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold">Add</span>
         </button>
 
         {mobileQuickNav.slice(2).map(n => (
