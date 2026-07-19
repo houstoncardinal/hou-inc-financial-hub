@@ -22,7 +22,7 @@ import {
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
 import { Download, ShoppingCart, X } from 'lucide-react';
-import { fmtUSD } from '@/lib/format';
+import { fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Package, PackagePlus, PackageMinus, SlidersHorizontal, Boxes, Zap,
@@ -46,7 +46,7 @@ const INV_CSS = `
 .inv-action:hover{background:hsl(var(--secondary)/.55);}
 .inv-field{height:38px;border-radius:0;font-size:12px;}
 .dark .inv-panel,.dark .inv-kpi,.dark .inv-action{background:hsl(var(--card));}
-@media(max-width:767px){.inv-v{font-size:13px}.inv-panel{padding:10px!important}}
+@media(max-width:767px){.inv-v{font-size:13px}.inv-panel{padding:10px!important}.inv-action{min-height:34px}.inv-primary{min-height:38px}}
 `;
 
 const PART_CATEGORIES: Record<string, string> = {
@@ -311,7 +311,7 @@ export default function HgpInventory() {
         user_id: user.id,
         entity_id: 'houston-generator-pros',
         vendor_id: pt.vendor_id || null,
-        order_date: new Date().toISOString().slice(0, 10),
+        order_date: todayLocalDate(),
         total_amount: total,
         status: 'ordered',
         memo: `Reorder ${qty} × ${pt.name}${pt.sku ? ` (${pt.sku})` : ''}`,
@@ -335,7 +335,7 @@ export default function HgpInventory() {
     const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `hgp-parts-inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `hgp-parts-inventory-${todayLocalDate()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -406,7 +406,7 @@ export default function HgpInventory() {
             entity_id: 'houston-generator-pros',
             vendor_id: movementForm.vendor_id || null,
             po_number: poNumber.trim() || null,
-            order_date: new Date().toISOString().slice(0, 10),
+            order_date: todayLocalDate(),
             total_amount: Math.abs(qty) * unitCost,
             status: 'received',
             memo: movementForm.memo.trim() || 'Parts receiving',
@@ -538,9 +538,9 @@ export default function HgpInventory() {
           </div>
 
           {/* ── Category chips ── */}
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+          <div className="flex flex-wrap sm:flex-nowrap gap-1.5 sm:overflow-x-auto scrollbar-none pb-0.5 max-h-24 overflow-y-auto sm:max-h-none sm:overflow-y-visible">
             {[['all', 'All'], ...Object.entries(PART_CATEGORIES)].map(([k, l]) => (
-              <button key={k} className="inv-action shrink-0 !h-7"
+              <button key={k} className="inv-action sm:shrink-0 !h-7"
                 style={categoryFilter === k ? { borderColor: HGP_BLUE + '80', color: HGP_BLUE, background: HGP_BLUE + '0d' } : undefined}
                 onClick={() => setCategoryFilter(k)}>
                 {l} <span className="font-mono-tab opacity-70">{categoryCounts[k] ?? 0}</span>

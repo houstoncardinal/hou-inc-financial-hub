@@ -17,7 +17,7 @@ import {
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus,
   FolderKanban, Bell, CheckSquare, Plus, BriefcaseBusiness,
-  History, FileDown, Menu,
+  History, FileDown, Menu, LifeBuoy, X as XIcon,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS, BUILDER } from '@/hooks/usePortal';
@@ -37,6 +37,12 @@ import { ActionButton } from '@/components/admin/design/ActionButton';
 import { AdminTable } from '@/components/admin/design/AdminTable';
 import { VerticalTimeline } from '@/components/admin/design/VerticalTimeline';
 import { OverviewDashboard } from '@/components/admin/design/OverviewDashboard';
+import { todayLocalDate } from '@/lib/format';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  useHelpRequests, useUpdateHelpRequestStatus, useHelpRequestScreenshotUrl,
+  HELP_CATEGORY_LABELS, SUPPORT_ADMIN_EMAIL, type HelpRequest,
+} from '@/hooks/useHelpRequests';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const G500  = '#8A8580';
@@ -412,7 +418,8 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'projects' | 'notifications' | 'changelog';
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'projects' | 'notifications' | 'changelog' | 'help_desk';
+const ADMIN_TAB_KEYS: AdminTab[] = ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog', 'help_desk'];
 
 export default function Admin() {
   /* ── Auth ── */
@@ -421,19 +428,24 @@ export default function Admin() {
   const [pinError, setPinError] = useState('');
   const pinRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
+  // The real-auth user (distinct from the PIN lock above) — used only to
+  // gate the Help Requests tab to the one support-admin account.
+  const { user } = useAuth();
+  const isSupportAdmin = user?.email === SUPPORT_ADMIN_EMAIL;
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   /* ── Nav ── */
   const tabParam = searchParams.get('tab') as AdminTab | null;
-  const initialTab: AdminTab = tabParam && ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog'].includes(tabParam)
+  const initialTab: AdminTab = tabParam && ADMIN_TAB_KEYS.includes(tabParam)
     ? tabParam
     : 'overview';
   const [tab, setTab] = useState<AdminTab>(initialTab);
 
   useEffect(() => {
     const next = searchParams.get('tab') as AdminTab | null;
-    if (next && ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog'].includes(next)) {
+    if (next && ADMIN_TAB_KEYS.includes(next)) {
       setTab(next);
     }
   }, [searchParams]);
@@ -554,8 +566,13 @@ export default function Admin() {
   const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
 
-  /* ── Help requests ── */
+  /* ── Help requests (client portal) ── */
   const [helpRequests, setHelpRequests] = useState<any[]>([]);
+
+  /* ── Team help requests ("type help" shortcut, support-admin only) ── */
+  const { data: teamHelpRequests = [] } = useHelpRequests(isSupportAdmin);
+  const updateHelpRequestStatus = useUpdateHelpRequestStatus();
+  const [helpLightboxUrl, setHelpLightboxUrl] = useState<string | null>(null);
 
   /* ── Changelog ── */
   const [changelogEntries,   setChangelogEntries]   = useState<any[]>([]);
@@ -581,6 +598,7 @@ export default function Admin() {
 
   const clientName = (id: string) => clients.find((c: any) => c.id === id)?.name ?? '—';
   const openHelpCount = helpRequests.filter((r: any) => r.status !== 'resolved').length;
+  const openTeamHelpCount = teamHelpRequests.filter(r => r.status !== 'resolved').length;
 
   /* ── PIN handlers ── */
   const handlePinDigit = (idx: number, val: string) => {
@@ -796,6 +814,7 @@ export default function Admin() {
     { key: 'analytics',  label: 'Analytics',         icon: TrendingUp,   desc: 'Pipeline metrics' },
     { key: 'notifications', label: 'Notifications',  icon: Bell,         desc: 'Client help', badge: openHelpCount || undefined, urgent: openHelpCount > 0 },
     { key: 'changelog',  label: 'Changelog',         icon: History,      desc: 'Audit trail' },
+    ...(isSupportAdmin ? [{ key: 'help_desk' as AdminTab, label: 'Help Requests', icon: LifeBuoy, desc: 'Team support inbox', badge: openTeamHelpCount || undefined, urgent: openTeamHelpCount > 0 }] : []),
   ];
 
   /* ════════ LOCK SCREEN ════════ */
@@ -844,7 +863,7 @@ export default function Admin() {
     { label: 'Client Pipeline', items: [navByKey.approvals, navByKey.clients, navByKey.leads] },
     { label: 'Delivery', items: [navByKey.documents, navByKey.meetings, navByKey.projects, navByKey.portfolio, navByKey.map] },
     { label: 'Business', items: [navByKey.finance, navByKey.analytics] },
-    { label: 'System', items: [navByKey.notifications, navByKey.changelog] },
+    { label: 'System', items: [navByKey.notifications, navByKey.changelog, navByKey.help_desk].filter(Boolean) },
   ];
 
   /* ════════ DASHBOARD ════════ */
@@ -2454,6 +2473,119 @@ export default function Admin() {
             );
           })()}
 
+          {/* ══════ TEAM HELP REQUESTS (support-admin only) ══════ */}
+          {tab === 'help_desk' && (() => {
+            if (!isSupportAdmin) {
+              return (
+                <div className="text-center py-16">
+                  <LifeBuoy className="w-10 h-10 mx-auto mb-4 text-muted-foreground/40" strokeWidth={1} />
+                  <div className="text-[20px] font-bold text-foreground mb-2">Restricted</div>
+                  <p className="text-[13px] text-muted-foreground">This inbox is only visible to the support admin account.</p>
+                </div>
+              );
+            }
+
+            const TeamHelpStatusColors: Record<string, { bg: string; color: string }> = {
+              open:        { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' },
+              in_progress: { bg: 'rgba(59,130,246,0.08)', color: '#3b82f6' },
+              resolved:    { bg: 'rgba(16,185,129,0.08)', color: '#10b981' },
+            };
+
+            const openReqs     = teamHelpRequests.filter(r => r.status === 'open');
+            const inProgReqs   = teamHelpRequests.filter(r => r.status === 'in_progress');
+            const resolvedReqs = teamHelpRequests.filter(r => r.status === 'resolved');
+
+            function TeamHelpCard({ req }: { req: HelpRequest }) {
+              const sc = TeamHelpStatusColors[req.status] ?? TeamHelpStatusColors.open;
+              const { data: screenshotUrl } = useHelpRequestScreenshotUrl(req.screenshot_path);
+              const created = new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+              return (
+                <div className="pdv2-card p-5 mb-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap mb-2.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-[13px] font-bold text-foreground">{HELP_CATEGORY_LABELS[req.category]}</span>
+                        <StatusBadge label={req.status.replace('_', ' ')} style={sc} />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mb-0.5">
+                        <span className="font-semibold">{req.user_name || req.user_email}</span>
+                        {req.page_path && <> · <span className="font-mono">{req.page_path}</span></>}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground">{created}</div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      {req.status === 'open' && (
+                        <ActionButton variant="neutral" className="!border-blue-500/30 !text-blue-500" onClick={() => updateHelpRequestStatus.mutate({ id: req.id, status: 'in_progress' })}>In Progress</ActionButton>
+                      )}
+                      {req.status !== 'resolved' && (
+                        <ActionButton variant="positive" icon={CheckSquare} onClick={() => updateHelpRequestStatus.mutate({ id: req.id, status: 'resolved' })}>Resolve</ActionButton>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-wrap">{req.message}</p>
+                  {screenshotUrl && (
+                    <button type="button" onClick={() => setHelpLightboxUrl(screenshotUrl)} className="mt-3 block w-full border border-border overflow-hidden hover:opacity-90 transition-opacity">
+                      <img src={screenshotUrl} alt="Screen capture from requester" className="w-full max-h-64 object-cover object-top" />
+                    </button>
+                  )}
+                  {req.resolved_at && (
+                    <div className="mt-2.5 text-[10px] text-positive">Resolved {new Date(req.resolved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+                    <div>
+                      <div className="text-[8px] font-bold tracking-[0.46em] uppercase text-accent mb-1.5">Team Support</div>
+                      <div className="text-[22px] font-bold text-foreground">Help Requests</div>
+                      <p className="text-[11px] text-muted-foreground mt-1">Filed by staff typing "help" anywhere in the finance app — updates arrive here live.</p>
+                    </div>
+                  </div>
+
+                  {teamHelpRequests.length === 0 && (
+                    <div className="text-center py-16">
+                      <LifeBuoy className="w-10 h-10 mx-auto mb-4 text-muted-foreground/40" strokeWidth={1} />
+                      <div className="text-[20px] font-bold text-foreground mb-2">All clear</div>
+                      <p className="text-[13px] text-muted-foreground">No one has typed "help" yet — requests will appear here in real time.</p>
+                    </div>
+                  )}
+
+                  {openReqs.length > 0 && (
+                    <div className="mb-7">
+                      <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-warning mb-3">Open · {openReqs.length}</div>
+                      {openReqs.map(r => <TeamHelpCard key={r.id} req={r} />)}
+                    </div>
+                  )}
+                  {inProgReqs.length > 0 && (
+                    <div className="mb-7">
+                      <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-blue-500 mb-3">In Progress · {inProgReqs.length}</div>
+                      {inProgReqs.map(r => <TeamHelpCard key={r.id} req={r} />)}
+                    </div>
+                  )}
+                  {resolvedReqs.length > 0 && (
+                    <div>
+                      <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-positive mb-3">Resolved · {resolvedReqs.length}</div>
+                      {resolvedReqs.map(r => <TeamHelpCard key={r.id} req={r} />)}
+                    </div>
+                  )}
+                </motion.div>
+
+                {helpLightboxUrl && (
+                  <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-6" onClick={() => setHelpLightboxUrl(null)}>
+                    <button type="button" className="absolute top-5 right-5 text-white/80 hover:text-white" onClick={() => setHelpLightboxUrl(null)}>
+                      <XIcon className="w-6 h-6" />
+                    </button>
+                    <img src={helpLightboxUrl} alt="Screen capture, enlarged" className="max-w-full max-h-full object-contain" onClick={e => e.stopPropagation()} />
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
           {/* ══════ CHANGELOG ══════ */}
           {tab === 'changelog' && (() => {
             const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
@@ -2511,7 +2643,7 @@ export default function Admin() {
                 });
 
                 addDecorations(doc, 'Changelog');
-                doc.save(`hou-changelog-${new Date().toISOString().slice(0, 10)}.pdf`);
+                doc.save(`hou-changelog-${todayLocalDate()}.pdf`);
               } catch { toast({ title: 'PDF export failed', description: 'Please try again.' }); }
             }
 
@@ -2531,7 +2663,7 @@ export default function Admin() {
                   name: 'Changelog', headers, rows,
                   colWidths: [28, 18, 18, 14, 28, 20, 40],
                 }, 'Admin Changelog');
-                await writeWorkbook([{ ws, name: 'Changelog' }], `hou-changelog-${new Date().toISOString().slice(0, 10)}.xlsx`);
+                await writeWorkbook([{ ws, name: 'Changelog' }], `hou-changelog-${todayLocalDate()}.xlsx`);
               } catch { toast({ title: 'Excel export failed', description: 'Please try again.' }); }
             }
 

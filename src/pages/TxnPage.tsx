@@ -1,6 +1,6 @@
-import { useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   useFinanceCostCodes,
   useFinanceDivisions,
   useFinanceProjectPhases,
+  useFinanceClientAccounts,
   useProjects,
   useTransactions,
   useUpsert,
@@ -28,7 +29,7 @@ import { financeProfileFor } from '@/lib/entityFinance';
 import { useAuth } from '@/hooks/useAuth';
 import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Trash2, FileText, Table2, Plus, Camera, X, Sparkles, Eye,
@@ -38,7 +39,6 @@ import {
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
-import { useCreatePortalClient, usePortalClients } from '@/hooks/usePortalClients';
 import { generateTransactionReport, savePDF, downloadTransactionExcel } from '@/lib/reports';
 import { scanReceipt, type ScannedReceipt } from '@/lib/receiptScan';
 import { useUploadDocument } from '@/hooks/useDocuments';
@@ -384,13 +384,14 @@ function TransactionInspector({
 
 export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { entity } = useEntity();
   const entityProfile = financeProfileFor(entity?.id);
   const { user } = useAuth();
   const { data: txns = [] } = useTransactions(kind);
   const { data: projects = [] } = useProjects();
   const { data: vendors = [] } = useVendors();
-  const { data: portalClients = [] } = usePortalClients();
+  const { data: financeClients = [] } = useFinanceClientAccounts();
   const { data: bankAccounts = [] } = useFinanceBankAccounts();
   const { data: costCodes = [] } = useFinanceCostCodes();
   const { data: divisions = [] } = useFinanceDivisions();
@@ -399,9 +400,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const allocationCreate = useCreateTransactionAllocations();
   const createVendor = useQuickCreate('vendors');
   const createProject = useQuickCreate('projects');
-  const createClient = useCreatePortalClient();
 
   const isIncome = kind === 'income';
+  const isHoldings = entity?.id === 'houston-enterprise-holdings';
   const { invoices, update: updateInvoice } = useInvoices();
 
   const STEP_LABELS = isIncome ? INCOME_STEPS : EXPENSE_STEPS;
@@ -435,10 +436,10 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   };
 
   const blankForm = {
-    amount: '', transaction_date: new Date().toISOString().slice(0, 10),
-    transaction_number: '', external_reference: '', posting_date: new Date().toISOString().slice(0, 10),
+    amount: '', transaction_date: todayLocalDate(),
+    transaction_number: '', external_reference: '', posting_date: todayLocalDate(),
     due_date: '', paid_date: '', tax_amount: '', currency: 'USD',
-    vendor_id: '', source_name: '', portal_client_id: '', project_id: '',
+    vendor_id: '', source_name: '', finance_client_id: '', project_id: '',
     category: '', notes: '', payment_method: '',
     check_reference: '', retainage_percent: '', retainage_amount: '',
     invoice_id: '', external_invoice_provider: '', external_invoice_url: '', external_invoice_number: '',
@@ -455,6 +456,34 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   const [form, setForm] = useState(blankForm);
   const [allocations, setAllocations] = useState([blankAllocation()]);
   const [autoFilled, setAutoFilled] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const guided = params.get('guided') === '1' || params.get('open') === '1';
+    if (!guided) return;
+
+    const next = {
+      category: params.get('category') || '',
+      payment_method: params.get('payment_method') || '',
+      cost_phase: params.get('cost_phase') || '',
+      expense_type: params.get('expense_type') || params.get('category') || '',
+      cost_type: params.get('cost_type') || '',
+      description: params.get('description') || '',
+      notes: params.get('notes') || '',
+      source_name: params.get('source_name') || '',
+      external_reference: params.get('external_reference') || '',
+      purchase_order_ref: params.get('purchase_order_ref') || '',
+    };
+    const filled = new Set<string>();
+    Object.entries(next).forEach(([key, value]) => {
+      if (value) filled.add(key);
+    });
+
+    setForm(f => ({ ...f, ...next }));
+    setAutoFilled(filled);
+    setStep(1);
+    setOpen(true);
+  }, [kind, location.search]);
   const { data: projectPhases = [] } = useFinanceProjectPhases(form.project_id || undefined);
   const { data: sovItems = [] } = useQuery({
     queryKey: ['project-scope-items', form.project_id],
@@ -609,6 +638,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         internal_memo: form.internal_memo || null,
         notes: form.notes || null,
         project_id: form.project_id || null,
+        finance_client_id: form.finance_client_id || null,
         payment_method: form.payment_method || null,
         check_reference: form.check_reference || null,
         bank_account_id: form.bank_account_id || null,
@@ -631,7 +661,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       };
       if (isIncome) {
         payload.source_name = form.source_name || null;
-        payload.client_id = form.portal_client_id || null;
+        payload.client_id = null;
         payload.vendor_id = null;
         payload.invoice_id = form.invoice_id || null;
         payload.external_invoice_provider = form.external_invoice_provider || null;
@@ -683,13 +713,13 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         } catch { toast.info('Transaction saved; document upload failed — attach it from Documents.'); }
         setScanFile(null);
       }
-      if (isIncome && form.invoice_id && (form.external_invoice_url || form.external_invoice_provider || form.external_invoice_number || form.portal_client_id)) {
+      if (isIncome && form.invoice_id && (form.external_invoice_url || form.external_invoice_provider || form.external_invoice_number || form.finance_client_id)) {
         await updateInvoice(form.invoice_id, {
           stripe_payment_link: form.external_invoice_provider === 'stripe' && form.external_invoice_url ? form.external_invoice_url : undefined,
           external_invoice_url: form.external_invoice_url || undefined,
           external_invoice_provider: form.external_invoice_provider || undefined,
           external_invoice_number: form.external_invoice_number || undefined,
-          portal_client_id: form.portal_client_id || undefined,
+          finance_client_id: form.finance_client_id || undefined,
           client_visible: true,
         } as any);
       }
@@ -745,6 +775,14 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     () => txns.filter((t: any) => isInFinanceRange(t.transaction_date, timePeriod)),
     [txns, timePeriod]
   );
+  const partyLabel = (t: any) => {
+    const base = isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—');
+    return isHoldings && t.entity_label ? `${t.entity_label} · ${base}` : base;
+  };
+  const projectLabel = (t: any) => {
+    const base = t.projects?.name || 'No project';
+    return isHoldings && t.entity_label ? `${t.entity_label} portfolio · ${base}` : base;
+  };
   const selectedRangeLabel = financeRangeLabel(timePeriod);
   const total = filteredTxns.reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
   const average = filteredTxns.length ? total / filteredTxns.length : 0;
@@ -881,7 +919,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
   /* ── Exports ── */
   const exportPDF = () => {
     const doc = generateTransactionReport(filteredTxns, kind, selectedRangeLabel);
-    savePDF(doc, `hou-${kind}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-${kind}-${todayLocalDate()}.pdf`);
     toast.success(`${isIncome ? 'Income' : 'Expense'} report exported · ${selectedRangeLabel}`);
   };
   const exportExcel = () => {
@@ -897,9 +935,13 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
       <input ref={quickUploadRef} type="file" accept="image/*"                       className="hidden" onChange={handleFileInput} />
 
       <PageHeader
-        eyebrow={isIncome ? 'Capital Inflow' : 'Capital Outflow'}
-        title={isIncome ? 'Income' : 'Expenses'}
-        description={isIncome ? 'Recorded receipts from clients and project funding sources.' : 'Non-check expenditures by vendor and category.'}
+        eyebrow={isHoldings ? 'Corporate Portfolio' : isIncome ? 'Capital Inflow' : 'Capital Outflow'}
+        title={isHoldings ? (isIncome ? 'Consolidated Inflows' : 'Consolidated Outflows') : isIncome ? 'Income' : 'Expenses'}
+        description={isHoldings
+          ? (isIncome
+            ? 'Parent-company view of income activity across Houston Enterprise, Houston Generator Pros, and Holdings.'
+            : 'Parent-company view of expenses across all entities, labeled by operating company for board-level review.')
+          : isIncome ? 'Recorded receipts from clients and project funding sources.' : 'Non-check expenditures by vendor and category.'}
         actions={
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
@@ -928,7 +970,13 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
             <Button
               className="rounded-none h-9 text-sm bg-foreground text-background hover:bg-foreground/90"
-              onClick={() => navigate(`/concierge?start=${kind}`)}
+              onClick={() => {
+                if (entity?.id === 'houston-generator-pros') {
+                  navigate(`/concierge?start=${kind}`);
+                } else {
+                  navigate(`/concierge?start=${kind}`);
+                }
+              }}
             >
               {isIncome ? 'Log Income' : 'Log Expense'}
             </Button>
@@ -944,6 +992,14 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                     <div className="flex items-center gap-1.5 mt-1">
                       <div className="w-2 h-2 rounded-full" style={{ background: entity.color }} />
                       <span className="text-[11px] text-muted-foreground">{entity.shortName} · {entity.name}</span>
+                    </div>
+                  )}
+                  {entity?.id === 'houston-generator-pros' && (form.category || form.payment_method || form.cost_phase) && (
+                    <div className="mt-3 border border-border bg-secondary/35 px-3 py-2 text-[10px] leading-relaxed">
+                      <span className="font-black uppercase tracking-[0.16em] text-muted-foreground">Guided HGP preset</span>
+                      <span className="ml-2 font-semibold">
+                        {[form.category, form.payment_method, form.cost_phase].filter(Boolean).join(' · ')}
+                      </span>
                     </div>
                   )}
                 </DialogHeader>
@@ -1016,32 +1072,52 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                             </div>
                           </>
                         )}
+                        <div>
+                          <FieldLabel label={`${entityProfile.terms.project === 'Job' ? 'HGP' : 'Finance'} Client Account`} />
+                          <QuickCreateSelect
+                            value={form.finance_client_id}
+                            onValueChange={v => {
+                              const client = (financeClients as any[]).find(c => c.id === v);
+                              setForm(f => ({
+                                ...f,
+                                finance_client_id: v,
+                                source_name: isIncome ? (client?.name || f.source_name) : f.source_name,
+                                project_id: client?.project_id || f.project_id,
+                              }));
+                            }}
+                            options={(financeClients as any[]).map(c => ({
+                              id: c.id,
+                              name: [c.name, c.company, c.projects?.name].filter(Boolean).join(' · '),
+                            }))}
+                            placeholder="Select finance client account"
+                            entityLabel="Client Account"
+                            onCreateNew={async (name) => {
+                              const { data, error } = await (supabase as any)
+                                .from('finance_client_accounts')
+                                .insert({
+                                  user_id: user?.id,
+                                  entity_id: entity?.id ?? 'houston-enterprise',
+                                  name,
+                                  status: 'active',
+                                  client_type: 'residential',
+                                })
+                                .select('*')
+                                .single();
+                              if (error) throw error;
+                              toast.success(`Client account "${name}" created`);
+                              return { id: data.id, name: data.name };
+                            }}
+                          />
+                        </div>
 	                      {isIncome ? (
                         <div>
-                          <FieldLabel label="Source / Client" filled={autoFilled.has('source_name')} />
-                          <div className="space-y-2">
-                            <QuickCreateSelect
-                              value={form.portal_client_id}
-                              onValueChange={v => {
-                                const client = portalClients.find(c => c.id === v);
-                                setForm(f => ({ ...f, portal_client_id: v, source_name: client?.name || f.source_name }));
-                              }}
-                              options={portalClients.map(c => ({ id: c.id, name: c.email ? `${c.name} · ${c.email}` : c.name }))}
-                              placeholder="Select registered client"
-                              entityLabel="Client"
-                              onCreateNew={async (name) => {
-                                const result = await createClient.mutateAsync({ name });
-                                toast.success(`Client "${name}" added`);
-                                return { id: result.id, name: result.name };
-                              }}
-                            />
-                            <Input
-                              placeholder="Or type client/source name"
-                              className="rounded-none h-10"
-                              value={form.source_name}
-                              onChange={e => setForm(f => ({ ...f, source_name: e.target.value, portal_client_id: '' }))}
-                            />
-                          </div>
+                          <FieldLabel label="Source / Client Name" filled={autoFilled.has('source_name')} />
+                          <Input
+                            placeholder="Type payer/source name when no finance client account is linked"
+                            className="rounded-none h-10"
+                            value={form.source_name}
+                            onChange={e => setForm(f => ({ ...f, source_name: e.target.value }))}
+                          />
                         </div>
                       ) : (
                         <div>
@@ -1694,9 +1770,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
                 <span className={`text-sm font-bold font-mono-tab ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(Number(t.total_amount ?? t.amount ?? 0))}</span>
               </div>
-              <div className="text-sm font-medium">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
+              <div className="text-sm font-medium">{partyLabel(t)}</div>
               <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                <span>{t.projects?.name || 'No project'}</span>
+                <span>{projectLabel(t)}</span>
                 <span className="text-right truncate">{isIncome ? (t.external_invoice_provider ? providerName(t.external_invoice_provider) : (t.category || 'Income')) : (t.category || 'Expense')}</span>
               </div>
               <div className="flex justify-between items-center pt-1 border-t border-border/60" onClick={e => e.stopPropagation()}>
@@ -1726,7 +1802,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         <div className="hidden sm:block txn-panel">
           <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-border bg-secondary/40 text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">
             <div className="col-span-2">Date</div>
-            <div className="col-span-3">{isIncome ? 'Source' : 'Vendor'}</div>
+            <div className="col-span-3">{isHoldings ? 'Entity / Counterparty' : isIncome ? 'Source' : 'Vendor'}</div>
             <div className="col-span-3">Project</div>
             <div className="col-span-2">{isIncome ? 'Notes' : 'Category'}</div>
             <div className="col-span-1 text-right">Amount</div>
@@ -1737,8 +1813,8 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           ) : filteredTxns.map((t: any) => (
             <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
-              <div className="col-span-3 truncate">{isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—')}</div>
-              <div className="col-span-3 truncate text-muted-foreground">{t.projects?.name || '—'}</div>
+              <div className="col-span-3 truncate">{partyLabel(t)}</div>
+              <div className="col-span-3 truncate text-muted-foreground">{projectLabel(t)}</div>
               <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : (t.category || '—')}</div>
               <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(Number(t.total_amount ?? t.amount ?? 0))}</div>
               <div className="col-span-1 flex justify-end" onClick={e => e.stopPropagation()}>

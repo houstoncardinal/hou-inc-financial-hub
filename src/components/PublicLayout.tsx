@@ -431,9 +431,12 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </motion.div>
           </Link>
 
-          {/* Desktop nav */}
-          <nav style={{ display: 'none', flex: 1, justifyContent: 'center', gap: 36, alignItems: 'center' }}
-            className="md:!flex">
+          {/* Desktop nav — gated to lg+ (1024px), not md (768px): at
+              tablet widths there isn't room for 5 links + phone + divider +
+              CTA in one unwrapped row, so tablets get the mobile drawer
+              instead of a cramped/overlapping header. */}
+          <nav style={{ display: 'none', flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            className="lg:!flex gap-6 xl:gap-9">
             {NAV.map(n =>
               n.label === 'Services'
                 ? <ServicesNavItem key={n.to} openMega={openMega} megaOpen={megaOpen} />
@@ -442,22 +445,22 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           </nav>
 
           {/* Desktop right */}
-          <div style={{ display: 'none', alignItems: 'center', gap: 20, flexShrink: 0 }} className="md:!flex">
+          <div style={{ display: 'none', alignItems: 'center', flexShrink: 0 }} className="lg:!flex gap-3 xl:gap-5">
             <a href="tel:+12819159595" style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 8.5, fontWeight: 700, letterSpacing: '0.22em',
-              textTransform: 'uppercase', textDecoration: 'none',
+              textTransform: 'uppercase', textDecoration: 'none', whiteSpace: 'nowrap',
               color: 'rgba(0,0,0,0.46)', transition: 'color 0.22s',
             }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = BLACK; }}
               onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(0,0,0,0.46)'; }}>
               <Phone size={11} strokeWidth={1.8} /> (281) 915-9595
             </a>
-            <div style={{ width: 1, height: 18, backgroundColor: G200 }} />
+            <div style={{ width: 1, height: 18, backgroundColor: G200, flexShrink: 0 }} />
             <Link to="/portal" style={{
-              display: 'flex', alignItems: 'center', gap: 6,
+              display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
               padding: '10px 22px', fontSize: 8, fontWeight: 900, letterSpacing: '0.3em',
-              textTransform: 'uppercase', textDecoration: 'none',
+              textTransform: 'uppercase', textDecoration: 'none', whiteSpace: 'nowrap',
               backgroundColor: ACCENT, color: WHITE, transition: 'background-color 0.22s',
             }}
               onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#7d6432'; }}
@@ -466,8 +469,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </Link>
           </div>
 
-          {/* Mobile hamburger */}
-          <div style={{ marginLeft: 'auto' }} className="md:hidden">
+          {/* Mobile/tablet hamburger — mirrors the lg breakpoint above */}
+          <div style={{ marginLeft: 'auto' }} className="lg:hidden">
             <motion.button onClick={() => setOpen(o => !o)} whileTap={{ scale: 0.86 }}
               style={{ padding: 6, color: BLACK, background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
               <Menu size={22} strokeWidth={1.5} />

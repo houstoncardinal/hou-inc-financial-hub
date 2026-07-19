@@ -10,12 +10,12 @@ import {
   LayoutGrid, FileText, ArrowDownToLine, ArrowUpFromLine,
   FolderKanban, Users, BookOpen, LogOut, ConciergeBell, BarChart3,
   Settings, Sun, Moon, Receipt, Globe,
-  Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, Check,
-  MoreHorizontal, History, ShieldCheck, CloudLightning, Package,
+  Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, ChevronRight, Check,
+  MoreHorizontal, History, ShieldCheck, CloudLightning, Package, FileBarChart, ShoppingCart,
 } from 'lucide-react';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const navGroups = [
@@ -33,6 +33,7 @@ const navGroups = [
     label: 'Management',
     items: [
       { to: '/projects', label: 'Projects', icon: FolderKanban, desc: 'Active & archived jobs' },
+      { to: '/clients', label: 'Clients', icon: Users, desc: 'Client accounts & history' },
       { to: '/storm',    label: 'Storm Response', icon: CloudLightning, desc: 'Outage intelligence & dispatch' },
       { to: '/inventory', label: 'Inventory', icon: Package, desc: 'Parts, stock & movement ledger' },
       { to: '/vendors',  label: 'Vendors',  icon: Users,         desc: 'Vendor directory' },
@@ -48,6 +49,7 @@ const navGroups = [
     label: 'Analysis',
     items: [
       { to: '/charts',    label: 'Charts',    icon: BarChart3,   desc: 'Visual analytics' },
+      { to: '/reports',   label: 'Reports',   icon: FileBarChart, desc: 'PDF, Excel & CSV exports' },
       { to: '/finance/controls', label: 'Controls', icon: ShieldCheck, desc: 'WIP, aging, roles & bank matching' },
       { to: '/changelog', label: 'Changelog', icon: History,     desc: 'Finance audit trail' },
       { to: '/concierge', label: 'Concierge', icon: ConciergeBell, desc: 'Guided entry assistant' },
@@ -57,6 +59,13 @@ const navGroups = [
     label: 'Storage',
     items: [
       { to: '/documents', label: 'Documents', icon: FolderOpen, desc: 'Receipts & files' },
+    ],
+  },
+  {
+    label: 'Beta Tools',
+    beta: true,
+    items: [
+      { to: '/beta/procurement', label: 'Procurement Engine', icon: ShoppingCart, desc: 'Material hedge & RFQ routing' },
     ],
   },
 ];
@@ -202,10 +211,17 @@ function FullscreenMobileMenu({
   const { invoices } = useInvoices();
   const { entity, setEntity } = useEntity();
   const navigate = useNavigate();
+  const location = useLocation();
   const overdueCount = invoices.filter((i: any) => i.status === 'overdue').length;
   const accentColor = entity?.color ?? '#9D7E3F';
   const groups = entityNavGroups(entity?.id);
   const allNavItems = groups.flatMap(group => group.items.map(item => ({ ...item, group: group.label })));
+  const activeGroupLabel = groups.find(g => g.items.some(i => i.to === location.pathname))?.label ?? groups[0]?.label ?? null;
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(activeGroupLabel);
+
+  // Re-anchor to whichever group contains the current page each time the
+  // sheet opens, rather than remembering whatever the user last toggled.
+  useEffect(() => { if (open) setExpandedGroup(activeGroupLabel); }, [open, activeGroupLabel]);
 
   const go = (to: string) => {
     sounds.tap();
@@ -297,72 +313,95 @@ function FullscreenMobileMenu({
             </div>
           </div>
 
-          <div style={{ flex: 1, overflow: 'hidden', padding: '8px 12px 7px', background: '#F8F7F3' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px 10px', background: '#F8F7F3' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#777' }}>Finance Navigation</div>
               <div style={{ fontSize: 8, color: '#777' }}>{allNavItems.length + 2} destinations</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 7 }}>
-              {groups.map(group => (
-                <div key={group.label} style={{ minWidth: 0, background: '#FFFFFF', border: '1px solid #E1DED6', boxShadow: '0 1px 4px rgba(10,10,10,0.035)' }}>
-                  <div style={{ height: 2, background: group.label === 'Daily' ? accentColor : '#D8D2C4' }} />
-                  <div style={{ padding: '6px 7px 2px', fontSize: 7, fontWeight: 850, letterSpacing: '0.22em', textTransform: 'uppercase', color: group.label === 'Daily' ? accentColor : '#777' }}>{group.label}</div>
-                  <div style={{ padding: '0 5px 5px', display: 'grid', gap: 3 }}>
-                    {group.items.map(item => (
-                      <button
-                        key={item.to}
-                        onClick={() => go(item.to)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          minWidth: 0,
-                          minHeight: 28,
-                          padding: '4px 5px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          background: '#FBFAF7',
-                          border: '1px solid #EEE9DF',
-                        }}
-                      >
-                        <div style={{ width: 21, height: 21, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}0F`, border: `1px solid ${accentColor}22`, flexShrink: 0 }}>
-                          <item.icon className="w-3 h-3" style={{ color: accentColor }} strokeWidth={1.55} />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 9.5, fontWeight: 780, color: '#1F1F1F', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {item.label}
-                            {item.to === '/invoices' && overdueCount > 0 && (
-                              <span style={{ marginLeft: 4, fontSize: 6.5, fontWeight: 800, padding: '1px 3px', backgroundColor: accentColor, color: '#fff', letterSpacing: '0.08em' }}>
-                                {overdueCount}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {groups.map(group => {
+                const isOpen = expandedGroup === group.label;
+                return (
+                  <div key={group.label} style={{ background: '#FFFFFF', border: '1px solid #E1DED6', boxShadow: '0 1px 4px rgba(10,10,10,0.035)', overflow: 'hidden' }}>
+                    <div style={{ height: 2, background: isOpen ? accentColor : '#D8D2C4' }} />
+                    <button
+                      type="button"
+                      onClick={() => { setExpandedGroup(isOpen ? null : group.label); sounds.tap(); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 12px', cursor: 'pointer', background: 'transparent', border: 'none', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 11.5, fontWeight: 850, letterSpacing: '0.14em', textTransform: 'uppercase', color: isOpen ? accentColor : '#333' }}>{group.label}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontSize: 9.5, color: '#999' }}>{group.items.length}</span>
+                        <ChevronDown className="w-3.5 h-3.5" style={{ color: isOpen ? accentColor : '#999', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} strokeWidth={2} />
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div style={{ padding: '0 8px 8px', display: 'grid', gap: 4 }}>
+                        {group.items.map(item => (
+                          <button
+                            key={item.to}
+                            onClick={() => go(item.to)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              minHeight: 54,
+                              padding: '8px 10px',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              background: '#FBFAF7',
+                              border: '1px solid #EEE9DF',
+                            }}
+                          >
+                            <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}0F`, border: `1px solid ${accentColor}22`, flexShrink: 0 }}>
+                              <item.icon className="w-4 h-4" style={{ color: accentColor }} strokeWidth={1.6} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 14, fontWeight: 750, color: '#1F1F1F', lineHeight: 1.15 }}>{item.label}</span>
+                                {item.to === '/invoices' && overdueCount > 0 && (
+                                  <span style={{ fontSize: 8, fontWeight: 800, padding: '1px 5px', backgroundColor: accentColor, color: '#fff', letterSpacing: '0.06em' }}>
+                                    {overdueCount}
+                                  </span>
+                                )}
+                              </div>
+                              {item.desc && (
+                                <div style={{ fontSize: 10, color: '#8A8580', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</div>
+                              )}
+                            </div>
+                            <ChevronRight className="w-3.5 h-3.5" style={{ color: '#C4BEB0', flexShrink: 0 }} strokeWidth={1.75} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-            <button onClick={() => go('/finance')}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '7px 8px', textAlign: 'left', cursor: 'pointer', background: '#F2EFE7', border: '1px solid #DED8CA' }}>
-              <div style={{ width: 27, height: 27, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}12`, border: `1px solid ${accentColor}24`, flexShrink: 0 }}>
-                <Layers className="w-3.5 h-3.5" style={{ color: accentColor }} strokeWidth={1.5} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#1F1F1F' }}>Switch Entity</div>
-                <div style={{ fontSize: 7, color: '#777', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Business</div>
-              </div>
-            </button>
-            <button onClick={() => go('/')}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '7px 8px', textAlign: 'left', cursor: 'pointer', background: '#FFFFFF', border: '1px solid #E1DED6' }}>
-              <div style={{ width: 27, height: 27, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F2ED', border: '1px solid #E1DED6', flexShrink: 0 }}>
-                <Globe className="w-3.5 h-3.5" style={{ color: '#777' }} strokeWidth={1.5} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#1F1F1F' }}>Website</div>
-                <div style={{ fontSize: 7, color: '#777', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Public site</div>
-              </div>
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              <button onClick={() => go('/finance')}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 54, padding: '9px 10px', textAlign: 'left', cursor: 'pointer', background: '#F2EFE7', border: '1px solid #DED8CA' }}>
+                <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${accentColor}12`, border: `1px solid ${accentColor}24`, flexShrink: 0 }}>
+                  <Layers className="w-4 h-4" style={{ color: accentColor }} strokeWidth={1.5} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1F1F1F' }}>Switch Entity</div>
+                  <div style={{ fontSize: 9.5, color: '#8A8580' }}>Houston Enterprise, Generator Pros, Holdings</div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5" style={{ color: '#C4BEB0', flexShrink: 0 }} strokeWidth={1.75} />
+              </button>
+              <button onClick={() => go('/')}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 54, padding: '9px 10px', textAlign: 'left', cursor: 'pointer', background: '#FFFFFF', border: '1px solid #E1DED6' }}>
+                <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F2ED', border: '1px solid #E1DED6', flexShrink: 0 }}>
+                  <Globe className="w-4 h-4" style={{ color: '#777' }} strokeWidth={1.5} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1F1F1F' }}>Houston Enterprise Website</div>
+                  <div style={{ fontSize: 9.5, color: '#8A8580' }}>Leave the finance app for the public site</div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5" style={{ color: '#C4BEB0', flexShrink: 0 }} strokeWidth={1.75} />
+              </button>
             </div>
           </div>
 
@@ -543,6 +582,7 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
   const displayName = user?.user_metadata?.full_name || '';
   const initials = (displayName || user?.email || 'U').charAt(0).toUpperCase();
   const overdueCount = invoices.filter((i: any) => i.status === 'overdue').length;
+  const [betaOpen, setBetaOpen] = useState(true);
 
   const handleSettings = () => { navigate('/settings'); onNavigate?.(); sounds.tap(); };
 
@@ -561,12 +601,26 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
       </div>
 
       <nav className="flex-1 py-1.5 overflow-hidden">
-        {entityNavGroups(entity?.id).map(group => (
+        {entityNavGroups(entity?.id).map(group => {
+          const isBetaGroup = (group as any).beta || group.label === 'Beta Tools';
+          const collapsed = isBetaGroup && !betaOpen;
+          return (
           <div key={group.label} className="mb-1">
             <div className="px-4 py-0.5">
-              <span className="text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold">{group.label}</span>
+              {isBetaGroup ? (
+                <button
+                  type="button"
+                  onClick={() => { setBetaOpen(o => !o); sounds.tap(); }}
+                  className="w-full flex items-center justify-between text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold hover:text-foreground transition-colors"
+                >
+                  <span>{group.label}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${betaOpen ? 'rotate-180' : ''}`} strokeWidth={2} />
+                </button>
+              ) : (
+                <span className="text-[7px] uppercase tracking-[0.24em] text-foreground/55 font-bold">{group.label}</span>
+              )}
             </div>
-            {group.items.map(n => (
+            {!collapsed && group.items.map(n => (
               <NavLink
                 key={n.to}
                 to={n.to}
@@ -604,7 +658,8 @@ function NavContent({ onNavigate, isMobileSheet }: { onNavigate?: () => void; is
               </NavLink>
             ))}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-border shrink-0 bg-secondary/20">
@@ -703,14 +758,14 @@ export default function AppShell({
       <ElevenLabsAgent />
 
       {/* Main */}
-      <main className="md:ml-64 min-h-screen flex flex-col">
+      <main className="finance-mobile-surface md:ml-64 min-h-screen flex flex-col min-w-0">
         <div className="md:hidden h-14 shrink-0" />
-        <div className="flex-1 page-enter">{children}</div>
+        <div className="flex-1 page-enter min-w-0">{children}</div>
         <div className="md:hidden h-[66px] shrink-0" />
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 h-[66px] bg-white border-t border-[#E6E1D8] z-30 grid grid-cols-5 items-stretch shadow-[0_-8px_24px_rgba(10,10,10,0.075)]"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 h-[64px] bg-background/92 backdrop-blur-md border-t border-border z-30 grid grid-cols-5 items-stretch shadow-[0_-6px_20px_rgba(10,10,10,0.06)] dark:shadow-[0_-6px_20px_rgba(0,0,0,0.35)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {mobileQuickNav.slice(0, 2).map(n => (
           <NavLink
@@ -718,17 +773,15 @@ export default function AppShell({
             to={n.to}
             end={n.end}
             onClick={() => sounds.tap()}
-            className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777] hover:text-[#222]'}`
-            }
+            className="relative flex flex-col items-center justify-center gap-1 transition-colors text-muted-foreground hover:text-foreground"
           >
             {({ isActive }) => (
               <>
-                <div className="h-6 flex items-center justify-center transition-colors">
-                  <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
+                <div className="h-5 flex items-center justify-center transition-colors" style={{ color: isActive ? accentColor : undefined }}>
+                  <n.icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.5} />
                 </div>
-                <span className={`text-[8px] uppercase tracking-[0.07em] ${isActive ? 'font-bold' : 'font-semibold'}`}>{n.label}</span>
-                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-[#111]" />}
+                <span className={`text-[8px] uppercase tracking-[0.08em] transition-colors ${isActive ? 'font-bold text-foreground' : 'font-semibold'}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full" style={{ backgroundColor: accentColor }} />}
               </>
             )}
           </NavLink>
@@ -737,16 +790,16 @@ export default function AppShell({
         {/* Add Entry slot */}
         <button
           onClick={() => { sounds.open(); setAddSheetOpen(true); }}
-          className="flex flex-col items-center justify-center gap-0.5 transition-colors text-background relative border-r border-[#EFEAE1]"
+          className="flex flex-col items-center justify-center gap-1 transition-colors relative"
           aria-label="Add Entry"
         >
           <div
-            className="w-11 h-11 -mt-6 flex items-center justify-center rounded-full shadow-[0_10px_22px_rgba(0,0,0,0.24),0_0_0_4px_rgba(255,255,255,0.96)] transition-transform active:scale-95 border border-black"
-            style={{ backgroundColor: '#050505' }}
+            className="w-11 h-11 -mt-5 flex items-center justify-center rounded-full bg-foreground shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-transform active:scale-95"
+            style={{ boxShadow: '0 8px 18px rgba(0,0,0,0.22), 0 0 0 4px hsl(var(--background))' }}
           >
-            <Plus className="w-5 h-5" strokeWidth={2.35} style={{ color: '#fff' }} />
+            <Plus className="w-5 h-5 text-background" strokeWidth={2.25} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.07em] font-bold -mt-0.5" style={{ color: '#111' }}>Add</span>
+          <span className="text-[8px] uppercase tracking-[0.08em] font-bold text-muted-foreground -mt-0.5">Add</span>
         </button>
 
         {mobileQuickNav.slice(2).map(n => (
@@ -755,17 +808,15 @@ export default function AppShell({
             to={n.to}
             end={n.end}
             onClick={() => sounds.tap()}
-            className={({ isActive }) =>
-              `relative flex flex-col items-center justify-center gap-0.5 transition-colors border-r border-[#EFEAE1] ${isActive ? 'text-[#111]' : 'text-[#777] hover:text-[#222]'}`
-            }
+            className="relative flex flex-col items-center justify-center gap-1 transition-colors text-muted-foreground hover:text-foreground"
           >
             {({ isActive }) => (
               <>
-                <div className="h-6 flex items-center justify-center transition-colors">
-                  <n.icon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} />
+                <div className="h-5 flex items-center justify-center transition-colors" style={{ color: isActive ? accentColor : undefined }}>
+                  <n.icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2 : 1.5} />
                 </div>
-                <span className={`text-[8px] uppercase tracking-[0.07em] ${isActive ? 'font-bold' : 'font-semibold'}`}>{n.label}</span>
-                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-[#111]" />}
+                <span className={`text-[8px] uppercase tracking-[0.08em] transition-colors ${isActive ? 'font-bold text-foreground' : 'font-semibold'}`}>{n.label}</span>
+                {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full" style={{ backgroundColor: accentColor }} />}
               </>
             )}
           </NavLink>
@@ -774,13 +825,13 @@ export default function AppShell({
         {/* More slot */}
         <button
           onClick={() => { sounds.open(); setFullMenuOpen(true); }}
-          className="flex flex-col items-center justify-center gap-0.5 text-[#777] hover:text-[#111] transition-colors"
+          className="flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
           aria-label="All sections"
         >
-          <div className="h-6 flex items-center justify-center">
-            <MoreHorizontal className="w-4 h-4" strokeWidth={1.7} />
+          <div className="h-5 flex items-center justify-center">
+            <MoreHorizontal className="w-[18px] h-[18px]" strokeWidth={1.6} />
           </div>
-          <span className="text-[8px] uppercase tracking-[0.07em] font-semibold">More</span>
+          <span className="text-[8px] uppercase tracking-[0.08em] font-semibold">More</span>
         </button>
       </nav>
 

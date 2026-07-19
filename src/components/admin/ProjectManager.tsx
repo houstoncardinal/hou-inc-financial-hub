@@ -22,6 +22,7 @@ import { MilestoneTimeline } from '@/components/project-detail/MilestoneTimeline
 import { ProgressRing } from '@/components/project-detail/ProgressRing';
 import { ActionButton } from '@/components/admin/design/ActionButton';
 import { PDV2_CSS } from '@/components/project-detail/cardStyles';
+import { todayLocalDate } from '@/lib/format';
 
 /* ── Tokens ──────────────────────────────────────────────────────── */
 const AC    = '#9D7E3F';
@@ -1212,7 +1213,7 @@ export default function ProjectManager() {
   };
 
   const completeMilestone = async (m: Milestone) => {
-    const date = m.completed_date ? null : new Date().toISOString().slice(0, 10);
+    const date = m.completed_date ? null : todayLocalDate();
     const { data, error } = await supabase.from('admin_project_milestones')
       .update({ completed_date: date, is_active: false }).eq('id', m.id).select().single();
     if (!error && data) setMilestones(prev => prev.map(x => x.id === m.id ? data : x));

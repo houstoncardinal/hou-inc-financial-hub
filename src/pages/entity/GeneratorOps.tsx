@@ -4,8 +4,8 @@
    margin intelligence, maintenance/service agreements with recurring revenue
    and visit scheduling, warranty lifecycle, and revenue split from the shared
    transactions ledger. ── */
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Input } from '@/components/ui/input';
@@ -13,18 +13,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
-import { useTransactions, useVendors } from '@/hooks/useFinance';
+import { useChecks, useTransactions, useVendors } from '@/hooks/useFinance';
 import {
   useEquipmentUnits, useServiceAgreements, useServiceVisits, useHgpFinanceSummary,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Zap, Package, Wrench, CalendarClock, ShieldCheck, TrendingUp,
   Plus, Pencil, Trash2, AlertTriangle, PhoneCall, BookOpen,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, FileText, Users,
+  MoreHorizontal, Search, Settings2, Check as CheckIcon, ChevronDown, ChevronUp, CalendarDays,
 } from 'lucide-react';
+import {
+  Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip, XAxis, YAxis,
+} from 'recharts';
 
 const HGP_BLUE = '#1B72B5';
 
@@ -33,6 +38,8 @@ const OPS_CSS = `
 .hgp-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05),0 1px 0 rgba(255,255,255,.45) inset;}
 .hgp-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.045);position:relative;overflow:hidden;}
 .hgp-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#1B72B5);}
+.hgp-card-button{display:block;width:100%;text-align:left;transition:box-shadow .18s ease,border-color .18s ease,transform .18s ease;}
+.hgp-card-button:hover{box-shadow:0 6px 20px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);transform:translateY(-1px);}
 .hgp-k{font-size:8px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hgp-v{font-size:17px;line-height:1.05;font-weight:900;margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hgp-sub{font-size:10px;color:hsl(var(--muted-foreground));margin-top:5px;line-height:1.25;}
@@ -42,8 +49,35 @@ const OPS_CSS = `
 .hgp-action{height:28px;border:1px solid hsl(var(--border));background:hsl(var(--background));padding:0 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;display:inline-flex;align-items:center;gap:5px;}
 .hgp-action:hover{background:hsl(var(--secondary)/.55);}
 .hgp-field{height:38px;border-radius:0;font-size:12px;}
-.dark .hgp-panel,.dark .hgp-card,.dark .hgp-action{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.05) inset;}
-@media(max-width:767px){.hgp-v{font-size:14px}.hgp-panel{padding:12px!important}}
+.hgp-guided{background:linear-gradient(135deg,hsl(var(--background)) 0%,hsl(var(--secondary)/.22) 72%,rgba(27,114,181,.07) 100%);border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05),0 1px 0 rgba(255,255,255,.45) inset;}
+.hgp-guided-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease;text-align:left;min-height:58px;}
+.hgp-guided-card:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);background:hsl(var(--secondary)/.35);}
+.hgp-guided-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(27,114,181,.22);background:rgba(27,114,181,.08);flex-shrink:0;}
+.hgp-guided-title{font-size:12px;font-weight:900;letter-spacing:-.01em;color:hsl(var(--foreground));}
+.hgp-guided-sub{font-size:9px;line-height:1.35;color:hsl(var(--muted-foreground));margin-top:2px;}
+.hgp-flow-strip{display:grid;grid-template-columns:minmax(0,1.15fr) repeat(5,minmax(118px,1fr));gap:8px;align-items:stretch;}
+.hgp-flow-intro{border-right:1px solid hsl(var(--border));padding-right:12px;min-width:0;}
+.hgp-flow-chip{min-height:52px;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.045);padding:8px 9px;display:flex;align-items:center;gap:8px;text-align:left;transition:transform .16s,box-shadow .16s,border-color .16s,background .16s;}
+.hgp-flow-chip:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);background:hsl(var(--secondary)/.35);}
+.hgp-priority-card{position:relative;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05),0 1px 0 rgba(255,255,255,.45) inset;min-width:0;overflow:hidden;transition:border-color .18s,box-shadow .18s,transform .18s;}
+.hgp-priority-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(27,114,181,0.06),transparent 44%);pointer-events:none;}
+.hgp-priority-card:hover{border-color:hsl(var(--foreground)/.2);box-shadow:0 8px 22px rgba(10,10,10,.08);transform:translateY(-1px);}
+.hgp-priority-foot{border-top:1px solid hsl(var(--border)/.65);background:hsl(var(--secondary)/.24);}
+.hgp-priority-spark{height:42px;width:68px;}
+.hgp-page-btn{height:32px;min-width:32px;border:1px solid hsl(var(--border));background:hsl(var(--background));font-size:10px;font-weight:900;}
+.hgp-page-btn:hover:not(:disabled){background:hsl(var(--secondary)/.6);border-color:hsl(var(--foreground)/.22);}
+.hgp-page-btn:disabled{opacity:.38;cursor:not-allowed;}
+.hgp-calendar{grid-template-columns:repeat(7,minmax(88px,1fr));}
+.hgp-day{min-height:96px;padding:6px;}
+.hgp-visit-chip{display:block;width:100%;text-align:left;font-size:10px;font-weight:850;line-height:1.15;padding:5px 6px;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hgp-agenda-card{width:100%;min-height:46px;border:1px solid hsl(var(--border));background:hsl(var(--background));padding:8px 10px;text-align:left;display:flex;align-items:center;gap:9px;transition:background .16s,border-color .16s,transform .16s;}
+.hgp-agenda-card:hover{background:hsl(var(--secondary)/.45);border-color:hsl(var(--foreground)/.2);transform:translateY(-1px);}
+.hgp-agenda-date{min-width:42px;border-right:1px solid hsl(var(--border));font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:900;color:hsl(var(--muted-foreground));line-height:1.15;text-transform:uppercase;}
+.dark .hgp-panel,.dark .hgp-card,.dark .hgp-action,.dark .hgp-guided,.dark .hgp-guided-card,.dark .hgp-flow-chip{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.05) inset;}
+.dark .hgp-priority-card{background:hsl(var(--card));}
+@media(max-width:1279px){.hgp-flow-strip{grid-template-columns:repeat(3,minmax(0,1fr));}.hgp-flow-intro{grid-column:1/-1;border-right:0;border-bottom:1px solid hsl(var(--border));padding-right:0;padding-bottom:8px;}}
+@media(max-width:1024px){.hgp-calendar{grid-template-columns:repeat(7,minmax(74px,1fr));}.hgp-day{min-height:86px}.hgp-visit-chip{font-size:9px;padding:4px 5px}}
+@media(max-width:767px){.hgp-v{font-size:14px}.hgp-panel{padding:12px!important}.hgp-calendar-scroll{overflow-x:auto;border:1px solid hsl(var(--border));background:hsl(var(--background));}.hgp-calendar{min-width:620px}.hgp-guided-card{min-height:64px}.hgp-flow-strip{grid-template-columns:1fr 1fr}.hgp-flow-intro{grid-column:1/-1}.hgp-flow-chip{min-height:46px;padding:7px}.hgp-action{min-height:36px}.hgp-page-btn{min-height:36px;min-width:42px}}
 `;
 
 const UNIT_STATUS: Record<string, { label: string; color: string }> = {
@@ -65,9 +99,12 @@ const num = (v: unknown) => Number(v || 0);
 const daysUntil = (d: string | null | undefined) =>
   d ? Math.ceil((new Date(d + 'T12:00:00').getTime() - Date.now()) / 86400000) : null;
 
-function Metric({ label, value, sub, icon: Icon, color = HGP_BLUE }: any) {
+const DEFAULT_HGP_KPI_IDS = ['revenue', 'service', 'inventory', 'margin'];
+
+function Metric({ label, value, sub, icon: Icon, color = HGP_BLUE, onClick }: any) {
+  const Comp: any = onClick ? 'button' : 'div';
   return (
-    <div className="hgp-card p-3 min-w-0" style={{ '--accent': color } as any}>
+    <Comp className={`hgp-card p-3 min-w-0 ${onClick ? 'hgp-card-button' : ''}`} style={{ '--accent': color } as any} onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="hgp-k">{label}</div>
@@ -78,7 +115,7 @@ function Metric({ label, value, sub, icon: Icon, color = HGP_BLUE }: any) {
           <Icon className="w-4 h-4" style={{ color }} strokeWidth={1.7} />
         </div>
       </div>
-    </div>
+    </Comp>
   );
 }
 
@@ -104,11 +141,11 @@ const BLANK_UNIT = {
   status: 'in_stock', unit_cost: '', sale_price: '', customer_name: '',
   purchase_date: '', install_date: '', warranty_end: '', permit_number: '', notes: '',
   deposit_amount: '', install_labor_cost: '', inspection_status: '',
-  log_po: true, po_vendor_id: '', po_number: '', po_total: '', po_date: new Date().toISOString().slice(0, 10),
+  log_po: true, po_vendor_id: '', po_number: '', po_total: '', po_date: todayLocalDate(),
 };
 
 const BLANK_VISIT = {
-  id: '', agreement_id: '', customer_name: '', visit_date: new Date().toISOString().slice(0, 10),
+  id: '', agreement_id: '', customer_name: '', visit_date: todayLocalDate(),
   visit_type: 'scheduled', status: 'completed', technician: '', labor_hours: '', revenue: '', cost: '', summary: '',
 };
 
@@ -119,6 +156,7 @@ const BLANK_AGREEMENT = {
 };
 
 export default function GeneratorOps() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   useEntityOpsRealtime();
 
@@ -128,6 +166,7 @@ export default function GeneratorOps() {
   const { data: rpcSummary } = useHgpFinanceSummary();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
+  const { data: checks = [] } = useChecks();
 
   const upsertUnit = useEntityOpsUpsert('hgp_equipment_units');
   const deleteUnit = useEntityOpsSoftDelete('hgp_equipment_units');
@@ -138,6 +177,7 @@ export default function GeneratorOps() {
   const upsertPO = useEntityOpsUpsert('hgp_purchase_orders');
   const { data: vendors = [] } = useVendors();
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
 
   const [unitDialog, setUnitDialog] = useState(false);
   const [unitForm, setUnitForm] = useState({ ...BLANK_UNIT });
@@ -145,6 +185,21 @@ export default function GeneratorOps() {
   const [agreementForm, setAgreementForm] = useState({ ...BLANK_AGREEMENT });
   const [visitDialog, setVisitDialog] = useState(false);
   const [visitForm, setVisitForm] = useState({ ...BLANK_VISIT });
+  const [showAllGuided, setShowAllGuided] = useState(false);
+  const [kpiCustomOpen, setKpiCustomOpen] = useState(false);
+  const [selectedKpiIds, setSelectedKpiIds] = useState<string[]>(() => {
+    try {
+      const saved = window.localStorage.getItem('hgp-ops-kpis');
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_HGP_KPI_IDS;
+    } catch {
+      return DEFAULT_HGP_KPI_IDS;
+    }
+  });
+  const [unitSearch, setUnitSearch] = useState('');
+  const [unitStatus, setUnitStatus] = useState('all');
+  const [unitPage, setUnitPage] = useState(1);
+  const unitPageSize = 8;
 
   const stats = useMemo(() => {
     const live = units as any[];
@@ -204,9 +259,10 @@ export default function GeneratorOps() {
     const totalIncome = rpcSummary?.totalIncome
       ?? (income as any[]).filter(t => (t.status ?? '') !== 'voided')
         .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
-    const totalExpense = rpcSummary?.totalExpense
-      ?? (expenses as any[]).filter(t => (t.status ?? '') !== 'voided')
-        .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
+    const clearedChecks = (checks as any[]).filter(c => c.status === 'cleared')
+      .reduce((s, c) => s + num(c.amount), 0);
+    const totalExpense = (rpcSummary?.totalExpense ?? (expenses as any[]).filter(t => (t.status ?? '') !== 'voided')
+      .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0)) + clearedChecks;
     const serviceRevenue = rpcSummary?.serviceRevenue
       ?? (income as any[]).filter(t => (t.status ?? '') !== 'voided' && isService(t))
         .reduce((s, t) => s + num(t.total_amount ?? t.amount), 0);
@@ -221,7 +277,48 @@ export default function GeneratorOps() {
       contracted90, contracted180, contracted365,
       totalIncome, totalExpense, serviceRevenue, emergencyRevenue,
     };
-  }, [units, agreements, income, expenses, rpcSummary]);
+  }, [units, agreements, income, expenses, checks, rpcSummary]);
+
+  /* Monthly income/expense trend (last 8 months) feeding the priority-card
+     sparklines — expense includes cleared checks, mirroring stats.totalExpense. */
+  const monthlyTrend = useMemo(() => {
+    const buckets = new Map<string, { key: string; label: string; income: number; expense: number }>();
+    const keyLabel = (key: string) => {
+      const [y, m] = key.split('-').map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+    };
+    // Pre-seed the trailing 8 calendar months so the sparkline always has
+    // enough points to draw a line — a brand-new entity's data can be only
+    // days old, and an area/line chart needs 2+ points to render at all.
+    const now = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      buckets.set(key, { key, label: keyLabel(key), income: 0, expense: 0 });
+    }
+    const ensure = (dateStr: string) => {
+      const key = dateStr.slice(0, 7);
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { key, label: keyLabel(key), income: 0, expense: 0 };
+        buckets.set(key, bucket);
+      }
+      return bucket;
+    };
+    (income as any[]).filter(t => (t.status ?? '') !== 'voided').forEach(t => {
+      if (!t.transaction_date) return;
+      ensure(t.transaction_date).income += num(t.total_amount ?? t.amount);
+    });
+    (expenses as any[]).filter(t => (t.status ?? '') !== 'voided').forEach(t => {
+      if (!t.transaction_date) return;
+      ensure(t.transaction_date).expense += num(t.total_amount ?? t.amount);
+    });
+    (checks as any[]).filter(c => c.status === 'cleared').forEach(c => {
+      if (!c.issue_date) return;
+      ensure(c.issue_date).expense += num(c.amount);
+    });
+    return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key)).slice(-8);
+  }, [income, expenses, checks]);
 
   const marginByModel = useMemo(() => {
     const groups: Record<string, { model: string; count: number; cost: number; revenue: number }> = {};
@@ -237,6 +334,35 @@ export default function GeneratorOps() {
       .sort((a, b) => b.margin - a.margin);
   }, [units]);
 
+  const guidedActions = useMemo(() => [
+    { label: 'Generator Deposit', sub: 'Guided income', icon: ArrowDownToLine, color: '#059669', to: '/concierge?start=income&category=Generator%20Deposit&payment_method=credit_card&cost_phase=Equipment%20Order&source_name=Generator%20Customer' },
+    { label: 'Emergency Service', sub: 'Guided income', icon: PhoneCall, color: '#dc2626', to: '/concierge?start=income&category=Emergency%20Service&payment_method=credit_card&cost_phase=Emergency%20Service&source_name=HGP%20Emergency%20Client' },
+    { label: 'Distributor Invoice', sub: 'Guided expense', icon: ArrowUpFromLine, color: '#7c3aed', to: '/concierge?start=expense&category=Distributor%20Invoice&payment_method=check&cost_phase=Equipment%20Order' },
+    { label: 'Service Parts', sub: 'Guided expense', icon: Package, color: '#0891b2', to: '/concierge?start=expense&category=Service%20Parts&payment_method=credit_card&cost_phase=Service%20Parts' },
+    { label: 'Supplier Check', sub: 'Guided check', icon: FileText, color: '#2563eb', to: '/concierge?start=check&memo=HGP%20supplier%20payment' },
+    { label: 'Client / Job', sub: 'Account or install', icon: Users, color: HGP_BLUE, to: '/concierge?start=project' },
+  ], []);
+
+  useEffect(() => {
+    window.localStorage.setItem('hgp-ops-kpis', JSON.stringify(selectedKpiIds));
+  }, [selectedKpiIds]);
+
+  const filteredUnits = useMemo(() => {
+    const q = unitSearch.trim().toLowerCase();
+    return (units as any[]).filter(u => {
+      if (unitStatus !== 'all' && u.status !== unitStatus) return false;
+      if (!q) return true;
+      return [u.model, u.serial_number, u.customer_name, u.fuel_type, u.permit_number]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [units, unitSearch, unitStatus]);
+  const unitPageCount = Math.max(1, Math.ceil(filteredUnits.length / unitPageSize));
+  const safeUnitPage = Math.min(unitPage, unitPageCount);
+  const pagedUnits = filteredUnits.slice((safeUnitPage - 1) * unitPageSize, safeUnitPage * unitPageSize);
+
   const openUnit = (u?: any) => {
     setUnitForm(u ? {
       id: u.id, model: u.model ?? '', serial_number: u.serial_number ?? '',
@@ -248,7 +374,7 @@ export default function GeneratorOps() {
       deposit_amount: u.deposit_amount != null && num(u.deposit_amount) !== 0 ? String(u.deposit_amount) : '',
       install_labor_cost: u.install_labor_cost != null && num(u.install_labor_cost) !== 0 ? String(u.install_labor_cost) : '',
       inspection_status: u.inspection_status ?? '',
-      log_po: false, po_vendor_id: '', po_number: '', po_total: '', po_date: new Date().toISOString().slice(0, 10),
+      log_po: false, po_vendor_id: '', po_number: '', po_total: '', po_date: todayLocalDate(),
     } : { ...BLANK_UNIT });
     setUnitDialog(true);
   };
@@ -289,7 +415,7 @@ export default function GeneratorOps() {
               entity_id: 'houston-generator-pros',
               vendor_id: unitForm.po_vendor_id || null,
               po_number: unitForm.po_number.trim() || null,
-              order_date: unitForm.po_date || new Date().toISOString().slice(0, 10),
+              order_date: unitForm.po_date || todayLocalDate(),
               total_amount: poTotal,
               status: 'received',
               memo: `Equipment intake — ${unitForm.model.trim()}`,
@@ -316,7 +442,7 @@ export default function GeneratorOps() {
       const v = preset.visit;
       setVisitForm({
         id: v.id, agreement_id: v.agreement_id ?? '', customer_name: v.customer_name ?? '',
-        visit_date: v.visit_date ?? new Date().toISOString().slice(0, 10),
+        visit_date: v.visit_date ?? todayLocalDate(),
         visit_type: v.visit_type ?? 'scheduled', status: v.status ?? 'completed',
         technician: v.technician ?? '', labor_hours: num(v.labor_hours) ? String(v.labor_hours) : '',
         revenue: num(v.revenue) ? String(v.revenue) : '', cost: num(v.cost) ? String(v.cost) : '',
@@ -401,6 +527,32 @@ export default function GeneratorOps() {
     } catch (e: any) { toast.error(e.message); }
   };
 
+  const kpiCards = useMemo(() => [
+    { id: 'revenue', label: 'Revenue (Entity)', value: fmtUSD(stats.totalIncome), sub: `${fmtUSD(stats.totalExpense)} costs recorded`, icon: TrendingUp, color: '#059669', onClick: () => navigate('/ledger') },
+    { id: 'service', label: 'Recurring Service', value: fmtUSD(stats.arr), sub: `${fmtUSD(stats.contracted90)} contracted 90d · ${fmtUSD(stats.contracted365)} 12mo`, icon: Wrench, color: HGP_BLUE, onClick: () => openAgreement() },
+    { id: 'inventory', label: 'Inventory On Hand', value: String(stats.onHandCount), sub: `${fmtUSD(stats.inventoryValue)} at cost · ${fmtUSD(stats.depositsHeld)} deposits held`, icon: Package, color: '#7c3aed', onClick: () => openUnit() },
+    { id: 'margin', label: 'Install Margin', value: `${stats.avgMarginPct.toFixed(1)}%`, sub: `${fmtUSD(stats.soldRevenue - stats.soldCogs)} on ${stats.installedCount} installs`, icon: Zap, color: '#d97706', onClick: () => navigate('/projects') },
+    { id: 'emergency', label: 'Emergency Revenue', value: fmtUSD(stats.emergencyRevenue), sub: 'After-hours and outage response income', icon: PhoneCall, color: '#dc2626', onClick: () => navigate('/storm') },
+    { id: 'visits', label: 'Service Visits', value: String(stats.upcoming.length), sub: `${stats.overdueVisits.length} overdue · ${stats.warrantyExpiring.length} warranties ≤90d`, icon: CalendarClock, color: '#0891b2', onClick: () => openVisit() },
+    { id: 'renewals', label: 'Renewal Pipeline', value: fmtUSD(stats.renewalValue), sub: `${stats.renewals.length} plans within 60 days`, icon: ShieldCheck, color: '#059669', onClick: () => stats.renewals[0] ? openAgreement(stats.renewals[0]) : openAgreement() },
+    { id: 'costs', label: 'Operating Costs', value: fmtUSD(stats.totalExpense), sub: 'Parts, equipment, labor, permits + cleared checks', icon: ArrowUpFromLine, color: '#dc2626', onClick: () => navigate('/expenses') },
+  ], [navigate, stats]);
+
+  const displayKpiCards = useMemo(() => {
+    const selected = selectedKpiIds
+      .map(id => kpiCards.find(card => card.id === id))
+      .filter(Boolean) as any[];
+    return selected.length ? selected.slice(0, 4) : kpiCards.slice(0, 4);
+  }, [kpiCards, selectedKpiIds]);
+
+  const toggleKpi = (id: string) => {
+    setSelectedKpiIds(current => {
+      if (current.includes(id)) return current.filter(x => x !== id);
+      if (current.length >= 4) return current;
+      return [...current, id];
+    });
+  };
+
   return (
     <AppShell>
       <style>{OPS_CSS}</style>
@@ -409,31 +561,198 @@ export default function GeneratorOps() {
         title="Generator Operations"
         description="Sales, inventory COGS, install margin, maintenance plans, and service revenue."
         actions={
-          <div className="flex items-center gap-2">
-            <button className="hgp-action" onClick={() => openVisit()}><CalendarClock className="w-3 h-3" /> Log / Schedule Visit</button>
-            <button className="hgp-action" onClick={() => openAgreement()}><Wrench className="w-3 h-3" /> New Plan</button>
-            <button className="hgp-primary" onClick={() => openUnit()}><Plus className="w-3.5 h-3.5" /> Add Unit</button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button className="hgp-action !h-9" onClick={() => openVisit()}><CalendarClock className="w-3 h-3" /> Visit</button>
+            <button className="hgp-action !h-9" onClick={() => openAgreement()}><Wrench className="w-3 h-3" /> Plan</button>
+            <button className="hgp-primary !h-9" onClick={() => openUnit()}><Plus className="w-3.5 h-3.5" /> Unit</button>
           </div>
         }
       />
 
       <div className="hgp-shell border-t border-border/50">
         <div className="px-4 sm:px-8 py-4 space-y-4">
-          {/* ── KPI rail — one dense row on desktop ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
-            <Metric label="Revenue (Entity)" value={fmtUSD(stats.totalIncome)} sub={`${fmtUSD(stats.totalExpense)} costs recorded`} icon={TrendingUp} color="#059669" />
-            <Metric label="Recurring Service" value={fmtUSD(stats.arr)}
-              sub={`${fmtUSD(stats.contracted90)} contracted 90d · ${fmtUSD(stats.contracted365)} 12mo`} icon={Wrench} />
-            <Metric label="Inventory On Hand" value={String(stats.onHandCount)} sub={`${fmtUSD(stats.inventoryValue)} at cost · ${fmtUSD(stats.depositsHeld)} deposits held`} icon={Package} color="#7c3aed" />
-            <Metric label="Install Margin" value={`${stats.avgMarginPct.toFixed(1)}%`} sub={`${fmtUSD(stats.soldRevenue - stats.soldCogs)} on ${stats.installedCount} installs`} icon={Zap} color="#d97706" />
-            <Metric label="Service Revenue" value={fmtUSD(stats.serviceRevenue)} sub="Income tagged service / maintenance" icon={BookOpen} color="#0891b2" />
-            <Metric label="Emergency Revenue" value={fmtUSD(stats.emergencyRevenue)} sub="After-hours & emergency calls" icon={PhoneCall} color="#dc2626" />
-            <Metric label="Visits · Next 30d" value={String(stats.upcoming.length)} sub={stats.overdueVisits.length ? `${stats.overdueVisits.length} overdue — schedule now` : 'No overdue visits'} icon={CalendarClock} color={stats.overdueVisits.length ? '#dc2626' : '#059669'} />
-            <Metric label="Warranty · 90d" value={String(stats.warrantyExpiring.length)} sub="Installed units nearing warranty end" icon={ShieldCheck} color="#9D7E3F" />
+          <section className="hgp-guided p-2.5">
+            <div className="hgp-flow-strip">
+              <div className="hgp-flow-intro">
+                <div className="hgp-k" style={{ color: HGP_BLUE }}>Guided Generator Finance Flows</div>
+                <div className="text-sm font-black tracking-tight mt-1">Fast HGP entry</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">Prefilled income, expense, check, client, and job workflows.</div>
+              </div>
+              {(showAllGuided ? guidedActions : guidedActions.slice(0, 5)).map(action => (
+                <button key={action.label} className="hgp-flow-chip min-w-0" onClick={() => navigate(action.to)}>
+                  <div className="hgp-guided-icon !w-8 !h-8" style={{ color: action.color, backgroundColor: `${action.color}12`, borderColor: `${action.color}30` }}>
+                    <action.icon className="w-4 h-4" strokeWidth={1.8} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="hgp-guided-title truncate">{action.label}</div>
+                    <div className="hgp-guided-sub truncate">{action.sub}</div>
+                  </div>
+                </button>
+              ))}
+              <button className="hgp-flow-chip min-w-0" onClick={() => setShowAllGuided(v => !v)}>
+                <div className="hgp-guided-icon !w-8 !h-8"><MoreHorizontal className="w-4 h-4" /></div>
+                <div className="min-w-0">
+                  <div className="hgp-guided-title">{showAllGuided ? 'Less' : 'More'}</div>
+                  <div className="hgp-guided-sub truncate">Tools</div>
+                </div>
+              </button>
+            </div>
+          </section>
+
+          {/* ── Priority command strip — same intel-card language as Checks/
+              Income/Expenses/Ledger, customized per metric: revenue and cost
+              get real monthly trend areas, inventory and dispatch get
+              comparison bars against their own sub-metrics. ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+            <button className="hgp-priority-card text-left" onClick={() => navigate('/ledger')}>
+              <div className="relative flex items-start justify-between gap-2 p-2.5 sm:p-3 pb-2">
+                <div className="min-w-0">
+                  <div className="hgp-k">Entity Revenue</div>
+                  <div className="text-xl font-black font-mono-tab mt-1 text-positive">{fmtUSD(stats.totalIncome)}</div>
+                  <div className="hgp-sub truncate">{fmtUSD(stats.serviceRevenue)} service · {fmtUSD(stats.emergencyRevenue)} emergency</div>
+                </div>
+                <div className="hgp-priority-spark shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyTrend}>
+                      <defs>
+                        <linearGradient id="hgpRevTrend" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#059669" stopOpacity={0.32} />
+                          <stop offset="95%" stopColor="#059669" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="label" hide /><YAxis hide domain={[0, 'dataMax']} />
+                      <RechartsTooltip cursor={false} formatter={(v: number) => fmtUSD(Number(v))} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+                      <Area type="monotone" dataKey="income" stroke="#059669" fill="url(#hgpRevTrend)" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="hgp-priority-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-foreground/46">8mo trend</span>
+                <span className="text-[9px] font-mono-tab font-semibold text-foreground/66">{fmtUSD(monthlyTrend.at(-1)?.income ?? 0)} this month</span>
+              </div>
+            </button>
+
+            <button className="hgp-priority-card text-left" onClick={() => navigate('/expenses')}>
+              <div className="relative flex items-start justify-between gap-2 p-2.5 sm:p-3 pb-2">
+                <div className="min-w-0">
+                  <div className="hgp-k">Costs Recorded</div>
+                  <div className="text-xl font-black font-mono-tab mt-1 text-destructive">{fmtUSD(stats.totalExpense)}</div>
+                  <div className="hgp-sub truncate">Distributor invoices, parts, labor + cleared checks</div>
+                </div>
+                <div className="hgp-priority-spark shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyTrend}>
+                      <defs>
+                        <linearGradient id="hgpCostTrend" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#dc2626" stopOpacity={0.30} />
+                          <stop offset="95%" stopColor="#dc2626" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="label" hide /><YAxis hide domain={[0, 'dataMax']} />
+                      <RechartsTooltip cursor={false} formatter={(v: number) => fmtUSD(Number(v))} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+                      <Area type="monotone" dataKey="expense" stroke="#dc2626" fill="url(#hgpCostTrend)" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="hgp-priority-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-foreground/46">8mo trend</span>
+                <span className="text-[9px] font-mono-tab font-semibold text-foreground/66">{fmtUSD(monthlyTrend.at(-1)?.expense ?? 0)} this month</span>
+              </div>
+            </button>
+
+            <button className="hgp-priority-card text-left" onClick={() => navigate('/projects')}>
+              <div className="relative flex items-start justify-between gap-2 p-2.5 sm:p-3 pb-2">
+                <div className="min-w-0">
+                  <div className="hgp-k">Inventory + Deposits</div>
+                  <div className="text-xl font-black font-mono-tab mt-1">{stats.onHandCount} units</div>
+                  <div className="hgp-sub truncate">{fmtUSD(stats.inventoryValue)} at cost · {fmtUSD(stats.depositsHeld)} deposits held</div>
+                </div>
+                <div className="hgp-priority-spark shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[{ label: 'At Cost', value: stats.inventoryValue }, { label: 'Deposits', value: stats.depositsHeld }]}>
+                      <XAxis dataKey="label" hide /><YAxis hide />
+                      <RechartsTooltip cursor={false} formatter={(v: number) => fmtUSD(Number(v))} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+                      <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                        <Cell fill="#7c3aed" /><Cell fill="#7c3aed88" />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="hgp-priority-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-foreground/46">On hand</span>
+                <span className="text-[9px] font-mono-tab font-semibold text-foreground/66">{stats.installedCount} installed</span>
+              </div>
+            </button>
+
+            <button className="hgp-priority-card text-left" onClick={() => openVisit()}>
+              <div className="relative flex items-start justify-between gap-2 p-2.5 sm:p-3 pb-2">
+                <div className="min-w-0">
+                  <div className="hgp-k">Dispatch Attention</div>
+                  <div className={`text-xl font-black font-mono-tab mt-1 ${stats.overdueVisits.length ? 'text-destructive' : 'text-positive'}`}>{stats.upcoming.length} visits</div>
+                  <div className="hgp-sub truncate">{stats.overdueVisits.length ? `${stats.overdueVisits.length} overdue` : 'No overdue visits'} · {stats.warrantyExpiring.length} warranties ≤90d</div>
+                </div>
+                <div className="hgp-priority-spark shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[{ label: 'Upcoming', value: stats.upcoming.length }, { label: 'Overdue', value: stats.overdueVisits.length }]}>
+                      <XAxis dataKey="label" hide /><YAxis hide />
+                      <RechartsTooltip cursor={false} formatter={(v: number) => Number(v).toLocaleString()} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+                      <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                        <Cell fill={HGP_BLUE} /><Cell fill={stats.overdueVisits.length ? '#dc2626' : 'hsl(var(--border))'} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="hgp-priority-foot relative px-2.5 sm:px-3 py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-foreground/46">Next 30d</span>
+                <span className="text-[9px] font-mono-tab font-semibold text-foreground/66">{stats.warrantyExpiring.length} warranties ≤90d</span>
+              </div>
+            </button>
           </div>
 
+          {/* ── Optional metric drawer — collapsed by default to keep the HGP
+              overview focused on guided entry, priority work, and schedule. ── */}
+          <section className="space-y-2">
+            <button className="hgp-action !h-9 w-full sm:w-auto justify-center" onClick={() => setKpiCustomOpen(v => !v)}>
+              <Settings2 className="w-3 h-3" /> {kpiCustomOpen ? 'Hide Optional Metrics' : 'Show Optional Metrics'}
+            </button>
+            {kpiCustomOpen && (
+              <div className="hgp-panel p-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 px-1">
+                  <div>
+                    <div className="hgp-k">Optional HGP Metrics</div>
+                    <div className="text-[10px] text-muted-foreground">Choose up to 4 compact cards when you need a deeper snapshot.</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-1.5">
+                  {kpiCards.map(card => {
+                    const selected = selectedKpiIds.includes(card.id);
+                    const disabled = !selected && selectedKpiIds.length >= 4;
+                    return (
+                      <button key={card.id} className={`hgp-action !h-9 justify-between ${selected ? '!border-foreground' : ''}`}
+                        disabled={disabled}
+                        style={selected ? { color: card.color } : disabled ? { opacity: .45 } : undefined}
+                        onClick={() => toggleKpi(card.id)}>
+                        <span className="truncate">{card.label}</span>
+                        {selected && <CheckIcon className="w-3 h-3 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                  {displayKpiCards.map(card => (
+                    <Metric key={card.id} {...card} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* ── Margin by model + upcoming visits ── */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_.85fr] gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_.85fr] gap-4 items-start">
             <section className="hgp-panel p-3 sm:p-4">
               <div className="hgp-k mb-2">Unit Margin by Model</div>
               <div className="overflow-x-auto">
@@ -461,16 +780,16 @@ export default function GeneratorOps() {
             </section>
 
             <section className="hgp-panel p-3 sm:p-4">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                 <div className="hgp-k">Visit Schedule</div>
-                <div className="flex items-center gap-1">
-                  <button className="hgp-action !px-1.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} aria-label="Previous month">
+                <div className="flex items-center gap-1.5">
+                  <button className="hgp-action !h-9 !px-2.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} aria-label="Previous month">
                     <ChevronLeft className="w-3 h-3" />
                   </button>
-                  <button className="hgp-action" onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>
+                  <button className="hgp-action !h-9 flex-1 sm:flex-none justify-center" onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>
                     {calMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </button>
-                  <button className="hgp-action !px-1.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} aria-label="Next month">
+                  <button className="hgp-action !h-9 !px-2.5" onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} aria-label="Next month">
                     <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
@@ -479,7 +798,7 @@ export default function GeneratorOps() {
                 const first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
                 const startPad = first.getDay();
                 const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
-                const todayKey = new Date().toISOString().slice(0, 10);
+                const todayKey = todayLocalDate();
                 const byDay: Record<string, any[]> = {};
                 for (const v of visits as any[]) {
                   if (!v.visit_date) continue;
@@ -494,37 +813,105 @@ export default function GeneratorOps() {
                 const cells = [];
                 for (let i = 0; i < startPad; i++) cells.push(null);
                 for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                const agenda = [
+                  ...Object.entries(byDay).flatMap(([date, rows]) => rows.map(v => ({
+                    id: `v-${v.id}`,
+                    date,
+                    customer: v.customer_name,
+                    detail: `${String(v.visit_type || 'visit').replace(/_/g, ' ')} · ${String(v.status || 'scheduled').replace(/_/g, ' ')}`,
+                    color: v.status === 'cancelled' ? '#8A8580'
+                      : v.visit_type === 'emergency' ? '#dc2626'
+                      : v.status === 'scheduled' ? HGP_BLUE : '#059669',
+                    onClick: () => openVisit({ visit: v }),
+                  }))),
+                  ...Object.entries(ghostByDay).flatMap(([date, rows]) => rows.map(a => ({
+                    id: `g-${a.id}`,
+                    date,
+                    customer: a.customer_name,
+                    detail: `plan visit due · ${fmtUSD(num(a.annual_value))}/yr`,
+                    color: '#d97706',
+                    onClick: () => openVisit(a),
+                  }))),
+                ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
                 return (
                   <>
-                    <div className="grid grid-cols-7 gap-px text-center mb-0.5">
+                    <div className="sm:hidden mb-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="hgp-k">Mobile Agenda</div>
+                          <div className="text-[10px] text-muted-foreground">Next visits and due service plans</div>
+                        </div>
+                        <button className="hgp-action !h-9 shrink-0" onClick={() => openVisit({ date: todayKey })}>Add Visit</button>
+                      </div>
+                      {agenda.map(item => {
+                        const d = new Date(`${item.date}T12:00:00`);
+                        return (
+                          <button key={item.id} className="hgp-agenda-card" onClick={item.onClick}>
+                            <div className="hgp-agenda-date">
+                              {d.toLocaleDateString('en-US', { month: 'short' })}<br />{d.getDate()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-black truncate">{item.customer}</div>
+                              <div className="text-[10px] capitalize text-muted-foreground truncate">{item.detail}</div>
+                            </div>
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                          </button>
+                        );
+                      })}
+                      {!agenda.length && (
+                        <button className="hgp-agenda-card" onClick={() => openVisit({ date: todayKey })}>
+                          <div className="hgp-agenda-date">Open</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-black">No scheduled visits this month</div>
+                            <div className="text-[10px] text-muted-foreground">Tap to add the next generator service visit.</div>
+                          </div>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="hgp-agenda-card justify-center !min-h-[38px] text-[10px] font-black uppercase tracking-[0.12em] text-foreground/70"
+                        onClick={() => setMobileCalendarOpen(v => !v)}
+                        aria-expanded={mobileCalendarOpen}
+                      >
+                        <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                        {mobileCalendarOpen ? 'Hide Full Calendar' : 'Show Full Calendar'}
+                        {mobileCalendarOpen ? <ChevronUp className="w-3.5 h-3.5 shrink-0 ml-1" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0 ml-1" />}
+                      </button>
+                    </div>
+                    {/* Full month grid: collapsed by default on mobile (the
+                        agenda above covers day-to-day management), always
+                        shown on sm+ where there's room for it. */}
+                    <div className={`${mobileCalendarOpen ? 'block' : 'hidden'} sm:block`}>
+                    <div className="hgp-calendar-scroll">
+                    <div className="grid hgp-calendar gap-px text-center mb-0.5">
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => (
-                        <div key={i} className="text-[7px] font-black uppercase text-muted-foreground py-0.5">{w}</div>
+                        <div key={i} className="text-[9px] font-black uppercase text-muted-foreground py-1">{w}</div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-7 gap-px bg-border/60 border border-border">
+                    <div className="grid hgp-calendar gap-px bg-border/60 border border-border">
                       {cells.map((d, i) => {
-                        if (d === null) return <div key={`p${i}`} className="bg-secondary/20 min-h-[52px]" />;
+                        if (d === null) return <div key={`p${i}`} className="bg-secondary/20 hgp-day" />;
                         const key = `${calMonth.getFullYear()}-${String(calMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                         const dayVisits = byDay[key] ?? [];
                         const ghosts = ghostByDay[key] ?? [];
                         const isToday = key === todayKey;
                         return (
                           <div key={key}
-                            className="bg-background min-h-[52px] p-0.5 cursor-pointer hover:bg-secondary/30 transition-colors min-w-0"
+                            className="hgp-day bg-background cursor-pointer hover:bg-secondary/30 transition-colors min-w-0"
                             style={isToday ? { boxShadow: `inset 0 0 0 1.5px ${HGP_BLUE}` } : undefined}
                             onClick={() => openVisit({ date: key })}
                             title={`Schedule a visit on ${key}`}>
-                            <div className={`text-[8px] font-bold px-0.5 ${isToday ? '' : 'text-muted-foreground'}`}
+                            <div className={`text-[10px] font-black px-0.5 mb-1 ${isToday ? '' : 'text-muted-foreground'}`}
                               style={isToday ? { color: HGP_BLUE } : undefined}>{d}</div>
-                            <div className="space-y-px">
+                            <div className="space-y-1">
                               {dayVisits.slice(0, 3).map(v => {
                                 const color = v.status === 'cancelled' ? '#8A8580'
                                   : v.visit_type === 'emergency' ? '#dc2626'
                                   : v.status === 'scheduled' ? HGP_BLUE : '#059669';
                                 return (
                                   <button key={v.id} type="button"
-                                    className={`block w-full text-left text-[7px] font-bold leading-tight px-0.5 truncate ${v.status === 'cancelled' ? 'line-through opacity-60' : ''}`}
-                                    style={{ backgroundColor: color + '1a', color }}
+                                    className={`hgp-visit-chip ${v.status === 'cancelled' ? 'line-through opacity-60' : ''}`}
+                                    style={{ backgroundColor: color + '16', color, borderColor: color + '30' }}
                                     onClick={e => { e.stopPropagation(); openVisit({ visit: v }); }}
                                     title={`${v.customer_name} · ${v.visit_type} · ${v.status}`}>
                                     {v.customer_name}
@@ -533,27 +920,29 @@ export default function GeneratorOps() {
                               })}
                               {ghosts.slice(0, 2).map(a => (
                                 <button key={`g${a.id}`} type="button"
-                                  className="block w-full text-left text-[7px] font-bold leading-tight px-0.5 truncate border border-dashed"
-                                  style={{ borderColor: '#d97706aa', color: '#d97706' }}
+                                  className="hgp-visit-chip border-dashed"
+                                  style={{ borderColor: '#d97706aa', color: '#d97706', backgroundColor: '#d9770610' }}
                                   onClick={e => { e.stopPropagation(); openVisit(a); }}
                                   title={`${a.customer_name} — plan visit due, click to schedule`}>
                                   {a.customer_name}
                                 </button>
                               ))}
                               {dayVisits.length > 3 && (
-                                <div className="text-[6.5px] text-muted-foreground px-0.5">+{dayVisits.length - 3} more</div>
+                                <div className="text-[9px] text-muted-foreground px-1">+{dayVisits.length - 3} more</div>
                               )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                    <div className="flex flex-wrap gap-2.5 mt-1.5 text-[7px] font-bold uppercase tracking-wide text-muted-foreground">
+                    </div>
+                    <div className="flex flex-wrap gap-2.5 mt-2 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
                       <span><span className="inline-block w-1.5 h-1.5 mr-1" style={{ background: HGP_BLUE }} />Scheduled</span>
                       <span><span className="inline-block w-1.5 h-1.5 mr-1 bg-[#059669]" />Completed</span>
                       <span><span className="inline-block w-1.5 h-1.5 mr-1 bg-[#dc2626]" />Emergency</span>
                       <span><span className="inline-block w-1.5 h-1.5 mr-1 border border-dashed border-[#d97706]" />Plan due</span>
-                      <span className="ml-auto normal-case font-medium">Click a day to schedule · click a chip to edit</span>
+                      <span className="w-full sm:w-auto sm:ml-auto normal-case font-medium">Tap a day to schedule · tap a chip to edit</span>
+                    </div>
                     </div>
                   </>
                 );
@@ -600,19 +989,33 @@ export default function GeneratorOps() {
 
           {/* ── Equipment inventory ── */}
           <section className="hgp-panel p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-3">
               <div>
                 <div className="hgp-k">Equipment Inventory</div>
                 <h2 className="text-base font-bold mt-0.5">Generator Units</h2>
+                <div className="text-[10px] text-muted-foreground mt-1">{filteredUnits.length} matching units · page {safeUnitPage} of {unitPageCount}</div>
               </div>
-              <button className="hgp-action" onClick={() => openUnit()}><Plus className="w-3 h-3" /> Add Unit</button>
+              <div className="flex flex-col sm:flex-row gap-2 lg:justify-end">
+                <div className="relative min-w-[220px]">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input className="hgp-field pl-8" placeholder="Search model, serial, customer…" value={unitSearch} onChange={e => { setUnitSearch(e.target.value); setUnitPage(1); }} />
+                </div>
+                <Select value={unitStatus} onValueChange={v => { setUnitStatus(v); setUnitPage(1); }}>
+                  <SelectTrigger className="hgp-field sm:w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {Object.entries(UNIT_STATUS).map(([k, m]) => <SelectItem key={k} value={k}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <button className="hgp-action !h-[38px]" onClick={() => openUnit()}><Plus className="w-3 h-3" /> Add Unit</button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[860px]">
                 <div className="hgp-row grid grid-cols-[1.3fr_.9fr_.5fr_.7fr_.7fr_.7fr_.9fr_.9fr_.5fr] gap-2 bg-secondary/45 hgp-k items-center">
                   <div>Model</div><div>Serial</div><div>kW</div><div>Status</div><div>Cost</div><div>Price</div><div>Customer</div><div>Warranty</div><div></div>
                 </div>
-                {(units as any[]).map(u => {
+                {pagedUnits.map(u => {
                   const wd = daysUntil(u.warranty_end);
                   return (
                     <div key={u.id} className="hgp-row grid grid-cols-[1.3fr_.9fr_.5fr_.7fr_.7fr_.7fr_.9fr_.9fr_.5fr] gap-2 items-center">
@@ -639,8 +1042,25 @@ export default function GeneratorOps() {
                 {!unitsLoading && !(units as any[]).length && (
                   <div className="py-10 text-center text-xs text-muted-foreground">No generator units yet — add your first unit to start tracking inventory and COGS.</div>
                 )}
+                {!unitsLoading && !!(units as any[]).length && !filteredUnits.length && (
+                  <div className="py-10 text-center text-xs text-muted-foreground">No units match this search/filter.</div>
+                )}
               </div>
             </div>
+            {filteredUnits.length > unitPageSize && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 mt-3 border-t border-border">
+                <div className="text-[10px] text-muted-foreground font-mono-tab">
+                  Showing {(safeUnitPage - 1) * unitPageSize + 1}-{Math.min(safeUnitPage * unitPageSize, filteredUnits.length)} of {filteredUnits.length}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button className="hgp-page-btn" onClick={() => setUnitPage(1)} disabled={safeUnitPage === 1}>First</button>
+                  <button className="hgp-page-btn" onClick={() => setUnitPage(p => Math.max(1, p - 1))} disabled={safeUnitPage === 1}>Prev</button>
+                  <span className="px-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Page {safeUnitPage}/{unitPageCount}</span>
+                  <button className="hgp-page-btn" onClick={() => setUnitPage(p => Math.min(unitPageCount, p + 1))} disabled={safeUnitPage === unitPageCount}>Next</button>
+                  <button className="hgp-page-btn" onClick={() => setUnitPage(unitPageCount)} disabled={safeUnitPage === unitPageCount}>Last</button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* ── Service agreements ── */}

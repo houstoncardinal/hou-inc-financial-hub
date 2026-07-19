@@ -109,7 +109,7 @@ export function QuickCreateSelect({
               <div className="border-t border-border p-1.5">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:bg-[#f7f3ea] dark:hover:bg-white/10"
+                  className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:bg-secondary"
                   onClick={() => {
                     setShowCreate(true);
                     setOpen(false);
@@ -123,7 +123,7 @@ export function QuickCreateSelect({
           </PopoverContent>
         </Popover>
       ) : (
-        <div className="border border-[#eadfce] bg-[#fbf8f2] p-3 space-y-2.5 dark:border-white/15 dark:bg-white/5">
+        <div className="border border-border bg-secondary/40 p-3 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <Plus className="w-3 h-3 text-foreground" />

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { generateGlossaryPDF, savePDF } from '@/lib/reports';
 import { Search, BookMarked, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { todayLocalDate } from '@/lib/format';
 
 type Category =
   | 'Foundation'
@@ -512,7 +513,7 @@ export default function Glossary() {
 
   const handleDownload = () => {
     const doc = generateGlossaryPDF(TERMS);
-    savePDF(doc, `hou-inc-glossary-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-inc-glossary-${todayLocalDate()}.pdf`);
     toast.success('Glossary exported as PDF');
   };
 

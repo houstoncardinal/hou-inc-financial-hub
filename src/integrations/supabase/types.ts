@@ -39,6 +39,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounting_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          entity_id: string
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          notes: string | null
+          period_key: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          entity_id?: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          notes?: string | null
+          period_key: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          entity_id?: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          notes?: string | null
+          period_key?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_changelog: {
         Row: {
           action: string
@@ -72,6 +117,69 @@ export type Database = {
           entity_id?: string | null
           entity_label?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      admin_help_requests: {
+        Row: {
+          category: string
+          created_at: string
+          entity_id: string | null
+          id: string
+          message: string
+          page_path: string | null
+          page_title: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          screenshot_path: string | null
+          status: string
+          updated_at: string
+          user_email: string
+          user_id: string
+          user_name: string | null
+          user_role: string | null
+          viewport: Json | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          message: string
+          page_path?: string | null
+          page_title?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: string
+          updated_at?: string
+          user_email: string
+          user_id: string
+          user_name?: string | null
+          user_role?: string | null
+          viewport?: Json | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          message?: string
+          page_path?: string | null
+          page_title?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          screenshot_path?: string | null
+          status?: string
+          updated_at?: string
+          user_email?: string
+          user_id?: string
+          user_name?: string | null
+          user_role?: string | null
+          viewport?: Json | null
         }
         Relationships: []
       }
@@ -1576,6 +1684,177 @@ export type Database = {
           },
         ]
       }
+      finance_client_accounts: {
+        Row: {
+          billing_address: string | null
+          city: string | null
+          client_type: string
+          company: string | null
+          construction_scope: string | null
+          county: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          entity_id: string
+          fuel_type: string | null
+          generator_model: string | null
+          generator_serial: string | null
+          hgp_equipment_unit_id: string | null
+          hgp_service_agreement_id: string | null
+          hgp_site_id: string | null
+          id: string
+          install_status: string | null
+          kw_rating: number | null
+          last_visit_date: string | null
+          latitude: number | null
+          lifetime_revenue: number
+          longitude: number | null
+          metadata: Json
+          name: string
+          next_visit_date: string | null
+          notes: string | null
+          open_balance: number
+          phone: string | null
+          preferred_contact_method: string | null
+          project_id: string | null
+          project_stage: string | null
+          property_type: string | null
+          secondary_phone: string | null
+          site_address: string | null
+          state: string
+          status: string
+          tags: string[]
+          updated_at: string
+          user_id: string
+          utility_provider: string | null
+          zip: string | null
+        }
+        Insert: {
+          billing_address?: string | null
+          city?: string | null
+          client_type?: string
+          company?: string | null
+          construction_scope?: string | null
+          county?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          entity_id: string
+          fuel_type?: string | null
+          generator_model?: string | null
+          generator_serial?: string | null
+          hgp_equipment_unit_id?: string | null
+          hgp_service_agreement_id?: string | null
+          hgp_site_id?: string | null
+          id?: string
+          install_status?: string | null
+          kw_rating?: number | null
+          last_visit_date?: string | null
+          latitude?: number | null
+          lifetime_revenue?: number
+          longitude?: number | null
+          metadata?: Json
+          name: string
+          next_visit_date?: string | null
+          notes?: string | null
+          open_balance?: number
+          phone?: string | null
+          preferred_contact_method?: string | null
+          project_id?: string | null
+          project_stage?: string | null
+          property_type?: string | null
+          secondary_phone?: string | null
+          site_address?: string | null
+          state?: string
+          status?: string
+          tags?: string[]
+          updated_at?: string
+          user_id: string
+          utility_provider?: string | null
+          zip?: string | null
+        }
+        Update: {
+          billing_address?: string | null
+          city?: string | null
+          client_type?: string
+          company?: string | null
+          construction_scope?: string | null
+          county?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          entity_id?: string
+          fuel_type?: string | null
+          generator_model?: string | null
+          generator_serial?: string | null
+          hgp_equipment_unit_id?: string | null
+          hgp_service_agreement_id?: string | null
+          hgp_site_id?: string | null
+          id?: string
+          install_status?: string | null
+          kw_rating?: number | null
+          last_visit_date?: string | null
+          latitude?: number | null
+          lifetime_revenue?: number
+          longitude?: number | null
+          metadata?: Json
+          name?: string
+          next_visit_date?: string | null
+          notes?: string | null
+          open_balance?: number
+          phone?: string | null
+          preferred_contact_method?: string | null
+          project_id?: string | null
+          project_stage?: string | null
+          property_type?: string | null
+          secondary_phone?: string | null
+          site_address?: string | null
+          state?: string
+          status?: string
+          tags?: string[]
+          updated_at?: string
+          user_id?: string
+          utility_provider?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_client_accounts_hgp_equipment_unit_id_fkey"
+            columns: ["hgp_equipment_unit_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_equipment_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_client_accounts_hgp_service_agreement_id_fkey"
+            columns: ["hgp_service_agreement_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_service_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_client_accounts_hgp_site_id_fkey"
+            columns: ["hgp_site_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_customer_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_client_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "finance_project_control_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "finance_client_accounts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_commitments: {
         Row: {
           approved_change_amount: number
@@ -2291,6 +2570,194 @@ export type Database = {
           },
         ]
       }
+      fixed_assets: {
+        Row: {
+          acquisition_date: string
+          asset_category: string
+          asset_name: string
+          asset_tag: string | null
+          cost_basis: number
+          created_at: string
+          deleted_at: string | null
+          depreciation_method: string
+          disposal_amount: number | null
+          disposal_date: string | null
+          entity_id: string
+          id: string
+          notes: string | null
+          placed_in_service_date: string
+          project_id: string | null
+          salvage_value: number
+          status: string
+          updated_at: string
+          useful_life_years: number
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          acquisition_date: string
+          asset_category?: string
+          asset_name: string
+          asset_tag?: string | null
+          cost_basis: number
+          created_at?: string
+          deleted_at?: string | null
+          depreciation_method?: string
+          disposal_amount?: number | null
+          disposal_date?: string | null
+          entity_id?: string
+          id?: string
+          notes?: string | null
+          placed_in_service_date: string
+          project_id?: string | null
+          salvage_value?: number
+          status?: string
+          updated_at?: string
+          useful_life_years: number
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          acquisition_date?: string
+          asset_category?: string
+          asset_name?: string
+          asset_tag?: string | null
+          cost_basis?: number
+          created_at?: string
+          deleted_at?: string | null
+          depreciation_method?: string
+          disposal_amount?: number | null
+          disposal_date?: string | null
+          entity_id?: string
+          id?: string
+          notes?: string | null
+          placed_in_service_date?: string
+          project_id?: string | null
+          salvage_value?: number
+          status?: string
+          updated_at?: string
+          useful_life_years?: number
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "finance_project_control_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_customer_sites: {
+        Row: {
+          agreement_id: string | null
+          city: string | null
+          county: string | null
+          created_at: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          deleted_at: string | null
+          entity_id: string
+          equipment_unit_id: string | null
+          finance_client_id: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          metadata: Json
+          notes: string | null
+          site_address: string | null
+          updated_at: string
+          user_id: string
+          utility_provider: string | null
+          zip: string | null
+        }
+        Insert: {
+          agreement_id?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          deleted_at?: string | null
+          entity_id?: string
+          equipment_unit_id?: string | null
+          finance_client_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          metadata?: Json
+          notes?: string | null
+          site_address?: string | null
+          updated_at?: string
+          user_id: string
+          utility_provider?: string | null
+          zip?: string | null
+        }
+        Update: {
+          agreement_id?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          deleted_at?: string | null
+          entity_id?: string
+          equipment_unit_id?: string | null
+          finance_client_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          metadata?: Json
+          notes?: string | null
+          site_address?: string | null
+          updated_at?: string
+          user_id?: string
+          utility_provider?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_customer_sites_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_service_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_customer_sites_equipment_unit_id_fkey"
+            columns: ["equipment_unit_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_equipment_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_customer_sites_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hgp_equipment_units: {
         Row: {
           created_at: string
@@ -2310,6 +2777,7 @@ export type Database = {
           notes: string | null
           permit_number: string | null
           permit_status: string | null
+          po_id: string | null
           project_id: string | null
           purchase_date: string | null
           sale_price: number | null
@@ -2339,6 +2807,7 @@ export type Database = {
           notes?: string | null
           permit_number?: string | null
           permit_status?: string | null
+          po_id?: string | null
           project_id?: string | null
           purchase_date?: string | null
           sale_price?: number | null
@@ -2368,6 +2837,7 @@ export type Database = {
           notes?: string | null
           permit_number?: string | null
           permit_status?: string | null
+          po_id?: string | null
           project_id?: string | null
           purchase_date?: string | null
           sale_price?: number | null
@@ -2380,6 +2850,13 @@ export type Database = {
           warranty_end?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "hgp_equipment_units_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_purchase_orders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "hgp_equipment_units_project_id_fkey"
             columns: ["project_id"]
@@ -2396,6 +2873,628 @@ export type Database = {
           },
           {
             foreignKeyName: "hgp_equipment_units_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_inventory_movements: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          equipment_unit_id: string | null
+          id: string
+          job_id: string | null
+          memo: string | null
+          metadata: Json
+          movement_type: string
+          part_id: string | null
+          quantity: number
+          total_cost: number | null
+          unit_cost: number | null
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+          visit_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          equipment_unit_id?: string | null
+          id?: string
+          job_id?: string | null
+          memo?: string | null
+          metadata?: Json
+          movement_type: string
+          part_id?: string | null
+          quantity?: number
+          total_cost?: number | null
+          unit_cost?: number | null
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+          visit_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          equipment_unit_id?: string | null
+          id?: string
+          job_id?: string | null
+          memo?: string | null
+          metadata?: Json
+          movement_type?: string
+          part_id?: string | null
+          quantity?: number
+          total_cost?: number | null
+          unit_cost?: number | null
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+          visit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_inventory_movements_equipment_unit_id_fkey"
+            columns: ["equipment_unit_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_equipment_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_inventory_movements_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_inventory_movements_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_parts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_inventory_movements_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_inventory_movements_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_service_visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_job_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          job_id: string
+          memo: string | null
+          method: string
+          payment_date: string
+          payment_type: string
+          reference: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          job_id: string
+          memo?: string | null
+          method?: string
+          payment_date?: string
+          payment_type?: string
+          reference?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          job_id?: string
+          memo?: string | null
+          method?: string
+          payment_date?: string
+          payment_type?: string
+          reference?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_job_payments_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_jobs: {
+        Row: {
+          city: string | null
+          completed_date: string | null
+          county: string | null
+          created_at: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          deleted_at: string | null
+          deposit_amount: number
+          dispatch_status: string
+          emergency: boolean
+          entity_id: string
+          equipment_cost: number
+          equipment_status: string
+          equipment_unit_id: string | null
+          finance_client_id: string | null
+          fuel_type: string
+          generator_model: string | null
+          id: string
+          inspection_status: string
+          job_type: string
+          kw_rating: number | null
+          labor_cost: number
+          latitude: number | null
+          longitude: number | null
+          maintenance_enrolled: boolean
+          materials_cost: number
+          metadata: Json
+          notes: string | null
+          outage_event_id: string | null
+          permit_cost: number
+          permit_status: string
+          quoted_amount: number
+          serial_number: string | null
+          site_address: string | null
+          stage: string
+          subcontractor_cost: number
+          target_install_date: string | null
+          technician: string | null
+          transfer_switch: string | null
+          updated_at: string
+          user_id: string
+          utility_provider: string | null
+          vendor_id: string | null
+          warranty_status: string | null
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          completed_date?: string | null
+          county?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          deleted_at?: string | null
+          deposit_amount?: number
+          dispatch_status?: string
+          emergency?: boolean
+          entity_id?: string
+          equipment_cost?: number
+          equipment_status?: string
+          equipment_unit_id?: string | null
+          finance_client_id?: string | null
+          fuel_type?: string
+          generator_model?: string | null
+          id?: string
+          inspection_status?: string
+          job_type?: string
+          kw_rating?: number | null
+          labor_cost?: number
+          latitude?: number | null
+          longitude?: number | null
+          maintenance_enrolled?: boolean
+          materials_cost?: number
+          metadata?: Json
+          notes?: string | null
+          outage_event_id?: string | null
+          permit_cost?: number
+          permit_status?: string
+          quoted_amount?: number
+          serial_number?: string | null
+          site_address?: string | null
+          stage?: string
+          subcontractor_cost?: number
+          target_install_date?: string | null
+          technician?: string | null
+          transfer_switch?: string | null
+          updated_at?: string
+          user_id: string
+          utility_provider?: string | null
+          vendor_id?: string | null
+          warranty_status?: string | null
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          completed_date?: string | null
+          county?: string | null
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          deleted_at?: string | null
+          deposit_amount?: number
+          dispatch_status?: string
+          emergency?: boolean
+          entity_id?: string
+          equipment_cost?: number
+          equipment_status?: string
+          equipment_unit_id?: string | null
+          finance_client_id?: string | null
+          fuel_type?: string
+          generator_model?: string | null
+          id?: string
+          inspection_status?: string
+          job_type?: string
+          kw_rating?: number | null
+          labor_cost?: number
+          latitude?: number | null
+          longitude?: number | null
+          maintenance_enrolled?: boolean
+          materials_cost?: number
+          metadata?: Json
+          notes?: string | null
+          outage_event_id?: string | null
+          permit_cost?: number
+          permit_status?: string
+          quoted_amount?: number
+          serial_number?: string | null
+          site_address?: string | null
+          stage?: string
+          subcontractor_cost?: number
+          target_install_date?: string | null
+          technician?: string | null
+          transfer_switch?: string | null
+          updated_at?: string
+          user_id?: string
+          utility_provider?: string | null
+          vendor_id?: string | null
+          warranty_status?: string | null
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_jobs_equipment_unit_id_fkey"
+            columns: ["equipment_unit_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_equipment_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_jobs_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_jobs_outage_event_id_fkey"
+            columns: ["outage_event_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_outage_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_jobs_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_outage_events: {
+        Row: {
+          affected_customers: number
+          cause: string | null
+          city: string | null
+          county: string | null
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          estimated_restoration_at: string | null
+          external_outage_id: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          metadata: Json
+          outage_started_at: string | null
+          provider: string
+          resolved_at: string | null
+          source_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          zip: string | null
+        }
+        Insert: {
+          affected_customers?: number
+          cause?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          estimated_restoration_at?: string | null
+          external_outage_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          metadata?: Json
+          outage_started_at?: string | null
+          provider: string
+          resolved_at?: string | null
+          source_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          zip?: string | null
+        }
+        Update: {
+          affected_customers?: number
+          cause?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          estimated_restoration_at?: string | null
+          external_outage_id?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          metadata?: Json
+          outage_started_at?: string | null
+          provider?: string
+          resolved_at?: string | null
+          source_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_outage_events_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_outage_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_outage_impacts: {
+        Row: {
+          created_at: string
+          entity_id: string
+          id: string
+          match_basis: string
+          notes: string | null
+          outage_event_id: string
+          outreach_status: string
+          site_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string
+          id?: string
+          match_basis?: string
+          notes?: string | null
+          outage_event_id: string
+          outreach_status?: string
+          site_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          id?: string
+          match_basis?: string
+          notes?: string | null
+          outage_event_id?: string
+          outreach_status?: string
+          site_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_outage_impacts_outage_event_id_fkey"
+            columns: ["outage_event_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_outage_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hgp_outage_impacts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_customer_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_outage_sources: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          metadata: Json
+          polling_interval_minutes: number | null
+          provider: string
+          source_type: string
+          source_url: string | null
+          terms_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          metadata?: Json
+          polling_interval_minutes?: number | null
+          provider: string
+          source_type?: string
+          source_url?: string | null
+          terms_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          metadata?: Json
+          polling_interval_minutes?: number | null
+          provider?: string
+          source_type?: string
+          source_url?: string | null
+          terms_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hgp_parts: {
+        Row: {
+          category: string
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          location: string | null
+          metadata: Json
+          name: string
+          notes: string | null
+          qty_on_hand: number
+          reorder_point: number
+          reorder_qty: number | null
+          sku: string | null
+          unit_cost: number
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          location?: string | null
+          metadata?: Json
+          name: string
+          notes?: string | null
+          qty_on_hand?: number
+          reorder_point?: number
+          reorder_qty?: number | null
+          sku?: string | null
+          unit_cost?: number
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          location?: string | null
+          metadata?: Json
+          name?: string
+          notes?: string | null
+          qty_on_hand?: number
+          reorder_point?: number
+          reorder_qty?: number | null
+          sku?: string | null
+          unit_cost?: number
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_parts_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hgp_purchase_orders: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          memo: string | null
+          order_date: string
+          po_number: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          memo?: string | null
+          order_date?: string
+          po_number?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          memo?: string | null
+          order_date?: string
+          po_number?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hgp_purchase_orders_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
@@ -2489,9 +3588,11 @@ export type Database = {
           deleted_at: string | null
           entity_id: string
           equipment_unit_id: string | null
+          finance_client_id: string | null
           id: string
           labor_hours: number
           revenue: number
+          status: string
           summary: string | null
           technician: string | null
           updated_at: string
@@ -2507,9 +3608,11 @@ export type Database = {
           deleted_at?: string | null
           entity_id?: string
           equipment_unit_id?: string | null
+          finance_client_id?: string | null
           id?: string
           labor_hours?: number
           revenue?: number
+          status?: string
           summary?: string | null
           technician?: string | null
           updated_at?: string
@@ -2525,9 +3628,11 @@ export type Database = {
           deleted_at?: string | null
           entity_id?: string
           equipment_unit_id?: string | null
+          finance_client_id?: string | null
           id?: string
           labor_hours?: number
           revenue?: number
+          status?: string
           summary?: string | null
           technician?: string | null
           updated_at?: string
@@ -2550,6 +3655,13 @@ export type Database = {
             referencedRelation: "hgp_equipment_units"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "hgp_service_visits_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       holdings_capital_activity: {
@@ -2557,6 +3669,10 @@ export type Database = {
           activity_date: string
           activity_type: string
           amount: number
+          approval_notes: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           deleted_at: string | null
           entity_id: string
@@ -2570,6 +3686,10 @@ export type Database = {
           activity_date?: string
           activity_type: string
           amount: number
+          approval_notes?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           deleted_at?: string | null
           entity_id?: string
@@ -2583,6 +3703,10 @@ export type Database = {
           activity_date?: string
           activity_type?: string
           amount?: number
+          approval_notes?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           deleted_at?: string | null
           entity_id?: string
@@ -2593,6 +3717,68 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      holdings_covenants: {
+        Row: {
+          covenant_type: string
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          last_reviewed_date: string | null
+          metadata: Json
+          name: string
+          next_review_date: string | null
+          note_id: string | null
+          notes: string | null
+          requirement: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          covenant_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          last_reviewed_date?: string | null
+          metadata?: Json
+          name: string
+          next_review_date?: string | null
+          note_id?: string | null
+          notes?: string | null
+          requirement?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          covenant_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          last_reviewed_date?: string | null
+          metadata?: Json
+          name?: string
+          next_review_date?: string | null
+          note_id?: string | null
+          notes?: string | null
+          requirement?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holdings_covenants_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "holdings_notes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       holdings_note_payments: {
         Row: {
@@ -2728,9 +3914,12 @@ export type Database = {
           created_at: string
           due_date: string
           entity_id: string
+          external_invoice_label: string | null
           external_invoice_number: string | null
           external_invoice_provider: string | null
           external_invoice_url: string | null
+          finance_client_id: string | null
+          hgp_job_id: string | null
           id: string
           internal_memo: string | null
           invoice_number: string
@@ -2767,9 +3956,12 @@ export type Database = {
           created_at?: string
           due_date?: string
           entity_id?: string
+          external_invoice_label?: string | null
           external_invoice_number?: string | null
           external_invoice_provider?: string | null
           external_invoice_url?: string | null
+          finance_client_id?: string | null
+          hgp_job_id?: string | null
           id?: string
           internal_memo?: string | null
           invoice_number: string
@@ -2806,9 +3998,12 @@ export type Database = {
           created_at?: string
           due_date?: string
           entity_id?: string
+          external_invoice_label?: string | null
           external_invoice_number?: string | null
           external_invoice_provider?: string | null
           external_invoice_url?: string | null
+          finance_client_id?: string | null
+          hgp_job_id?: string | null
           id?: string
           internal_memo?: string | null
           invoice_number?: string
@@ -2840,6 +4035,20 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "portal_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_hgp_job_id_fkey"
+            columns: ["hgp_job_id"]
+            isOneToOne: false
+            referencedRelation: "hgp_jobs"
             referencedColumns: ["id"]
           },
           {
@@ -3447,6 +4656,388 @@ export type Database = {
         }
         Relationships: []
       }
+      procurement_material_requirements: {
+        Row: {
+          category: string
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          material_name: string
+          metadata: Json
+          normalized_material: string | null
+          notes: string | null
+          priority: string
+          project_id: string | null
+          quantity: number
+          required_by: string | null
+          scope_item_id: string | null
+          status: string
+          target_unit_price: number | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          material_name: string
+          metadata?: Json
+          normalized_material?: string | null
+          notes?: string | null
+          priority?: string
+          project_id?: string | null
+          quantity?: number
+          required_by?: string | null
+          scope_item_id?: string | null
+          status?: string
+          target_unit_price?: number | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          material_name?: string
+          metadata?: Json
+          normalized_material?: string | null
+          notes?: string | null
+          priority?: string
+          project_id?: string | null
+          quantity?: number
+          required_by?: string | null
+          scope_item_id?: string | null
+          status?: string
+          target_unit_price?: number | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_material_requirements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "finance_project_control_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "procurement_material_requirements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_material_requirements_scope_item_id_fkey"
+            columns: ["scope_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procurement_price_quotes: {
+        Row: {
+          captured_at: string
+          category: string | null
+          confidence: number
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          expires_at: string | null
+          id: string
+          material_name: string
+          metadata: Json
+          min_quantity: number
+          normalized_material: string | null
+          quote_source: string
+          quote_url: string | null
+          raw_excerpt: string | null
+          supplier_source_id: string | null
+          unit: string
+          unit_price: number
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          captured_at?: string
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          expires_at?: string | null
+          id?: string
+          material_name: string
+          metadata?: Json
+          min_quantity?: number
+          normalized_material?: string | null
+          quote_source?: string
+          quote_url?: string | null
+          raw_excerpt?: string | null
+          supplier_source_id?: string | null
+          unit?: string
+          unit_price: number
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          captured_at?: string
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          expires_at?: string | null
+          id?: string
+          material_name?: string
+          metadata?: Json
+          min_quantity?: number
+          normalized_material?: string | null
+          quote_source?: string
+          quote_url?: string | null
+          raw_excerpt?: string | null
+          supplier_source_id?: string | null
+          unit?: string
+          unit_price?: number
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_price_quotes_supplier_source_id_fkey"
+            columns: ["supplier_source_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_supplier_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_price_quotes_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procurement_rfq_batches: {
+        Row: {
+          awarded_supplier_source_id: string | null
+          created_at: string
+          deleted_at: string | null
+          due_date: string | null
+          entity_id: string
+          estimated_savings: number
+          id: string
+          metadata: Json
+          notes: string | null
+          project_count: number
+          rfq_number: string
+          sent_at: string | null
+          status: string
+          supplier_count: number
+          title: string
+          total_estimated_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          awarded_supplier_source_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          due_date?: string | null
+          entity_id?: string
+          estimated_savings?: number
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          project_count?: number
+          rfq_number: string
+          sent_at?: string | null
+          status?: string
+          supplier_count?: number
+          title: string
+          total_estimated_cost?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          awarded_supplier_source_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          due_date?: string | null
+          entity_id?: string
+          estimated_savings?: number
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          project_count?: number
+          rfq_number?: string
+          sent_at?: string | null
+          status?: string
+          supplier_count?: number
+          title?: string
+          total_estimated_cost?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_rfq_batches_awarded_supplier_source_id_fkey"
+            columns: ["awarded_supplier_source_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_supplier_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procurement_rfq_lines: {
+        Row: {
+          best_supplier_name: string | null
+          best_unit_price: number | null
+          category: string | null
+          created_at: string
+          entity_id: string
+          estimated_line_cost: number
+          estimated_line_savings: number
+          id: string
+          material_name: string
+          metadata: Json
+          normalized_material: string
+          project_count: number
+          requirement_ids: string[]
+          rfq_batch_id: string
+          target_unit_price: number | null
+          total_quantity: number
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          best_supplier_name?: string | null
+          best_unit_price?: number | null
+          category?: string | null
+          created_at?: string
+          entity_id?: string
+          estimated_line_cost?: number
+          estimated_line_savings?: number
+          id?: string
+          material_name: string
+          metadata?: Json
+          normalized_material: string
+          project_count?: number
+          requirement_ids?: string[]
+          rfq_batch_id: string
+          target_unit_price?: number | null
+          total_quantity?: number
+          unit?: string
+          user_id: string
+        }
+        Update: {
+          best_supplier_name?: string | null
+          best_unit_price?: number | null
+          category?: string | null
+          created_at?: string
+          entity_id?: string
+          estimated_line_cost?: number
+          estimated_line_savings?: number
+          id?: string
+          material_name?: string
+          metadata?: Json
+          normalized_material?: string
+          project_count?: number
+          requirement_ids?: string[]
+          rfq_batch_id?: string
+          target_unit_price?: number | null
+          total_quantity?: number
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_rfq_lines_rfq_batch_id_fkey"
+            columns: ["rfq_batch_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_rfq_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procurement_supplier_sources: {
+        Row: {
+          active: boolean
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          id: string
+          last_scraped_at: string | null
+          metadata: Json
+          preferred_categories: string[]
+          source_type: string
+          source_url: string | null
+          supplier_name: string
+          terms_notes: string | null
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          last_scraped_at?: string | null
+          metadata?: Json
+          preferred_categories?: string[]
+          source_type?: string
+          source_url?: string | null
+          supplier_name: string
+          terms_notes?: string | null
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          id?: string
+          last_scraped_at?: string | null
+          metadata?: Json
+          preferred_categories?: string[]
+          source_type?: string
+          source_url?: string | null
+          supplier_name?: string
+          terms_notes?: string | null
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_supplier_sources_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -3982,6 +5573,7 @@ export type Database = {
           department: string | null
           entity_id: string
           estimated_cost_to_complete: number
+          finance_client_id: string | null
           id: string
           location: string | null
           name: string
@@ -4004,6 +5596,7 @@ export type Database = {
           department?: string | null
           entity_id?: string
           estimated_cost_to_complete?: number
+          finance_client_id?: string | null
           id?: string
           location?: string | null
           name: string
@@ -4026,6 +5619,7 @@ export type Database = {
           department?: string | null
           entity_id?: string
           estimated_cost_to_complete?: number
+          finance_client_id?: string | null
           id?: string
           location?: string | null
           name?: string
@@ -4043,6 +5637,13 @@ export type Database = {
             columns: ["admin_project_id"]
             isOneToOne: false
             referencedRelation: "admin_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -4186,6 +5787,7 @@ export type Database = {
           external_invoice_provider: string | null
           external_invoice_url: string | null
           external_reference: string | null
+          finance_client_id: string | null
           fiscal_year: number | null
           id: string
           import_batch_id: string | null
@@ -4279,6 +5881,7 @@ export type Database = {
           external_invoice_provider?: string | null
           external_invoice_url?: string | null
           external_reference?: string | null
+          finance_client_id?: string | null
           fiscal_year?: number | null
           id?: string
           import_batch_id?: string | null
@@ -4372,6 +5975,7 @@ export type Database = {
           external_invoice_provider?: string | null
           external_invoice_url?: string | null
           external_reference?: string | null
+          finance_client_id?: string | null
           fiscal_year?: number | null
           id?: string
           import_batch_id?: string | null
@@ -4462,6 +6066,13 @@ export type Database = {
             columns: ["cost_code_id"]
             isOneToOne: false
             referencedRelation: "finance_cost_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_finance_client_id_fkey"
+            columns: ["finance_client_id"]
+            isOneToOne: false
+            referencedRelation: "finance_client_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -4669,6 +6280,10 @@ export type Database = {
         Args: { p_suggestion_id: string }
         Returns: undefined
       }
+      accounting_period_locked: {
+        Args: { p_date: string; p_entity_id: string }
+        Returns: boolean
+      }
       approve_portal_client: { Args: { p_email: string }; Returns: undefined }
       can_manage_entity_roles: {
         Args: { p_entity_id: string }
@@ -4681,6 +6296,10 @@ export type Database = {
       consume_portal_invite: {
         Args: { p_client_id: string; p_token: string }
         Returns: boolean
+      }
+      create_hgp_emergency_job: {
+        Args: { p_outage_event_id: string; p_site_id: string }
+        Returns: string
       }
       create_portal_client: {
         Args: {
@@ -4712,6 +6331,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      create_procurement_rfq_from_open: {
+        Args: {
+          p_due_date?: string
+          p_requirement_ids?: string[]
+          p_title?: string
+        }
+        Returns: string
+      }
       ensure_default_accounting_config: {
         Args: { p_entity_id?: string }
         Returns: string
@@ -4742,6 +6369,29 @@ export type Database = {
           aging_type: string
           bucket: string
           open_amount: number
+        }[]
+      }
+      get_finance_client_account_summary: {
+        Args: { p_entity_id: string }
+        Returns: {
+          city: string
+          client_type: string
+          company: string
+          email: string
+          id: string
+          invoice_open_balance: number
+          job_count: number
+          last_visit_date: string
+          lifetime_expense: number
+          lifetime_income: number
+          name: string
+          next_visit_date: string
+          phone: string
+          project_name: string
+          site_address: string
+          status: string
+          visit_count: number
+          zip: string
         }[]
       }
       get_finance_control_summary: {
@@ -4777,6 +6427,42 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_fixed_asset_depreciation_schedule: {
+        Args: { p_asset_id: string }
+        Returns: {
+          accumulated_depreciation: number
+          book_value_end: number
+          book_value_start: number
+          depreciation_expense: number
+          months_in_service: number
+          period_year: number
+        }[]
+      }
+      get_fixed_assets_register: {
+        Args: { p_entity_id?: string }
+        Returns: {
+          accumulated_depreciation: number
+          acquisition_date: string
+          asset_category: string
+          asset_name: string
+          asset_tag: string
+          cost_basis: number
+          depreciation_method: string
+          disposal_amount: number
+          disposal_date: string
+          id: string
+          net_book_value: number
+          notes: string
+          placed_in_service_date: string
+          project_id: string
+          project_name: string
+          salvage_value: number
+          status: string
+          useful_life_years: number
+          vendor_id: string
+          vendor_name: string
+        }[]
+      }
       get_hgp_finance_summary: {
         Args: never
         Returns: {
@@ -4789,6 +6475,37 @@ export type Database = {
           total_income: number
         }[]
       }
+      get_hgp_inventory_position: {
+        Args: never
+        Returns: {
+          consumed_30d: number
+          low_stock_count: number
+          part_skus: number
+          parts_value: number
+          units_on_hand: number
+          units_value: number
+        }[]
+      }
+      get_holdings_balance_sheet: {
+        Args: { p_entity_id?: string }
+        Returns: {
+          active_notes_payable_count: number
+          active_notes_receivable_count: number
+          as_of_date: string
+          capital_contributions_itd: number
+          cash_position: number
+          distributions_itd: number
+          dividends_itd: number
+          intercompany_transfers_itd: number
+          management_fees_itd: number
+          notes_payable: number
+          notes_receivable: number
+          owners_equity: number
+          tax_reserves_itd: number
+          total_assets: number
+          total_liabilities: number
+        }[]
+      }
       get_holdings_entity_performance: {
         Args: never
         Returns: {
@@ -4796,6 +6513,17 @@ export type Database = {
           entity_id: string
           expense: number
           income: number
+        }[]
+      }
+      get_holdings_note_amortization: {
+        Args: { p_max_periods?: number; p_note_id: string }
+        Returns: {
+          due_date: string
+          ending_balance: number
+          interest: number
+          payment: number
+          period: number
+          principal: number
         }[]
       }
       get_ledger_page: {
@@ -4810,6 +6538,8 @@ export type Database = {
         Returns: {
           amount: number
           cleared_date: string
+          context_kind: string
+          context_label: string
           counterparty: string
           entity_id: string
           ledger_date: string
@@ -4877,6 +6607,25 @@ export type Database = {
           updates: Json
         }[]
       }
+      get_procurement_hedge_summary: {
+        Args: { p_entity_id?: string }
+        Returns: {
+          avg_target_unit_price: number
+          best_quote_captured_at: string
+          best_supplier_name: string
+          best_unit_price: number
+          category: string
+          display_material: string
+          earliest_required_by: string
+          estimated_cost: number
+          estimated_savings: number
+          normalized_material: string
+          open_quantity: number
+          project_count: number
+          requirement_count: number
+          unit: string
+        }[]
+      }
       get_project_financial_summary: {
         Args: { p_project_id: string }
         Returns: {
@@ -4912,6 +6661,7 @@ export type Database = {
         Args: { p_line_items: Json; p_tax_rate?: number }
         Returns: number
       }
+      is_help_support_admin: { Args: never; Returns: boolean }
       log_portal_changelog: {
         Args: {
           p_action: string
@@ -4926,6 +6676,10 @@ export type Database = {
       map_admin_status_to_finance: {
         Args: { s: string }
         Returns: Database["public"]["Enums"]["project_status"]
+      }
+      match_hgp_outage_impacts: {
+        Args: { p_outage_event_id: string }
+        Returns: number
       }
       post_check_to_ledger: { Args: { p_check_id: string }; Returns: string }
       post_transaction_to_ledger: {
@@ -4943,6 +6697,34 @@ export type Database = {
       reverse_journal_entry: {
         Args: { p_journal_entry_id: string; p_reason?: string }
         Returns: string
+      }
+      set_accounting_period_status: {
+        Args: {
+          p_entity_id: string
+          p_notes?: string
+          p_period_key: string
+          p_status: string
+        }
+        Returns: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          entity_id: string
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          notes: string | null
+          period_key: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "accounting_periods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_portal_password: {
         Args: { p_id: string; p_password: string }
@@ -4975,6 +6757,46 @@ export type Database = {
           token: string
         }[]
       }
+      verify_accounting_period_close: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_admin_help_requests: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_dispatch_capital_approvals: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_entity_client_accounts: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_entity_finance_depth2: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
       verify_entity_finance_summaries: {
         Args: never
         Returns: {
@@ -4991,7 +6813,103 @@ export type Database = {
           ok: boolean
         }[]
       }
+      verify_finance_client_portal_separation: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
       verify_finance_launch_migrations: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_fixed_assets_depreciation: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_he_procurement_hedge_engine: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_hgp_command_map: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_hgp_field_ops: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_hgp_inventory: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_hgp_job_payments: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_hgp_procurement_scheduling: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_holdings_balance_sheet: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_holdings_covenants: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_invoice_intelligence_job_link: {
+        Args: never
+        Returns: {
+          check_name: string
+          details: string
+          ok: boolean
+        }[]
+      }
+      verify_ledger_entity_context: {
         Args: never
         Returns: {
           check_name: string

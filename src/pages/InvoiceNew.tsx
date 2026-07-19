@@ -12,15 +12,44 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useInvoices, invoiceSubtotal, invoiceTax, invoiceTotal, nextInvoiceNumber, LineItem, Invoice } from '@/hooks/useInvoices';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { generateInvoicePDF, savePDF } from '@/lib/invoicePDF';
 import { toast } from 'sonner';
-import { Plus, Trash2, Download, ExternalLink, Send, FileText, Copy, CheckCheck, Zap, Users } from 'lucide-react';
+import { Plus, Trash2, Download, ExternalLink, Send, FileText, Copy, CheckCheck, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useEntity } from '@/contexts/EntityContext';
+import { useHgpJobs } from '@/hooks/useEntityOps';
+import { useFinanceClientAccounts } from '@/hooks/useFinance';
 
 
 function newLineItem(): LineItem {
   return { id: crypto.randomUUID(), description: '', qty: 1, rate: 0 };
+}
+
+function detectProvider(url: string) {
+  const u = url.toLowerCase();
+  if (u.includes('stripe.com') || u.includes('stripe')) return 'stripe';
+  if (u.includes('quickbooks') || u.includes('intuit.com')) return 'quickbooks';
+  if (u.includes('square') || u.includes('squareup.com')) return 'square';
+  return 'other';
+}
+
+function providerLabel(provider?: string) {
+  switch (provider) {
+    case 'stripe': return 'Stripe';
+    case 'quickbooks': return 'QuickBooks';
+    case 'square': return 'Square';
+    case 'other': return 'Other';
+    default: return 'External';
+  }
+}
+
+function normalizeHttpsUrl(raw?: string) {
+  const value = (raw ?? '').trim();
+  if (!value) return '';
+  if (/^https:\/\//i.test(value)) return value;
+  if (/^http:\/\//i.test(value)) return value.replace(/^http:\/\//i, 'https://');
+  return `https://${value}`;
 }
 
 export default function InvoiceNew() {
@@ -28,10 +57,14 @@ export default function InvoiceNew() {
   const { id } = useParams<{ id: string }>();
   const { state: routeState } = useLocation();
   const { invoices, create, update } = useInvoices();
+  const { entity } = useEntity();
+  const isHgp = entity?.id === 'houston-generator-pros';
+  const { data: hgpJobs = [] } = useHgpJobs();
+  const { data: financeClients = [] } = useFinanceClientAccounts();
 
   const existing = id ? invoices.find(inv => inv.id === id) : undefined;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalDate();
   const due30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
 
   const [form, setForm] = useState<Omit<Invoice, 'id' | 'created_at' | 'updated_at'>>(() => existing ?? {
@@ -48,27 +81,18 @@ export default function InvoiceNew() {
     notes: '',
     terms: 'Net 30 — Payment is due within 30 days of invoice date.',
     stripe_payment_link: existing?.stripe_payment_link,
+    external_invoice_url: existing?.external_invoice_url,
+    external_invoice_provider: existing?.external_invoice_provider,
+    external_invoice_number: existing?.external_invoice_number,
+    external_invoice_label: existing?.external_invoice_label,
+    hgp_job_id: existing?.hgp_job_id,
+    finance_client_id: existing?.finance_client_id,
   });
 
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // Portal client picker
-  const [portalClients, setPortalClients] = useState<Array<{ id: string; name: string; email: string; phone: string }>>([]);
-  const [clientPickerOpen, setClientPickerOpen] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await (supabase as any)
-        .from('portal_clients')
-        .select('id, name, email, phone')
-        .eq('status', 'approved')
-        .order('name');
-      setPortalClients(data ?? []);
-    })();
-  }, []);
 
   // Pre-fill from Admin "Create Invoice" deep-link (route state)
   useEffect(() => {
@@ -78,11 +102,19 @@ export default function InvoiceNew() {
     if (clientEmail) setField('client_email', clientEmail);
   }, []);
 
-  const applyPortalClient = (pc: typeof portalClients[0]) => {
-    setField('client_name', pc.name);
-    setField('client_email', pc.email);
-    setClientPickerOpen(false);
-    toast.success(`Client set to ${pc.name}`);
+  const applyFinanceClient = (clientId: string) => {
+    const client = (financeClients as any[]).find(c => c.id === clientId);
+    setField('finance_client_id', clientId || undefined);
+    if (!client) return;
+    setForm(f => ({
+      ...f,
+      finance_client_id: client.id,
+      client_name: client.name || f.client_name,
+      client_email: client.email || f.client_email,
+      client_company: client.company || f.client_company,
+      client_address: client.billing_address || client.site_address || f.client_address,
+    }));
+    toast.success(`Invoice linked to ${client.name}`);
   };
 
   const setField = <K extends keyof typeof form>(k: K, v: typeof form[K]) => setForm(f => ({ ...f, [k]: v }));
@@ -101,17 +133,57 @@ export default function InvoiceNew() {
   const subtotal = invoiceSubtotal(form);
   const tax = invoiceTax(form);
   const total = invoiceTotal(form);
+  const paymentUrl = form.external_invoice_url || form.stripe_payment_link;
+
+  const applyHgpJob = (jobId: string) => {
+    const job = (hgpJobs as any[]).find(j => j.id === jobId);
+    setField('hgp_job_id', jobId || undefined);
+    if (!job) return;
+    setForm(f => ({
+      ...f,
+      hgp_job_id: job.id,
+      client_name: job.customer_name ?? f.client_name,
+      client_email: job.customer_email ?? f.client_email,
+      client_company: f.client_company || 'Houston Generator Pros Customer',
+      client_address: [job.site_address, job.city, job.zip].filter(Boolean).join(', ') || f.client_address,
+      line_items: [{
+        id: crypto.randomUUID(),
+        description: `${job.generator_model || 'Generator'} ${String(job.job_type || 'install').replace(/_/g, ' ')}${job.serial_number ? ` · SN ${job.serial_number}` : ''}`,
+        qty: 1,
+        rate: Number(job.quoted_amount || 0),
+      }],
+      notes: f.notes || [
+        job.utility_provider ? `Utility provider: ${job.utility_provider}` : null,
+        job.target_install_date ? `Target install: ${fmtDate(job.target_install_date)}` : null,
+      ].filter(Boolean).join('\n'),
+    }));
+    toast.success(`Invoice linked to ${job.customer_name}'s HGP job`);
+  };
 
   const handleSave = async () => {
     if (!form.client_name) { toast.error('Client name is required'); return; }
     if (form.line_items.length === 0) { toast.error('Add at least one line item'); return; }
+    const normalizedExternalUrl = normalizeHttpsUrl(form.external_invoice_url);
+    if (normalizedExternalUrl && !/^https:\/\//i.test(normalizedExternalUrl)) {
+      toast.error('External invoice/payment links must use HTTPS');
+      return;
+    }
+    const payload = {
+      ...form,
+      external_invoice_url: normalizedExternalUrl || undefined,
+      external_invoice_provider: normalizedExternalUrl ? (form.external_invoice_provider || detectProvider(normalizedExternalUrl)) : undefined,
+      external_invoice_label: normalizedExternalUrl
+        ? (form.external_invoice_label || `${providerLabel(form.external_invoice_provider || detectProvider(normalizedExternalUrl))} invoice/payment link`)
+        : undefined,
+      stripe_payment_link: form.stripe_payment_link || (form.external_invoice_provider === 'stripe' ? normalizedExternalUrl : undefined),
+    };
     setSaving(true);
     try {
       if (existing) {
-        await update(existing.id, form);
+        await update(existing.id, payload);
         toast.success('Invoice updated');
       } else {
-        await create(form);
+        await create(payload);
         toast.success('Invoice saved');
         navigate('/invoices');
       }
@@ -171,7 +243,15 @@ export default function InvoiceNew() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setField('stripe_payment_link', data.url);
-      if (existing) await update(existing.id, { stripe_payment_link: data.url });
+      setField('external_invoice_url', data.url);
+      setField('external_invoice_provider', 'stripe');
+      setField('external_invoice_label', 'Stripe payment link');
+      if (existing) await update(existing.id, {
+        stripe_payment_link: data.url,
+        external_invoice_url: data.url,
+        external_invoice_provider: 'stripe',
+        external_invoice_label: 'Stripe payment link',
+      });
       toast.success('Stripe payment link created!');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create payment link — deploy the edge function first');
@@ -179,8 +259,8 @@ export default function InvoiceNew() {
   };
 
   const copyStripeLink = () => {
-    if (!form.stripe_payment_link) return;
-    navigator.clipboard.writeText(form.stripe_payment_link);
+    if (!paymentUrl) return;
+    navigator.clipboard.writeText(paymentUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success('Payment link copied');
@@ -237,37 +317,49 @@ export default function InvoiceNew() {
             </div>
           </div>
 
+          {isHgp && (
+            <div className="border border-border p-4 space-y-3 bg-secondary/15">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="micro-label">Houston Generator Pros Job Link</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Build a customer-facing invoice or receipt directly from an install, service, maintenance, or emergency job.
+                  </div>
+                </div>
+                <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
+              </div>
+              <Select value={form.hgp_job_id || '__none__'} onValueChange={v => v === '__none__' ? setField('hgp_job_id', undefined) : applyHgpJob(v)}>
+                <SelectTrigger className="rounded-none h-10 text-sm"><SelectValue placeholder="Select HGP job…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No job link</SelectItem>
+                  {(hgpJobs as any[]).map(job => (
+                    <SelectItem key={job.id} value={job.id}>
+                      {job.customer_name} · {String(job.job_type).replace(/_/g, ' ')}
+                      {job.generator_model ? ` · ${job.generator_model}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Client info */}
           <div className="border border-border p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="micro-label">Bill To</div>
-              {portalClients.length > 0 && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setClientPickerOpen(o => !o)}
-                    className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Users className="w-3 h-3" strokeWidth={1.5} />
-                    Select Portal Client
-                  </button>
-                  {clientPickerOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-background border border-border shadow-lg max-h-56 overflow-y-auto">
-                      {portalClients.map(pc => (
-                        <button
-                          key={pc.id}
-                          type="button"
-                          onClick={() => applyPortalClient(pc)}
-                          className="w-full flex flex-col items-start px-3 py-2.5 text-left hover:bg-secondary/50 transition-colors border-b border-border/50 last:border-b-0"
-                        >
-                          <span className="text-xs font-semibold">{pc.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{pc.email}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="micro-label">Bill To</div>
+            <div className="space-y-1.5">
+              <Label className="micro-label">Finance Client Account</Label>
+              <Select value={form.finance_client_id || ''} onValueChange={applyFinanceClient}>
+                <SelectTrigger className="rounded-none h-10">
+                  <SelectValue placeholder={isHgp ? 'Select HGP client account' : 'Select construction client account'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(financeClients as any[]).map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {[c.name, c.company, c.projects?.name].filter(Boolean).join(' · ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -383,6 +475,72 @@ export default function InvoiceNew() {
           </div>
 
           {/* Notes + Terms */}
+          <div className="border border-border p-4 space-y-4 bg-secondary/10">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="micro-label">External Invoice / Payment Link</div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Paste a Stripe, QuickBooks, Square, or secure external invoice URL. The downloaded PDF embeds it as a clickable link.
+                </div>
+              </div>
+              {paymentUrl && (
+                <a href={paymentUrl} target="_blank" rel="noreferrer" className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  Open <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-4">
+              <div className="space-y-1.5">
+                <Label className="micro-label">Provider</Label>
+                <Select value={form.external_invoice_provider || 'other'} onValueChange={v => setField('external_invoice_provider', v)}>
+                  <SelectTrigger className="rounded-none h-10 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="quickbooks">QuickBooks</SelectItem>
+                    <SelectItem value="square">Square</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="micro-label">Secure URL</Label>
+                <Input
+                  value={form.external_invoice_url || ''}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    setField('external_invoice_url', raw);
+                    if (raw && (!form.external_invoice_provider || form.external_invoice_provider === 'other')) {
+                      setField('external_invoice_provider', detectProvider(raw));
+                    }
+                  }}
+                  onBlur={e => setField('external_invoice_url', normalizeHttpsUrl(e.target.value) || undefined)}
+                  placeholder="https://invoice.stripe.com/..."
+                  className="rounded-none h-10"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="micro-label">Link Label</Label>
+                <Input
+                  value={form.external_invoice_label || ''}
+                  onChange={e => setField('external_invoice_label', e.target.value)}
+                  placeholder="Stripe payment link, QuickBooks invoice #1042…"
+                  className="rounded-none h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="micro-label">External Invoice #</Label>
+                <Input
+                  value={form.external_invoice_number || ''}
+                  onChange={e => setField('external_invoice_number', e.target.value)}
+                  placeholder="QB-1042, SQ-88, payment request ID…"
+                  className="rounded-none h-10"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="micro-label">Notes</Label>
@@ -442,7 +600,7 @@ export default function InvoiceNew() {
                   <div className="text-[10px] text-muted-foreground">Create a payment link</div>
                 </div>
               </div>
-              {form.stripe_payment_link ? (
+              {paymentUrl ? (
                 <div className="space-y-1.5">
                   <div className="text-[10px] text-positive font-medium">✓ Payment link ready</div>
                   <div className="flex gap-1.5">
@@ -450,7 +608,7 @@ export default function InvoiceNew() {
                       {copied ? <CheckCheck className="w-3 h-3 text-positive" /> : <Copy className="w-3 h-3" />}
                       {copied ? 'Copied!' : 'Copy Link'}
                     </button>
-                    <a href={form.stripe_payment_link} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 border border-border hover:bg-secondary/50 transition-colors text-[10px] text-muted-foreground hover:text-foreground">
+                    <a href={paymentUrl} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-1.5 py-1.5 border border-border hover:bg-secondary/50 transition-colors text-[10px] text-muted-foreground hover:text-foreground">
                       <ExternalLink className="w-3 h-3" /> Open
                     </a>
                   </div>
@@ -564,8 +722,10 @@ export default function InvoiceNew() {
                 <span>Total Due</span>
                 <span>{fmtUSD(total)}</span>
               </div>
-              {form.stripe_payment_link && (
-                <div className="text-[8px] text-[#635BFF] truncate">Pay online: {form.stripe_payment_link}</div>
+              {paymentUrl && (
+                <div className="text-[8px] text-[#1B72B5] truncate">
+                  {form.external_invoice_label || providerLabel(form.external_invoice_provider)}: {paymentUrl}
+                </div>
               )}
             </div>
           </div>

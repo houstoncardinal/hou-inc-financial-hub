@@ -14,18 +14,19 @@ import {
   Check as CheckIcon, BarChart3,
 } from 'lucide-react';
 import { buildFinanceBuckets, FinanceRangePicker, financeRangeLabel, getFinanceDateRange } from '@/lib/financeTime';
-import { CashFlowChart } from '@/components/FinancialChartPanel';
 import { BalanceTrendChart, InflowChart, OutflowChart, PendingAgingChart } from '@/components/StatChartPanel';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine,
+  CartesianGrid, ComposedChart, Line,
 } from 'recharts';
 
 const parseLocalDate = (d: string): Date => {
   const [y, m, day] = d.split('-').map(Number);
   return new Date(y, m - 1, day);
 };
+const txnAmount = (t: any) => Number(t?.total_amount ?? t?.amount ?? 0);
 
 /* ── Compact period picker ────────────────────────────────────────────────── */
 function CompactPeriodPicker({
@@ -473,19 +474,68 @@ function ComplianceMatrix({ vendors }: { vendors: { name: string; state: 'ok' | 
   );
 }
 
+function ExecutiveCashTrend({ data, onOpen }: {
+  data: { label: string; inflow: number; outflow: number; net: number }[];
+  onOpen: () => void;
+}) {
+  return (
+    <button onClick={onOpen} className="idx-chart-card text-left">
+      <div className="idx-section-head compact">
+        <div>
+          <div className="idx-eyebrow">Cash Flow Command Graph</div>
+          <h2 className="idx-section-title">Inflow, outflow, and net runway</h2>
+        </div>
+        <span className="idx-open-link">Open ledger</span>
+      </div>
+      <div className="h-[280px] sm:h-[320px] mt-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 12, right: 12, left: 6, bottom: 0 }}>
+            <defs>
+              <linearGradient id="idxTrendInflow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.32} />
+                <stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="idxTrendOutflow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#dc2626" stopOpacity={0.24} />
+                <stop offset="100%" stopColor="#dc2626" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="3 6" />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+            <YAxis tickFormatter={(v) => `$${Math.round(Number(v) / 1000)}k`} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={48} />
+            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 4" />
+            <RechartsTooltip content={<MiniTooltip formatter={(value: number) => fmtUSD(Number(value || 0))} />} cursor={{ stroke: 'hsl(var(--foreground))', strokeOpacity: 0.12 }} />
+            <Area type="monotone" dataKey="inflow" name="Inflow" fill="url(#idxTrendInflow)" stroke="#2563eb" strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} />
+            <Area type="monotone" dataKey="outflow" name="Outflow" fill="url(#idxTrendOutflow)" stroke="#dc2626" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+            <Line type="monotone" dataKey="net" name="Net Runway" stroke="hsl(var(--foreground))" strokeWidth={2.6} dot={{ r: 2, fill: 'hsl(var(--foreground))' }} activeDot={{ r: 5 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </button>
+  );
+}
+
 const DEFAULT_CI_IDS = ['margin', 'receivables', 'projectBurn', 'vendors'];
 const DEFAULT_CI_MAX = 4;
 
 /* ── Styles ───────────────────────────────────────────────────────────────── */
 const IDX_CSS = `
-.stat-card{border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);}
-.stat-card:hover{box-shadow:0 6px 22px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04);z-index:30;}
-.qa-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s,background 0.18s;}
+.idx-eyebrow{font-size:9px;line-height:1;text-transform:uppercase;letter-spacing:.22em;font-weight:900;color:hsl(var(--muted-foreground));}
+.idx-section-title{font-size:clamp(18px,2vw,24px);line-height:1.12;font-weight:900;letter-spacing:-0.01em;color:hsl(var(--foreground));}
+.idx-section-copy{margin-top:5px;max-width:58rem;font-size:12px;line-height:1.55;color:hsl(var(--muted-foreground));}
+.idx-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.idx-section-head.compact{align-items:center;}
+.idx-open-link{font-size:9px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:hsl(var(--foreground));border:1px solid hsl(var(--border));background:hsl(var(--secondary)/.35);padding:7px 9px;white-space:nowrap;}
+.idx-open-link:hover{background:hsl(var(--secondary)/.65);}
+.stat-card{border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03);border-radius:0;background-color:hsl(var(--background));}
+.stat-card:hover{box-shadow:0 6px 22px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04);border-color:hsl(var(--foreground)/.2);z-index:30;}
+.qa-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 2px rgba(10,10,10,0.03),0 1px 0 rgba(255,255,255,0.45) inset;border-radius:0;transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s,background 0.18s;}
 .qa-card:hover{box-shadow:0 5px 18px rgba(10,10,10,0.08),0 2px 5px rgba(10,10,10,0.04),0 1px 0 rgba(255,255,255,0.45) inset;transform:translateY(-1px);border-color:hsl(var(--foreground)/0.22);background:hsl(var(--secondary)/0.35);}
-.ci-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s;position:relative;overflow:visible;}
+.ci-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05);transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s;position:relative;overflow:visible;border-radius:0;}
 .ci-card:hover{box-shadow:0 4px 14px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.18);z-index:30;}
-.idx-widget{background:hsl(var(--background));transition:box-shadow 0.18s;}
-.idx-widget:hover{box-shadow:0 3px 14px rgba(10,10,10,0.08);}
+.idx-widget,.idx-chart-card{background:hsl(var(--background));border:1px solid hsl(var(--border));border-radius:0;box-shadow:0 1px 3px rgba(10,10,10,0.05);transition:box-shadow 0.18s,transform 0.18s,border-color 0.18s;}
+.idx-widget:hover,.idx-chart-card:hover{box-shadow:0 4px 14px rgba(10,10,10,0.08);border-color:hsl(var(--foreground)/0.18);}
+.idx-chart-card{padding:16px;width:100%;}
 .idx-row:hover{background-color:hsl(var(--secondary)/0.55);}
 .dark .stat-card{box-shadow:0 1px 5px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.04);}
 .dark .stat-card:hover{box-shadow:0 6px 24px rgba(0,0,0,0.48),inset 0 1px 0 rgba(255,255,255,0.05);}
@@ -493,9 +543,10 @@ const IDX_CSS = `
 .dark .qa-card:hover{box-shadow:0 5px 18px rgba(0,0,0,0.42),0 1px 0 rgba(255,255,255,0.05) inset;transform:translateY(-1px);}
 .dark .ci-card{background:hsl(var(--card));box-shadow:0 1px 3px rgba(0,0,0,0.25);}
 .dark .ci-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.38);}
-.dark .idx-widget{background:hsl(var(--card));}
-.dark .idx-widget:hover{box-shadow:0 3px 14px rgba(0,0,0,0.3);}
+.dark .idx-widget,.dark .idx-chart-card{background:hsl(var(--card));box-shadow:0 1px 3px rgba(0,0,0,0.25);}
+.dark .idx-widget:hover,.dark .idx-chart-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.38);}
 .dark .idx-row:hover{background-color:hsl(var(--secondary)/0.4);}
+@media (max-width: 640px){.idx-section-head{display:block}.idx-chart-card{padding:12px}.idx-open-link{display:inline-flex;margin-top:8px}.idx-section-title{font-size:17px}.idx-section-copy{font-size:11px}}
 `;
 
 export default function Index() {
@@ -564,14 +615,14 @@ export default function Index() {
     const now      = new Date();
     const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const inMTD    = (d: string) => parseLocalDate(d) >= mtdStart;
-    const totalIn  = income.reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const totalOut = expenses.reduce((s: number, t: any) => s + Number(t.amount), 0)
+    const totalIn  = income.reduce((s: number, t: any) => s + txnAmount(t), 0);
+    const totalOut = expenses.reduce((s: number, t: any) => s + txnAmount(t), 0)
       + checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const pending      = checks.filter((c: any) => c.status === 'pending');
     return {
       balance:      totalIn - totalOut,
-      inflowMTD:    income.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0),
-      outflowMTD:   expenses.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
+      inflowMTD:    income.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0),
+      outflowMTD:   expenses.filter((t: any) => inMTD(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0)
         + checks.filter((c: any) => inMTD(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0),
       pendingCount: pending.length,
       pendingValue: pending.reduce((s: number, c: any) => s + Number(c.amount), 0),
@@ -582,8 +633,8 @@ export default function Index() {
     const { start, end } = getFinanceDateRange(timePeriod);
     const label = financeRangeLabel(timePeriod);
     const inRange = (d: string) => { const dt = parseLocalDate(d); return dt >= start && dt <= end; };
-    const pInc = income.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const pExp = expenses.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const pInc = income.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+    const pExp = expenses.filter((t: any) => inRange(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
     const pChk = checks.filter((c: any) => inRange(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     return { income: pInc, outflow: pExp + pChk, net: pInc - pExp - pChk, label };
   }, [income, expenses, checks, timePeriod]);
@@ -601,8 +652,8 @@ export default function Index() {
   const cashFlowData = useMemo(() => {
     return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      const inflow  = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const exp     = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
+      const inflow  = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+      const exp     = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
       const chk     = checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
       return { label, inflow, outflow: exp + chk, net: inflow - exp - chk };
     });
@@ -611,8 +662,8 @@ export default function Index() {
   const ciTrendData = useMemo(() => {
     return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      const mInc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const mOut = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
+      const mInc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+      const mOut = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
       return {
         month:   label,
@@ -672,13 +723,13 @@ export default function Index() {
     return active.map((p: any) => {
       const projectExpenses = expenses
         .filter((t: any) => t.project_id === p.id)
-        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        .reduce((s: number, t: any) => s + txnAmount(t), 0);
       const projectChecks = checks
         .filter((c: any) => c.project_id === p.id && c.status !== 'voided')
         .reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
       const projectIncome = income
         .filter((t: any) => t.project_id === p.id)
-        .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        .reduce((s: number, t: any) => s + txnAmount(t), 0);
       const budget = Number(p.budget || 0);
       const spent = projectExpenses + projectChecks;
       return {
@@ -698,7 +749,7 @@ export default function Index() {
     const m: Record<string, number> = {};
     filtered.expenses.forEach((t: any) => {
       const k = t.vendors?.name || t.vendor_name || t.category || 'Unassigned';
-      m[k] = (m[k] || 0) + Number(t.amount || 0);
+      m[k] = (m[k] || 0) + txnAmount(t);
     });
     filtered.checks.forEach((c: any) => {
       const k = c.vendors?.name || c.payee_name || 'Checks';
@@ -710,26 +761,27 @@ export default function Index() {
       .slice(0, 6);
   }, [filtered.expenses, filtered.checks]);
 
-  const recent = useMemo(() => [
-    ...filtered.checks.map((c: any) => ({
+  const ledgerActivity = useMemo(() => [
+    ...checks.map((c: any) => ({
       id: c.id, kind: 'Check', label: c.payee_name,
       amount: -Number(c.amount), date: c.issue_date, project: c.projects?.name,
     })),
-    ...filtered.income.map((t: any) => ({
+    ...income.map((t: any) => ({
       id: t.id, kind: 'Income', label: t.source_name || t.vendors?.name || '—',
-      amount: Number(t.amount), date: t.transaction_date, project: t.projects?.name,
+      amount: txnAmount(t), date: t.transaction_date, project: t.projects?.name,
     })),
-    ...filtered.expenses.map((t: any) => ({
+    ...expenses.map((t: any) => ({
       id: t.id, kind: 'Expense', label: t.vendors?.name || t.category || '—',
-      amount: -Number(t.amount), date: t.transaction_date, project: t.projects?.name,
+      amount: -txnAmount(t), date: t.transaction_date, project: t.projects?.name,
     })),
-  ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10), [filtered]);
+  ].filter(r => r.date).sort((a, b) => b.date.localeCompare(a.date)), [checks, income, expenses]);
+  const recent = useMemo(() => ledgerActivity.slice(0, 10), [ledgerActivity]);
 
   const balanceTrendData = useMemo(() => {
     return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      const inc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const out = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
+      const inc = income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+      const out = expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
       return { month: label, label, balance: inc - out };
     });
@@ -738,13 +790,13 @@ export default function Index() {
   const inflowMonthlyData = useMemo(() => {
     return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
-      return { month: label, label, inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) };
+      return { month: label, label, inflow: income.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0) };
     });
   }, [dashboardBuckets, income]);
 
   const inflowCategoryData = useMemo(() => {
     const m: Record<string, number> = {};
-    filtered.income.forEach((t: any) => { const k = t.source_name || t.category || 'Other'; m[k] = (m[k] || 0) + Number(t.amount); });
+    filtered.income.forEach((t: any) => { const k = t.source_name || t.category || 'Other'; m[k] = (m[k] || 0) + txnAmount(t); });
     return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 7);
   }, [filtered.income]);
 
@@ -752,14 +804,14 @@ export default function Index() {
     return dashboardBuckets.map(({ label, start, end }) => {
       const inR   = (dt: string) => { const d2 = parseLocalDate(dt); return d2 >= start && d2 < end; };
       return { month: label, label, outflow:
-        expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
+        expenses.filter((t: any) => inR(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0)
         + checks.filter((c: any) => inR(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0) };
     });
   }, [dashboardBuckets, expenses, checks]);
 
   const outflowCategoryData = useMemo(() => {
     const m: Record<string, number> = {};
-    filtered.expenses.forEach((t: any) => { const k = t.vendors?.name || t.category || 'Other'; m[k] = (m[k] || 0) + Number(t.amount); });
+    filtered.expenses.forEach((t: any) => { const k = t.vendors?.name || t.category || 'Other'; m[k] = (m[k] || 0) + txnAmount(t); });
     return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 7);
   }, [filtered.expenses]);
 
@@ -783,8 +835,8 @@ export default function Index() {
   const constructionKPIs = useMemo(() => {
     const ytdStart = new Date(new Date().getFullYear(), 0, 1);
     const inYTD    = (d: string) => parseLocalDate(d) >= ytdStart;
-    const ytdInc   = income.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const ytdOut   = expenses.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0)
+    const ytdInc   = income.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+    const ytdOut   = expenses.filter((t: any) => inYTD(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0)
       + checks.filter((c: any) => inYTD(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     const active   = projects.filter((p: any) => p.status === 'active' || !p.status);
     return {
@@ -1051,7 +1103,7 @@ export default function Index() {
   const unlinkedExpenses = filtered.expenses.filter((t: any) => !t.project_id).length;
   const unlinkedExpenseValue = filtered.expenses
     .filter((t: any) => !t.project_id)
-    .reduce((s: number, t: any) => s + Number(t.amount), 0);
+    .reduce((s: number, t: any) => s + txnAmount(t), 0);
   const clearedChecks = filtered.checks.filter((c: any) => c.status === 'cleared').length;
   const checkClearancePct = filtered.checks.length > 0 ? (clearedChecks / filtered.checks.length) * 100 : 100;
 
@@ -1410,10 +1462,11 @@ export default function Index() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
           {displayCiCards.map((ci, idx) => (
-            <motion.div key={ci.label}
+            <motion.button key={ci.label}
+              onClick={() => navigate(ci.id === 'vendors' ? '/vendors' : ci.id === 'receivables' ? '/invoices' : ci.id === 'projectBurn' || ci.id === 'margin' ? '/finance/controls' : ci.id === 'clearance' ? '/checks' : '/expenses')}
               initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04 }}
-              className="ci-card border border-border bg-background p-2 sm:p-2.5 transition-shadow duration-200 min-w-0"
+              className="ci-card border border-border bg-background p-2 sm:p-2.5 transition-shadow duration-200 min-w-0 text-left"
             >
               <div className="flex items-start justify-between gap-2 mb-1">
                 <div className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground font-medium leading-tight">{ci.label}</div>
@@ -1422,7 +1475,7 @@ export default function Index() {
               <div className={`text-[15px] sm:text-base font-bold font-mono-tab leading-tight ${ci.valueColor}`}>{ci.value}</div>
               <div className="text-[8px] text-muted-foreground mt-1 leading-snug font-mono-tab line-clamp-1">{ci.sub}</div>
               <div className="mt-1.5">{ci.chart}</div>
-            </motion.div>
+            </motion.button>
           ))}
         </div>
       </div>
@@ -1434,7 +1487,7 @@ export default function Index() {
             <div className="flex items-center justify-between px-3.5 py-3 border-b border-border bg-secondary/25">
               <div>
                 <div className="micro-label">Recent Activity</div>
-                <div className="text-[9px] text-muted-foreground">{recent.length} movement{recent.length !== 1 ? 's' : ''} in {periodStats.label.toLowerCase()}</div>
+                <div className="text-[9px] text-muted-foreground">{ledgerActivity.length} entity ledger movement{ledgerActivity.length !== 1 ? 's' : ''} · latest 10 shown</div>
               </div>
               <Link to="/ledger" className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground transition-colors">
                 View all <ChevronRight className="inline w-3 h-3" />
@@ -1486,7 +1539,7 @@ export default function Index() {
                 <div className="col-span-2 text-right">Amount</div>
               </div>
               {recent.length === 0 ? (
-                <div className="px-3.5 py-10 text-center text-sm text-muted-foreground">No activity this period.</div>
+                <div className="px-3.5 py-10 text-center text-sm text-muted-foreground">No entity ledger activity yet.</div>
               ) : (
                 <div className="divide-y divide-border">
                   {recent.slice(0, 7).map(r => (
@@ -1516,7 +1569,7 @@ export default function Index() {
           </div>
 
           <div className="xl:col-span-5 h-fit">
-            <CashFlowChart data={cashFlowData} />
+            <ExecutiveCashTrend data={cashFlowData} onOpen={() => navigate('/ledger')} />
           </div>
         </div>
 

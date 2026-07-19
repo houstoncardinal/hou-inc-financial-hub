@@ -11,10 +11,15 @@ import { motion } from 'framer-motion';
    strips' sliding underlines never try to animate into each other, and a
    `size` of 'sm' for the second-level nav.
 
-   Scrolls horizontally at any width instead of falling back to a <select> —
+   Desktop (sm+): scrolls horizontally instead of falling back to a <select> —
    the active tab auto-scrolls into view and receives focus on change, and
    arrow-key roving tabindex + ARIA tablist roles keep it keyboard-accessible
-   since plain <button> elements no longer get that behavior for free. ── */
+   since plain <button> elements no longer get that behavior for free.
+
+   Mobile (below sm): horizontal scroll hides options off-screen with no
+   affordance that there's more to swipe to, so below `sm` this instead
+   renders every tab as an equal-size grid cell — all options are visible and
+   tappable at once, no scrolling, regardless of how many tabs there are. ── */
 
 export interface FlushTabItem {
   key: string;
@@ -55,7 +60,36 @@ export function FlushTabs({
 
   return (
     <div className="relative">
-      <div role="tablist" className="flex overflow-x-auto scrollbar-none border-b border-border">
+      {/* Mobile: every tab as an equal-size grid cell — all visible, nothing
+          to scroll to find. Grid, not flex-wrap, so a ragged last row still
+          lines up in clean columns regardless of item count. */}
+      <div role="tablist" className="grid grid-cols-3 gap-1 pb-2 sm:hidden">
+        {items.map(item => {
+          const Icon = item.icon;
+          const active = item.key === activeKey;
+          return (
+            <button
+              key={item.key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => onChange(item.key)}
+              className={`flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-1.5 border text-center transition-colors focus-visible:outline-none ${
+                active ? 'border-accent/50 bg-accent/10 text-foreground' : 'border-border bg-background text-muted-foreground'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5 shrink-0" style={active ? { color: 'hsl(var(--accent))' } : undefined} strokeWidth={active ? 2.1 : 1.7} />
+              <span className="text-[8px] font-bold uppercase tracking-[0.06em] leading-tight w-full truncate">{item.label}</span>
+              {!!item.count && (
+                <span className={`text-[8px] font-mono-tab leading-none ${active ? 'text-accent' : 'text-muted-foreground'}`}>{item.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Desktop: flush underline strip, horizontal scroll if it ever
+          overflows a wide viewport. */}
+      <div role="tablist" className="hidden sm:flex overflow-x-auto scrollbar-none border-b border-border">
         {items.map((item, idx) => {
           const Icon = item.icon;
           const active = item.key === activeKey;
@@ -89,9 +123,9 @@ export function FlushTabs({
             </button>
           );
         })}
+        <div className="pointer-events-none absolute left-0 top-0 bottom-px w-8 bg-gradient-to-r from-background to-transparent" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-px w-8 bg-gradient-to-l from-background to-transparent" />
       </div>
-      <div className="pointer-events-none absolute left-0 top-0 bottom-px w-8 bg-gradient-to-r from-background to-transparent" />
-      <div className="pointer-events-none absolute right-0 top-0 bottom-px w-8 bg-gradient-to-l from-background to-transparent" />
     </div>
   );
 }

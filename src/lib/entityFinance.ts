@@ -9,7 +9,8 @@
 export type FinanceModuleKey =
   | 'overview' | 'ledger' | 'checks' | 'income' | 'expenses'
   | 'projects' | 'vendors' | 'invoices' | 'charts' | 'controls'
-  | 'changelog' | 'concierge' | 'documents' | 'storm' | 'inventory';
+  | 'changelog' | 'concierge' | 'documents' | 'storm' | 'inventory' | 'reports'
+  | 'procurement' | 'clients';
 
 export type OverviewVariant = 'construction' | 'generator' | 'holdings';
 
@@ -37,7 +38,8 @@ export interface EntityFinanceProfile {
 
 const ALL_MODULES: FinanceModuleKey[] = [
   'overview', 'ledger', 'checks', 'income', 'expenses', 'projects', 'vendors',
-  'invoices', 'charts', 'controls', 'changelog', 'concierge', 'documents',
+  'invoices', 'charts', 'controls', 'changelog', 'concierge', 'documents', 'reports',
+  'clients', 'procurement',
 ];
 
 export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
@@ -74,12 +76,15 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
     screenHeaders: {},
   },
 
-  /* Generator sales, installs, inventory, and recurring service — no
-     construction WIP controls, no construction guided-entry concierge. */
+  /* Generator sales, installs, inventory, and recurring service. Concierge is
+     enabled here because src/pages/Concierge.tsx has HGP-specific guided flows
+     (generator income, suppliers, install jobs, service parts, emergency work),
+     not the construction-only questions. */
   'houston-generator-pros': {
     modules: [
       'overview', 'ledger', 'checks', 'income', 'expenses', 'projects',
       'vendors', 'invoices', 'charts', 'changelog', 'documents', 'storm', 'inventory',
+      'clients', 'controls', 'reports', 'concierge',
     ],
     overview: 'generator',
     labels: {
@@ -88,6 +93,9 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       vendors: 'Suppliers',
       storm: 'Storm Response',
       inventory: 'Inventory',
+      clients: 'Clients',
+      controls: 'Controls',
+      concierge: 'Guided Entry',
     },
     descriptions: {
       overview: 'Sales, inventory, service & margin',
@@ -95,6 +103,10 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       vendors: 'Distributors & suppliers',
       storm: 'Outage intelligence & dispatch',
       inventory: 'Parts, stock & movement ledger',
+      clients: 'Generator customers & sites',
+      controls: 'Aging, bank matching & roles',
+      reports: 'Ops, inventory & job exports',
+      concierge: 'Guided HGP finance flows',
     },
     terms: { project: 'Job', projects: 'Install Jobs', vendor: 'Supplier', vendors: 'Suppliers' },
     /* 'Service Maintenance'/'Emergency Service' match the categories written
@@ -134,6 +146,7 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
     modules: [
       'overview', 'ledger', 'checks', 'income', 'expenses', 'projects',
       'vendors', 'invoices', 'charts', 'changelog', 'documents',
+      'controls', 'reports',
     ],
     overview: 'holdings',
     labels: {
@@ -141,12 +154,15 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       projects: 'Assets & Deals',
       income: 'Inflows',
       expenses: 'Corporate Expenses',
+      controls: 'Controls',
     },
     descriptions: {
       overview: 'Portfolio, capital & consolidated view',
       projects: 'Investments & development deals',
       income: 'Interest, fees & distributions in',
       expenses: 'Overhead & corporate costs',
+      controls: 'Aging, bank matching & roles',
+      reports: 'Statements & board packets',
     },
     terms: { project: 'Asset', projects: 'Assets & Deals', vendor: 'Counterparty', vendors: 'Counterparties' },
     /* 'Interest Income'/'Interest Expense' match the categories written by
@@ -198,6 +214,7 @@ export const ROUTE_MODULES: Record<string, FinanceModuleKey> = {
   '/income': 'income',
   '/expenses': 'expenses',
   '/projects': 'projects',
+  '/clients': 'clients',
   '/vendors': 'vendors',
   '/invoices': 'invoices',
   '/charts': 'charts',
@@ -207,6 +224,8 @@ export const ROUTE_MODULES: Record<string, FinanceModuleKey> = {
   '/documents': 'documents',
   '/storm': 'storm',
   '/inventory': 'inventory',
+  '/reports': 'reports',
+  '/beta/procurement': 'procurement',
 };
 
 export function moduleLabel(entityId: string | null | undefined, module: FinanceModuleKey, fallback: string): string {

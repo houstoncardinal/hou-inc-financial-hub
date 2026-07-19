@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
+import { todayLocalDate } from '@/lib/format';
 
 export interface LineItem {
   id: string;
@@ -30,6 +31,9 @@ export interface Invoice {
   external_invoice_url?: string;
   external_invoice_provider?: string;
   external_invoice_number?: string;
+  external_invoice_label?: string;
+  hgp_job_id?: string;
+  finance_client_id?: string;
   client_visible?: boolean;
   portal_client_id?: string;
   created_at: string;
@@ -83,6 +87,9 @@ function mapRow(row: Record<string, unknown>): Invoice {
     external_invoice_url: row.external_invoice_url as string | undefined,
     external_invoice_provider: row.external_invoice_provider as string | undefined,
     external_invoice_number: row.external_invoice_number as string | undefined,
+    external_invoice_label: row.external_invoice_label as string | undefined,
+    hgp_job_id:           row.hgp_job_id as string | undefined,
+    finance_client_id:    row.finance_client_id as string | undefined,
     client_visible:       row.client_visible as boolean | undefined,
     portal_client_id:     row.portal_client_id as string | undefined,
     created_at:          row.created_at as string,
@@ -93,7 +100,7 @@ function mapRow(row: Record<string, unknown>): Invoice {
 // ── Auto-overdue check (server-side preferred; this handles edge cases) ───────
 
 function applyAutoOverdue(invoices: Invoice[]): Invoice[] {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalDate();
   return invoices.map(inv =>
     inv.status === 'sent' && inv.due_date && inv.due_date < today
       ? { ...inv, status: 'overdue' as const }

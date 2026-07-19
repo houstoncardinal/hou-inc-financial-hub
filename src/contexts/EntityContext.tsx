@@ -50,8 +50,8 @@ export const ENTITIES: Entity[] = [
     description:
       'Real estate development, asset management, construction lending, bank loan administration, interest income, and cross-entity capital allocation.',
     category: 'Holdings & Development',
-    color: '#2C5F8A',
-    colorMuted: 'rgba(44,95,138,0.10)',
+    color: '#047857',
+    colorMuted: 'rgba(4,120,87,0.10)',
     since: 2010,
     type: 'holdings',
   },
@@ -114,6 +114,21 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     // Persist to Supabase user metadata — durable across devices and sessions.
     supabase.auth.updateUser({ data: { [META_KEY]: e?.id ?? null } }).catch(() => {});
   };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const accent = entity?.color ?? '#9D7E3F';
+    const muted = entity?.colorMuted ?? 'rgba(157,126,63,0.10)';
+    const secondary = entity?.id === 'houston-generator-pros'
+      ? '#334155'
+      : entity?.id === 'houston-enterprise-holdings'
+        ? '#065f46'
+        : '#1e3a5f';
+    root.dataset.financeEntity = entity?.id ?? 'houston-enterprise';
+    root.style.setProperty('--entity-accent', accent);
+    root.style.setProperty('--entity-accent-muted', muted);
+    root.style.setProperty('--entity-secondary', secondary);
+  }, [entity?.id, entity?.color, entity?.colorMuted]);
 
   return (
     <EntityContext.Provider value={{ entity, setEntity, ready }}>

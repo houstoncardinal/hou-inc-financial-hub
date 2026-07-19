@@ -16,11 +16,13 @@ describe('entity-aware finance profiles', () => {
     expect(he.modules).toContain('projects');
   });
 
-  it('HGP gets the generator overview and no construction WIP controls', () => {
+  it('HGP gets the generator overview, guided entry, and shared finance controls', () => {
     const hgp = financeProfileFor('houston-generator-pros');
     expect(hgp.overview).toBe('generator');
-    expect(entityHasModule('houston-generator-pros', 'controls')).toBe(false);
-    expect(entityHasModule('houston-generator-pros', 'concierge')).toBe(false);
+    expect(entityHasModule('houston-generator-pros', 'clients')).toBe(true);
+    expect(entityHasModule('houston-generator-pros', 'controls')).toBe(true);
+    expect(entityHasModule('houston-generator-pros', 'reports')).toBe(true);
+    expect(entityHasModule('houston-generator-pros', 'concierge')).toBe(true);
     expect(entityHasModule('houston-generator-pros', 'ledger')).toBe(true);
     expect(moduleLabel('houston-generator-pros', 'projects', 'Projects')).toBe('Install Jobs');
     expect(moduleLabel('houston-generator-pros', 'vendors', 'Vendors')).toBe('Suppliers');
@@ -29,7 +31,9 @@ describe('entity-aware finance profiles', () => {
   it('Holdings gets the holdings overview with capital terminology', () => {
     const heh = financeProfileFor('houston-enterprise-holdings');
     expect(heh.overview).toBe('holdings');
-    expect(entityHasModule('houston-enterprise-holdings', 'controls')).toBe(false);
+    expect(entityHasModule('houston-enterprise-holdings', 'controls')).toBe(true);
+    expect(entityHasModule('houston-enterprise-holdings', 'reports')).toBe(true);
+    expect(entityHasModule('houston-enterprise-holdings', 'clients')).toBe(false);
     expect(entityHasModule('houston-enterprise-holdings', 'checks')).toBe(true);
     expect(moduleLabel('houston-enterprise-holdings', 'projects', 'Projects')).toBe('Assets & Deals');
     expect(moduleLabel('houston-enterprise-holdings', 'expenses', 'Expenses')).toBe('Corporate Expenses');
@@ -71,6 +75,20 @@ describe('entity-aware finance profiles', () => {
     expect(entityHasModule('houston-enterprise', 'inventory')).toBe(false);
     expect(entityHasModule('houston-enterprise-holdings', 'inventory')).toBe(false);
     expect(moduleLabel('houston-generator-pros', 'inventory', 'Inventory')).toBe('Inventory');
+  });
+
+  it('procurement hedge beta tool is scoped to Houston Enterprise', () => {
+    expect(entityHasModule('houston-enterprise', 'procurement')).toBe(true);
+    expect(entityHasModule('houston-generator-pros', 'procurement')).toBe(false);
+    expect(entityHasModule('houston-enterprise-holdings', 'procurement')).toBe(false);
+    expect(ROUTE_MODULES['/beta/procurement']).toBe('procurement');
+  });
+
+  it('client accounts route is scoped to operating companies', () => {
+    expect(entityHasModule('houston-enterprise', 'clients')).toBe(true);
+    expect(entityHasModule('houston-generator-pros', 'clients')).toBe(true);
+    expect(entityHasModule('houston-enterprise-holdings', 'clients')).toBe(false);
+    expect(ROUTE_MODULES['/clients']).toBe('clients');
   });
 
   it('every profile ships non-empty category catalogs, document tags, and a projects header', () => {

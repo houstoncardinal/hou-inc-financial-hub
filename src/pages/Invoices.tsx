@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useInvoices, invoiceTotal, invoiceSubtotal, invoiceTax, Invoice } from '@/hooks/useInvoices';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { Plus, Trash2, Eye, FileText, Table2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateInvoicesReport, savePDF, downloadInvoiceExcel } from '@/lib/reports';
@@ -54,7 +54,7 @@ export default function Invoices() {
       tax: invoiceTax(inv),
       total: invoiceTotal(inv),
     })));
-    savePDF(doc, `hou-invoices-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-invoices-${todayLocalDate()}.pdf`);
     toast.success('Invoice register exported as PDF');
   };
 

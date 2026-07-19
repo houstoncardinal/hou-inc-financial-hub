@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Edit3, Check, X, ChevronDown,
@@ -611,7 +611,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
       payments: enriched?.incomeList ?? [],
       fin,
     });
-    savePDF(doc, `houston-enterprise-reconciliation-${(project?.name || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `houston-enterprise-reconciliation-${(project?.name || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${todayLocalDate()}.pdf`);
     toast.success('Houston Enterprise Reconciliation exported');
   };
 
@@ -787,7 +787,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     const amount = Number(draw.draw_amount || 0);
     if (amount <= 0) throw new Error('Funded draw amount must be greater than zero to create income');
 
-    const transactionDate = draw.scheduled_date || draw.billing_period_end || new Date().toISOString().slice(0, 10);
+    const transactionDate = draw.scheduled_date || draw.billing_period_end || todayLocalDate();
     const payload = {
       user_id: user.id,
       entity_id: entityId,

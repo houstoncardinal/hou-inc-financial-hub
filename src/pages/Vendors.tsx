@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useChecks, useDelete, useTransactions, useUpsert, useVendors } from '@/hooks/useFinance';
-import { fmtUSD } from '@/lib/format';
+import { fmtUSD, todayLocalDate } from '@/lib/format';
 import {
   Trash2, Download, FileSpreadsheet, Plus, Building2, ShieldCheck,
   AlertTriangle, CircleDollarSign, ClipboardCheck, Search, ChevronRight,
@@ -100,7 +100,7 @@ export default function Vendors() {
   const exportCSV = () => {
     downloadCSV(
       enriched,
-      `hou-vendors-${new Date().toISOString().slice(0, 10)}.csv`,
+      `hou-vendors-${todayLocalDate()}.csv`,
       ['Name', 'EIN', 'Email', 'Phone', 'W9 On File', '1099 Required', 'Lien Waiver Req', 'Total Paid', 'Transactions', 'Notes'],
       (v: any) => [v.name, v.ein || '', v.contact_email || '', v.contact_phone || '', v.w9_on_file ? 'Yes' : 'No', v.requires_1099 ? 'Yes' : 'No', v.lien_waiver_required ? 'Yes' : 'No', v.totalPaid, v.txnCount, v.notes || '']
     );
@@ -113,7 +113,7 @@ export default function Vendors() {
     if (!eligible.length) { toast.error('No 1099-eligible vendors found'); return; }
     downloadCSV(
       eligible,
-      `hou-1099-summary-${new Date().toISOString().slice(0, 10)}.csv`,
+      `hou-1099-summary-${todayLocalDate()}.csv`,
       ['Vendor Name', 'EIN', 'Email', 'Phone', 'Total Paid (YTD)', 'W9 On File'],
       (v: any) => [v.name, v.ein || 'MISSING', v.contact_email || '', v.contact_phone || '', v.totalPaid, v.w9_on_file ? 'Yes' : 'No — COLLECT W9']
     );

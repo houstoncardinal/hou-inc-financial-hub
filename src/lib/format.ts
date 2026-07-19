@@ -3,6 +3,20 @@ export const fmtUSD = (n: number | string | null | undefined) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v || 0);
 };
 
+// `new Date().toISOString().slice(0, 10)` gives the UTC calendar date, which
+// runs ahead of local date for the evening hours in any UTC-negative zone
+// (e.g. all of the US) — a check/transaction logged at 8pm Houston time gets
+// stamped "tomorrow", then vanishes from range filters that compare against
+// local "now" until the browser's clock actually reaches that date. Use this
+// wherever a date field should default to "today".
+export const todayLocalDate = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const fmtDate = (d: string | Date | null | undefined) => {
   if (!d) return '—';
   // Bare "YYYY-MM-DD" (what Postgres DATE columns come back as) has no

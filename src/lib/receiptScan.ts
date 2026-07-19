@@ -1,3 +1,5 @@
+import { todayLocalDate } from '@/lib/format';
+
 export interface ScannedReceipt {
   amount: string;
   date: string;
@@ -10,7 +12,7 @@ export async function scanReceipt(imageDataUrl: string): Promise<ScannedReceipt>
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY_MISSING');
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalDate();
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

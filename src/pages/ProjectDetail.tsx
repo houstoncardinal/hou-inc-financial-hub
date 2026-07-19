@@ -15,7 +15,7 @@ import { useProjectFinancialSummary } from '@/hooks/useConstructionFinance';
 import { usePortalClients } from '@/hooks/usePortalClients';
 import { useRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
-import { fmtUSD, fmtDate, fmtBytes } from '@/lib/format';
+import { fmtUSD, fmtDate, fmtBytes, todayLocalDate } from '@/lib/format';
 import { generateProjectReport, savePDF, downloadCSV } from '@/lib/reports';
 import {
   useProjectDocuments, useUploadDocument, useDeleteDocument,
@@ -225,7 +225,7 @@ export default function ProjectDetail() {
         phase_label: photoPhase.trim() || 'General',
         url: pub.publicUrl,
         caption: photoCaption.trim() || null,
-        taken_at: new Date().toISOString().slice(0, 10),
+        taken_at: todayLocalDate(),
       });
       if (insErr) throw insErr;
       toast.success('Photo uploaded — now visible in the client portal');
@@ -494,12 +494,12 @@ export default function ProjectDetail() {
   const exportPDF = () => {
     if (!enriched) return;
     const doc = generateProjectReport([enriched]);
-    savePDF(doc, `hou-project-${enriched.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-project-${enriched.name.toLowerCase().replace(/\s+/g, '-')}-${todayLocalDate()}.pdf`);
     toast.success('Project report exported');
   };
   const exportCSV = () => {
     if (!sortedActivity) return;
-    downloadCSV(sortedActivity, `hou-project-activity-${new Date().toISOString().slice(0, 10)}.csv`,
+    downloadCSV(sortedActivity, `hou-project-activity-${todayLocalDate()}.csv`,
       ['Date', 'Type', 'Reference', 'Amount'], (r: any) => [r.date?.slice(0, 10), r.type, r.ref, r.amount]);
     toast.success('Activity exported');
   };

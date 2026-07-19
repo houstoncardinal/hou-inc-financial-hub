@@ -12,6 +12,7 @@ import RoleGuard from "@/components/RoleGuard";
 import { EntityProvider, useEntity } from "@/contexts/EntityContext";
 import { entityHasModule, type FinanceModuleKey } from "@/lib/entityFinance";
 import { isSchemaCacheError, recordSystemHealthEvent } from "@/lib/systemHealth";
+import HelpRequestLauncher from "@/components/HelpRequestLauncher";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -72,6 +73,7 @@ import Admin from "./pages/Admin";
 import EntitySelect  from "./pages/EntitySelect";
 import EntityOverview from "./pages/EntityOverview";
 import HgpJobs from "./pages/entity/HgpJobs";
+import HoldingsAssets from "./pages/entity/HoldingsAssets";
 import StormResponse from "./pages/entity/StormResponse";
 import HgpInventory from "./pages/entity/HgpInventory";
 import Auth          from "./pages/Auth";
@@ -81,6 +83,7 @@ import TxnPage       from "./pages/TxnPage";
 import Ledger        from "./pages/Ledger";
 import Projects      from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
+import Clients       from "./pages/Clients";
 import Vendors       from "./pages/Vendors";
 import Concierge     from "./pages/Concierge";
 import Charts        from "./pages/Charts";
@@ -91,6 +94,8 @@ import InvoiceNew    from "./pages/InvoiceNew";
 import Documents     from "./pages/Documents";
 import OpsCenter     from "./pages/OpsCenter";
 import FinanceControls from "./pages/FinanceControls";
+import Reports        from "./pages/Reports";
+import ProcurementEngine from "./pages/ProcurementEngine";
 import NotFound      from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -135,6 +140,7 @@ function EntityProjects() {
   const { entity, ready } = useEntity();
   if (!ready) return null;
   if (entity?.id === 'houston-generator-pros') return <HgpJobs />;
+  if (entity?.id === 'houston-enterprise-holdings') return <HoldingsAssets />;
   return <Projects />;
 }
 
@@ -153,10 +159,13 @@ function FinanceRoutes() {
         <Route path="/ledger"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Ledger /></RoleGuard>} />
         <Route path="/projects"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntityProjects /></RoleGuard>} />
         <Route path="/projects/:id"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><ProjectDetail /></RoleGuard>} />
+        <Route path="/clients"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="clients"><Clients /></ModuleGuard></RoleGuard>} />
         <Route path="/vendors"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><Vendors /></RoleGuard>} />
         <Route path="/concierge"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="concierge"><Concierge /></ModuleGuard></RoleGuard>} />
         <Route path="/charts"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Charts /></RoleGuard>} />
         <Route path="/finance/controls"   element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="controls"><FinanceControls /></ModuleGuard></RoleGuard>} />
+        <Route path="/reports"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="reports"><Reports /></ModuleGuard></RoleGuard>} />
+        <Route path="/beta/procurement"   element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="procurement"><ProcurementEngine /></ModuleGuard></RoleGuard>} />
         <Route path="/changelog"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><Changelog /></RoleGuard>} />
         <Route path="/invoices"           element={<RoleGuard allowed={[...FINANCE_ROLES]}><Invoices /></RoleGuard>} />
         <Route path="/invoices/new"       element={<RoleGuard allowed={[...FINANCE_ROLES]}><InvoiceNew /></RoleGuard>} />
@@ -183,6 +192,7 @@ const App = () => (
             <AuthProvider>
               <ScrollToTop />
               <GlobalShortcuts />
+              <HelpRequestLauncher />
               <Routes>
                 {/* ── Public website ── */}
                 <Route path="/"          element={<Home />} />

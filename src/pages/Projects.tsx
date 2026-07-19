@@ -19,7 +19,7 @@ import {
 import { useChecks, useDelete, useProjects, useTransactions, useUpsert } from '@/hooks/useFinance';
 import { useRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
-import { fmtUSD } from '@/lib/format';
+import { fmtUSD, todayLocalDate } from '@/lib/format';
 import {
   Trash2, Table2, FileText, ChevronRight, BarChart2,
   Search, Plus, Grid3X3, List, ExternalLink,
@@ -396,7 +396,7 @@ export default function Projects() {
   }, [enriched, filter, categoryFilter, search, sortBy, sortDir]);
 
   /* ── Exports ── */
-  const exportPDF   = () => { const doc = generateProjectReport(enriched); savePDF(doc, `hou-projects-${new Date().toISOString().slice(0, 10)}.pdf`); toast.success('Portfolio exported'); };
+  const exportPDF   = () => { const doc = generateProjectReport(enriched); savePDF(doc, `hou-projects-${todayLocalDate()}.pdf`); toast.success('Portfolio exported'); };
   const exportExcel = () => { downloadProjectExcel(enriched); toast.success('Projects exported as Excel'); };
 
   /* ── Form ── */
@@ -664,11 +664,13 @@ export default function Projects() {
           </div>
         </div>
 
-        {/* Status filter tabs — scrollable on mobile */}
-        <div className="flex overflow-x-auto gap-0 border border-border shrink-0 sm:ml-auto scrollbar-none">
+        {/* Status filter tabs — equal-width grid on mobile so all 5 are
+            visible and tappable with no horizontal scrolling; natural-width
+            row on desktop where there's room to spare. */}
+        <div className="grid grid-cols-5 sm:flex sm:overflow-x-auto gap-0 border border-border shrink-0 sm:ml-auto scrollbar-none">
           {(['all', 'active', 'on_hold', 'completed', 'archived'] as const).map(s => (
             <button key={s} onClick={() => setFilter(s)}
-              className={`px-3 py-2.5 text-[9px] uppercase tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap ${
+              className={`px-1 sm:px-3 py-2.5 text-[7.5px] sm:text-[9px] uppercase tracking-[0.04em] sm:tracking-[0.12em] font-bold border-r border-border last:border-r-0 transition-all whitespace-nowrap text-center truncate ${
                 filter === s ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground hover:bg-secondary/50'
               }`}>
               {s === 'all' ? `All (${counts.all})` : s === 'on_hold' ? `Hold (${counts.on_hold})` : `${S[s].label} (${counts[s]})`}

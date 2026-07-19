@@ -18,11 +18,11 @@ export default function PageHeader({
           {eyebrow && <div className="micro-label">{eyebrow}</div>}
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight">{title}</h1>
           {description && (
-            <p className="text-sm text-muted-foreground max-w-2xl hidden sm:block">{description}</p>
+            <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground max-w-2xl">{description}</p>
           )}
         </div>
         {actions && (
-          <div className="flex items-center gap-2 min-w-0 lg:shrink-0">{actions}</div>
+          <div className="flex flex-wrap items-center gap-2 min-w-0 lg:shrink-0 [&>*]:min-w-0">{actions}</div>
         )}
       </div>
     </div>

@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useChecks, useLedgerPage, useProjects, useTransactions, useUpsert, useDelete, useQuickCreate, useVendors } from '@/hooks/useFinance';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { generateLedgerReport, generateLedgerRecordReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
 import { useEntity } from '@/contexts/EntityContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -133,9 +133,13 @@ const LDG_CSS = `
 .ldg-live-dot{width:7px;height:7px;border-radius:999px;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.13);}
 .ldg-recon-row-action{height:30px;min-width:30px;border:1px solid hsl(var(--border));background:hsl(var(--background));display:inline-flex;align-items:center;justify-content:center;color:hsl(var(--foreground)/.58);transition:background .16s,border-color .16s,color .16s;}
 .ldg-recon-row-action:hover{background:hsl(var(--secondary)/.55);border-color:hsl(var(--foreground)/.22);color:hsl(var(--foreground));}
-.ldg-op-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.045);transition:background .16s,border-color .16s,box-shadow .16s;}
-.ldg-op-card:hover{background:hsl(var(--secondary)/0.22);border-color:hsl(var(--foreground)/0.18);box-shadow:0 4px 14px rgba(10,10,10,0.06);}
-.ldg-op-card.active{background:hsl(var(--secondary)/0.45);border-color:hsl(var(--foreground)/0.26);box-shadow:inset 0 0 0 1px hsl(var(--foreground)/0.08),0 4px 14px rgba(10,10,10,0.07);}
+.ldg-intel-card{position:relative;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;transition:box-shadow .18s,transform .18s,border-color .18s;overflow:hidden;}
+.ldg-intel-card:before{content:"";position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,0.055),transparent 44%);pointer-events:none;}
+.ldg-intel-card:hover{box-shadow:0 8px 22px rgba(10,10,10,0.08);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
+.ldg-intel-card.active{border-color:hsl(var(--foreground)/0.32);box-shadow:inset 0 0 0 1px hsl(var(--foreground)/0.14),0 6px 18px rgba(10,10,10,0.08);}
+.ldg-card-foot{border-top:1px solid hsl(var(--border)/0.65);background:hsl(var(--secondary)/0.24);}
+.ldg-op-spark{height:40px;width:60px;}
+.dark .ldg-intel-card{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.05) inset;}
 .ldg-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}
 .ldg-inspector{background:#fff;border-left:1px solid #d8d8d8;box-shadow:-18px 0 54px rgba(10,10,10,0.16);position:fixed;right:0;top:0;bottom:0;width:min(440px,calc(100vw - 24px));z-index:60;color:#111;overflow:hidden;}
 .ldg-inspector-body{padding:12px;display:grid;gap:9px;max-height:calc(100vh - 132px);overflow-y:auto;}
@@ -309,19 +313,41 @@ function ExportButton({
 }
 
 function OperationalMetric({
-  label, value, detail, icon: Icon, tone = 'text-foreground', active, onClick,
-}: { label: string; value: string; detail: string; icon: ComponentType<any>; tone?: string; active?: boolean; onClick?: () => void }) {
+  label, value, detail, icon: Icon, color = '#111827', active, onClick, flagged, total, rangeLabel,
+}: {
+  label: string; value: string; detail: string; icon: ComponentType<any>; color?: string;
+  active?: boolean; onClick?: () => void; flagged: number; total: number; rangeLabel: string;
+}) {
+  const clear = Math.max(0, total - flagged);
+  const chartData = [{ label: 'Flagged', value: flagged }, { label: 'Clear', value: clear }];
+  const pct = total ? Math.round((flagged / total) * 100) : 0;
   return (
-    <button type="button" onClick={onClick} className={`ldg-op-card p-2.5 min-w-0 w-full text-left ${active ? 'active' : ''}`}>
-      <div className="flex items-start justify-between gap-2">
+    <button type="button" onClick={onClick} className={`ldg-intel-card text-left w-full min-w-0 ${active ? 'active' : ''}`}>
+      <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ backgroundColor: color }} />
+      <div className="relative flex items-start justify-between gap-2 p-2.5 pb-2">
         <div className="min-w-0">
-          <div className="text-[8px] uppercase tracking-[0.18em] text-foreground/55 font-bold truncate">{label}</div>
-          <div className={`text-base font-bold font-mono-tab leading-tight mt-1 ${tone}`}>{value}</div>
-          <div className="text-[9px] text-foreground/48 mt-1 truncate">{detail}</div>
+          <div className="flex items-center gap-1.5 text-[8px] uppercase tracking-[0.16em] text-foreground/58 font-bold mb-1">
+            <Icon className="w-3 h-3 shrink-0" strokeWidth={1.6} /> <span className="truncate">{label}</span>
+          </div>
+          <div className="text-lg font-bold font-mono-tab leading-tight" style={{ color: flagged > 0 ? color : undefined }}>{value}</div>
+          <div className="text-[9px] text-foreground/58 mt-1 truncate">{detail}</div>
         </div>
-        <div className="w-7 h-7 flex items-center justify-center border border-border bg-secondary/35 shrink-0">
-          <Icon className="w-3.5 h-3.5 text-foreground/62" strokeWidth={1.55} />
+        <div className="ldg-op-spark shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <XAxis dataKey="label" hide />
+              <YAxis hide />
+              <RechartsTooltip cursor={false} formatter={(v: number) => Number(v).toLocaleString()} contentStyle={{ borderRadius: 0, border: '1px solid #ddd6c8', fontSize: 11 }} />
+              <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                {chartData.map((d, i) => <Cell key={d.label} fill={i === 0 ? color : 'hsl(var(--border))'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
+      </div>
+      <div className="ldg-card-foot relative px-2.5 py-1.5 flex items-center justify-between gap-2">
+        <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-foreground/46 truncate">{rangeLabel}</span>
+        <span className="text-[9px] font-mono-tab font-semibold text-foreground/66 truncate">{total ? `${pct}% of ${total}` : 'No records'}</span>
       </div>
     </button>
   );
@@ -756,6 +782,7 @@ export default function Ledger() {
   const [type, setType] = useState('all');
   const [timePeriod, setTimePeriod] = useState('all');
   const [queueFilter, setQueueFilter] = useState<LedgerQueueKey>('all');
+  const [chartFilterLabel, setChartFilterLabel] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState<'income' | 'expense' | 'check' | null>(null);
@@ -782,6 +809,38 @@ export default function Ledger() {
   });
 
   useEffect(() => {
+    const applyChartFilter = (payload: any) => {
+      if (!payload || payload.entityId !== entity?.id) return;
+      setQ(payload.search || '');
+      setType(payload.type && payload.type !== 'all' ? payload.type : 'all');
+      setProject(payload.projectId || 'all');
+      setQueueFilter('all');
+      setPage(1);
+      setChartFilterLabel(payload.label || '');
+    };
+    try {
+      const raw = sessionStorage.getItem('hou-ledger-cross-filter');
+      if (raw) applyChartFilter(JSON.parse(raw));
+    } catch {
+      // Ignore stale or hand-edited session storage.
+    }
+    const onFilter = (event: Event) => applyChartFilter((event as CustomEvent).detail);
+    const onClear = () => {
+      setChartFilterLabel('');
+      setQ('');
+      setType('all');
+      setProject('all');
+      setPage(1);
+    };
+    window.addEventListener('hou:ledger-filter', onFilter);
+    window.addEventListener('hou:ledger-filter-clear', onClear);
+    return () => {
+      window.removeEventListener('hou:ledger-filter', onFilter);
+      window.removeEventListener('hou:ledger-filter-clear', onClear);
+    };
+  }, [entity?.id]);
+
+  useEffect(() => {
     if (!entity?.id) return;
     const refreshLedger = () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
@@ -801,9 +860,9 @@ export default function Ledger() {
   const [expenseStep, setExpenseStep] = useState(1);
   const [checkStep,   setCheckStep]   = useState(1);
 
-  const blankIncome  = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), source_name: '', project_id: '', category: '', notes: '', payment_method: '', check_reference: '', retainage_percent: '', retainage_amount: '', cost_phase: '' };
-  const blankExpense = { amount: '', transaction_date: new Date().toISOString().slice(0, 10), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '', cost_type: '', check_reference: '', cost_phase: '' };
-  const blankCheck   = { amount: '', issue_date: new Date().toISOString().slice(0, 10), payee_name: '', check_number: '', memo: '', project_id: '' };
+  const blankIncome  = { amount: '', transaction_date: todayLocalDate(), source_name: '', project_id: '', category: '', notes: '', payment_method: '', check_reference: '', retainage_percent: '', retainage_amount: '', cost_phase: '' };
+  const blankExpense = { amount: '', transaction_date: todayLocalDate(), vendor_id: '', project_id: '', category: '', notes: '', payment_method: '', cost_type: '', check_reference: '', cost_phase: '' };
+  const blankCheck   = { amount: '', issue_date: todayLocalDate(), payee_name: '', check_number: '', memo: '', project_id: '' };
 
   const [formIncome,  setFormIncome]  = useState(blankIncome);
   const [formExpense, setFormExpense] = useState(blankExpense);
@@ -902,7 +961,7 @@ export default function Ledger() {
     if (key === 'duplicates') return refKey && refKey !== '—' && (duplicateRefs.get(refKey) ?? 0) > 1;
     if (key === 'pending_approval') return ['draft', 'submitted', 'under_review', 'pending_approval'].includes(status);
     if (key === 'large_transactions') return Math.abs(Number(r.amount || 0)) >= 10000;
-    if (key === 'imported_today') return String(r.raw?.created_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10) && r.raw?.import_batch_id;
+    if (key === 'imported_today') return String(r.raw?.created_at || '').slice(0, 10) === todayLocalDate() && r.raw?.import_batch_id;
     if (key === 'open_checks') return r._kind === 'check' && !r.reconciled && r.status !== 'voided';
     return true;
   };
@@ -995,7 +1054,7 @@ export default function Ledger() {
   }, [rows]);
 
   const operationalMetrics = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalDate();
     const duplicateCount = scopedRows.filter(r => {
       const key = String(r.ref || '').trim().toLowerCase();
       return key && key !== '—' && (duplicateRefs.get(key) ?? 0) > 1;
@@ -1007,13 +1066,14 @@ export default function Ledger() {
     const largeTransactions = scopedRows.filter(r => Math.abs(Number(r.amount || 0)) >= 10000).length;
     const importedToday = scopedRows.filter(r => String(r.raw?.created_at || '').slice(0, 10) === today && r.raw?.import_batch_id).length;
     const openChecks = scopedRows.filter(r => r._kind === 'check' && !r.reconciled && r.status !== 'voided').length;
+    const total = scopedRows.length;
     return [
-      { key: 'needs_review' as LedgerQueueKey, label: 'Needs Review', value: String(openRecon + pendingApproval), detail: 'Open, draft, or submitted records', icon: AlertTriangle, tone: openRecon ? 'text-warning' : 'text-positive' },
-      { key: 'missing_receipts' as LedgerQueueKey, label: 'Missing Docs', value: String(missingReceipts), detail: 'Receipts or invoices needed', icon: Receipt, tone: missingReceipts ? 'text-warning' : 'text-foreground' },
-      { key: 'uncategorized' as LedgerQueueKey, label: 'Job-Cost Coding', value: String(uncategorized), detail: 'Needs category or cost code', icon: Layers, tone: uncategorized ? 'text-warning' : 'text-foreground' },
-      { key: 'duplicates' as LedgerQueueKey, label: 'Duplicate Refs', value: String(duplicateCount), detail: 'Possible duplicate entries', icon: CopyIcon, tone: duplicateCount ? 'text-destructive' : 'text-foreground' },
-      { key: 'large_transactions' as LedgerQueueKey, label: 'High Value', value: String(largeTransactions), detail: '$10k+ audit review', icon: CircleDollarSign, tone: largeTransactions ? 'text-foreground' : 'text-foreground' },
-      { key: 'open_checks' as LedgerQueueKey, label: 'Open Checks', value: String(openChecks), detail: 'Uncleared instruments', icon: FileText, tone: openChecks ? 'text-warning' : 'text-foreground' },
+      { key: 'needs_review' as LedgerQueueKey, label: 'Needs Review', value: String(openRecon + pendingApproval), detail: 'Open, draft, or submitted records', icon: AlertTriangle, color: openRecon ? '#f59e0b' : '#10b981', flagged: openRecon + pendingApproval, total },
+      { key: 'missing_receipts' as LedgerQueueKey, label: 'Missing Docs', value: String(missingReceipts), detail: 'Receipts or invoices needed', icon: Receipt, color: missingReceipts ? '#f59e0b' : '#111827', flagged: missingReceipts, total },
+      { key: 'uncategorized' as LedgerQueueKey, label: 'Job-Cost Coding', value: String(uncategorized), detail: 'Needs category or cost code', icon: Layers, color: uncategorized ? '#f59e0b' : '#111827', flagged: uncategorized, total },
+      { key: 'duplicates' as LedgerQueueKey, label: 'Duplicate Refs', value: String(duplicateCount), detail: 'Possible duplicate entries', icon: CopyIcon, color: duplicateCount ? '#dc2626' : '#111827', flagged: duplicateCount, total },
+      { key: 'large_transactions' as LedgerQueueKey, label: 'High Value', value: String(largeTransactions), detail: '$10k+ audit review', icon: CircleDollarSign, color: '#9D7E3F', flagged: largeTransactions, total },
+      { key: 'open_checks' as LedgerQueueKey, label: 'Open Checks', value: String(openChecks), detail: 'Uncleared instruments', icon: FileText, color: openChecks ? '#f59e0b' : '#111827', flagged: openChecks, total },
     ];
   }, [scopedRows, duplicateRefs]);
 
@@ -1028,13 +1088,16 @@ export default function Ledger() {
   const serverRows = useMemo(() => (ledgerPageRows as any[]).map((r: any) => {
     const kind = r.row_kind === 'check' ? 'check' : r.ledger_type;
     const amount = Number(r.amount || 0);
+    const entityPrefix = entity?.id === 'houston-enterprise-holdings' && r.entity_label
+      ? `${r.entity_label} · `
+      : '';
     return {
       id: r.source_id,
       rowId: `${kind}-${r.source_id}`,
       date: r.ledger_date,
       type: kind === 'check' ? 'Check' : kind === 'income' ? 'Income' : 'Expense',
       ref: r.reference || '—',
-      party: r.counterparty || '—',
+      party: `${entityPrefix}${r.counterparty || '—'}`,
       project: r.project_name,
       project_id: r.project_id,
       amount,
@@ -1050,8 +1113,11 @@ export default function Ledger() {
         issue_date: r.row_kind === 'check' ? r.ledger_date : undefined,
         check_number: r.row_kind === 'check' ? r.reference : undefined,
         check_reference: r.row_kind !== 'check' ? r.reference : undefined,
-        source_name: r.row_kind !== 'check' ? r.counterparty : undefined,
-        payee_name: r.row_kind === 'check' ? r.counterparty : undefined,
+        source_name: r.row_kind !== 'check' ? `${entityPrefix}${r.counterparty || '—'}` : undefined,
+        payee_name: r.row_kind === 'check' ? `${entityPrefix}${r.counterparty || '—'}` : undefined,
+        entity_id: r.entity_id,
+        entity_label: r.entity_label,
+        entity_color: r.entity_color,
         amount: Math.abs(amount),
         total_amount: Math.abs(amount),
         status: r.status,
@@ -1060,16 +1126,18 @@ export default function Ledger() {
       },
       total_count: Number(r.total_count || 0),
     };
-  }), [ledgerPageRows]);
-  const visibleRows = serverPagedEnabled && serverRows.length ? serverRows : rows;
-  const visibleTotalCount = serverPagedEnabled && serverRows.length ? Number(serverRows[0]?.total_count || serverRows.length) : rows.length;
+  }), [ledgerPageRows, entity?.id]);
+  const serverTotalCount = serverRows.length ? Number(serverRows[0]?.total_count || serverRows.length) : 0;
+  const useServerRows = serverPagedEnabled && serverRows.length > 0 && serverTotalCount >= rows.length;
+  const visibleRows = useServerRows ? serverRows : rows;
+  const visibleTotalCount = useServerRows ? serverTotalCount : rows.length;
   const totalPages = Math.max(1, Math.ceil(visibleTotalCount / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageStart = visibleTotalCount ? (safePage - 1) * pageSize + 1 : 0;
   const pageEnd = Math.min(visibleTotalCount, safePage * pageSize);
   const pagedRows = useMemo(
-    () => (serverPagedEnabled && serverRows.length ? serverRows : rows.slice((safePage - 1) * pageSize, safePage * pageSize)),
-    [serverPagedEnabled, serverRows, rows, safePage, pageSize],
+    () => (useServerRows ? serverRows : rows.slice((safePage - 1) * pageSize, safePage * pageSize)),
+    [useServerRows, serverRows, rows, safePage, pageSize],
   );
 
   const activateQueue = (metricKey: LedgerQueueKey) => {
@@ -1113,7 +1181,7 @@ export default function Ledger() {
     const visibleExpenses = rows.filter(r => r._kind === 'expense').map(r => r.raw);
     const visibleChecks = rows.filter(r => r._kind === 'check').map(r => r.raw);
     const doc = generateLedgerReport(visibleIncome, visibleExpenses, visibleChecks, proj, `${type !== 'all' ? type : 'all'} · ${selectedRangeLabel}`);
-    savePDF(doc, `hou-general-ledger-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-general-ledger-${todayLocalDate()}.pdf`);
     toast.success('Ledger exported as PDF');
   };
 
@@ -1132,7 +1200,7 @@ export default function Ledger() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
-    savePDF(doc, `hou-ledger-record-${label}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-ledger-record-${label}-${todayLocalDate()}.pdf`);
     toast.success('Ledger record PDF exported');
   };
 
@@ -1378,11 +1446,12 @@ export default function Ledger() {
             </div>
             <div className="text-[10px] text-foreground/50 font-mono-tab hidden sm:block">{selectedRangeLabel}</div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {operationalMetrics.map(({ key: metricKey, ...metric }) => (
               <OperationalMetric
                 key={metricKey}
                 {...metric}
+                rangeLabel={selectedRangeLabel}
                 active={queueFilter === metricKey}
                 onClick={() => activateQueue(metricKey)}
               />
@@ -1403,6 +1472,27 @@ export default function Ledger() {
                 <span className="px-2 py-1 border border-border bg-secondary/25">Columns: Core</span>
               </div>
             </div>
+            {chartFilterLabel && (
+              <div className="mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-border bg-secondary/25 px-3 py-2">
+                <div>
+                  <div className="text-[8px] uppercase tracking-[0.18em] font-black text-foreground/50">Chart Cross-Filter Active</div>
+                  <div className="text-xs font-semibold">{chartFilterLabel}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('hou-ledger-cross-filter');
+                    setChartFilterLabel('');
+                    setQ('');
+                    setType('all');
+                    setProject('all');
+                    setPage(1);
+                  }}
+                  className="h-8 border border-border bg-background px-3 text-[9px] uppercase tracking-[0.14em] font-bold"
+                >
+                  Clear Chart Filter
+                </button>
+              </div>
+            )}
             <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 lg:items-center">
               <div className="relative flex-1 min-w-[220px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/45" strokeWidth={1.5} />
@@ -1592,7 +1682,7 @@ export default function Ledger() {
           {visibleTotalCount === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No entries match.</div> :
             pagedRows.map((r, index) => {
               const absoluteIndex = (safePage - 1) * pageSize + index;
-              const runningBalance = (serverPagedEnabled ? pagedRows.slice(index) : visibleRows.slice(absoluteIndex)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+              const runningBalance = (useServerRows ? pagedRows.slice(index) : visibleRows.slice(absoluteIndex)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
               const debit = r.amount < 0 ? Math.abs(r.amount) : 0;
               const credit = r.amount >= 0 ? r.amount : 0;
               return (

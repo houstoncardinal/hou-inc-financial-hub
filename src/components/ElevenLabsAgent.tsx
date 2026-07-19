@@ -20,6 +20,7 @@ import {
   generateTransactionReport,
   savePDF,
 } from '@/lib/reports';
+import { todayLocalDate } from '@/lib/format';
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID;
 
@@ -47,7 +48,7 @@ type ToolResult = {
 };
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocalDate();
 }
 
 function cleanDate(value?: string) {

@@ -10,6 +10,16 @@ const fmtDate = (s: string) => {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
+const providerLabel = (provider?: string) => {
+  switch (provider) {
+    case 'stripe': return 'Stripe';
+    case 'quickbooks': return 'QuickBooks';
+    case 'square': return 'Square';
+    case 'other': return 'External Invoice';
+    default: return 'Online Payment';
+  }
+};
+
 export function generateInvoicePDF(inv: Invoice): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const W = 215.9, M = 20;
@@ -153,15 +163,24 @@ export function generateInvoicePDF(inv: Invoice): jsPDF {
   doc.line(W - M - 70, fy - 1, W - M, fy - 1);
   drawTotLine('TOTAL DUE', fmtUSD(total), true, C.accent);
 
-  // ── Stripe payment link ──
-  if (inv.stripe_payment_link) {
-    ensureSpace(10);
+  // ── Clickable external payment / invoice link ──
+  const paymentUrl = inv.external_invoice_url || inv.stripe_payment_link;
+  if (paymentUrl) {
+    ensureSpace(14);
     fy += 2;
-    doc.setFillColor(99, 91, 255, 10);
+    const label = inv.external_invoice_label
+      || (inv.external_invoice_number
+        ? `${providerLabel(inv.external_invoice_provider)} · ${inv.external_invoice_number}`
+        : providerLabel(inv.external_invoice_provider || (inv.stripe_payment_link ? 'stripe' : undefined)));
     doc.setFontSize(7);
-    doc.setTextColor(99, 91, 255);
-    doc.text('Pay online: ' + inv.stripe_payment_link, M, fy);
-    fy += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...C.muted);
+    doc.text('PAYMENT / SOURCE LINK', M, fy);
+    fy += 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(27, 114, 181);
+    doc.textWithLink(`${label}: ${paymentUrl}`, M, fy, { url: paymentUrl });
+    fy += 7;
   }
 
   // ── Notes + Terms ──

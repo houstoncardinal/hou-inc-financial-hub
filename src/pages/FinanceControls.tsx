@@ -18,7 +18,7 @@ import {
   useVendors,
 } from '@/hooks/useFinance';
 import { supabase } from '@/integrations/supabase/client';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   BadgeDollarSign,
@@ -47,11 +47,13 @@ const CONTROL_CSS = `
 .fc-table{min-width:980px;display:grid;grid-template-columns:1.4fr .8fr .8fr .8fr .8fr .8fr .8fr .8fr;gap:10px;align-items:center;}
 .fc-row{border-bottom:1px solid hsl(var(--border));padding:10px 12px;font-size:12px;}
 .fc-row:hover{background:hsl(var(--secondary)/.35);}
+.fc-mobile-control{border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.045);padding:11px;min-width:0;}
+.fc-mobile-stat{border:1px solid hsl(var(--border));background:hsl(var(--secondary)/.24);padding:8px;min-width:0;}
 .fc-action{height:34px;border:1px solid hsl(var(--border));background:hsl(var(--background));padding:0 10px;font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
 .fc-action:hover{background:hsl(var(--secondary)/.55);border-color:hsl(var(--foreground)/.2);}
 .fc-primary{height:34px;background:hsl(var(--foreground));color:hsl(var(--background));padding:0 12px;font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
 .fc-field{height:38px;border-radius:0;font-size:12px;}
-.dark .fc-panel,.dark .fc-card,.dark .fc-action{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.05) inset;}
+.dark .fc-panel,.dark .fc-card,.dark .fc-mobile-control,.dark .fc-action{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.05) inset;}
 @media(max-width:767px){.fc-v{font-size:15px}.fc-panel{padding:12px!important}.fc-card{padding:10px!important}}
 `;
 
@@ -201,7 +203,7 @@ export default function FinanceControls() {
       const { data: imp, error: importError } = await supabase.from('finance_bank_imports' as any).insert({
         user_id: user.id,
         entity_id: entityId,
-        file_name: `manual-import-${new Date().toISOString().slice(0, 10)}.csv`,
+        file_name: `manual-import-${todayLocalDate()}.csv`,
         source: 'manual_csv',
         row_count: rows.length,
       }).select('*').single();
@@ -279,7 +281,39 @@ export default function FinanceControls() {
               </div>
               <div className="text-[10px] text-muted-foreground font-mono-tab hidden sm:block">{controls.length} projects</div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="sm:hidden space-y-2">
+              {(controls as any[]).map(row => (
+                <div key={row.project_id} className="fc-mobile-control">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-black truncate">{row.project_name}</div>
+                      <div className="text-[10px] text-muted-foreground capitalize mt-0.5">{row.project_status || 'active'}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="fc-k">Complete</div>
+                      <div className="font-mono-tab font-black">{num(row.percent_complete_cost).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mt-3">
+                    {[
+                      ['Revenue', fmtUSD(num(row.earned_revenue)), 'text-positive'],
+                      ['Actual Cost', fmtUSD(num(row.actual_cost)), 'text-foreground'],
+                      ['Margin', fmtUSD(num(row.gross_margin)), num(row.gross_margin) >= 0 ? 'text-positive' : 'text-destructive'],
+                      ['AR Open', fmtUSD(num(row.ar_open)), 'text-foreground'],
+                      ['Pending CO', fmtUSD(num(row.pending_change_orders)), 'text-warning'],
+                      ['Over/Under', fmtUSD(num(row.over_under_billed)), num(row.over_under_billed) >= 0 ? 'text-positive' : 'text-warning'],
+                    ].map(([label, value, cls]: any) => (
+                      <div key={label} className="fc-mobile-stat">
+                        <div className="fc-k">{label}</div>
+                        <div className={`font-mono-tab font-bold text-[12px] mt-1 ${cls}`}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!controls.length && <div className="py-12 text-center text-sm text-muted-foreground">No project control data yet.</div>}
+            </div>
+            <div className="hidden sm:block overflow-x-auto">
               <div className="fc-table fc-row bg-secondary/45 fc-k">
                 <div>Project</div><div>% Complete</div><div>Revenue</div><div>Actual Cost</div><div>Margin</div><div>AR Open</div><div>Pending CO</div><div>Over/Under</div>
               </div>

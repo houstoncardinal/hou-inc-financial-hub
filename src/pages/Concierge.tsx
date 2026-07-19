@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -9,19 +10,21 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate } from '@/hooks/useFinance';
-import { useCreatePortalClient, usePortalClients } from '@/hooks/usePortalClients';
+import { useTransactions, useChecks, useVendors, useProjects, useUpsert, useQuickCreate, useFinanceClientAccounts } from '@/hooks/useFinance';
 import { useUploadDocument } from '@/hooks/useDocuments';
 import { useInvoices } from '@/hooks/useInvoices';
+import { usePortalClients, useCreatePortalClient } from '@/hooks/usePortalClients';
 import { useEntity } from '@/contexts/EntityContext';
-import { fmtUSD } from '@/lib/format';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   ArrowDownToLine, ArrowUpFromLine, FileText, Users, FolderKanban,
   BookOpen, ChevronRight, Camera, Upload, X, Plus,
   PartyPopper, Check, ArrowLeft, DollarSign, Building2, User,
   Hash, CreditCard, FileSpreadsheet, MessageSquare, Calendar,
-  Sparkles, RefreshCw,
+  Sparkles, RefreshCw, Zap,
 } from 'lucide-react';
 
 /* ─── TYPES ─── */
@@ -55,6 +58,7 @@ const invoiceProviderLabel = (provider: string) => {
   if (provider === 'other') return 'External invoice';
   return '';
 };
+const txnAmount = (t: any) => Number(t?.total_amount ?? t?.amount ?? 0);
 
 interface ServiceDef {
   icon: any;
@@ -87,6 +91,7 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
     questions: [
       { id: 'amount', label: 'How much was spent?', placeholder: '0.00', type: 'number', required: true, icon: DollarSign },
       { id: 'date', label: 'When did it occur?', type: 'date', required: true, icon: Calendar },
+      { id: 'source_name', label: 'Link to a finance client account?', placeholder: 'Client account, site, or payer relationship', type: 'text', icon: User, helper: 'Optional — links this cost to a client account while staying separate from portal access.' },
       { id: 'vendor_id', label: 'Which vendor?', type: 'vendor', icon: Building2 },
       { id: 'category', label: 'What category?', type: 'category', options: ['Materials & Supplies', 'Labor & Subcontractors', 'Permits & Fees', 'Equipment Rental', 'Transportation & Freight', 'Office & Admin', 'Insurance', 'Utilities', 'Marketing & Advertising', 'Professional Services', 'Travel & Meals', 'Software & Subscriptions', 'Maintenance & Repairs', 'Taxes & Licenses', 'Miscellaneous'], icon: FileSpreadsheet },
       { id: 'payment_method', label: 'How was it paid?', type: 'payment_expense', icon: CreditCard },
@@ -102,11 +107,11 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
     questions: [
       { id: 'payee_name', label: 'Payee name?', placeholder: 'Who should this check be made out to?', type: 'text', required: true, icon: User },
       { id: 'amount', label: 'Check amount?', placeholder: '0.00', type: 'number', required: true, icon: DollarSign },
-      { id: 'check_number', label: 'Check number?', placeholder: 'e.g. 1024', type: 'text', icon: Hash },
+      { id: 'check_number', label: 'Check number?', placeholder: 'e.g. 1024', type: 'text', required: true, icon: Hash },
       { id: 'date', label: 'Date on check?', type: 'date', required: true, icon: Calendar },
       { id: 'project_id', label: 'Assign to a project?', type: 'project', icon: FolderKanban },
       { id: 'status', label: 'What is the check status?', type: 'check_status', icon: FileSpreadsheet, helper: 'Most new checks should stay pending until the bank clears them.' },
-      { id: 'retainage_pct', label: 'Retainage withheld?', placeholder: '0.00', type: 'number', icon: DollarSign, helper: 'Optional percentage retained from subcontractor/vendor payment.' },
+      { id: 'retainage_pct', label: 'Retainage withheld?', placeholder: '0.00', type: 'percent', icon: DollarSign, helper: 'Optional percentage (0-100) retained from subcontractor/vendor payment.' },
       { id: 'lien_waiver_status', label: 'Lien waiver status?', type: 'lien_waiver', icon: FileText, helper: 'Track whether lien waiver documentation is needed.' },
       { id: 'memo', label: 'Add a memo?', placeholder: 'Optional memo…', type: 'text', icon: MessageSquare },
     ],
@@ -129,11 +134,106 @@ const SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
   },
 };
 
+const HGP_SERVICE_DEFS: Record<ServiceType, ServiceDef> = {
+  income: {
+    ...SERVICE_DEFS.income,
+    label: 'Log Generator Income',
+    description: 'Record generator sale deposits, install payments, maintenance plans, emergency service, or warranty reimbursement.',
+    questions: SERVICE_DEFS.income.questions.map(q => {
+      if (q.id === 'source_name') return { ...q, label: 'Which HGP client or property paid?', placeholder: 'Customer, builder, property manager, or warranty source' };
+      if (q.id === 'payment_method') return { ...q, label: 'How did HGP receive this payment?' };
+      if (q.id === 'category') return {
+        ...q,
+        label: 'What type of HGP income is this?',
+        options: [
+          'Generator Sale', 'Generator Deposit', 'Installation Payment', 'Final Payment',
+          'Service Maintenance', 'Maintenance Plan', 'Emergency Service',
+          'Warranty Reimbursement', 'Financing Payment', 'Parts Sale', 'Other Income',
+        ],
+      };
+      if (q.id === 'cost_phase') return { ...q, label: 'Generator job phase?', type: 'hgp_phase', helper: 'Optional — classify sale, install, service, permit, or warranty work.' };
+      if (q.id === 'project_id') return { ...q, label: 'Link to an install/service job?', type: 'project', icon: Zap };
+      if (q.id === 'notes') return { ...q, placeholder: 'Generator model, site address, utility provider, service summary, warranty claim, or install notes…' };
+      return q;
+    }),
+  },
+  expense: {
+    ...SERVICE_DEFS.expense,
+    label: 'Record HGP Expense',
+    description: 'Log generator equipment, distributor invoices, electrical labor, permits, warranty/service parts, trucks, fuel, and service overhead.',
+    questions: SERVICE_DEFS.expense.questions.map(q => {
+      if (q.id === 'source_name') return { ...q, label: 'Which HGP client / generator site is this cost tied to?', placeholder: 'Customer, property, service account, or install job relationship' };
+      if (q.id === 'vendor_id') return { ...q, label: 'Which supplier / distributor / subcontractor?', icon: Building2 };
+      if (q.id === 'category') return {
+        ...q,
+        label: 'What HGP cost category?',
+        options: [
+          'Generator Equipment Purchase', 'Distributor Invoice', 'Install Materials',
+          'Electrical Labor', 'Subcontract Labor', 'Permit Fees', 'Inspection Fees',
+          'Warranty Parts', 'Service Parts', 'Truck & Fuel', 'Marketing Leads',
+          'Software', 'Insurance', 'Payroll', 'Office Overhead', 'Other',
+        ],
+      };
+      if (q.id === 'cost_phase') return { ...q, label: 'Generator job phase?', type: 'hgp_phase', helper: 'Optional — assign to survey, permit, equipment, install, inspection, service, or warranty.' };
+      if (q.id === 'project_id') return { ...q, label: 'Link to an install/service job?', icon: Zap };
+      if (q.id === 'receipt') return { ...q, label: 'Upload supplier invoice / receipt?', helper: 'Distributor invoices, Home Depot runs, fuel, permits, parts, or warranty documentation.' };
+      if (q.id === 'notes') return { ...q, placeholder: 'PO number, generator model/serial, job address, technician, truck, or service notes…' };
+      return q;
+    }),
+  },
+  check: {
+    ...SERVICE_DEFS.check,
+    label: 'Issue HGP Check',
+    description: 'Create a supplier, distributor, permit, subcontractor, warranty-parts, or service vendor check.',
+    questions: SERVICE_DEFS.check.questions.map(q => {
+      if (q.id === 'payee_name') return { ...q, label: 'Supplier / payee name?', placeholder: 'Distributor, electrician, permit office, or service vendor' };
+      if (q.id === 'project_id') return { ...q, label: 'Assign to an install/service job?', icon: Zap };
+      if (q.id === 'retainage_pct') return { ...q, label: 'Any subcontractor retainage?', helper: 'Optional retainage withheld from electrical or install subcontractors.' };
+      if (q.id === 'lien_waiver_status') return { ...q, label: 'Lien waiver / supplier paperwork?', helper: 'Useful for electrical subcontractors and larger equipment/vendor payments.' };
+      if (q.id === 'memo') return { ...q, placeholder: 'Generator equipment, permit, electrical labor, service parts, warranty work…' };
+      return q;
+    }),
+  },
+  vendor: {
+    ...SERVICE_DEFS.vendor,
+    label: 'Add Supplier',
+    description: 'Add generator distributors, electrical suppliers, subcontract electricians, permit offices, and service vendors.',
+    submitLabel: 'Add Supplier',
+    questions: SERVICE_DEFS.vendor.questions.map(q => {
+      if (q.id === 'vendor_name') return { ...q, label: 'Supplier / business name?', placeholder: 'Generac distributor, electrical supplier, subcontractor…' };
+      return q;
+    }),
+  },
+  project: {
+    ...SERVICE_DEFS.project,
+    label: 'Create Install Job',
+    description: 'Start a generator install, service, maintenance, emergency, warranty, or site-survey job.',
+    submitLabel: 'Create Job',
+    questions: SERVICE_DEFS.project.questions.map(q => {
+      if (q.id === 'project_name') return { ...q, label: 'Job / customer name?', placeholder: 'Customer - generator install / service job' };
+      if (q.id === 'project_code') return { ...q, label: 'Job code?', placeholder: 'HGP-001 or customer/job number' };
+      if (q.id === 'project_budget') return { ...q, label: 'Quoted amount / job budget?', placeholder: '0.00' };
+      return q;
+    }),
+  },
+};
+
 /* ─── INPUT RENDERERS ─── */
 function SimpleInput({ type, value, onChange, placeholder, options }: { type: string; value: string; onChange: (v: string) => void; placeholder?: string; options?: string[] }) {
   switch (type) {
     case 'number':
       return <CurrencyInput className="h-12 text-xl" placeholder={placeholder || '0.00'} value={value} onValueChange={onChange} autoFocus />;
+    case 'percent':
+      return (
+        <div className="relative">
+          <Input
+            type="number" min="0" max="100" step="0.5" inputMode="decimal"
+            className="rounded-none h-12 text-xl pr-9" placeholder={placeholder || '0.00'}
+            value={value} onChange={e => onChange(e.target.value)} autoFocus
+          />
+          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-base text-muted-foreground pointer-events-none">%</span>
+        </div>
+      );
     case 'date':
       return <DateInput className="h-12 text-base" value={value} onChange={e => onChange(e.target.value)} autoFocus />;
     case 'email':
@@ -191,6 +291,21 @@ function SimpleInput({ type, value, onChange, placeholder, options }: { type: st
           </SelectContent>
         </Select>
       );
+    case 'hgp_phase':
+      return (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select HGP phase (optional)" /></SelectTrigger>
+          <SelectContent>
+            {[
+              'Lead / Proposal', 'Site Survey', 'Load Calculation', 'Permit',
+              'Equipment Order', 'Equipment Delivery', 'Install Labor',
+              'Inspection', 'Commissioning', 'Maintenance Plan',
+              'Emergency Service', 'Warranty Work', 'Service Parts',
+              'Truck / Dispatch', 'General Overhead',
+            ].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
     case 'check_status':
       return (
         <Select value={value || 'pending'} onValueChange={onChange}>
@@ -223,6 +338,8 @@ export default function Concierge() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { entity } = useEntity();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const inputFileRef = useRef<HTMLInputElement>(null);
   const captureFileRef = useRef<HTMLInputElement>(null);
   const guidedFormRef = useRef<HTMLFormElement>(null);
@@ -239,6 +356,18 @@ export default function Concierge() {
   const [customCat, setCustomCat] = useState(false);
   const [customCatVal, setCustomCatVal] = useState('');
   const [savingEntry, setSavingEntry] = useState(false);
+  const isHgp = entity?.id === 'houston-generator-pros';
+  const isHE = entity?.id === 'houston-enterprise';
+  const activeServiceDefs = isHgp ? HGP_SERVICE_DEFS : SERVICE_DEFS;
+
+  // Client portal clients — HE-only income source picker (portal_clients is
+  // deliberately separate from finance_client_accounts, migration
+  // 20260718000009_finance_client_portal_separation.sql).
+  const { data: portalClients = [] } = usePortalClients();
+  const createPortalClient = useCreatePortalClient();
+  const [quickPortalClientOpen, setQuickPortalClientOpen] = useState(false);
+  const [quickPortalClientName, setQuickPortalClientName] = useState('');
+  const [creatingPortalClient, setCreatingPortalClient] = useState(false);
 
   // Inline quick-create forms (replaces browser prompt())
   const [quickVendorOpen, setQuickVendorOpen] = useState(false);
@@ -259,18 +388,32 @@ export default function Concierge() {
   const checkUpsert = useUpsert('checks', [['checks']]);
   const vendorCreate = useQuickCreate('vendors');
   const projectCreate = useQuickCreate('projects');
-  const clientCreate = useCreatePortalClient();
   const uploadDocument = useUploadDocument();
 
-  const { data: vendors = [] } = useVendors();
-  const { data: projects = [] } = useProjects();
-  const { data: portalClients = [] } = usePortalClients();
+  const { data: vendorsRaw = [] } = useVendors();
+  const { data: projectsRaw = [] } = useProjects();
+  // Inline-created vendors/projects merge in immediately so the picker can
+  // show + auto-select the new one before the underlying query refetches —
+  // otherwise the Select's value points at an id with no matching item yet.
+  const [extraVendors, setExtraVendors] = useState<any[]>([]);
+  const [extraProjects, setExtraProjects] = useState<any[]>([]);
+  const vendors = useMemo(() => {
+    const byId = new Map<string, any>();
+    [...vendorsRaw, ...extraVendors].forEach(v => v?.id && byId.set(v.id, v));
+    return Array.from(byId.values());
+  }, [vendorsRaw, extraVendors]);
+  const projects = useMemo(() => {
+    const byId = new Map<string, any>();
+    [...projectsRaw, ...extraProjects].forEach(p => p?.id && byId.set(p.id, p));
+    return Array.from(byId.values());
+  }, [projectsRaw, extraProjects]);
+  const { data: financeClients = [] } = useFinanceClientAccounts();
   const { invoices = [], update: updateInvoice } = useInvoices();
   const { data: income = [] } = useTransactions('income');
   const { data: expenses = [] } = useTransactions('expense');
   const { data: checks = [] } = useChecks();
 
-  const service = serviceType ? SERVICE_DEFS[serviceType] : null;
+  const service = serviceType ? activeServiceDefs[serviceType] : null;
   const questions = service?.questions || [];
   const currentQuestion = questions[step] || null;
   const isLast = service && questions.slice(step + 1).every(q => q.skipIf?.(data));
@@ -278,23 +421,39 @@ export default function Concierge() {
   const mtd = useMemo(() => {
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
     const inMonth = (d: string) => new Date(d) >= start;
-    const inflow = income.filter((t: any) => inMonth(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const outflow = expenses.filter((t: any) => inMonth(t.transaction_date)).reduce((s: number, t: any) => s + Number(t.amount), 0) + checks.filter((c: any) => inMonth(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
-    const totalIn = income.reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const totalOut = expenses.reduce((s: number, t: any) => s + Number(t.amount), 0) + checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+    const inflow = income.filter((t: any) => inMonth(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0);
+    const outflow = expenses.filter((t: any) => inMonth(t.transaction_date)).reduce((s: number, t: any) => s + txnAmount(t), 0) + checks.filter((c: any) => inMonth(c.issue_date) && c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
+    const totalIn = income.reduce((s: number, t: any) => s + txnAmount(t), 0);
+    const totalOut = expenses.reduce((s: number, t: any) => s + txnAmount(t), 0) + checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
     return { inflow, outflow, net: inflow - outflow, balance: totalIn - totalOut };
   }, [income, expenses, checks]);
 
   const getVal = (id: string) => data[id] || '';
   const setVal = (id: string, v: string) => setData(prev => ({ ...prev, [id]: v }));
 
+  // checks.check_number is NOT NULL in the DB — mirror CheckNew.tsx's
+  // auto-numbering so the guided flow can't submit a blank one.
+  const nextCheckNumber = useMemo(() => {
+    const nums = checks.map((c: any) => parseInt(c.check_number, 10)).filter((n: number) => !isNaN(n));
+    return String((nums.length ? Math.max(...nums) : 1000) + 1);
+  }, [checks]);
+
   const startService = (type: ServiceType) => {
-    const def = SERVICE_DEFS[type];
+    const def = activeServiceDefs[type];
     const defaults: Record<string, string> = {};
     def.questions.forEach(q => {
-      if (q.type === 'date') defaults[q.id] = new Date().toISOString().slice(0, 10);
+      if (q.type === 'date') defaults[q.id] = todayLocalDate();
+      else if (q.id === 'check_number') defaults[q.id] = nextCheckNumber;
       else defaults[q.id] = '';
+      const preset = searchParams.get(q.id);
+      if (preset !== null) defaults[q.id] = preset;
     });
+    const categoryPreset = searchParams.get('category');
+    const phasePreset = searchParams.get('cost_phase');
+    const paymentPreset = searchParams.get('payment_method');
+    if (categoryPreset) defaults.category = categoryPreset;
+    if (phasePreset) defaults.cost_phase = phasePreset;
+    if (paymentPreset) defaults.payment_method = paymentPreset;
     setData(defaults);
     setStep(0);
     setServiceType(type);
@@ -315,11 +474,12 @@ export default function Concierge() {
 
   useEffect(() => {
     const start = searchParams.get('start') as ServiceType | null;
-    if (!start || !(start in SERVICE_DEFS)) return;
+    if (!start || !(start in activeServiceDefs)) return;
     startService(start);
-    searchParams.delete('start');
-    setSearchParams(searchParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const next = new URLSearchParams(searchParams);
+    ['start', 'category', 'cost_phase', 'payment_method', 'project_id', 'source_name', 'vendor_id'].forEach(k => next.delete(k));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, activeServiceDefs]);
 
   // Intelligent prefill: a project detail page can deep-link here with ?project=<id>
   // to pin the guided form to that project and pull in its known client name.
@@ -401,6 +561,7 @@ export default function Concierge() {
     try {
       const result = await vendorCreate.mutateAsync({ name: quickVendorName.trim() });
       toast.success(`Vendor "${quickVendorName.trim()}" created`);
+      setExtraVendors(prev => [...prev.filter(v => v.id !== result.id), result]);
       setVal('vendor_id', result.id);
       setQuickVendorOpen(false);
       setQuickVendorName('');
@@ -417,6 +578,7 @@ export default function Concierge() {
       if (quickProjectBudget) payload.budget = parseFloat(quickProjectBudget) || 0;
       const result = await projectCreate.mutateAsync(payload);
       toast.success(`Project "${quickProjectName.trim()}" created`);
+      setExtraProjects(prev => [...prev.filter(p => p.id !== result.id), result]);
       setVal('project_id', result.id);
       setQuickProjectOpen(false);
       setQuickProjectName(''); setQuickProjectCode(''); setQuickProjectBudget('');
@@ -424,20 +586,47 @@ export default function Concierge() {
     setCreatingProject(false);
   };
 
+  const createPortalClientNow = async () => {
+    if (!quickPortalClientName.trim()) { toast.error('Enter a client name'); return; }
+    setCreatingPortalClient(true);
+    try {
+      const result = await createPortalClient.mutateAsync({ name: quickPortalClientName.trim() });
+      toast.success(`Client "${quickPortalClientName.trim()}" added`);
+      setVal('source_name', result.name);
+      setQuickPortalClientOpen(false);
+      setQuickPortalClientName('');
+    } catch (err: any) { toast.error(err.message || 'Failed'); }
+    setCreatingPortalClient(false);
+  };
+
   const createClientNow = async () => {
     if (!quickClientName.trim()) { toast.error('Enter a client name'); return; }
     if (!quickClientEmail.trim()) { toast.error('Enter an email so payments can be matched to this client'); return; }
+    if (!user?.id || !entity?.id) { toast.error('Sign in required'); return; }
     try {
-      const result = await clientCreate.mutateAsync({
+      const payload = {
+        user_id: user.id,
+        entity_id: entity.id,
         name: quickClientName.trim(),
         email: quickClientEmail.trim(),
         phone: quickClientPhone.trim(),
-        project_type: quickClientProjectType.trim() || 'Client payment source',
-        project_interest: quickClientReference.trim(),
-      });
-      setVal('portal_client_id', result.id);
-      setVal('source_name', result.name);
-      toast.success(`Client "${result.name}" added`);
+        client_type: quickClientProjectType.trim() || (isHgp ? 'residential' : 'residential'),
+        status: 'active',
+        construction_scope: isHgp ? null : quickClientReference.trim() || null,
+        notes: quickClientReference.trim() || null,
+        tags: isHgp ? ['hgp-finance-client'] : ['he-finance-client'],
+      };
+      const { data: result, error } = await supabase
+        .from('finance_client_accounts' as never)
+        .insert(payload as never)
+        .select()
+        .single();
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ['finance-client-accounts'] });
+      const created = result as any;
+      setVal('finance_client_id', created.id);
+      setVal('source_name', created.name);
+      toast.success(`Client "${created.name}" added`);
       setQuickClientOpen(false);
       setQuickClientName('');
       setQuickClientEmail('');
@@ -469,7 +658,7 @@ export default function Concierge() {
             transaction_date: getVal('date'),
             posting_date: getVal('date'),
             source_name: getVal('source_name') || null,
-            client_id: getVal('portal_client_id') || null,
+            finance_client_id: getVal('finance_client_id') || null,
             vendor_id: null,
             project_id: getVal('project_id') || null,
             category: getVal('category') || null,
@@ -491,14 +680,14 @@ export default function Concierge() {
             fiscal_year: new Date(getVal('date')).getFullYear(),
             accounting_period: getVal('date').slice(0, 7),
           } as any);
-          if (getVal('invoice_id') && (getVal('external_invoice_url') || getVal('external_invoice_provider') || getVal('external_invoice_number') || getVal('portal_client_id'))) {
+          if (getVal('invoice_id') && (getVal('external_invoice_url') || getVal('external_invoice_provider') || getVal('external_invoice_number') || getVal('finance_client_id'))) {
             await updateInvoice(getVal('invoice_id'), {
               status: 'paid',
               stripe_payment_link: getVal('external_invoice_provider') === 'stripe' && getVal('external_invoice_url') ? getVal('external_invoice_url') : undefined,
               external_invoice_url: getVal('external_invoice_url') || undefined,
               external_invoice_provider: getVal('external_invoice_provider') || undefined,
               external_invoice_number: getVal('external_invoice_number') || undefined,
-              portal_client_id: getVal('portal_client_id') || undefined,
+              finance_client_id: getVal('finance_client_id') || undefined,
               client_visible: true,
             } as any);
           }
@@ -516,6 +705,7 @@ export default function Concierge() {
             transaction_date: getVal('date'),
             posting_date: getVal('date'),
             vendor_id: getVal('vendor_id') || null,
+            finance_client_id: getVal('finance_client_id') || null,
             project_id: getVal('project_id') || null,
             category: getVal('category') || null,
             description: getVal('category') || mergedNotes || null,
@@ -539,13 +729,23 @@ export default function Concierge() {
         case 'check': {
           const status = getVal('status') || 'pending';
           const retainagePct = parseFloat(getVal('retainage_pct') || '0') || 0;
+          if (retainagePct < 0 || retainagePct > 100) {
+            toast.error('Retainage must be between 0% and 100%');
+            setSavingEntry(false);
+            return;
+          }
+          if (!getVal('check_number').trim()) {
+            toast.error('Check number is required');
+            setSavingEntry(false);
+            return;
+          }
           const amount = parseFloat(getVal('amount'));
           await checkUpsert.mutateAsync({
             amount,
             payee_name: getVal('payee_name'),
             issue_date: getVal('date'),
             posting_date: getVal('date'),
-            check_number: getVal('check_number') || null,
+            check_number: getVal('check_number'),
             memo: getVal('memo') || null,
             project_id: getVal('project_id') || null,
             status,
@@ -564,7 +764,23 @@ export default function Concierge() {
           await vendorCreate.mutateAsync({ name: getVal('vendor_name'), contact_email: getVal('vendor_email') || null, contact_phone: getVal('vendor_phone') || null });
           break;
         case 'project':
-          await projectCreate.mutateAsync({ name: getVal('project_name'), code: getVal('project_code') || null, budget: getVal('project_budget') ? parseFloat(getVal('project_budget')) : null, status: 'active' });
+          if (isHgp && user?.id) {
+            const { error } = await supabase
+              .from('hgp_jobs' as never)
+              .insert({
+                user_id: user.id,
+                entity_id: 'houston-generator-pros',
+                customer_name: getVal('project_name'),
+                job_type: 'install',
+                stage: 'lead',
+                quoted_amount: getVal('project_budget') ? parseFloat(getVal('project_budget')) : 0,
+                notes: getVal('project_code') ? `Job code: ${getVal('project_code')}` : null,
+              } as never);
+            if (error) throw error;
+            await queryClient.invalidateQueries({ queryKey: ['hgp-jobs'] });
+          } else {
+            await projectCreate.mutateAsync({ name: getVal('project_name'), code: getVal('project_code') || null, budget: getVal('project_budget') ? parseFloat(getVal('project_budget')) : null, status: 'active' });
+          }
           break;
       }
       toast.success(`${service.submitLabel} — done!`);
@@ -581,8 +797,9 @@ export default function Concierge() {
     return (
       <AppShell>
         <PageHeader
-          eyebrow="Concierge"
-          title="Your Dedicated Assistant"
+          eyebrow={isHgp ? 'Houston Generator Pros' : 'Concierge'}
+          title={isHgp ? 'HGP Guided Entry' : 'Your Dedicated Assistant'}
+          description={isHgp ? 'Generator income, supplier expenses, checks, clients, and install-job creation through mobile-friendly guided forms.' : undefined}
           actions={entity && (
             <button
               onClick={() => navigate('/finance')}
@@ -630,11 +847,11 @@ export default function Concierge() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">What can I help you with?</span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{isHgp ? 'Choose an HGP workflow' : 'What can I help you with?'}</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {(Object.entries(SERVICE_DEFS) as [ServiceType, ServiceDef][]).map(([type, s]) => (
+                {(Object.entries(activeServiceDefs) as [ServiceType, ServiceDef][]).map(([type, s]) => (
                   <button key={type} onClick={() => startService(type)}
                     className={`group relative w-full text-left border transition-all duration-300 p-5 h-full flex flex-col ${s.accent ? 'border-foreground/20 bg-foreground/[0.02] hover:bg-foreground/[0.04] hover:border-foreground/40' : 'border-border hover:bg-secondary/50 hover:border-foreground/20'}`}
                   >
@@ -684,6 +901,9 @@ export default function Concierge() {
     const q = currentQuestion;
     const Icon = q.icon || Sparkles;
     const progress = ((step + 1) / questions.length) * 100;
+    const guidedPreset = isHgp
+      ? [data.category, data.payment_method, data.cost_phase, data.memo].filter(Boolean).join(' · ')
+      : '';
 
     const handleGuidedSubmit = (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -822,37 +1042,86 @@ export default function Concierge() {
       }
 
       if (q.id === 'source_name') {
+        const selectedFinanceClientId = getVal('finance_client_id');
         return (
           <div className="space-y-3">
             <Select
-              value={getVal('portal_client_id')}
+              value={selectedFinanceClientId}
               onValueChange={v => {
-                const client = portalClients.find(c => c.id === v);
-                setVal('portal_client_id', v);
+                const client = (financeClients as any[]).find(c => c.id === v);
+                setVal('finance_client_id', v);
                 setVal('source_name', client?.name || '');
+                if (client?.project_id) setVal('project_id', client.project_id);
                 setQuickClientOpen(false);
               }}
             >
               <SelectTrigger className="rounded-none h-12 text-base">
-                <SelectValue placeholder="Select registered client or add one" />
+                <SelectValue placeholder={isHgp ? 'Select HGP client / site account' : 'Select finance client account'} />
               </SelectTrigger>
               <SelectContent>
-                {portalClients.map(c => (
+                {(financeClients as any[]).map(c => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name}{c.email ? ` — ${c.email}` : ''}
+                    {c.name}{c.company ? ` · ${c.company}` : ''}{c.email ? ` — ${c.email}` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {(financeClients as any[]).length === 0 && (
+              <div className="text-xs text-muted-foreground">
+                No finance client accounts found for this entity yet. Add one below and it will stay separate from the Houston Enterprise client portal.
+              </div>
+            )}
+
+            {serviceType === 'income' && isHE && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">or a client portal client</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <Select
+                  value={portalClients.some((c: any) => c.name === getVal('source_name')) ? getVal('source_name') : ''}
+                  onValueChange={v => { setVal('source_name', v); setVal('finance_client_id', ''); setQuickPortalClientOpen(false); }}
+                >
+                  <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select a client portal client" /></SelectTrigger>
+                  <SelectContent>
+                    {portalClients.map((c: any) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {quickPortalClientOpen ? (
+                  <div className="border border-foreground/20 p-4 space-y-3 bg-secondary/30">
+                    <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">New Client Portal Client</div>
+                    <Input
+                      autoFocus
+                      className="rounded-none h-11 text-base"
+                      placeholder="Client name *"
+                      value={quickPortalClientName}
+                      onChange={e => setQuickPortalClientName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createPortalClientNow(); } if (e.key === 'Escape') { setQuickPortalClientOpen(false); setQuickPortalClientName(''); } }}
+                    />
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={createPortalClientNow} disabled={creatingPortalClient || !quickPortalClientName.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
+                        {creatingPortalClient ? 'Creating…' : 'Create Client'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => { setQuickPortalClientOpen(false); setQuickPortalClientName(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" onClick={() => setQuickPortalClientOpen(true)} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
+                    <Plus className="w-3 h-3" /> Add new client portal client
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="relative">
               <Input
                 className="rounded-none h-11 text-base"
-                placeholder="Or type source / client name"
+                placeholder={isHgp ? 'Or type generator customer / warranty source' : 'Or type source / client name'}
                 value={getVal('source_name')}
                 onChange={e => {
                   setVal('source_name', e.target.value);
-                  setVal('portal_client_id', '');
+                  setVal('finance_client_id', '');
                 }}
               />
             </div>
@@ -871,23 +1140,26 @@ export default function Concierge() {
                 <Select value={quickClientProjectType} onValueChange={setQuickClientProjectType}>
                   <SelectTrigger className="rounded-none h-10 text-sm"><SelectValue placeholder="Client type / relationship" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Residential client">Residential client</SelectItem>
-                    <SelectItem value="Commercial client">Commercial client</SelectItem>
-                    <SelectItem value="Developer / investor">Developer / investor</SelectItem>
-                    <SelectItem value="Insurance / lender">Insurance / lender</SelectItem>
-                    <SelectItem value="Internal funding source">Internal funding source</SelectItem>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="builder">Builder</SelectItem>
+                    <SelectItem value="property_manager">Property Manager</SelectItem>
+                    <SelectItem value="investor">Investor</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <Textarea
                   className="rounded-none text-sm min-h-[74px]"
-                  placeholder="Identifying notes: billing address, project address, invoice reference, primary contact, or payment relationship"
+                  placeholder={isHgp
+                    ? 'Site address, utility provider, generator model, serial, service plan, invoice reference, or dispatch notes'
+                    : 'Billing address, project address, invoice reference, primary contact, or payment relationship'}
                   value={quickClientReference}
                   onChange={e => setQuickClientReference(e.target.value)}
                   onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); createClientNow(); } }}
                 />
                 <div className="flex gap-2">
-                  <Button type="button" onClick={createClientNow} disabled={clientCreate.isPending || !quickClientName.trim() || !quickClientEmail.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
-                    {clientCreate.isPending ? 'Adding…' : 'Add Client'}
+                  <Button type="button" onClick={createClientNow} disabled={!quickClientName.trim() || !quickClientEmail.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
+                    Add Client
                   </Button>
                   <Button type="button" variant="outline" onClick={() => { setQuickClientOpen(false); setQuickClientName(''); setQuickClientEmail(''); setQuickClientPhone(''); setQuickClientProjectType(''); setQuickClientReference(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
                 </div>
@@ -942,7 +1214,7 @@ export default function Concierge() {
         return (
           <div className="space-y-3">
             <Select value={getVal('vendor_id')} onValueChange={v => { setVal('vendor_id', v); setQuickVendorOpen(false); }}>
-              <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder="Select a vendor" /></SelectTrigger>
+              <SelectTrigger className="rounded-none h-12 text-base"><SelectValue placeholder={isHgp ? 'Select supplier / distributor' : 'Select a vendor'} /></SelectTrigger>
               <SelectContent>
                 {vendors.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
               </SelectContent>
@@ -951,25 +1223,25 @@ export default function Concierge() {
             {/* Inline vendor quick-create */}
             {quickVendorOpen ? (
               <div className="border border-foreground/20 p-4 space-y-3 bg-secondary/30">
-                <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">New Vendor</div>
+                <div className="text-[9px] uppercase tracking-[0.24em] font-bold text-muted-foreground">{isHgp ? 'New Supplier' : 'New Vendor'}</div>
                 <Input
                   autoFocus
                   className="rounded-none h-11 text-base"
-                  placeholder="Business name"
+                  placeholder={isHgp ? 'Supplier, distributor, subcontractor, or permit office' : 'Business name'}
                   value={quickVendorName}
                   onChange={e => setQuickVendorName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createVendorNow(); } if (e.key === 'Escape') { setQuickVendorOpen(false); setQuickVendorName(''); } }}
                 />
                 <div className="flex gap-2">
                   <Button type="button" onClick={createVendorNow} disabled={creatingVendor || !quickVendorName.trim()} className="rounded-none flex-1 h-10 text-xs bg-foreground text-background hover:opacity-90">
-                    {creatingVendor ? 'Creating…' : 'Create Vendor'}
+                    {creatingVendor ? 'Creating…' : isHgp ? 'Create Supplier' : 'Create Vendor'}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => { setQuickVendorOpen(false); setQuickVendorName(''); }} className="rounded-none h-10 text-xs">Cancel</Button>
                 </div>
               </div>
             ) : (
               <Button type="button" variant="outline" onClick={() => setQuickVendorOpen(true)} className="rounded-none h-9 text-xs w-full flex items-center justify-center gap-1">
-                <Plus className="w-3 h-3" /> Create new vendor
+                <Plus className="w-3 h-3" /> {isHgp ? 'Create new supplier' : 'Create new vendor'}
               </Button>
             )}
           </div>
@@ -1071,62 +1343,87 @@ export default function Concierge() {
     // Determine if we need the generic continue button
     const noAutoSubmit = new Set(['receipt','vendor','project','retainage','invoice','phase','payment_income','payment_expense']);
     const showContinue = !noAutoSubmit.has(q.type) && !(q.type === 'category' && !customCat);
+    const showGuidedButton = showContinue || (
+      noAutoSubmit.has(q.type) && q.type !== 'receipt'
+      && !(q.type === 'vendor' && quickVendorOpen)
+      && !(q.type === 'project' && quickProjectOpen)
+    );
+    const accent = entity?.color ?? '#9D7E3F';
+
+    // "Next: <label of the next question>" instead of a generic "Continue" —
+    // mirrors goNext()'s own skip-forward logic so the preview always names
+    // the step the user will actually land on.
+    let nextLabel = '';
+    let peekStep = step + 1;
+    while (peekStep < questions.length && questions[peekStep].skipIf?.(data)) peekStep++;
+    if (peekStep < questions.length) nextLabel = questions[peekStep].label.replace(/\?+$/, '');
+    const guidedButtonText = isLast ? 'Review & Save' : nextLabel ? `Next: ${nextLabel}` : 'Continue';
 
     return (
       <AppShell>
-        <div className="min-h-screen flex flex-col">
-          <div className="border-b border-border bg-background">
-            <div className="px-4 sm:px-8 py-3 flex items-center justify-between">
-              <button onClick={goBack} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(180deg, ${accent}08, transparent 260px)` }}>
+          <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-20">
+            <div className="px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+              <button onClick={goBack} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0">
                 <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
                 {step === 0 ? 'All services' : 'Previous'}
               </button>
-              <div className="flex items-center gap-2">
-                <service.icon className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
-                <span className="text-xs font-medium text-muted-foreground">{service.label}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <service.icon className="w-3.5 h-3.5 shrink-0" style={{ color: accent }} strokeWidth={1.5} />
+                <span className="text-xs font-semibold tracking-tight truncate">{service.label}</span>
               </div>
-              <div className="text-[10px] text-muted-foreground font-mono-tab">{step + 1} / {questions.length}</div>
+              <div className="text-[10px] text-muted-foreground font-mono-tab shrink-0 tabular-nums">{step + 1} / {questions.length}</div>
             </div>
-            <div className="h-0.5 bg-border">
-              <div className="h-full bg-foreground transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+            <div className="h-[3px] bg-border/70">
+              <div className="h-full transition-all duration-500 ease-out" style={{ width: `${progress}%`, background: `linear-gradient(90deg, ${accent}, ${accent}cc)` }} />
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-8">
+          <div className="flex-1 flex items-start sm:items-center justify-center px-4 sm:px-8 py-8 sm:py-10">
             <div className="w-full max-w-lg mx-auto">
               <form ref={guidedFormRef} onSubmit={handleGuidedSubmit} onKeyDown={handleGuidedKeyDown}>
-                <div className="flex items-center justify-center mb-8">
-                  <div className="w-16 h-16 bg-foreground/5 flex items-center justify-center">
-                    <Icon className="w-7 h-7 text-foreground/60" strokeWidth={1.5} />
+                <div className="flex items-center justify-center mb-7">
+                  <div
+                    className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-full flex items-center justify-center shadow-[0_10px_28px_-10px_rgba(0,0,0,0.18)]"
+                    style={{ backgroundColor: `${accent}12`, border: `1px solid ${accent}30` }}
+                  >
+                    <Icon className="w-7 h-7" style={{ color: accent }} strokeWidth={1.4} />
                   </div>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-light tracking-tight text-center mb-2 leading-snug">{q.label}</h2>
-                {q.helper && <p className="text-xs text-muted-foreground text-center mb-8">{q.helper}</p>}
-                {!q.helper && <div className="mb-8" />}
-                <div className="mb-6">{renderInput()}</div>
+                <h2 className="font-display text-[26px] sm:text-3xl font-medium tracking-tight text-center mb-2 leading-[1.15] px-2">{q.label}</h2>
+                {guidedPreset && (
+                  <div className="mb-4 mx-auto max-w-full border border-border bg-secondary/35 px-3 py-2 text-center text-[10px] leading-relaxed">
+                    <span className="font-black uppercase tracking-[0.16em] text-muted-foreground">HGP preset</span>
+                    <span className="ml-2 font-semibold">{guidedPreset}</span>
+                  </div>
+                )}
+                {q.helper && <p className="text-xs text-muted-foreground text-center mb-7 px-2 leading-relaxed">{q.helper}</p>}
+                {!q.helper && <div className="mb-7" />}
+                <div className="mb-4">{renderInput()}</div>
 
-                {showContinue && (
-                  <div className="flex justify-center">
-                    <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
-                      {isLast ? 'Review & Save' : 'Continue'}
-                      <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
+                {showGuidedButton && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      type="submit"
+                      title={guidedButtonText}
+                      className="rounded-none h-12 sm:h-[3.1rem] w-full sm:w-auto sm:min-w-[16rem] px-6 bg-foreground text-background hover:opacity-90 text-[13px] font-semibold tracking-tight shadow-[0_14px_30px_-12px_rgba(0,0,0,0.28)] transition-opacity"
+                    >
+                      <span className="truncate max-w-[19rem]">{guidedButtonText}</span>
+                      <ChevronRight className="w-4 h-4 ml-2 shrink-0" strokeWidth={1.75} />
                     </Button>
                   </div>
                 )}
 
-                {/* Continue for select/optional types */}
-                {noAutoSubmit.has(q.type) && q.type !== 'receipt' && !(q.type === 'vendor' && quickVendorOpen) && !(q.type === 'project' && quickProjectOpen) && (
-                  <div className="flex justify-center mt-4">
-                    <Button type="submit" className="rounded-none h-12 px-10 bg-foreground text-background hover:opacity-90 text-sm">
-                      {isLast ? 'Review & Save' : 'Continue'}
-                      <ChevronRight className="w-4 h-4 ml-2" strokeWidth={1.5} />
-                    </Button>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-center gap-1.5 mt-8">
+                <div className="flex items-center justify-center gap-1.5 mt-8 pb-[env(safe-area-inset-bottom)]">
                   {questions.map((_, i) => (
-                    <div key={i} className={`w-1.5 h-1.5 transition-all duration-500 ${i <= step ? 'bg-foreground' : 'bg-border'}`} />
+                    <div
+                      key={i}
+                      className="h-1.5 rounded-full transition-all duration-500"
+                      style={{
+                        width: i === step ? 20 : 6,
+                        backgroundColor: i <= step ? accent : 'hsl(var(--border))',
+                      }}
+                    />
                   ))}
                 </div>
               </form>

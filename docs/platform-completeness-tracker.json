@@ -1,9 +1,9 @@
 {
   "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
   "updated": "2026-07-18",
-  "pass": "inventory-enterprise-ocr",
+  "pass": "enterprise-reports-invoice-intelligence-repair",
   "overall": {
-    "completion": 94,
+    "completion": 95,
     "status": "launch-ready"
   },
   "apps": {
@@ -20,7 +20,7 @@
       "status": "launch-ready"
     },
     "finance_dashboard": {
-      "completion": 95,
+      "completion": 96,
       "status": "launch-ready"
     }
   },
@@ -34,7 +34,7 @@
       "status": "launch-ready"
     },
     "houston-enterprise-holdings": {
-      "completion": 92,
+      "completion": 94,
       "status": "launch-ready"
     }
   },
@@ -98,10 +98,10 @@
     },
     {
       "id": "generator-operations",
-      "completion": 94,
+      "completion": 96,
       "status": "complete",
       "remaining": [
-        "equipment lifecycle report"
+        "recurring maintenance billing automation"
       ],
       "priority": "medium",
       "complexity": "M"
@@ -163,7 +163,7 @@
     },
     {
       "id": "invoices-payments",
-      "completion": 90,
+      "completion": 94,
       "status": "launch-ready",
       "remaining": [
         "recurring service billing automation"
@@ -173,14 +173,12 @@
     },
     {
       "id": "reporting-exports",
-      "completion": 85,
-      "status": "partial",
+      "completion": 95,
+      "status": "launch-ready",
       "remaining": [
-        "HGP job report",
-        "Holdings covenant report",
-        "WIP PDF"
+        "automated PDF visual regression later"
       ],
-      "priority": "medium",
+      "priority": "low",
       "complexity": "M"
     },
     {
@@ -245,11 +243,9 @@
     {
       "id": "hgp-job-payments",
       "completion": 85,
-      "status": "needs-migration",
-      "remaining": [
-        "apply 20260718000001"
-      ],
-      "priority": "high",
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
       "complexity": "S",
       "verification": "verify_hgp_job_payments"
     },
@@ -316,7 +312,12 @@
       "20260718000001",
       "20260718000002"
     ],
-    "pending_apply": []
+    "pending_apply": [
+      "20260718000003",
+      "20260718000004",
+      "20260718000005",
+      "20260718000006"
+    ]
   },
   "test_battery": {
     "typescript": "clean",

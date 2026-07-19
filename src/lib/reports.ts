@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
+import { todayLocalDate } from '@/lib/format';
 
 /* ── Design tokens ── */
 export const C = {
@@ -915,7 +916,7 @@ export function downloadTransactionExcel(data: any[], kind: 'income' | 'expense'
     colWidths: [14, 28, 22, 28, 14],
     currencyCols: [4],
   }, `${label} Ledger`);
-  writeWorkbook([{ ws, name: label }], `hou-${kind}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  writeWorkbook([{ ws, name: label }], `hou-${kind}-${todayLocalDate()}.xlsx`);
 }
 
 export function downloadCheckExcel(checks: any[]) {
@@ -935,7 +936,7 @@ export function downloadCheckExcel(checks: any[]) {
     colWidths: [12, 28, 14, 12, 22, 30, 14],
     currencyCols: [6],
   }, 'Check Register');
-  writeWorkbook([{ ws, name: 'Checks' }], `hou-check-register-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  writeWorkbook([{ ws, name: 'Checks' }], `hou-check-register-${todayLocalDate()}.xlsx`);
 }
 
 export function downloadLedgerExcel(income: any[], expenses: any[], checks: any[]) {
@@ -980,7 +981,7 @@ export function downloadLedgerExcel(income: any[], expenses: any[], checks: any[
     { ws: mkSheet(incomeRows, 'Income',      'General Ledger — Income'),   name: 'Income' },
     { ws: mkSheet(expenseRows,'Expenses',    'General Ledger — Expenses'), name: 'Expenses' },
     { ws: mkSheet(checkRows,  'Checks',      'General Ledger — Checks'),   name: 'Checks' },
-  ], `hou-general-ledger-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  ], `hou-general-ledger-${todayLocalDate()}.xlsx`);
 }
 
 export function downloadProjectExcel(projects: any[]) {
@@ -1002,7 +1003,7 @@ export function downloadProjectExcel(projects: any[]) {
     colWidths: [30, 12, 14, 16, 16, 16, 16, 16, 14],
     currencyCols: [3, 4, 5, 6, 7],
   }, 'Project Portfolio');
-  writeWorkbook([{ ws, name: 'Projects' }], `hou-projects-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  writeWorkbook([{ ws, name: 'Projects' }], `hou-projects-${todayLocalDate()}.xlsx`);
 }
 
 export function downloadInvoiceExcel(invoices: InvoiceSummary[]) {
@@ -1024,7 +1025,7 @@ export function downloadInvoiceExcel(invoices: InvoiceSummary[]) {
     colWidths: [14, 24, 24, 14, 14, 12, 14, 14, 14],
     currencyCols: [6, 7, 8],
   }, 'Invoice Register');
-  writeWorkbook([{ ws, name: 'Invoices' }], `hou-invoices-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  writeWorkbook([{ ws, name: 'Invoices' }], `hou-invoices-${todayLocalDate()}.xlsx`);
 }
 
 /* ────────────────────────────────────────────
@@ -1106,6 +1107,991 @@ export function generateGlossaryPDF(terms: GlossaryTerm[]) {
   }
 
   addDecorations(doc, 'Glossary');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Shared: key/value statement section (exec summaries, pay apps,
+   balance sheets — anywhere a labeled figure needs a clean line item)
+──────────────────────────────────────────── */
+function kvSection(
+  doc: jsPDF,
+  y: number,
+  label: string,
+  rows: Array<[string, string, [number, number, number]?]>,
+) {
+  const sy = sectionLabel(doc, y, label);
+  autoTable(doc, {
+    ...tblCfg(sy),
+    body: rows.map(([k, v, color]) => [
+      { content: k, styles: { fontStyle: 'bold', textColor: C.muted } },
+      { content: v, styles: { halign: 'right', fontStyle: 'bold', textColor: color ?? C.black } },
+    ]),
+    showHead: false,
+    columnStyles: { 1: { halign: 'right', cellWidth: 50 } },
+  });
+  return (doc as any).lastAutoTable.finalY + 8;
+}
+
+/* ────────────────────────────────────────────
+   Report: generic entity-branded executive summary
+──────────────────────────────────────────── */
+export interface ExecSummarySection { label: string; rows: Array<{ label: string; value: string; color?: [number, number, number] }> }
+
+export function generateExecutiveSummaryReport(opts: {
+  entityLabel: string;
+  reportTitle: string;
+  metrics: Array<{ label: string; value: string; color?: [number, number, number] }>;
+  sections: ExecSummarySection[];
+  narrative?: string;
+}) {
+  const { doc, y } = makeDoc(opts.reportTitle, `HOU INC · ${opts.entityLabel}`);
+  let cy = drawMetrics(doc, y, opts.metrics.slice(0, 4));
+  for (const s of opts.sections) {
+    cy = kvSection(doc, cy + 2, s.label, s.rows.map(r => [r.label, r.value, r.color] as [string, string, [number, number, number]?]));
+  }
+  if (opts.narrative) {
+    cy = sectionLabel(doc, cy + 2, 'Notes & Assumptions');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.black);
+    const lines = doc.splitTextToSize(opts.narrative, pageDims(doc).w - 2 * M);
+    doc.text(lines, M, cy);
+  }
+  addDecorations(doc, opts.reportTitle);
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: AR / AP Aging (shared across all entities)
+──────────────────────────────────────────── */
+export interface AgingRow { aging_type: string; bucket: string; open_amount: number }
+
+function agingMap(aging: AgingRow[]) {
+  const map: Record<string, number> = {};
+  aging.forEach(r => { map[`${r.aging_type}:${r.bucket}`] = Number(r.open_amount) || 0; });
+  return map;
+}
+const AGING_BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
+
+export function generateAgingReport(aging: AgingRow[], entityLabel: string) {
+  const { doc, y } = makeDoc('AR / AP Aging', `HOU INC · ${entityLabel}`);
+  const map = agingMap(aging);
+  const arTotal = AGING_BUCKETS.reduce((s, b) => s + (map[`ar:${b}`] || 0), 0);
+  const apTotal = AGING_BUCKETS.reduce((s, b) => s + (map[`ap:${b}`] || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Total AR Open', value: fmtUSD(arTotal), color: C.positive },
+    { label: 'Total AP Open', value: fmtUSD(apTotal), color: C.negative },
+    { label: '90+ Days AR', value: fmtUSD(map['ar:90+'] || 0), color: (map['ar:90+'] || 0) > 0 ? C.negative : C.positive },
+    { label: 'Net Aging Exposure', value: fmtUSD(arTotal - apTotal) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Aging Buckets');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Bucket', 'Accounts Receivable', 'Accounts Payable']],
+    body: AGING_BUCKETS.map(b => [
+      b === 'current' ? 'Current' : `${b} days`,
+      { content: fmtUSD(map[`ar:${b}`] || 0), styles: { halign: 'right' } },
+      { content: fmtUSD(map[`ap:${b}`] || 0), styles: { halign: 'right' } },
+    ]),
+    foot: [['Total',
+      { content: fmtUSD(arTotal), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: fmtUSD(apTotal), styles: { halign: 'right', fontStyle: 'bold' } },
+    ]],
+  });
+  addDecorations(doc, 'AR / AP Aging');
+  return doc;
+}
+
+export function downloadAgingExcel(aging: AgingRow[], entityLabel: string) {
+  const map = agingMap(aging);
+  const rows = AGING_BUCKETS.map(b => [b === 'current' ? 'Current' : `${b} days`, map[`ar:${b}`] || 0, map[`ap:${b}`] || 0]);
+  const ws = buildSheet({ name: 'Aging', headers: ['Bucket', 'AR Open', 'AP Open'], rows, colWidths: [16, 16, 16], currencyCols: [1, 2] }, `${entityLabel} — AR / AP Aging`);
+  writeWorkbook([{ ws, name: 'Aging' }], `hou-aging-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Vendor / Supplier / Counterparty Spend (shared, term-aware)
+──────────────────────────────────────────── */
+function aggregateSpend(transactions: any[], checks: any[]) {
+  const byParty: Record<string, { name: string; txn: number; checks: number; count: number }> = {};
+  transactions.filter((t: any) => t.type === 'expense' && t.vendor_id).forEach((t: any) => {
+    const id = t.vendor_id, name = t.vendors?.name || 'Unknown';
+    const row = byParty[id] ?? (byParty[id] = { name, txn: 0, checks: 0, count: 0 });
+    row.txn += Number(t.amount) || 0; row.count++;
+  });
+  checks.filter((c: any) => c.status === 'cleared' && (c.payee_vendor_id || c.vendors?.name)).forEach((c: any) => {
+    const id = c.payee_vendor_id || c.payee_name; const name = c.vendors?.name || c.payee_name || 'Unknown';
+    const row = byParty[id] ?? (byParty[id] = { name, txn: 0, checks: 0, count: 0 });
+    row.checks += Number(c.amount) || 0; row.count++;
+  });
+  return Object.values(byParty).map(v => ({ ...v, total: v.txn + v.checks })).sort((a, b) => b.total - a.total);
+}
+
+export function generateVendorSpendReport(vendors: any[], transactions: any[], checks: any[], termLabel: string) {
+  const { doc, y } = makeDoc(`${termLabel} Spend`, 'HOU INC · Spend Analysis');
+  const list = aggregateSpend(transactions, checks);
+  const total = list.reduce((s, v) => s + v.total, 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Spend', value: fmtUSD(total) },
+    { label: `Active ${termLabel}s`, value: String(vendors.length) },
+    { label: 'With Spend', value: String(list.length) },
+    { label: 'Top Spend', value: list[0] ? fmtUSD(list[0].total) : fmtUSD(0) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, `${termLabel} Detail`);
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [[termLabel, 'Transactions', 'Checks', 'Entries', 'Total Spend']],
+    body: list.map(v => [v.name, fmtUSD(v.txn), fmtUSD(v.checks), String(v.count), { content: fmtUSD(v.total), styles: { halign: 'right', fontStyle: 'bold' } }]),
+    columnStyles: { 4: { halign: 'right' } },
+    foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
+  });
+  addDecorations(doc, `${termLabel} Spend`);
+  return doc;
+}
+
+export function downloadVendorSpendExcel(transactions: any[], checks: any[], termLabel: string) {
+  const list = aggregateSpend(transactions, checks);
+  const rows = list.map(v => [v.name, v.txn, v.checks, v.count, v.total]);
+  const ws = buildSheet({ name: 'Spend', headers: [termLabel, 'Transactions', 'Checks', 'Entries', 'Total'], rows, colWidths: [28, 16, 16, 12, 16], currencyCols: [1, 2, 4] }, `${termLabel} Spend`);
+  writeWorkbook([{ ws, name: 'Spend' }], `hou-vendor-spend-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Audit & Activity Trail (shared)
+──────────────────────────────────────────── */
+export interface AuditEventRow { date: string; source: string; action: string; table_name?: string; user_label?: string; details?: string }
+
+export function generateAuditTrailReport(events: AuditEventRow[], entityLabel: string) {
+  const { doc, y } = makeDoc('Audit & Activity Trail', `HOU INC · ${entityLabel}`);
+  const sources = new Set(events.map(e => e.source)).size;
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Events', value: String(events.length) },
+    { label: 'Sources', value: String(sources) },
+    { label: 'Most Recent', value: events[0]?.date?.slice(0, 10) || '—' },
+    { label: 'Earliest Shown', value: events[events.length - 1]?.date?.slice(0, 10) || '—' },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Event Log');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Date', 'Source', 'Action', 'Table', 'User', 'Details']],
+    body: events.slice(0, 400).map(e => [
+      e.date ? e.date.slice(0, 16).replace('T', ' ') : '—',
+      e.source, e.action, e.table_name || '—', e.user_label || '—', e.details || '—',
+    ]),
+  });
+  addDecorations(doc, 'Audit & Activity Trail');
+  return doc;
+}
+
+export function downloadAuditTrailExcel(events: AuditEventRow[], entityLabel: string) {
+  const rows = events.map(e => [e.date?.slice(0, 16).replace('T', ' ') || '', e.source, e.action, e.table_name || '', e.user_label || '', e.details || '']);
+  const ws = buildSheet({ name: 'Activity', headers: ['Date', 'Source', 'Action', 'Table', 'User', 'Details'], rows, colWidths: [18, 14, 20, 16, 22, 40] }, `${entityLabel} — Audit Trail`);
+  writeWorkbook([{ ws, name: 'Activity' }], `hou-audit-trail-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: User & Role Access (shared)
+──────────────────────────────────────────── */
+export function generateRoleAccessReport(roles: any[], entityLabel: string) {
+  const { doc, y } = makeDoc('User & Role Access', `HOU INC · ${entityLabel}`);
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Assignments', value: String(roles.length) },
+    { label: 'Active', value: String(roles.filter((r: any) => r.is_active).length) },
+    { label: 'Admins', value: String(roles.filter((r: any) => r.role === 'admin' && r.is_active).length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Role Assignments');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['User', 'Role', 'Status', 'Assigned', 'Notes']],
+    body: roles.map((r: any) => [r.user_id, String(r.role).replace(/_/g, ' '), r.is_active ? 'Active' : 'Inactive', r.assigned_at?.slice(0, 10) || '—', r.notes || '—']),
+  });
+  addDecorations(doc, 'User & Role Access');
+  return doc;
+}
+
+export function downloadRoleAccessExcel(roles: any[], entityLabel: string) {
+  const rows = roles.map((r: any) => [r.user_id, r.role, r.is_active ? 'Active' : 'Inactive', r.assigned_at?.slice(0, 10) || '', r.notes || '']);
+  const ws = buildSheet({ name: 'Roles', headers: ['User ID', 'Role', 'Status', 'Assigned', 'Notes'], rows, colWidths: [30, 18, 12, 14, 30] }, `${entityLabel} — Role Access`);
+  writeWorkbook([{ ws, name: 'Roles' }], `hou-role-access-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Houston Enterprise · Pay Application
+   HOU INC's professional equivalent of an AIA G702/G703 certificate —
+   not a licensed AIA form reproduction, same structure and math.
+──────────────────────────────────────────── */
+export interface PayAppInput {
+  projectName: string;
+  clientName?: string;
+  applicationNumber: number;
+  periodEnding: string;
+  originalContract: number;
+  approvedChangeOrders: number;
+  completedStoredToDate: number;
+  retainagePercent: number;
+  retainageHeld: number;
+  previousPayments: number;
+  changeOrders: Array<{ title: string; amount: number; status: string }>;
+}
+
+function payAppMath(input: PayAppInput) {
+  const contractSumToDate = input.originalContract + input.approvedChangeOrders;
+  const earnedLessRetainage = input.completedStoredToDate - input.retainageHeld;
+  const currentPaymentDue = Math.max(earnedLessRetainage - input.previousPayments, 0);
+  const balanceToFinish = Math.max(contractSumToDate - earnedLessRetainage, 0);
+  return { contractSumToDate, earnedLessRetainage, currentPaymentDue, balanceToFinish };
+}
+
+export function generatePayApplicationReport(input: PayAppInput) {
+  const { doc, y } = makeDoc('Application for Payment', `${input.projectName} · Application #${input.applicationNumber}`);
+  const m = payAppMath(input);
+  const { w } = pageDims(doc);
+
+  let cy = y;
+  doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+  doc.text(`Owner / Client: ${input.clientName || 'On file'}`, M, cy);
+  doc.text(`Period Ending: ${new Date(input.periodEnding).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, w - M, cy, { align: 'right' });
+  cy += 8;
+
+  cy = drawMetrics(doc, cy, [
+    { label: 'Contract Sum to Date', value: fmtUSD(m.contractSumToDate) },
+    { label: 'Completed & Stored', value: fmtUSD(input.completedStoredToDate) },
+    { label: 'Current Payment Due', value: fmtUSD(m.currentPaymentDue), color: C.accent },
+    { label: 'Balance to Finish', value: fmtUSD(m.balanceToFinish) },
+  ]);
+
+  cy = kvSection(doc, cy + 2, 'Certificate for Payment', [
+    ['1. Original Contract Sum', fmtUSD(input.originalContract)],
+    ['2. Net Change by Change Orders', fmtUSD(input.approvedChangeOrders)],
+    ['3. Contract Sum to Date (Line 1 + 2)', fmtUSD(m.contractSumToDate)],
+    ['4. Total Completed & Stored to Date', fmtUSD(input.completedStoredToDate)],
+    [`5. Retainage (${input.retainagePercent.toFixed(1)}%)`, fmtUSD(input.retainageHeld)],
+    ['6. Total Earned Less Retainage (Line 4 − 5)', fmtUSD(m.earnedLessRetainage)],
+    ['7. Less Previous Certificates for Payment', fmtUSD(input.previousPayments)],
+    ['8. CURRENT PAYMENT DUE (Line 6 − 7)', fmtUSD(m.currentPaymentDue), C.accent],
+    ['9. Balance to Finish, Including Retainage (Line 3 − 6)', fmtUSD(m.balanceToFinish)],
+  ]);
+
+  if (input.changeOrders.length) {
+    const ty = sectionLabel(doc, cy + 2, 'Change Order Summary');
+    autoTable(doc, {
+      ...tblCfg(ty),
+      head: [['Change Order', 'Status', 'Amount']],
+      body: input.changeOrders.map(c => [c.title, c.status, { content: fmtUSD(c.amount), styles: { halign: 'right' } }]),
+      foot: [['Net Approved Change Orders', '', { content: fmtUSD(input.approvedChangeOrders), styles: { halign: 'right', fontStyle: 'bold' } }]],
+    });
+    cy = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  cy += 6;
+  if (cy > 225) { doc.addPage(); cy = 24; }
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...C.muted);
+  doc.text(
+    'The undersigned contractor certifies that, to the best of its knowledge, the work covered by this application for payment has been completed in accordance with the contract documents and all amounts have been paid for work for which previous certificates were issued and payments received.',
+    M, cy, { maxWidth: w - 2 * M },
+  );
+  cy += 16;
+  doc.setDrawColor(...C.border);
+  doc.line(M, cy, M + 62, cy);
+  doc.line(w - M - 62, cy, w - M, cy);
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+  doc.text('Contractor Signature / Date', M, cy + 4);
+  doc.text('Owner / Client Signature / Date', w - M - 62, cy + 4);
+
+  addDecorations(doc, `Application for Payment #${input.applicationNumber}`);
+  return doc;
+}
+
+export function downloadPayApplicationExcel(input: PayAppInput) {
+  const m = payAppMath(input);
+  const rows: any[][] = [
+    ['1. Original Contract Sum', input.originalContract],
+    ['2. Net Change by Change Orders', input.approvedChangeOrders],
+    ['3. Contract Sum to Date', m.contractSumToDate],
+    ['4. Total Completed & Stored to Date', input.completedStoredToDate],
+    [`5. Retainage (${input.retainagePercent.toFixed(1)}%)`, input.retainageHeld],
+    ['6. Total Earned Less Retainage', m.earnedLessRetainage],
+    ['7. Less Previous Certificates for Payment', input.previousPayments],
+    ['8. Current Payment Due', m.currentPaymentDue],
+    ['9. Balance to Finish Including Retainage', m.balanceToFinish],
+  ];
+  const ws = buildSheet({ name: 'Pay Application', headers: ['Line Item', 'Amount'], rows, colWidths: [46, 18], currencyCols: [1] }, `${input.projectName} — Application #${input.applicationNumber}`);
+  writeWorkbook([{ ws, name: 'Pay Application' }], `hou-payapp-${input.applicationNumber}-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Houston Enterprise · Cost Code / Phase Spend
+   Actual spend rolled up by cost code — no per-code budget exists in the
+   schema (budgets live at the project level), so this is an honest actual-
+   spend-by-code report, not a fabricated budget-vs-actual.
+──────────────────────────────────────────── */
+export function generateCostCodeReport(costCodes: any[], transactions: any[], entityLabel: string) {
+  const { doc, y } = makeDoc('Cost Code / Phase Spend', `HOU INC · ${entityLabel}`);
+  const spend: Record<string, { amount: number; count: number }> = {};
+  transactions.filter((t: any) => t.type === 'expense' && t.cost_phase).forEach((t: any) => {
+    const key = t.cost_phase;
+    const row = spend[key] ?? (spend[key] = { amount: 0, count: 0 });
+    row.amount += Number(t.amount) || 0; row.count++;
+  });
+  const known = new Set(costCodes.map((cc: any) => cc.code));
+  const rows = costCodes.map((cc: any) => ({
+    code: cc.code, name: cc.name, division: cc.finance_construction_divisions?.name || '—',
+    amount: spend[cc.code]?.amount || 0, count: spend[cc.code]?.count || 0,
+  }));
+  Object.keys(spend).filter(k => !known.has(k)).forEach(k => rows.push({ code: k, name: '(unmapped phase)', division: '—', amount: spend[k].amount, count: spend[k].count }));
+  rows.sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Coded Spend', value: fmtUSD(total) },
+    { label: 'Cost Codes', value: String(costCodes.length) },
+    { label: 'Codes With Spend', value: String(rows.filter(r => r.amount > 0).length) },
+    { label: 'Top Code', value: rows[0] ? fmtUSD(rows[0].amount) : fmtUSD(0) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Spend by Cost Code');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Code', 'Name', 'Division', 'Entries', 'Actual Spend']],
+    body: rows.map(r => [r.code, r.name, r.division, String(r.count), { content: fmtUSD(r.amount), styles: { halign: 'right', fontStyle: 'bold' } }]),
+    columnStyles: { 4: { halign: 'right' } },
+    foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
+  });
+  addDecorations(doc, 'Cost Code / Phase Spend');
+  return doc;
+}
+
+export function downloadCostCodeExcel(costCodes: any[], transactions: any[], entityLabel: string) {
+  const spend: Record<string, number> = {};
+  transactions.filter((t: any) => t.type === 'expense' && t.cost_phase).forEach((t: any) => {
+    spend[t.cost_phase] = (spend[t.cost_phase] || 0) + (Number(t.amount) || 0);
+  });
+  const rows = costCodes.map((cc: any) => [cc.code, cc.name, cc.finance_construction_divisions?.name || '', spend[cc.code] || 0]);
+  const ws = buildSheet({ name: 'Cost Codes', headers: ['Code', 'Name', 'Division', 'Actual Spend'], rows, colWidths: [12, 30, 20, 16], currencyCols: [3] }, `${entityLabel} — Cost Code Spend`);
+  writeWorkbook([{ ws, name: 'Cost Codes' }], `hou-cost-codes-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Houston Enterprise · Fixed Assets Register
+──────────────────────────────────────────── */
+export function generateFixedAssetsReport(assets: any[], entityLabel: string) {
+  const { doc, y } = makeDoc('Fixed Asset Register', `HOU INC · ${entityLabel} · Book Basis`);
+  const cost = assets.reduce((s: number, a: any) => s + Number(a.cost_basis || 0), 0);
+  const accum = assets.reduce((s: number, a: any) => s + Number(a.accumulated_depreciation || 0), 0);
+  const nbv = assets.reduce((s: number, a: any) => s + Number(a.net_book_value || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Cost Basis', value: fmtUSD(cost) },
+    { label: 'Accumulated Depreciation', value: fmtUSD(accum), color: C.negative },
+    { label: 'Net Book Value', value: fmtUSD(nbv), color: C.positive },
+    { label: 'Assets Tracked', value: String(assets.length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Asset Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Asset', 'Category', 'In Service', 'Cost Basis', 'Accum. Depr.', 'Net Book Value', 'Method']],
+    body: assets.map((a: any) => [
+      a.asset_name, String(a.asset_category).replace(/_/g, ' '), a.placed_in_service_date?.slice(0, 10) || '—',
+      fmtUSD(a.cost_basis), fmtUSD(a.accumulated_depreciation),
+      { content: fmtUSD(a.net_book_value), styles: { halign: 'right', fontStyle: 'bold' } },
+      String(a.depreciation_method).replace(/_/g, ' '),
+    ]),
+    foot: [[{ content: 'Total', colSpan: 3, styles: { fontStyle: 'bold' } },
+      { content: fmtUSD(cost), styles: { fontStyle: 'bold' } },
+      { content: fmtUSD(accum), styles: { fontStyle: 'bold' } },
+      { content: fmtUSD(nbv), styles: { halign: 'right', fontStyle: 'bold' } }, '']],
+  });
+  doc.setFontSize(6); doc.setFont('helvetica', 'italic'); doc.setTextColor(...C.muted);
+  const noteY = (doc as any).lastAutoTable.finalY + 5;
+  doc.text('Book-basis straight-line / declining-balance depreciation for internal management reporting — not prepared as a tax (MACRS) schedule.', M, noteY);
+  addDecorations(doc, 'Fixed Asset Register');
+  return doc;
+}
+
+export function downloadFixedAssetsExcel(assets: any[], entityLabel: string) {
+  const rows = assets.map((a: any) => [
+    a.asset_name, a.asset_category, a.placed_in_service_date?.slice(0, 10) || '', a.depreciation_method,
+    Number(a.cost_basis) || 0, Number(a.accumulated_depreciation) || 0, Number(a.net_book_value) || 0,
+  ]);
+  const ws = buildSheet({ name: 'Fixed Assets', headers: ['Asset', 'Category', 'In Service', 'Method', 'Cost Basis', 'Accum. Depreciation', 'Net Book Value'], rows, colWidths: [26, 16, 14, 20, 16, 18, 16], currencyCols: [4, 5, 6] }, `${entityLabel} — Fixed Asset Register`);
+  writeWorkbook([{ ws, name: 'Fixed Assets' }], `hou-fixed-assets-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Model Profitability
+──────────────────────────────────────────── */
+export function generateModelProfitabilityReport(models: Array<{ model: string; units: number; revenue: number; costs: number; margin: number; marginPct: number }>) {
+  const { doc, y } = makeDoc('Generator Model Profitability', 'HOU INC · Houston Generator Pros');
+  const revenue = models.reduce((s, m) => s + m.revenue, 0);
+  const margin = models.reduce((s, m) => s + m.margin, 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Delivered Revenue', value: fmtUSD(revenue) },
+    { label: 'Total Margin', value: fmtUSD(margin), color: margin >= 0 ? C.positive : C.negative },
+    { label: 'Models Delivered', value: String(models.length) },
+    { label: 'Blended Margin', value: revenue > 0 ? `${((margin / revenue) * 100).toFixed(1)}%` : '—' },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'By Generator Model');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Model', 'Units', 'Revenue', 'Job Costs', 'Margin', 'Margin %']],
+    body: models.map(m => [m.model, String(m.units), fmtUSD(m.revenue), fmtUSD(m.costs),
+      { content: fmtUSD(m.margin), styles: { textColor: m.margin >= 0 ? C.positive : C.negative, fontStyle: 'bold' } },
+      `${m.marginPct.toFixed(1)}%`]),
+    foot: [['Total', String(models.reduce((s, m) => s + m.units, 0)), fmtUSD(revenue), fmtUSD(models.reduce((s, m) => s + m.costs, 0)),
+      { content: fmtUSD(margin), styles: { fontStyle: 'bold' } }, '']],
+  });
+  addDecorations(doc, 'Generator Model Profitability');
+  return doc;
+}
+
+export function downloadModelProfitabilityExcel(models: Array<{ model: string; units: number; revenue: number; costs: number; margin: number; marginPct: number }>) {
+  const rows = models.map(m => [m.model, m.units, m.revenue, m.costs, m.margin, m.marginPct]);
+  const ws = buildSheet({ name: 'Model Profitability', headers: ['Model', 'Units', 'Revenue', 'Job Costs', 'Margin', 'Margin %'], rows, colWidths: [28, 10, 16, 16, 16, 12], currencyCols: [2, 3, 4] }, 'Generator Model Profitability');
+  writeWorkbook([{ ws, name: 'Model Profitability' }], `hou-hgp-model-profitability-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Inventory Valuation
+──────────────────────────────────────────── */
+export function generateInventoryValuationReport(parts: any[]) {
+  const { doc, y } = makeDoc('Inventory Valuation', 'HOU INC · Houston Generator Pros');
+  const totalValue = parts.reduce((s: number, p: any) => s + Number(p.qty_on_hand || 0) * Number(p.unit_cost || 0), 0);
+  const lowStock = parts.filter((p: any) => Number(p.qty_on_hand || 0) <= Number(p.reorder_point || 0));
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Inventory Value', value: fmtUSD(totalValue) },
+    { label: 'SKUs Tracked', value: String(parts.length) },
+    { label: 'Units on Hand', value: String(parts.reduce((s: number, p: any) => s + Number(p.qty_on_hand || 0), 0)) },
+    { label: 'Below Reorder Point', value: String(lowStock.length), color: lowStock.length > 0 ? C.negative : C.positive },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Part Register');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['SKU', 'Name', 'Category', 'Qty on Hand', 'Unit Cost', 'Value', 'Location']],
+    body: parts.map((p: any) => {
+      const value = Number(p.qty_on_hand || 0) * Number(p.unit_cost || 0);
+      return [p.sku || '—', p.name, String(p.category).replace(/_/g, ' '), String(p.qty_on_hand), fmtUSD(p.unit_cost),
+        { content: fmtUSD(value), styles: { halign: 'right', fontStyle: 'bold' } }, p.location || '—'];
+    }),
+    foot: [[{ content: 'Total', colSpan: 5, styles: { fontStyle: 'bold' } }, { content: fmtUSD(totalValue), styles: { halign: 'right', fontStyle: 'bold' } }, '']],
+  });
+  addDecorations(doc, 'Inventory Valuation');
+  return doc;
+}
+
+export function downloadInventoryValuationExcel(parts: any[]) {
+  const rows = parts.map((p: any) => [p.sku || '', p.name, p.category, Number(p.qty_on_hand) || 0, Number(p.unit_cost) || 0, (Number(p.qty_on_hand) || 0) * (Number(p.unit_cost) || 0), p.location || '']);
+  const ws = buildSheet({ name: 'Inventory', headers: ['SKU', 'Name', 'Category', 'Qty', 'Unit Cost', 'Value', 'Location'], rows, colWidths: [14, 26, 16, 10, 14, 14, 16], currencyCols: [4, 5] }, 'Inventory Valuation');
+  writeWorkbook([{ ws, name: 'Inventory' }], `hou-hgp-inventory-valuation-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Low Stock / Reorder
+──────────────────────────────────────────── */
+export function generateLowStockReorderReport(parts: any[]) {
+  const low = parts.filter((p: any) => Number(p.qty_on_hand || 0) <= Number(p.reorder_point || 0));
+  const { doc, y } = makeDoc('Low Stock / Reorder', 'HOU INC · Houston Generator Pros');
+  const exposure = low.reduce((s: number, p: any) => s + Number(p.reorder_qty || p.reorder_point * 2 || 0) * Number(p.unit_cost || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Parts Below Reorder Point', value: String(low.length), color: low.length > 0 ? C.negative : C.positive },
+    { label: 'Estimated Reorder Cost', value: fmtUSD(exposure) },
+    { label: 'Total SKUs', value: String(parts.length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Reorder Queue');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['SKU', 'Name', 'On Hand', 'Reorder Point', 'Suggested Qty', 'Est. Cost', 'Preferred Vendor']],
+    body: low.map((p: any) => {
+      const qty = Number(p.reorder_qty || p.reorder_point * 2 || 0);
+      return [p.sku || '—', p.name, String(p.qty_on_hand), String(p.reorder_point), String(qty), fmtUSD(qty * Number(p.unit_cost || 0)), p.vendors?.name || '—'];
+    }),
+  });
+  addDecorations(doc, 'Low Stock / Reorder');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Purchase Order / Procurement
+──────────────────────────────────────────── */
+export function generatePurchaseOrderReport(pos: any[]) {
+  const { doc, y } = makeDoc('Purchase Order / Procurement', 'HOU INC · Houston Generator Pros');
+  const total = pos.reduce((s: number, p: any) => s + Number(p.total_amount || 0), 0);
+  const ordered = pos.filter((p: any) => p.status === 'ordered').reduce((s: number, p: any) => s + Number(p.total_amount || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Procurement', value: fmtUSD(total) },
+    { label: 'In Transit (Ordered)', value: fmtUSD(ordered), color: C.accent },
+    { label: 'Purchase Orders', value: String(pos.length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Purchase Order Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['PO #', 'Vendor', 'Order Date', 'Status', 'Amount']],
+    body: pos.map((p: any) => [p.po_number || '—', p.vendors?.name || '—', p.order_date?.slice(0, 10) || '—',
+      { content: String(p.status).toUpperCase(), styles: { fontStyle: 'bold', textColor: p.status === 'cancelled' ? C.muted : p.status === 'received' ? C.positive : C.accent } },
+      { content: fmtUSD(p.total_amount), styles: { halign: 'right', fontStyle: 'bold' } }]),
+    foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
+  });
+  addDecorations(doc, 'Purchase Order / Procurement');
+  return doc;
+}
+
+export function downloadPurchaseOrderExcel(pos: any[]) {
+  const rows = pos.map((p: any) => [p.po_number || '', p.vendors?.name || '', p.order_date?.slice(0, 10) || '', p.status, Number(p.total_amount) || 0]);
+  const ws = buildSheet({ name: 'Purchase Orders', headers: ['PO #', 'Vendor', 'Order Date', 'Status', 'Amount'], rows, colWidths: [14, 26, 14, 12, 16], currencyCols: [4] }, 'Purchase Order / Procurement');
+  writeWorkbook([{ ws, name: 'Purchase Orders' }], `hou-hgp-purchase-orders-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Deposits & Open Balances
+──────────────────────────────────────────── */
+export function generateDepositsOpenBalancesReport(jobs: any[]) {
+  const { doc, y } = makeDoc('Deposits & Open Balances', 'HOU INC · Houston Generator Pros');
+  const active = jobs.filter((j: any) => !['completed', 'lost'].includes(j.stage));
+  const deposits = active.reduce((s: number, j: any) => s + (Number(j.deposit_amount) || 0), 0);
+  const balance = active.reduce((s: number, j: any) => s + Math.max((Number(j.quoted_amount) || 0) - (Number(j.deposit_amount) || 0), 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Deposits Held', value: fmtUSD(deposits), color: C.positive },
+    { label: 'Balance Due', value: fmtUSD(balance), color: C.accent },
+    { label: 'Open Jobs', value: String(active.length) },
+  ]);
+  const withBalance = active.filter((j: any) => (Number(j.quoted_amount) || 0) - (Number(j.deposit_amount) || 0) > 0);
+  const ty = sectionLabel(doc, my + 2, 'Jobs With Open Balance');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Customer', 'Stage', 'Quoted', 'Collected', 'Balance Due']],
+    body: withBalance.map((j: any) => [j.customer_name, String(j.stage).replace(/_/g, ' '), fmtUSD(j.quoted_amount), fmtUSD(j.deposit_amount),
+      { content: fmtUSD(Math.max((Number(j.quoted_amount) || 0) - (Number(j.deposit_amount) || 0), 0)), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } }]),
+    foot: [[{ content: 'Total Open Balance', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(balance), styles: { halign: 'right', fontStyle: 'bold' } }]],
+  });
+  addDecorations(doc, 'Deposits & Open Balances');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Warranty Expiration
+──────────────────────────────────────────── */
+export function generateWarrantyExpirationReport(units: any[]) {
+  const { doc, y } = makeDoc('Warranty Expiration', 'HOU INC · Houston Generator Pros');
+  const withWarranty = units.filter((u: any) => u.warranty_end);
+  const today = new Date();
+  const expiring90 = withWarranty.filter((u: any) => {
+    const d = new Date(u.warranty_end); const days = (d.getTime() - today.getTime()) / 86400000;
+    return days >= 0 && days <= 90;
+  });
+  const expired = withWarranty.filter((u: any) => new Date(u.warranty_end) < today);
+  const my = drawMetrics(doc, y, [
+    { label: 'Units With Warranty', value: String(withWarranty.length) },
+    { label: 'Expiring Next 90 Days', value: String(expiring90.length), color: expiring90.length > 0 ? C.accent : C.positive },
+    { label: 'Already Expired', value: String(expired.length), color: expired.length > 0 ? C.negative : C.positive },
+  ]);
+  const sorted = [...withWarranty].sort((a, b) => String(a.warranty_end).localeCompare(String(b.warranty_end)));
+  const ty = sectionLabel(doc, my + 2, 'Units by Warranty Expiration');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Model', 'Serial #', 'Customer', 'Install Date', 'Warranty End', 'Status']],
+    body: sorted.map((u: any) => {
+      const isExpired = new Date(u.warranty_end) < today;
+      return [u.model, u.serial_number || '—', u.customer_name || '—', u.install_date?.slice(0, 10) || '—', u.warranty_end?.slice(0, 10),
+        { content: isExpired ? 'EXPIRED' : 'ACTIVE', styles: { fontStyle: 'bold', textColor: isExpired ? C.negative : C.positive } }];
+    }),
+  });
+  addDecorations(doc, 'Warranty Expiration');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Customer Site Registry
+──────────────────────────────────────────── */
+export function generateCustomerSiteRegistryReport(sites: any[]) {
+  const { doc, y } = makeDoc('Customer Site Registry', 'HOU INC · Houston Generator Pros');
+  const geocoded = sites.filter((s: any) => s.latitude && s.longitude).length;
+  const my = drawMetrics(doc, y, [
+    { label: 'Registered Sites', value: String(sites.length) },
+    { label: 'Mapped / Geocoded', value: String(geocoded) },
+    { label: 'Under Agreement', value: String(sites.filter((s: any) => s.agreement_id).length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Site Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Customer', 'Address', 'City', 'Utility', 'Under Agreement']],
+    body: sites.map((s: any) => [s.customer_name, s.site_address || '—', s.city || '—', s.utility_provider || '—', s.agreement_id ? 'Yes' : 'No']),
+  });
+  addDecorations(doc, 'Customer Site Registry');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Service Visit Revenue
+──────────────────────────────────────────── */
+export function generateServiceVisitRevenueReport(visits: any[]) {
+  const { doc, y } = makeDoc('Service Visit Revenue', 'HOU INC · Houston Generator Pros');
+  const completed = visits.filter((v: any) => v.status === 'completed');
+  const revenue = completed.reduce((s: number, v: any) => s + (Number(v.revenue) || 0), 0);
+  const cost = completed.reduce((s: number, v: any) => s + (Number(v.cost) || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Completed Visits', value: String(completed.length) },
+    { label: 'Visit Revenue', value: fmtUSD(revenue), color: C.positive },
+    { label: 'Visit Margin', value: fmtUSD(revenue - cost), color: revenue - cost >= 0 ? C.positive : C.negative },
+  ]);
+  const byType: Record<string, { revenue: number; count: number }> = {};
+  completed.forEach((v: any) => {
+    const row = byType[v.visit_type] ?? (byType[v.visit_type] = { revenue: 0, count: 0 });
+    row.revenue += Number(v.revenue) || 0; row.count++;
+  });
+  const ty = sectionLabel(doc, my + 2, 'Revenue by Visit Type');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Visit Type', 'Visits', 'Revenue']],
+    body: Object.entries(byType).map(([type, r]) => [String(type).replace(/_/g, ' '), String(r.count), fmtUSD(r.revenue)]),
+    foot: [['Total', String(completed.length), { content: fmtUSD(revenue), styles: { halign: 'right', fontStyle: 'bold' } }]],
+  });
+  addDecorations(doc, 'Service Visit Revenue');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: Holdings · Notes Payable / Receivable
+──────────────────────────────────────────── */
+export function generateNotesReport(notes: any[]) {
+  const { doc, y } = makeDoc('Notes Payable / Receivable', 'HOU INC · Houston Enterprise Holdings');
+  const receivable = notes.filter((n: any) => n.direction === 'receivable' && n.status === 'active').reduce((s: number, n: any) => s + Number(n.outstanding_balance || 0), 0);
+  const payable = notes.filter((n: any) => n.direction === 'payable' && n.status === 'active').reduce((s: number, n: any) => s + Number(n.outstanding_balance || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Notes Receivable', value: fmtUSD(receivable), color: C.positive },
+    { label: 'Notes Payable', value: fmtUSD(payable), color: C.negative },
+    { label: 'Net Position', value: fmtUSD(receivable - payable), color: receivable - payable >= 0 ? C.positive : C.negative },
+    { label: 'Active Notes', value: String(notes.filter((n: any) => n.status === 'active').length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Note Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Counterparty', 'Direction', 'Type', 'Principal', 'Outstanding', 'Rate', 'Maturity', 'Status']],
+    body: notes.map((n: any) => [n.counterparty_name, n.direction === 'receivable' ? 'Receivable' : 'Payable', String(n.note_type).replace(/_/g, ' '),
+      fmtUSD(n.principal), { content: fmtUSD(n.outstanding_balance), styles: { fontStyle: 'bold', textColor: n.direction === 'receivable' ? C.positive : C.negative } },
+      `${Number(n.interest_rate || 0).toFixed(2)}%`, n.maturity_date?.slice(0, 10) || '—', String(n.status).replace(/_/g, ' ')]),
+  });
+  addDecorations(doc, 'Notes Payable / Receivable');
+  return doc;
+}
+
+export function downloadNotesExcel(notes: any[]) {
+  const rows = notes.map((n: any) => [n.counterparty_name, n.direction, n.note_type, Number(n.principal) || 0, Number(n.outstanding_balance) || 0, Number(n.interest_rate) || 0, n.maturity_date?.slice(0, 10) || '', n.status]);
+  const ws = buildSheet({ name: 'Notes', headers: ['Counterparty', 'Direction', 'Type', 'Principal', 'Outstanding', 'Rate %', 'Maturity', 'Status'], rows, colWidths: [24, 12, 18, 16, 16, 10, 14, 12], currencyCols: [3, 4] }, 'Notes Payable / Receivable');
+  writeWorkbook([{ ws, name: 'Notes' }], `hou-holdings-notes-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Holdings · Capital Activity
+──────────────────────────────────────────── */
+export function generateCapitalActivityReport(activity: any[]) {
+  const { doc, y } = makeDoc('Capital Activity', 'HOU INC · Houston Enterprise Holdings');
+  const sum = (t: string) => activity.filter((a: any) => a.activity_type === t).reduce((s: number, a: any) => s + Number(a.amount || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Contributions ITD', value: fmtUSD(sum('capital_contribution')), color: C.positive },
+    { label: 'Distributions ITD', value: fmtUSD(sum('distribution')), color: C.negative },
+    { label: 'Dividends ITD', value: fmtUSD(sum('dividend')), color: C.negative },
+    { label: 'Total Activity', value: String(activity.length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Activity Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Date', 'Type', 'Related Entity', 'Amount', 'Memo']],
+    body: activity.map((a: any) => [a.activity_date?.slice(0, 10), String(a.activity_type).replace(/_/g, ' '), a.related_entity_id || '—',
+      { content: fmtUSD(a.amount), styles: { halign: 'right', fontStyle: 'bold' } }, a.memo || '—']),
+  });
+  addDecorations(doc, 'Capital Activity');
+  return doc;
+}
+
+export function downloadCapitalActivityExcel(activity: any[]) {
+  const rows = activity.map((a: any) => [a.activity_date?.slice(0, 10) || '', a.activity_type, a.related_entity_id || '', Number(a.amount) || 0, a.memo || '']);
+  const ws = buildSheet({ name: 'Capital Activity', headers: ['Date', 'Type', 'Related Entity', 'Amount', 'Memo'], rows, colWidths: [14, 20, 20, 16, 30], currencyCols: [3] }, 'Capital Activity');
+  writeWorkbook([{ ws, name: 'Capital Activity' }], `hou-holdings-capital-activity-${todayLocalDate()}.xlsx`);
+}
+
+/* ────────────────────────────────────────────
+   Report: Holdings · Covenant Compliance
+──────────────────────────────────────────── */
+export function generateCovenantComplianceReport(covenants: any[]) {
+  const { doc, y } = makeDoc('Covenant Compliance', 'HOU INC · Houston Enterprise Holdings');
+  const breached = covenants.filter((c: any) => c.status === 'breached').length;
+  const atRisk = covenants.filter((c: any) => c.status === 'at_risk').length;
+  const my = drawMetrics(doc, y, [
+    { label: 'Covenants Tracked', value: String(covenants.length) },
+    { label: 'In Compliance', value: String(covenants.filter((c: any) => c.status === 'compliant').length), color: C.positive },
+    { label: 'At Risk', value: String(atRisk), color: atRisk > 0 ? C.accent : C.positive },
+    { label: 'Breached', value: String(breached), color: breached > 0 ? C.negative : C.positive },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Covenant Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Covenant', 'Note', 'Required', 'Current', 'Status', 'Last Tested']],
+    body: covenants.map((c: any) => [c.name, c.holdings_notes?.counterparty_name || '—', c.threshold_value != null ? String(c.threshold_value) : '—',
+      c.current_value != null ? String(c.current_value) : '—',
+      { content: String(c.status).replace(/_/g, ' ').toUpperCase(), styles: { fontStyle: 'bold', textColor: c.status === 'breached' ? C.negative : c.status === 'at_risk' ? C.accent : C.positive } },
+      c.last_tested_date?.slice(0, 10) || '—']),
+  });
+  addDecorations(doc, 'Covenant Compliance');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: Holdings · Balance Sheet (management basis)
+──────────────────────────────────────────── */
+export interface HoldingsBalanceSheet {
+  as_of_date: string; cash_position: number; notes_receivable: number; total_assets: number;
+  notes_payable: number; total_liabilities: number; owners_equity: number;
+  capital_contributions_itd: number; distributions_itd: number; dividends_itd: number;
+  management_fees_itd: number; tax_reserves_itd: number; intercompany_transfers_itd: number;
+}
+
+export function generateBalanceSheetReport(bs: HoldingsBalanceSheet) {
+  const { doc, y } = makeDoc('Statement of Financial Position', `HOU INC · Houston Enterprise Holdings · As of ${fmtDateLong(bs.as_of_date)}`);
+  let cy = drawMetrics(doc, y, [
+    { label: 'Total Assets', value: fmtUSD(bs.total_assets) },
+    { label: 'Total Liabilities', value: fmtUSD(bs.total_liabilities) },
+    { label: "Owners' Equity", value: fmtUSD(bs.owners_equity), color: bs.owners_equity >= 0 ? C.positive : C.negative },
+  ]);
+  cy = kvSection(doc, cy + 2, 'Assets', [
+    ['Cash Position (net of all-time income, expense, cleared checks)', fmtUSD(bs.cash_position)],
+    ['Notes Receivable (active)', fmtUSD(bs.notes_receivable)],
+    ['TOTAL ASSETS', fmtUSD(bs.total_assets), C.accent],
+  ]);
+  cy = kvSection(doc, cy, 'Liabilities', [
+    ['Notes Payable (active)', fmtUSD(bs.notes_payable)],
+    ['TOTAL LIABILITIES', fmtUSD(bs.total_liabilities), C.accent],
+  ]);
+  cy = kvSection(doc, cy, "Owners' Equity", [
+    ["Owners' Equity (Total Assets − Total Liabilities)", fmtUSD(bs.owners_equity), C.accent],
+  ]);
+  cy = kvSection(doc, cy, 'Capital Activity Since Inception (supplementary)', [
+    ['Capital Contributions', fmtUSD(bs.capital_contributions_itd)],
+    ['Distributions', fmtUSD(-bs.distributions_itd)],
+    ['Dividends', fmtUSD(-bs.dividends_itd)],
+    ['Management Fees Collected', fmtUSD(bs.management_fees_itd)],
+    ['Tax Reserve Transfers', fmtUSD(bs.tax_reserves_itd)],
+    ['Intercompany Transfers', fmtUSD(bs.intercompany_transfers_itd)],
+  ]);
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...C.muted);
+  const lines = doc.splitTextToSize(
+    'Management-basis statement. This platform maintains a cash/transaction ledger rather than full double-entry books with dedicated equity accounts — Owners’ Equity above is therefore reported as a residual (Total Assets less Total Liabilities), and capital activity is shown separately as supporting context rather than forced to reconcile line-by-line against it. Not prepared under GAAP.',
+    pageDims(doc).w - 2 * M,
+  );
+  doc.text(lines, M, cy + 2);
+  addDecorations(doc, 'Statement of Financial Position');
+  return doc;
+}
+
+export function downloadBalanceSheetExcel(bs: HoldingsBalanceSheet) {
+  const rows: any[][] = [
+    ['Cash Position', bs.cash_position], ['Notes Receivable', bs.notes_receivable], ['Total Assets', bs.total_assets],
+    ['Notes Payable', bs.notes_payable], ['Total Liabilities', bs.total_liabilities],
+    ["Owners' Equity", bs.owners_equity],
+    ['Capital Contributions ITD', bs.capital_contributions_itd], ['Distributions ITD', -bs.distributions_itd], ['Dividends ITD', -bs.dividends_itd],
+    ['Management Fees ITD', bs.management_fees_itd], ['Tax Reserves ITD', bs.tax_reserves_itd], ['Intercompany Transfers ITD', bs.intercompany_transfers_itd],
+  ];
+  const ws = buildSheet({ name: 'Balance Sheet', headers: ['Line Item', 'Amount'], rows, colWidths: [40, 18], currencyCols: [1] }, `Statement of Financial Position — As of ${fmtDateLong(bs.as_of_date)}`);
+  writeWorkbook([{ ws, name: 'Balance Sheet' }], `hou-holdings-balance-sheet-${todayLocalDate()}.xlsx`);
+}
+
+function fmtDateLong(s: string) {
+  if (!s) return '—';
+  return new Date(s).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+/* ────────────────────────────────────────────
+   Report: Holdings · Consolidated Board Packet
+   The single document a board member, lender, or investor gets — entity
+   performance, notes/debt, covenants, capital activity, pending approvals,
+   maturity risk, and the balance sheet in one PDF.
+──────────────────────────────────────────── */
+export function generateBoardPacketReport(opts: {
+  periodLabel: string;
+  balanceSheet: HoldingsBalanceSheet;
+  entityPerformance: Array<{ entity_id: string; entity_name?: string; net_income?: number; revenue?: number; expenses?: number }>;
+  notes: any[];
+  covenants: any[];
+  capitalActivity: any[];
+  pendingApprovals: any[];
+  managementNotes?: string;
+}) {
+  const { doc, y } = makeDoc('Consolidated Board Packet', `HOU INC · Houston Enterprise Holdings · ${opts.periodLabel}`);
+  const activeNotes = opts.notes.filter((n: any) => n.status === 'active');
+  const maturingSoon = activeNotes.filter((n: any) => {
+    if (!n.maturity_date) return false;
+    const days = (new Date(n.maturity_date).getTime() - Date.now()) / 86400000;
+    return days >= 0 && days <= 180;
+  });
+
+  let cy = drawMetrics(doc, y, [
+    { label: 'Total Assets', value: fmtUSD(opts.balanceSheet.total_assets) },
+    { label: "Owners' Equity", value: fmtUSD(opts.balanceSheet.owners_equity), color: opts.balanceSheet.owners_equity >= 0 ? C.positive : C.negative },
+    { label: 'Maturing ≤180d', value: String(maturingSoon.length), color: maturingSoon.length > 0 ? C.accent : C.positive },
+    { label: 'Pending Approvals', value: String(opts.pendingApprovals.length), color: opts.pendingApprovals.length > 0 ? C.accent : C.positive },
+  ]);
+
+  cy = kvSection(doc, cy + 2, 'Statement of Financial Position (Summary)', [
+    ['Total Assets', fmtUSD(opts.balanceSheet.total_assets)],
+    ['Total Liabilities', fmtUSD(opts.balanceSheet.total_liabilities)],
+    ["Owners' Equity", fmtUSD(opts.balanceSheet.owners_equity), C.accent],
+  ]);
+
+  if (opts.entityPerformance.length) {
+    const ty = sectionLabel(doc, cy + 2, 'Consolidated Entity Performance');
+    autoTable(doc, {
+      ...tblCfg(ty),
+      head: [['Entity', 'Revenue', 'Expenses', 'Net Income']],
+      body: opts.entityPerformance.map((e: any) => [e.entity_name || e.entity_id, fmtUSD(e.revenue || 0), fmtUSD(e.expenses || 0),
+        { content: fmtUSD(e.net_income || 0), styles: { fontStyle: 'bold', textColor: (e.net_income || 0) >= 0 ? C.positive : C.negative } }]),
+    });
+    cy = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  if (activeNotes.length) {
+    const ty = sectionLabel(doc, cy, 'Notes & Debt Service');
+    autoTable(doc, {
+      ...tblCfg(ty),
+      head: [['Counterparty', 'Direction', 'Outstanding', 'Rate', 'Maturity']],
+      body: activeNotes.map((n: any) => [n.counterparty_name, n.direction, fmtUSD(n.outstanding_balance), `${Number(n.interest_rate || 0).toFixed(2)}%`, n.maturity_date?.slice(0, 10) || '—']),
+    });
+    cy = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  if (opts.covenants.length) {
+    const ty = sectionLabel(doc, cy, 'Covenant Compliance');
+    autoTable(doc, {
+      ...tblCfg(ty),
+      head: [['Covenant', 'Status', 'Last Tested']],
+      body: opts.covenants.map((c: any) => [c.name,
+        { content: String(c.status).replace(/_/g, ' ').toUpperCase(), styles: { fontStyle: 'bold', textColor: c.status === 'breached' ? C.negative : c.status === 'at_risk' ? C.accent : C.positive } },
+        c.last_tested_date?.slice(0, 10) || '—']),
+    });
+    cy = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  if (opts.pendingApprovals.length) {
+    const ty = sectionLabel(doc, cy, 'Pending Capital Approvals');
+    autoTable(doc, {
+      ...tblCfg(ty),
+      head: [['Type', 'Amount', 'Requested']],
+      body: opts.pendingApprovals.map((a: any) => [String(a.activity_type).replace(/_/g, ' '), fmtUSD(a.amount), a.activity_date?.slice(0, 10) || '—']),
+    });
+    cy = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  if (opts.managementNotes) {
+    cy = sectionLabel(doc, cy, 'Management Notes & Assumptions');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.black);
+    doc.text(doc.splitTextToSize(opts.managementNotes, pageDims(doc).w - 2 * M), M, cy);
+  }
+
+  addDecorations(doc, 'Consolidated Board Packet');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Technician Workload
+──────────────────────────────────────────── */
+export function generateTechnicianWorkloadReport(jobs: any[], visits: any[]) {
+  const { doc, y } = makeDoc('Technician Workload', 'HOU INC · Houston Generator Pros');
+  const byTech: Record<string, { jobs: number; visits: number; hours: number; revenue: number }> = {};
+  const bump = (name: string) => byTech[name] ?? (byTech[name] = { jobs: 0, visits: 0, hours: 0, revenue: 0 });
+  jobs.filter((j: any) => j.technician && !['completed', 'lost'].includes(j.stage)).forEach((j: any) => {
+    bump(j.technician).jobs += 1;
+  });
+  visits.filter((v: any) => v.technician).forEach((v: any) => {
+    const row = bump(v.technician);
+    row.visits += 1; row.hours += Number(v.labor_hours) || 0; row.revenue += Number(v.revenue) || 0;
+  });
+  const rows = Object.entries(byTech).map(([name, r]) => ({ name, ...r })).sort((a, b) => (b.jobs + b.visits) - (a.jobs + a.visits));
+  const my = drawMetrics(doc, y, [
+    { label: 'Technicians', value: String(rows.length) },
+    { label: 'Open Jobs Assigned', value: String(rows.reduce((s, r) => s + r.jobs, 0)) },
+    { label: 'Logged Visits', value: String(rows.reduce((s, r) => s + r.visits, 0)) },
+    { label: 'Visit Revenue', value: fmtUSD(rows.reduce((s, r) => s + r.revenue, 0)), color: C.positive },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'By Technician');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Technician', 'Open Jobs', 'Visits', 'Labor Hours', 'Visit Revenue']],
+    body: rows.map(r => [r.name, String(r.jobs), String(r.visits), r.hours.toFixed(1), fmtUSD(r.revenue)]),
+  });
+  addDecorations(doc, 'Technician Workload');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Service Agreement Renewals
+──────────────────────────────────────────── */
+export function generateServiceAgreementRenewalReport(agreements: any[]) {
+  const { doc, y } = makeDoc('Service Agreement Renewals', 'HOU INC · Houston Generator Pros');
+  const active = agreements.filter((a: any) => a.status === 'active');
+  const today = new Date();
+  const expiring90 = active.filter((a: any) => a.end_date && (new Date(a.end_date).getTime() - today.getTime()) / 86400000 <= 90);
+  const annualValue = active.reduce((s: number, a: any) => s + (Number(a.annual_value) || 0), 0);
+  const my = drawMetrics(doc, y, [
+    { label: 'Active Agreements', value: String(active.length) },
+    { label: 'Renewing ≤90 Days', value: String(expiring90.length), color: expiring90.length > 0 ? C.accent : C.positive },
+    { label: 'Recurring Annual Value', value: fmtUSD(annualValue), color: C.positive },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Agreement Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Customer', 'Plan', 'Annual Value', 'Visits / Year', 'End Date', 'Status']],
+    body: [...active].sort((a, b) => String(a.end_date || '9999').localeCompare(String(b.end_date || '9999'))).map((a: any) => [
+      a.customer_name, String(a.plan).replace(/_/g, ' '), fmtUSD(a.annual_value), String(a.visits_per_year),
+      a.end_date?.slice(0, 10) || 'Open-ended',
+      { content: a.end_date && (new Date(a.end_date).getTime() - today.getTime()) / 86400000 <= 90 ? 'RENEWING SOON' : 'ACTIVE',
+        styles: { fontStyle: 'bold', textColor: a.end_date && (new Date(a.end_date).getTime() - today.getTime()) / 86400000 <= 90 ? C.accent : C.positive } },
+    ]),
+  });
+  addDecorations(doc, 'Service Agreement Renewals');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: HGP · Emergency Service / Outage Response
+──────────────────────────────────────────── */
+export function generateEmergencyResponseReport(jobs: any[], impacts: any[]) {
+  const { doc, y } = makeDoc('Emergency Service / Outage Response', 'HOU INC · Houston Generator Pros');
+  const emergencyJobs = jobs.filter((j: any) => j.emergency);
+  const revenue = emergencyJobs.reduce((s: number, j: any) => s + (Number(j.quoted_amount) || 0), 0);
+  const matched = impacts.filter((i: any) => i.hgp_customer_sites);
+  const my = drawMetrics(doc, y, [
+    { label: 'Emergency Jobs', value: String(emergencyJobs.length) },
+    { label: 'Emergency Revenue', value: fmtUSD(revenue), color: C.positive },
+    { label: 'Outage-Matched Sites', value: String(matched.length) },
+    { label: 'Open Emergencies', value: String(emergencyJobs.filter((j: any) => !['completed', 'lost'].includes(j.stage)).length), color: C.negative },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Emergency Job Detail');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Customer', 'Stage', 'Technician', 'Dispatch', 'Quoted']],
+    body: emergencyJobs.map((j: any) => [j.customer_name, String(j.stage).replace(/_/g, ' '), j.technician || '—', String(j.dispatch_status || 'unassigned').replace(/_/g, ' '), fmtUSD(j.quoted_amount)]),
+  });
+  addDecorations(doc, 'Emergency Service / Outage Response');
+  return doc;
+}
+
+/* ────────────────────────────────────────────
+   Report: Documents (shared)
+──────────────────────────────────────────── */
+export function generateDocumentsReport(documents: any[], entityLabel: string) {
+  const { doc, y } = makeDoc('Documents Report', `HOU INC · ${entityLabel}`);
+  const byType: Record<string, number> = {};
+  documents.forEach((d: any) => { byType[d.doc_type] = (byType[d.doc_type] || 0) + 1; });
+  const my = drawMetrics(doc, y, [
+    { label: 'Total Documents', value: String(documents.length) },
+    { label: 'Document Types', value: String(Object.keys(byType).length) },
+    { label: 'OCR Processed', value: String(documents.filter((d: any) => d.ocr_status === 'complete').length) },
+  ]);
+  const ty = sectionLabel(doc, my + 2, 'Document Register');
+  autoTable(doc, {
+    ...tblCfg(ty),
+    head: [['Title', 'Type', 'Tags', 'Uploaded', 'Linked To']],
+    body: documents.slice(0, 400).map((d: any) => [
+      d.title || d.file_name, String(d.doc_type).replace(/_/g, ' '), (d.tags || []).join(', ') || '—',
+      d.created_at?.slice(0, 10) || '—',
+      d.linked_project_id ? 'Project' : d.linked_transaction_id ? 'Transaction' : d.linked_invoice_id ? 'Invoice' : d.linked_check_id ? 'Check' : '—',
+    ]),
+  });
+  addDecorations(doc, 'Documents Report');
   return doc;
 }
 

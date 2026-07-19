@@ -78,8 +78,9 @@ test('entity-aware navigation swaps modules per selected entity', async ({ page 
   await switcher.click();
   await heOption.click();
 
-  // Houston Enterprise: full construction suite with WIP Controls.
+  // Houston Enterprise: full construction suite with WIP Controls and reports.
   await expect(page.getByRole('link', { name: /Controls/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Reports/ }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: /Projects/ }).first()).toBeVisible();
 
   // Switch to Houston Generator Pros via the sidebar entity selector.
@@ -87,13 +88,16 @@ test('entity-aware navigation swaps modules per selected entity', async ({ page 
   await hgpOption.click();
   await expect(page.getByText('Generator Operations').first()).toBeVisible();
   await expect(page.getByRole('link', { name: /Install Jobs/ }).first()).toBeVisible();
-  await expect(page.getByRole('link', { name: /Controls/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Controls/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Reports/ }).first()).toBeVisible();
 
   // Switch to Holdings.
   await switcher.click();
   await holdingsOption.click();
   await expect(page.getByText('Holdings HQ').first()).toBeVisible();
   await expect(page.getByRole('link', { name: /Assets & Deals/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Controls/ }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: /Reports/ }).first()).toBeVisible();
 });
 
 test('HGP service visit posts income and Holdings note payment moves balance', async () => {

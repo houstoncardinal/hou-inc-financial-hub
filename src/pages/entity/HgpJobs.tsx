@@ -7,7 +7,7 @@
    permit/inspection/equipment checklists, per-job economics (quote, deposit,
    equipment/labor/materials/sub/permit costs → gross margin), emergency
    priority, and outage-event links from the Storm Response center. ── */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
@@ -15,17 +15,19 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/hooks/useAuth';
-import { useVendors } from '@/hooks/useFinance';
+import { useFinanceClientAccounts, useVendors } from '@/hooks/useFinance';
 import {
   useHgpJobs, useEquipmentUnits, useHgpJobPayments,
   useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
 } from '@/hooks/useEntityOps';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   Zap, Plus, Pencil, Trash2, Search, CalendarClock, FileCheck2,
   PackageCheck, Wallet, Percent, Siren, LayoutGrid, Rows3, CloudLightning,
+  MapPin, StickyNote, UserRound, SlidersHorizontal, ChevronDown,
 } from 'lucide-react';
 
 const HGP_BLUE = '#1B72B5';
@@ -37,8 +39,12 @@ const JOBS_CSS = `
 .hj-kpi:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#1B72B5);}
 .hj-k{font-size:7.5px;text-transform:uppercase;letter-spacing:.16em;font-weight:900;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hj-v{font-size:15px;font-weight:900;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.hj-card{border:1px solid hsl(var(--border));background:hsl(var(--background));transition:box-shadow .16s,border-color .16s;cursor:pointer;}
-.hj-card:hover{box-shadow:0 6px 20px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);}
+.hj-card{border:1px solid hsl(var(--border));background:hsl(var(--background));transition:box-shadow .16s,border-color .16s,transform .16s;cursor:pointer;position:relative;overflow:hidden;}
+.hj-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#1B72B5);}
+.hj-card:hover{box-shadow:0 6px 20px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);transform:translateY(-1px);}
+.hj-client-band{border:1px solid hsl(var(--border));background:hsl(var(--secondary)/.25);padding:7px 8px;min-width:0;}
+.hj-mini-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid hsl(var(--border));background:hsl(var(--background));padding:3px 6px;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;}
+.hj-note{border-left:2px solid rgba(27,114,181,.5);background:rgba(27,114,181,.055);padding:6px 8px;font-size:10px;line-height:1.35;color:hsl(var(--foreground)/.78);}
 .hj-row{border-bottom:1px solid hsl(var(--border));padding:9px 12px;font-size:12px;cursor:pointer;}
 .hj-row:hover{background:hsl(var(--secondary)/.35);}
 .hj-primary{height:32px;background:hsl(var(--foreground));color:hsl(var(--background));padding:0 12px;font-size:9px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;display:inline-flex;align-items:center;gap:6px;}
@@ -47,8 +53,11 @@ const JOBS_CSS = `
 .hj-stage{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid hsl(var(--border));font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;white-space:nowrap;cursor:pointer;background:hsl(var(--background));}
 .hj-stage[data-on="true"]{border-color:rgba(27,114,181,.5);background:rgba(27,114,181,.09);color:#1B72B5;}
 .hj-field{height:38px;border-radius:0;font-size:12px;}
+.hj-page-btn{height:32px;min-width:32px;border:1px solid hsl(var(--border));background:hsl(var(--background));font-size:10px;font-weight:900;}
+.hj-page-btn:hover:not(:disabled){background:hsl(var(--secondary)/.6);border-color:hsl(var(--foreground)/.22);}
+.hj-page-btn:disabled{opacity:.38;cursor:not-allowed;}
 .dark .hj-panel,.dark .hj-kpi,.dark .hj-card,.dark .hj-action,.dark .hj-stage{background:hsl(var(--card));}
-@media(max-width:767px){.hj-v{font-size:13px}.hj-panel{padding:10px!important}}
+@media(max-width:767px){.hj-v{font-size:13px}.hj-panel{padding:10px!important}.hj-stage{min-height:32px;padding:5px 8px;font-size:8.5px}.hj-action{min-height:36px}.hj-primary{min-height:38px}.hj-mini-chip{min-height:26px}.hj-card{border-radius:0}.hj-page-btn{min-height:36px;min-width:42px}}
 `;
 
 export const HGP_STAGES: { key: string; label: string }[] = [
@@ -87,7 +96,7 @@ const jobBalance = (j: any) => Math.max(num(j.quoted_amount) - num(j.deposit_amo
 const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 const BLANK_JOB = {
-  id: '', job_type: 'install', stage: 'lead',
+  id: '', finance_client_id: '', job_type: 'install', stage: 'lead',
   customer_name: '', customer_email: '', customer_phone: '',
   site_address: '', city: '', county: '', zip: '', utility_provider: '',
   generator_model: '', serial_number: '', transfer_switch: '', kw_rating: '', fuel_type: 'natural_gas',
@@ -116,6 +125,7 @@ export default function HgpJobs() {
   const { data: jobs = [], isLoading } = useHgpJobs();
   const { data: units = [] } = useEquipmentUnits();
   const { data: vendors = [] } = useVendors();
+  const { data: financeClients = [] } = useFinanceClientAccounts();
   const upsertJob = useEntityOpsUpsert('hgp_jobs');
   const deleteJob = useEntityOpsSoftDelete('hgp_jobs');
   const { data: allPayments = [] } = useHgpJobPayments();
@@ -125,15 +135,32 @@ export default function HgpJobs() {
   const [view, setView] = useState<'cards' | 'table' | 'schedule'>('cards');
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  const [stageFilterOpen, setStageFilterOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
   const [queue, setQueue] = useState<'none' | 'emergency' | 'unpaid' | 'permits' | 'inspections' | 'equipment' | 'unscheduled'>('none');
+  const [jobsPage, setJobsPage] = useState(1);
   const [formStep, setFormStep] = useState(0);
   const [dialog, setDialog] = useState(false);
   const [form, setForm] = useState({ ...BLANK_JOB });
-  const BLANK_PAY = { payment_type: 'progress', amount: '', payment_date: new Date().toISOString().slice(0, 10), method: 'other', reference: '' };
+  const BLANK_PAY = { payment_type: 'progress', amount: '', payment_date: todayLocalDate(), method: 'other', reference: '' };
   const [payForm, setPayForm] = useState({ ...BLANK_PAY });
 
   const live = jobs as any[];
+  const clientById = useMemo(() => {
+    const map = new Map<string, any>();
+    (financeClients as any[]).forEach(c => map.set(c.id, c));
+    return map;
+  }, [financeClients]);
+
+  const clientForJob = (j: any) => {
+    if (j.finance_client_id && clientById.has(j.finance_client_id)) return clientById.get(j.finance_client_id);
+    const email = String(j.customer_email || '').toLowerCase();
+    const name = String(j.customer_name || '').toLowerCase().trim();
+    return (financeClients as any[]).find(c =>
+      (email && String(c.email || '').toLowerCase() === email)
+      || (name && String(c.name || '').toLowerCase().trim() === name)
+    );
+  };
 
   const kpis = useMemo(() => {
     const openInstalls = live.filter(j => j.job_type === 'install' && !['completed', 'lost'].includes(j.stage));
@@ -177,17 +204,25 @@ export default function HgpJobs() {
     if (queue === 'equipment' && !(activeJob && j.equipment_status === 'ordered')) return false;
     if (queue === 'unscheduled' && !(activeJob && !j.target_install_date)) return false;
     if (search) {
-      const hay = [j.customer_name, j.site_address, j.city, j.zip, j.generator_model, j.serial_number, j.utility_provider]
+      const client = clientForJob(j);
+      const hay = [j.customer_name, client?.name, client?.company, client?.email, client?.phone, j.site_address, j.city, j.zip, j.generator_model, j.serial_number, j.utility_provider, j.notes]
         .filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search.toLowerCase())) return false;
     }
     return true;
   }).sort((a, b) => Number(b.emergency) - Number(a.emergency) || String(b.created_at).localeCompare(String(a.created_at))),
-  [live, stageFilter, typeFilter, queue, search]);
+  [live, stageFilter, typeFilter, queue, search, financeClients, clientById]);
+
+  // Shared pagination for cards + table views (mobile-friendly footer below).
+  const JOBS_PAGE_SIZE = 12;
+  const jobsPageCount = Math.max(1, Math.ceil(filtered.length / JOBS_PAGE_SIZE));
+  const safeJobsPage = Math.min(jobsPage, jobsPageCount);
+  const pagedJobs = filtered.slice((safeJobsPage - 1) * JOBS_PAGE_SIZE, safeJobsPage * JOBS_PAGE_SIZE);
+  useEffect(() => { setJobsPage(1); }, [stageFilter, typeFilter, queue, search, view]);
 
   const openJob = (j?: any) => {
     setForm(j ? {
-      id: j.id, job_type: j.job_type, stage: j.stage,
+      id: j.id, finance_client_id: j.finance_client_id ?? '', job_type: j.job_type, stage: j.stage,
       customer_name: j.customer_name ?? '', customer_email: j.customer_email ?? '', customer_phone: j.customer_phone ?? '',
       site_address: j.site_address ?? '', city: j.city ?? '', county: j.county ?? '', zip: j.zip ?? '',
       utility_provider: j.utility_provider ?? '',
@@ -221,6 +256,7 @@ export default function HgpJobs() {
       ...(form.id ? { id: form.id } : {}),
       user_id: user.id,
       entity_id: 'houston-generator-pros',
+      finance_client_id: form.finance_client_id || null,
       job_type: form.job_type, stage: form.stage,
       customer_name: form.customer_name.trim(),
       customer_email: form.customer_email.trim() || null,
@@ -266,7 +302,7 @@ export default function HgpJobs() {
             job_id: saved.id,
             payment_type: 'deposit',
             amount: Number(form.deposit_amount),
-            payment_date: new Date().toISOString().slice(0, 10),
+            payment_date: todayLocalDate(),
             method: 'other',
           });
           toast.success('Job created — deposit posted to HGP income');
@@ -400,8 +436,8 @@ export default function HgpJobs() {
           </div>
 
           {/* ── Action queues — click to work the list ── */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-            <span className="hj-k shrink-0 mr-1">Queues</span>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:overflow-x-auto scrollbar-none pb-0.5">
+            <span className="hj-k w-full sm:w-auto shrink-0 mr-1">Queues</span>
             {[
               ['emergency', 'Emergency', kpis.emergencyOpen, Siren, '#dc2626'],
               ['unpaid', 'Unpaid Balance', kpis.unpaidCount, Wallet, '#d97706'],
@@ -412,7 +448,7 @@ export default function HgpJobs() {
             ].map(([key, label, count, Icon, color]: any) => {
               const on = queue === key;
               return (
-                <button key={key} className="hj-stage shrink-0"
+                <button key={key} className="hj-stage sm:shrink-0"
                   style={on ? { borderColor: color + '80', color, background: color + '10' } : count > 0 ? { color: 'hsl(var(--foreground))' } : undefined}
                   onClick={() => setQueue(q => q === key ? 'none' : key)}>
                   <Icon className="w-3 h-3" style={{ color: on || count > 0 ? color : undefined }} />
@@ -422,19 +458,9 @@ export default function HgpJobs() {
             })}
           </div>
 
-          {/* ── Pipeline ── */}
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-            <button className="hj-stage" data-on={stageFilter === 'all'} onClick={() => setStageFilter('all')}>
-              All <span className="font-mono-tab">{stageCounts.all}</span>
-            </button>
-            {HGP_STAGES.map(s => (
-              <button key={s.key} className="hj-stage" data-on={stageFilter === s.key} onClick={() => setStageFilter(stageFilter === s.key ? 'all' : s.key)}>
-                {s.label} <span className="font-mono-tab">{stageCounts[s.key] ?? 0}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* ── Filters + view toggle ── */}
+          {/* ── Filters + view toggle — pipeline stage consolidated into one
+              popover button instead of a 13-chip row, saving significant
+              vertical space (was 2-3 wrapped rows on every screen size). ── */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[180px] max-w-[300px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
@@ -442,6 +468,33 @@ export default function HgpJobs() {
                 placeholder="Customer, address, model, serial…"
                 className="w-full h-9 pl-7 pr-2.5 text-[16px] sm:text-[12px] border border-border bg-background outline-none focus:border-foreground/30" />
             </div>
+            <Popover open={stageFilterOpen} onOpenChange={setStageFilterOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="hj-action gap-1.5"
+                  style={stageFilter !== 'all' ? { borderColor: HGP_BLUE + '80', color: HGP_BLUE, background: HGP_BLUE + '0F' } : undefined}
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  Stage: {stageFilter === 'all' ? 'All' : (HGP_STAGES.find(s => s.key === stageFilter)?.label ?? stageFilter)}
+                  <span className="font-mono-tab">{stageCounts[stageFilter] ?? stageCounts.all}</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${stageFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[min(94vw,30rem)] p-3 rounded-none border-border z-[70]" align="start">
+                <div className="hj-k mb-2 px-0.5">Filter by Pipeline Stage</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[60vh] overflow-y-auto">
+                  <button className="hj-stage justify-center" data-on={stageFilter === 'all'} onClick={() => { setStageFilter('all'); setStageFilterOpen(false); }}>
+                    All <span className="font-mono-tab">{stageCounts.all}</span>
+                  </button>
+                  {HGP_STAGES.map(s => (
+                    <button key={s.key} className="hj-stage justify-center" data-on={stageFilter === s.key} onClick={() => { setStageFilter(stageFilter === s.key ? 'all' : s.key); setStageFilterOpen(false); }}>
+                      {s.label} <span className="font-mono-tab">{stageCounts[s.key] ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="rounded-none h-9 w-[130px] text-[11px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -534,11 +587,15 @@ export default function HgpJobs() {
             </div>
           ) : view === 'cards' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
-              {filtered.map(j => {
+              {pagedJobs.map(j => {
                 const type = JOB_TYPES[j.job_type] ?? JOB_TYPES.install;
                 const margin = jobMargin(j);
+                const client = clientForJob(j);
+                const clientLabel = client ? `${client.name}${client.company ? ` · ${client.company}` : ''}` : j.customer_name;
+                const siteLine = [j.site_address || client?.site_address, j.city || client?.city, j.zip || client?.zip].filter(Boolean).join(', ');
+                const contactLine = [client?.email || j.customer_email, client?.phone || j.customer_phone].filter(Boolean).join(' · ');
                 return (
-                  <div key={j.id} className="hj-card p-3 min-w-0" onClick={() => openJob(j)}>
+                  <div key={j.id} className="hj-card p-3 min-w-0" style={{ '--accent': type.color } as any} onClick={() => openJob(j)}>
                     <div className="flex items-start justify-between gap-2 mb-1.5">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -552,6 +609,15 @@ export default function HgpJobs() {
                       <span className="text-[8px] font-black uppercase tracking-[0.14em] px-1.5 py-0.5 shrink-0"
                         style={{ backgroundColor: type.color + '14', color: type.color }}>{type.label}</span>
                     </div>
+                    <div className="hj-client-band mb-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <UserRound className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: HGP_BLUE }} />
+                        <div className="min-w-0">
+                          <div className="text-[10.5px] font-black truncate">{clientLabel}</div>
+                          <div className="text-[9px] text-muted-foreground truncate">{contactLine || 'No linked client contact yet'}</div>
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1.5 flex-wrap mb-2">
                       <StagePill stage={j.stage} />
                       {j.generator_model && (
@@ -559,6 +625,18 @@ export default function HgpJobs() {
                           {j.generator_model}{j.kw_rating ? ` · ${num(j.kw_rating)}kW` : ''}{j.serial_number ? ` · SN ${j.serial_number}` : ''}
                         </span>
                       )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-2 min-w-0">
+                      {siteLine && (
+                        <span className="hj-mini-chip max-w-full normal-case tracking-normal text-[9px]">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{siteLine}</span>
+                        </span>
+                      )}
+                      {(j.utility_provider || client?.utility_provider) && (
+                        <span className="hj-mini-chip">{j.utility_provider || client.utility_provider}</span>
+                      )}
+                      {j.technician && <span className="hj-mini-chip">Tech: {j.technician}</span>}
                     </div>
                     <div className="grid grid-cols-3 gap-1.5 text-[10px]">
                       <div className="border border-border/70 bg-secondary/25 px-1.5 py-1">
@@ -577,11 +655,16 @@ export default function HgpJobs() {
                     <div className="flex items-center justify-between mt-2 text-[9px] text-muted-foreground">
                       <span className="truncate">
                         Permit {titleCase(j.permit_status)} · Insp. {titleCase(j.inspection_status)} · Equip. {titleCase(j.equipment_status)}
-                        {j.technician ? ` · ${j.technician}` : ''}
                         {j.dispatch_status && j.dispatch_status !== 'unassigned' ? ` · ${titleCase(j.dispatch_status)}` : ''}
                       </span>
                       {j.target_install_date && <span className="font-mono-tab shrink-0">{fmtDate(j.target_install_date)}</span>}
                     </div>
+                    {j.notes && (
+                      <div className="hj-note mt-2 line-clamp-2">
+                        <StickyNote className="w-3 h-3 inline mr-1 align-[-2px]" />
+                        {j.notes}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -590,18 +673,21 @@ export default function HgpJobs() {
             <div className="hj-panel overflow-x-auto">
               <div className="min-w-[1020px]">
                 <div className="hj-row grid grid-cols-[1.4fr_.8fr_.9fr_1fr_.8fr_.8fr_.8fr_.8fr_.7fr_.4fr] gap-2 bg-secondary/45 hj-k items-center cursor-default">
-                  <div>Customer / Site</div><div>Type</div><div>Stage</div><div>Generator</div><div>Permit</div><div>Quoted</div><div>Balance</div><div>Margin</div><div>Install</div><div></div>
+                  <div>Customer / Client</div><div>Type</div><div>Stage</div><div>Generator</div><div>Permit</div><div>Quoted</div><div>Balance</div><div>Margin</div><div>Install</div><div></div>
                 </div>
-                {filtered.map(j => {
+                {pagedJobs.map(j => {
                   const type = JOB_TYPES[j.job_type] ?? JOB_TYPES.install;
                   const margin = jobMargin(j);
+                  const client = clientForJob(j);
                   return (
                     <div key={j.id} className="hj-row grid grid-cols-[1.4fr_.8fr_.9fr_1fr_.8fr_.8fr_.8fr_.8fr_.7fr_.4fr] gap-2 items-center" onClick={() => openJob(j)}>
                       <div className="min-w-0">
                         <div className="font-bold truncate flex items-center gap-1">
                           {j.emergency && <Siren className="w-3 h-3 text-destructive shrink-0" />}{j.customer_name}
                         </div>
-                        <div className="text-[9px] text-muted-foreground truncate">{[j.city, j.zip, j.utility_provider].filter(Boolean).join(' · ')}</div>
+                        <div className="text-[9px] text-muted-foreground truncate">
+                          {client ? `Client: ${client.name}${client.company ? ` · ${client.company}` : ''}` : [j.city, j.zip, j.utility_provider].filter(Boolean).join(' · ')}
+                        </div>
                       </div>
                       <div><span className="text-[8px] font-black uppercase tracking-[0.12em] px-1.5 py-0.5" style={{ backgroundColor: type.color + '14', color: type.color }}>{type.label}</span></div>
                       <div><StagePill stage={j.stage} /></div>
@@ -621,6 +707,20 @@ export default function HgpJobs() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+          {filtered.length > 0 && view !== 'schedule' && filtered.length > JOBS_PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
+              <div className="text-[10px] text-muted-foreground font-mono-tab">
+                Showing {(safeJobsPage - 1) * JOBS_PAGE_SIZE + 1}-{Math.min(safeJobsPage * JOBS_PAGE_SIZE, filtered.length)} of {filtered.length} jobs
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button className="hj-page-btn" onClick={() => setJobsPage(1)} disabled={safeJobsPage === 1}>First</button>
+                <button className="hj-page-btn" onClick={() => setJobsPage(p => Math.max(1, p - 1))} disabled={safeJobsPage === 1}>Prev</button>
+                <span className="px-2 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Page {safeJobsPage}/{jobsPageCount}</span>
+                <button className="hj-page-btn" onClick={() => setJobsPage(p => Math.min(jobsPageCount, p + 1))} disabled={safeJobsPage === jobsPageCount}>Next</button>
+                <button className="hj-page-btn" onClick={() => setJobsPage(jobsPageCount)} disabled={safeJobsPage === jobsPageCount}>Last</button>
               </div>
             </div>
           )}
@@ -674,6 +774,43 @@ export default function HgpJobs() {
           <div className="px-5 py-4 min-h-[280px]">
             {formStep === 0 && (
               <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <div className="hj-k mb-1">Linked HGP Client Account</div>
+                  <Select value={form.finance_client_id || '__none__'} onValueChange={v => {
+                    const client = (financeClients as any[]).find(c => c.id === v);
+                    setForm(f => ({
+                      ...f,
+                      finance_client_id: v === '__none__' ? '' : v,
+                      ...(client ? {
+                        customer_name: client.name ?? f.customer_name,
+                        customer_email: client.email ?? f.customer_email,
+                        customer_phone: client.phone ?? f.customer_phone,
+                        site_address: client.site_address ?? f.site_address,
+                        city: client.city ?? f.city,
+                        county: client.county ?? f.county,
+                        zip: client.zip ?? f.zip,
+                        utility_provider: client.utility_provider ?? f.utility_provider,
+                        generator_model: client.generator_model ?? f.generator_model,
+                        serial_number: client.generator_serial ?? f.serial_number,
+                        kw_rating: client.kw_rating != null ? String(client.kw_rating) : f.kw_rating,
+                        fuel_type: client.fuel_type ?? f.fuel_type,
+                      } : {}),
+                    }));
+                  }}>
+                    <SelectTrigger className="hj-field !h-11"><SelectValue placeholder="No linked client" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No linked client</SelectItem>
+                      {(financeClients as any[]).map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{c.company ? ` · ${c.company}` : ''}{c.zip ? ` · ${c.zip}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-[9px] text-muted-foreground mt-1">
+                    Selecting a client fills known contact, site, utility, and generator details.
+                  </div>
+                </div>
                 <div className="col-span-2">
                   <div className="hj-k mb-1">Customer *</div>
                   <Input autoFocus className="hj-field !h-11" placeholder="Full name" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} />

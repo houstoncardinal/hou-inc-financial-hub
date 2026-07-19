@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { useUpsert } from '@/hooks/useFinance';
 import { KpiGrid, PanelHeader, EmptyState, GuidedEntryIntro, WorkflowDialog } from '@/components/project-detail/formPrimitives';
 
@@ -35,7 +35,7 @@ const statusOf = (row: any): ReconStatus => {
 };
 
 const blankLogForm = () => ({
-  amount: '', date: new Date().toISOString().slice(0, 10), source_name: '', category: '',
+  amount: '', date: todayLocalDate(), source_name: '', category: '',
   scope_item_id: '', check_reference: '', notes: '', budget_category: '',
 });
 

@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,11 @@ import { useChecks, useProjects, useUpsert, useVendors, useQuickCreate } from '@
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
 import DigitalCheck from '@/components/DigitalCheck';
 import { toast } from 'sonner';
+import { todayLocalDate } from '@/lib/format';
 
 export default function CheckNew() {
   const nav = useNavigate();
+  const location = useLocation();
   const { data: vendors = [] } = useVendors();
   const { data: projects = [] } = useProjects();
   const { data: checks = [] } = useChecks();
@@ -30,16 +32,31 @@ export default function CheckNew() {
 
   const [form, setForm] = useState({
     check_number: nextNumber, payee_vendor_id: '', payee_name: '', amount: '',
-    issue_date: new Date().toISOString().slice(0, 10), memo: '', project_id: '', status: 'pending' as const,
+    issue_date: todayLocalDate(), memo: '', project_id: '', status: 'pending' as const,
     retainage_pct: '', lien_waiver_status: 'not_required',
   });
 
   // sync default check # once async checks data loads — use functional updater to read live form state
   useEffect(() => { setForm(f => (f.check_number === nextNumber || (f.check_number && f.check_number !== '1001')) ? f : { ...f, check_number: nextNumber }); }, [nextNumber]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('guided') !== '1' && params.get('open') !== '1') return;
+    setForm(f => ({
+      ...f,
+      payee_name: params.get('payee_name') || f.payee_name,
+      amount: params.get('amount') || f.amount,
+      memo: params.get('memo') || f.memo || 'HGP supplier payment',
+      status: (params.get('status') as any) || f.status,
+      lien_waiver_status: params.get('lien_waiver_status') || f.lien_waiver_status,
+    }));
+  }, [location.search]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.payee_name || !form.amount || !form.check_number) { toast.error('Payee, amount and check number required'); return; }
+    const retainagePct = form.retainage_pct ? parseFloat(form.retainage_pct) : 0;
+    if (retainagePct < 0 || retainagePct > 100) { toast.error('Retainage must be between 0% and 100%'); return; }
     try {
       await upsert.mutateAsync({
         ...form,
@@ -50,9 +67,9 @@ export default function CheckNew() {
         approval_status: 'approved',
         print_status: 'not_printed',
         delivery_status: 'not_delivered',
-        retainage_pct: form.retainage_pct ? parseFloat(form.retainage_pct) : 0,
-        retainage_held: form.retainage_pct && form.amount
-          ? parseFloat(form.amount) * (parseFloat(form.retainage_pct) / 100)
+        retainage_pct: retainagePct,
+        retainage_held: retainagePct && form.amount
+          ? parseFloat(form.amount) * (retainagePct / 100)
           : 0,
         payee_vendor_id: form.payee_vendor_id || null,
         project_id: form.project_id || null,

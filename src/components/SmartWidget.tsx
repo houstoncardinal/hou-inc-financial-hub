@@ -13,7 +13,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useChecks, useTransactions, useVendors, useProjects } from '@/hooks/useFinance';
-import { fmtUSD, fmtDate } from '@/lib/format';
+import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
 import {
   generateTransactionReport, generateCheckRegisterReport,
@@ -525,7 +525,7 @@ export default function SmartWidget() {
                       icon: ArrowDownToLine,
                       action: () => {
                         const doc = generateTransactionReport(income, 'income');
-                        savePDF(doc, `hou-income-${new Date().toISOString().slice(0, 10)}.pdf`);
+                        savePDF(doc, `hou-income-${todayLocalDate()}.pdf`);
                         toast.success('Income report exported');
                       },
                     },
@@ -534,7 +534,7 @@ export default function SmartWidget() {
                       icon: ArrowUpFromLine,
                       action: () => {
                         const doc = generateTransactionReport(expenses, 'expense');
-                        savePDF(doc, `hou-expenses-${new Date().toISOString().slice(0, 10)}.pdf`);
+                        savePDF(doc, `hou-expenses-${todayLocalDate()}.pdf`);
                         toast.success('Expense report exported');
                       },
                     },
@@ -543,7 +543,7 @@ export default function SmartWidget() {
                       icon: FileText,
                       action: () => {
                         const doc = generateCheckRegisterReport(checks);
-                        savePDF(doc, `hou-checks-${new Date().toISOString().slice(0, 10)}.pdf`);
+                        savePDF(doc, `hou-checks-${todayLocalDate()}.pdf`);
                         toast.success('Check register exported');
                       },
                     },
@@ -552,7 +552,7 @@ export default function SmartWidget() {
                       icon: BookOpen,
                       action: () => {
                         const doc = generateLedgerReport(income, expenses, checks);
-                        savePDF(doc, `hou-ledger-${new Date().toISOString().slice(0, 10)}.pdf`);
+                        savePDF(doc, `hou-ledger-${todayLocalDate()}.pdf`);
                         toast.success('Ledger exported');
                       },
                     },
@@ -564,7 +564,7 @@ export default function SmartWidget() {
                           ...p,
                           spent: 0, incoming: 0, used: 0,
                         })));
-                        savePDF(doc, `hou-projects-${new Date().toISOString().slice(0, 10)}.pdf`);
+                        savePDF(doc, `hou-projects-${todayLocalDate()}.pdf`);
                         toast.success('Project report exported');
                       },
                     },
@@ -594,7 +594,7 @@ export default function SmartWidget() {
                           ...expenses.map((t: any) => ({ ...t, _type: 'expense' })),
                         ];
                         downloadCSV(
-                          all, `hou-transactions-${new Date().toISOString().slice(0, 10)}.csv`,
+                          all, `hou-transactions-${todayLocalDate()}.csv`,
                           ['Date', 'Type', 'Source / Vendor', 'Project', 'Category', 'Amount', 'Notes'],
                           t => [t.transaction_date, t._type, t.source_name || t.vendors?.name || '', t.projects?.name || '', t.category || '', t.amount, t.notes || '']
                         );
@@ -606,7 +606,7 @@ export default function SmartWidget() {
                       icon: FileText,
                       action: () => {
                         downloadCSV(
-                          checks, `hou-checks-${new Date().toISOString().slice(0, 10)}.csv`,
+                          checks, `hou-checks-${todayLocalDate()}.csv`,
                           ['Check #', 'Payee', 'Amount', 'Issue Date', 'Status', 'Project', 'Memo'],
                           c => [c.check_number, c.payee_name, c.amount, c.issue_date, c.status, c.projects?.name || '', c.memo || '']
                         );
@@ -618,7 +618,7 @@ export default function SmartWidget() {
                       icon: Users,
                       action: () => {
                         downloadCSV(
-                          vendors, `hou-vendors-${new Date().toISOString().slice(0, 10)}.csv`,
+                          vendors, `hou-vendors-${todayLocalDate()}.csv`,
                           ['Name', 'Email', 'Phone', 'Address', 'Notes'],
                           v => [v.name, v.contact_email || '', v.contact_phone || '', v.address || '', v.notes || '']
                         );
@@ -637,7 +637,7 @@ export default function SmartWidget() {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `hou-full-export-${new Date().toISOString().slice(0, 10)}.json`;
+                        a.download = `hou-full-export-${todayLocalDate()}.json`;
                         a.click();
                         URL.revokeObjectURL(url);
                         toast.success('Full data exported');

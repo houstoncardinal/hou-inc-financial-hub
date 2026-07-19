@@ -222,6 +222,19 @@ export const useConsolidatedEntityTotals = () =>
     },
   });
 
+/* Management-basis statement of financial position (migration 20260718000006)
+   — cash position + notes receivable/payable rolled into one statement. */
+export const useHoldingsBalanceSheet = () =>
+  useQuery({
+    queryKey: ['holdings-balance-sheet'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_holdings_balance_sheet');
+      if (error) return null;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row ?? null;
+    },
+  });
+
 /* HGP headline numbers from the server-side rollup — null when the RPC isn't
    deployed yet, in which case GeneratorOps falls back to client-side math. */
 export const useHgpFinanceSummary = () =>

@@ -8,7 +8,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { useChecks, useDelete, useProjects, useQuickCreate, useUpsert } from '@/hooks/useFinance';
-import { fmtDate, fmtUSD } from '@/lib/format';
+import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { QuickCreateSelect } from '@/components/QuickCreateSelect';
@@ -266,6 +266,7 @@ function CheckTransactionInspector({
 export default function Checks() {
   const navigate = useNavigate();
   const { entity } = useEntity();
+  const isHoldings = entity?.id === 'houston-enterprise-holdings';
   const logFinanceChange = useFinanceChangelog();
   const { data: checks = [] } = useChecks();
   const { data: projects = [] } = useProjects();
@@ -275,7 +276,7 @@ export default function Checks() {
 
   const updateStatus = async (check: any, newStatus: string) => {
     try {
-      const now = new Date().toISOString().slice(0, 10);
+      const now = todayLocalDate();
       await upsert.mutateAsync({
         ...check,
         status: newStatus,
@@ -344,15 +345,20 @@ export default function Checks() {
       toast.error('Digital signature is required');
       return;
     }
+    const retainagePct = parseFloat(editForm.retainage_pct) || 0;
+    if (retainagePct < 0 || retainagePct > 100) {
+      toast.error('Retainage must be between 0% and 100%');
+      return;
+    }
     const signedAt = new Date().toISOString();
     try {
       const corrected = {
         ...editCheck,
         ...editForm,
         amount: parseFloat(editForm.amount) || 0,
-        retainage_pct: parseFloat(editForm.retainage_pct) || 0,
-        retainage_held: editForm.retainage_pct && editForm.amount
-          ? (parseFloat(editForm.amount) || 0) * ((parseFloat(editForm.retainage_pct) || 0) / 100)
+        retainage_pct: retainagePct,
+        retainage_held: retainagePct && editForm.amount
+          ? (parseFloat(editForm.amount) || 0) * (retainagePct / 100)
           : 0,
         project_id: editForm.project_id || null,
         posting_date: editForm.posting_date || editForm.issue_date || null,
@@ -383,8 +389,19 @@ export default function Checks() {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (!q) return true;
     const s = q.toLowerCase();
-    return c.check_number?.toLowerCase().includes(s) || c.payee_name?.toLowerCase().includes(s) || c.projects?.name?.toLowerCase().includes(s);
+    return c.check_number?.toLowerCase().includes(s)
+      || c.payee_name?.toLowerCase().includes(s)
+      || c.entity_label?.toLowerCase().includes(s)
+      || c.projects?.name?.toLowerCase().includes(s);
   }), [checks, q, statusFilter, timePeriod]);
+  const payeeLabel = (c: any) => {
+    const base = c.payee_name || 'Unassigned payee';
+    return isHoldings && c.entity_label ? `${c.entity_label} · ${base}` : base;
+  };
+  const projectLabel = (c: any) => {
+    const base = c.projects?.name || 'Unassigned project';
+    return isHoldings && c.entity_label ? `${c.entity_label} portfolio · ${base}` : base;
+  };
 
   const selectedRangeLabel = financeRangeLabel(timePeriod);
   const metrics = useMemo(() => {
@@ -569,7 +586,7 @@ export default function Checks() {
   /* ── PDF Export ── */
   const exportPDF = () => {
     const doc = generateCheckRegisterReport(filtered, statusFilter !== 'all' ? `${statusFilter} · ${selectedRangeLabel}` : selectedRangeLabel);
-    savePDF(doc, `hou-check-register-${new Date().toISOString().slice(0, 10)}.pdf`);
+    savePDF(doc, `hou-check-register-${todayLocalDate()}.pdf`);
     toast.success(`Check register exported as PDF · ${selectedRangeLabel}`);
   };
 
@@ -592,7 +609,7 @@ export default function Checks() {
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportPDF}><FileText className="w-4 h-4" /></Button>
               <Button variant="outline" size="icon" className="rounded-none h-9 w-9" onClick={exportExcel}><Table2 className="w-4 h-4" /></Button>
             </div>
-            <Button className="rounded-none bg-foreground text-background hover:bg-foreground/90" onClick={() => navigate('/concierge?start=check')}>
+            <Button className="rounded-none bg-foreground text-background hover:bg-foreground/90" onClick={() => navigate(entity?.id === 'houston-generator-pros' ? '/concierge?start=check&memo=HGP%20supplier%20payment' : '/concierge?start=check')}>
               <PlusCircle className="w-4 h-4 mr-1.5" /> New Check
             </Button>
           </div>
@@ -717,8 +734,8 @@ export default function Checks() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[9px] uppercase tracking-[0.16em] text-foreground/45 font-bold">Check #{c.check_number || 'Draft'}</div>
-                  <div className="text-sm font-bold truncate mt-0.5">{c.payee_name || 'Unassigned payee'}</div>
-                  <div className="text-[10px] text-foreground/55 truncate">{c.projects?.name || 'Unassigned project'}</div>
+                  <div className="text-sm font-bold truncate mt-0.5">{payeeLabel(c)}</div>
+                  <div className="text-[10px] text-foreground/55 truncate">{projectLabel(c)}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-sm font-black font-mono-tab">{fmtUSD(c.amount)}</div>
@@ -797,11 +814,11 @@ export default function Checks() {
             <div key={c.id} className="chk-table-grid grid gap-2 px-3 py-2 border-b border-border last:border-b-0 text-[12px] font-mono-tab chk-row items-center cursor-pointer" onClick={() => setDetailRow(c)}>
               <div className="font-semibold truncate text-[11px]">#{c.check_number || 'Draft'}</div>
               <div className="min-w-0">
-                <div className="truncate font-semibold">{c.payee_name}</div>
+                <div className="truncate font-semibold">{payeeLabel(c)}</div>
                 <div className="text-[10px] text-muted-foreground truncate">{c.vendors?.name || c.external_reference || c.memo || 'No vendor reference'}</div>
               </div>
               <div className="min-w-0">
-                <div className="truncate text-foreground/85">{c.projects?.name || 'Unassigned'}</div>
+                <div className="truncate text-foreground/85">{projectLabel(c)}</div>
                 <div className="text-[10px] text-muted-foreground truncate">{c.cost_code_id ? `Cost ${c.cost_code_id}` : 'No cost code'}</div>
               </div>
               <div className="text-muted-foreground text-[11px]">{fmtDate(c.issue_date)}</div>

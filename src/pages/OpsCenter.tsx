@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity, ENTITIES, Entity } from '@/contexts/EntityContext';
-import { fmtUSD } from '@/lib/format';
+import { fmtUSD, todayLocalDate } from '@/lib/format';
 import {
   Building2, Zap, Landmark, FileText, ArrowDownToLine,
   ArrowUpFromLine, BookOpen, Receipt, BarChart3, ConciergeBell,
@@ -365,7 +365,7 @@ export default function OpsCenter() {
 
   /* ── Data load ── */
   const load = useCallback(async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalDate();
     const [txRes, ckRes, invRes, porRes] = await Promise.all([
       supabase.from('transactions').select('entity_id,type,amount,transaction_date').is('deleted_at', null),
       supabase.from('checks').select('entity_id,amount,status').is('deleted_at', null),

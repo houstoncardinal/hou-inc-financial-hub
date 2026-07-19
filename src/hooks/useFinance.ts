@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useEntity } from '@/contexts/EntityContext';
+import { ENTITIES, useEntity } from '@/contexts/EntityContext';
 import { isSchemaCacheError, recordSystemHealthEvent } from '@/lib/systemHealth';
 
 type TableName = 'vendors' | 'projects' | 'checks' | 'transactions';
@@ -18,6 +18,23 @@ const relatedQueryKeys: Record<TableName, string[][]> = {
   checks:       [['checks'],        ['projects'],     ['vendors'], ['project-financial-summary']],
   transactions: [['transactions'],  ['projects'],     ['vendors'], ['invoices'], ['project-financial-summary']],
 };
+
+const HOLDINGS_ENTITY_ID = 'houston-enterprise-holdings';
+const CONSOLIDATED_ENTITY_IDS = ENTITIES.map(e => e.id);
+
+const entityMetaFor = (entityId: string | null | undefined) => {
+  const meta = ENTITIES.find(e => e.id === entityId);
+  return {
+    entity_label: meta?.shortName ?? entityId ?? 'Entity',
+    entity_name: meta?.name ?? entityId ?? 'Entity',
+    entity_color: meta?.color ?? '#8A8580',
+  };
+};
+
+const withEntityMeta = <T extends Record<string, unknown>>(row: T): T & ReturnType<typeof entityMetaFor> => ({
+  ...row,
+  ...entityMetaFor(row.entity_id as string | undefined),
+});
 
 const stripJoinedRelations = <T extends Record<string, unknown>>(row: T) => {
   const { projects, vendors, subcontractors, __mode, __forceInsert, ...payload } = row;
@@ -244,6 +261,7 @@ export const useFinanceRealtime = () => {
       qc.invalidateQueries({ queryKey: ['checks'] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['vendors'] });
+      qc.invalidateQueries({ queryKey: ['finance-client-accounts'] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['project-financial-summary'] });
       qc.invalidateQueries({ queryKey: ['finance-reconciliation-audit'] });
@@ -264,6 +282,7 @@ export const useFinanceRealtime = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'checks', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_client_accounts', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_reconciliation_audit', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_bank_activity', filter: `entity_id=eq.${entityId}` }, invalidateFinance)
@@ -301,10 +320,31 @@ export const useLedgerPage = ({
 }) => {
   const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
+  const consolidated = entityId === HOLDINGS_ENTITY_ID;
   return useQuery({
     queryKey: ['ledger-page', entityId, page, pageSize, search ?? '', projectId ?? 'all', type ?? 'all'],
     enabled: ready,
     queryFn: async () => {
+      if (consolidated) {
+        const perEntity = await Promise.all(CONSOLIDATED_ENTITY_IDS.map(async id => {
+          const { data, error } = await supabase.rpc('get_ledger_page' as never, {
+            p_entity_id: id,
+            p_limit: 500,
+            p_offset: 0,
+            p_search: search?.trim() || null,
+            p_project_id: projectId && projectId !== 'all' ? projectId : null,
+            p_type: type && type !== 'all' ? type : null,
+          });
+          if (error) throw error;
+          return ((data ?? []) as Record<string, unknown>[]).map(row => withEntityMeta({ ...row, entity_id: id }));
+        }));
+        const merged = perEntity
+          .flat()
+          .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+            String(b.ledger_date || '').localeCompare(String(a.ledger_date || '')));
+        const offset = Math.max(0, (page - 1) * pageSize);
+        return merged.slice(offset, offset + pageSize).map(row => ({ ...row, total_count: merged.length }));
+      }
       const { data, error } = await supabase.rpc('get_ledger_page' as never, {
         p_entity_id: entityId,
         p_limit: pageSize,
@@ -387,6 +427,88 @@ export const useBankMatchSuggestions = () => {
   });
 };
 
+export const useFixedAssets = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['fixed-assets-register', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_fixed_assets_register' as never, { p_entity_id: entityId });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useUpsertFixedAsset = () => {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useMutation({
+    mutationFn: async (row: Record<string, unknown>) => {
+      if (!ready) throw new Error('Entity context not ready — please wait a moment and try again');
+      if (!user?.id) throw new Error('You must be signed in to save fixed assets');
+      const payload = { ...row, user_id: user.id, entity_id: entityId };
+      const { data, error } = row.id
+        ? await supabase.from('fixed_assets' as never).update(payload as never).eq('id', row.id as string).select('*').single()
+        : await supabase.from('fixed_assets' as never).insert(payload as never).select('*').single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fixed-assets-register'] }),
+  });
+};
+
+export const useSoftDeleteFixedAsset = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('fixed_assets' as never).update({ deleted_at: new Date().toISOString() } as never).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fixed-assets-register'] }),
+  });
+};
+
+export const useAccountingPeriods = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['accounting-periods', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('accounting_periods' as never)
+        .select('*')
+        .eq('entity_id', entityId)
+        .order('period_key', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useSetAccountingPeriodStatus = () => {
+  const qc = useQueryClient();
+  const { entity } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useMutation({
+    mutationFn: async ({ periodKey, status, notes }: { periodKey: string; status: 'open' | 'soft_closed' | 'locked'; notes?: string }) => {
+      const { data, error } = await supabase.rpc('set_accounting_period_status' as never, {
+        p_entity_id: entityId, p_period_key: periodKey, p_status: status, p_notes: notes ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting-periods'] });
+      qc.invalidateQueries({ queryKey: ['finance-reconciliation-audit'] });
+    },
+  });
+};
+
 export const useProjects = () => {
   const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
@@ -409,18 +531,20 @@ export const useProjects = () => {
 export const useChecks = () => {
   const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
+  const consolidated = entityId === HOLDINGS_ENTITY_ID;
   return useQuery({
     queryKey: ['checks', entityId],
     enabled: ready,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('checks')
         .select('*, projects:project_id(name), vendors:payee_vendor_id(name)')
-        .eq('entity_id', entityId)
         .is('deleted_at', null)
         .order('issue_date', { ascending: false });
+      query = consolidated ? query.in('entity_id', CONSOLIDATED_ENTITY_IDS) : query.eq('entity_id', entityId);
+      const { data, error } = await query;
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map(withEntityMeta);
     },
   });
 };
@@ -428,18 +552,38 @@ export const useChecks = () => {
 export const useTransactions = (type?: 'income' | 'expense') => {
   const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
+  const consolidated = entityId === HOLDINGS_ENTITY_ID;
   return useQuery({
     queryKey: ['transactions', type, entityId],
     enabled: ready,
     queryFn: async () => {
       let query = supabase
         .from('transactions')
-        .select('*, projects:project_id(name), vendors:vendor_id(name), subcontractors:subcontractor_id(name)')
-        .eq('entity_id', entityId)
+        .select('*, projects:project_id(name), vendors:vendor_id(name), subcontractors:subcontractor_id(name), finance_client_accounts:finance_client_id(name, company)')
         .is('deleted_at', null)
         .order('transaction_date', { ascending: false });
+      query = consolidated ? query.in('entity_id', CONSOLIDATED_ENTITY_IDS) : query.eq('entity_id', entityId);
       if (type) query = query.eq('type', type);
       const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []).map(withEntityMeta);
+    },
+  });
+};
+
+export const useFinanceClientAccounts = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['finance-client-accounts', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_client_accounts' as never)
+        .select('*, projects:project_id(name), hgp_customer_sites:hgp_site_id(customer_name, site_address, utility_provider)')
+        .eq('entity_id', entityId)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
       if (error) throw error;
       return data ?? [];
     },
