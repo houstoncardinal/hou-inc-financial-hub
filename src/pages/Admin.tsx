@@ -693,14 +693,15 @@ export default function Admin() {
     if (!selectedClientId || !coDesc.trim() || !coAmount) return;
     setCoSaving(true);
     try {
-      await (supabase as any).from('change_orders').insert({
+      const { error } = await (supabase as any).from('change_orders').insert({
         client_id: selectedClientId,
-        title: coNumber.trim() || null,
+        number: coNumber.trim() || null,
         description: coDesc.trim(),
         amount: parseFloat(coAmount),
         status: 'pending',
         created_by: BUILDER.name,
       });
+      if (error) throw error;
       await logAdminAction('change_order_created', selectedClientId, coDesc.trim().slice(0, 80));
       await logChangelog('created', 'change_order', 'admin', selectedClientId, clientName(selectedClientId), BUILDER.name, { description: coDesc.trim(), amount: parseFloat(coAmount) });
       await adminSendMessage(selectedClientId, `A change order has been issued: "${coDesc.trim()}" for $${parseFloat(coAmount).toLocaleString()}. Please review in your payments portal. — ${BUILDER.name}`);

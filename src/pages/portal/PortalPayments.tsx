@@ -101,7 +101,7 @@ export default function PortalPayments() {
       try {
         const { data: coData } = await (supabase as any)
           .from('change_orders')
-          .select('id, title, description, amount, status, created_at')
+          .select('id, number, description, amount, status, created_at')
           .eq('client_id', client.id)
           .order('created_at', { ascending: false });
         setChangeOrders(coData ?? []);
@@ -372,8 +372,8 @@ export default function PortalPayments() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            {co.title && (
-                              <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>{co.title}</span>
+                            {co.number && (
+                              <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: MUTED }}>{co.number}</span>
                             )}
                             <span
                               className="text-[7px] uppercase tracking-[0.2em] font-bold px-2 py-0.5"

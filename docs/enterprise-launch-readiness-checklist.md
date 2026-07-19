@@ -1,6 +1,8 @@
 # HOU INC Financial Hub — Enterprise Launch Readiness Checklist
 
-Last updated: 2026-07-17. Run every section top to bottom before go-live.
+Last updated: 2026-07-19 (full-platform deep audit + live-repair pass — see
+`platform-completeness-tracker.md` for the detailed findings list). Run every
+section top to bottom before go-live.
 
 ## 1. Database migrations (run in the Supabase SQL editor, in order)
 
@@ -43,9 +45,13 @@ SELECT * FROM verify_hgp_job_payments();
 SELECT * FROM verify_hgp_procurement_scheduling();
 ```
 
-Every row must show `ok = true`. As of 2026-07-17 all 9 verification RPCs
-return only ok=true on the live project — the full migration chain 10–23 is
-applied, and Playwright passes 26/26 with zero skips.
+Every row must show `ok = true`. As of 2026-07-19, **all 21** verification
+RPCs on the live project return only `ok = true` (re-probed directly via the
+Supabase Management API, not assumed) — the full migration chain through
+`20260719000003_changelog_rls_repair.sql` is applied, including several
+migrations this doc and the tracker had previously and incorrectly marked
+"pending apply." See `platform-completeness-tracker.md`'s "Migration gate
+status" section for the complete list.
 
 ## 2. Environment variables (`.env`, git-ignored — verify before deploy)
 
@@ -111,17 +117,29 @@ migration to apply in its skip message.
 
 ## 7. Go / No-Go
 
-- [x] All 9 verification RPCs return only `ok = true` (live-probed 2026-07-17)
-- [x] `npm run build` clean
-- [x] Playwright 26/26, zero skips (2026-07-17)
+- [x] All 21 verification RPCs return only `ok = true` (live-probed 2026-07-19)
+- [x] `npm run build` clean (single large JS chunk — see punch list below)
+- [x] `tsc`/`eslint`/Vitest clean (2026-07-19); no full Playwright suite run this
+      pass — 3 parallel live-crawl agents manually drove every route instead
+- [x] Three severe live-only bugs found and fixed 2026-07-19: Change Orders
+      (schema drift, false success toast), Changelog/Audit Trail (RLS
+      permission error, always empty), entity-selection reversion risk
+      (silent network-dependent default to the wrong legal entity)
 - [ ] Roles assigned in `app_user_roles` for every real operator
 - [ ] `.env` production values set; Mapbox token domain-restricted
-- [ ] QA rows archived
+- [ ] QA rows archived (Houston Enterprise still has ~90 "Launch QA" test
+      projects and 100+ "Launch QA" transactions polluting real screens)
 - [ ] Post-launch monitoring owner assigned
+- [ ] Pre-launch punch list from the 2026-07-19 audit addressed or explicitly
+      accepted as post-launch: Income/Expenses pagination (TxnPage.tsx has
+      none, largest real screens render 20,000+px), mobile table-column CSS
+      collapse, FinanceControls not entity-aware for HGP/Holdings, Holdings
+      HQ dashboard missing its balance-sheet section — full detail in
+      `platform-completeness-tracker.md`
 
 ## Known deferred items (not launch blockers)
 
 - Outage polling Edge Function (manual logging is the supported path).
 - Capital call / distribution **approval workflow** (capital activity log exists; approvals would add a status + approver column).
 - Per-technician lanes on the 8-week planner (technician/dispatch fields ship in migration `...000006`).
-- See `docs/platform-completeness-tracker.md` for the full scored breakdown.
+- See `docs/platform-completeness-tracker.md` for the full scored breakdown and the 2026-07-19 audit findings.

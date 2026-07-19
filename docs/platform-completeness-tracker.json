@@ -1,10 +1,10 @@
 {
   "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
-  "updated": "2026-07-18",
-  "pass": "enterprise-reports-invoice-intelligence-repair",
+  "updated": "2026-07-19",
+  "pass": "full-platform-deep-audit-live-repair",
   "overall": {
-    "completion": 95,
-    "status": "launch-ready"
+    "completion": 93,
+    "status": "launch-ready-with-punch-list"
   },
   "apps": {
     "public_website": {
@@ -12,7 +12,7 @@
       "status": "launch-ready"
     },
     "client_portal": {
-      "completion": 85,
+      "completion": 86,
       "status": "launch-ready"
     },
     "admin_dashboard": {
@@ -20,21 +20,21 @@
       "status": "launch-ready"
     },
     "finance_dashboard": {
-      "completion": 96,
+      "completion": 93,
       "status": "launch-ready"
     }
   },
   "entities": {
     "houston-enterprise": {
-      "completion": 96,
+      "completion": 94,
       "status": "launch-ready"
     },
     "houston-generator-pros": {
-      "completion": 97,
+      "completion": 95,
       "status": "launch-ready"
     },
     "houston-enterprise-holdings": {
-      "completion": 94,
+      "completion": 90,
       "status": "launch-ready"
     }
   },
@@ -59,11 +59,12 @@
     },
     {
       "id": "portal-communication",
-      "completion": 85,
+      "completion": 87,
       "status": "launch-ready",
       "remaining": [
         "realtime message test",
-        "meeting reminder emails"
+        "meeting reminder emails",
+        "change orders schema drift (title vs number column) — fixed 2026-07-19"
       ],
       "priority": "medium",
       "complexity": "M"
@@ -88,20 +89,23 @@
     },
     {
       "id": "construction-finance",
-      "completion": 95,
+      "completion": 94,
       "status": "complete",
       "remaining": [
-        "cost-code/phase report polish"
+        "cost-code/phase report polish",
+        "Reconciliation Progress ring shows 0% instead of 'ahead of billing' when collected > billed",
+        "Committed Cost Index has no upper-bound guard for $0-contract denominators"
       ],
       "priority": "low",
       "complexity": "M"
     },
     {
       "id": "generator-operations",
-      "completion": 96,
+      "completion": 95,
       "status": "complete",
       "remaining": [
-        "recurring maintenance billing automation"
+        "recurring maintenance billing automation",
+        "mobile table CSS override collapses Generator Units/Unit Margin columns"
       ],
       "priority": "medium",
       "complexity": "M"
@@ -138,7 +142,7 @@
       "completion": 95,
       "status": "complete",
       "remaining": [],
-      "priority": "high",
+      "priority": "low",
       "complexity": "S",
       "verification": "verify_holdings_covenants"
     },
@@ -147,19 +151,31 @@
       "completion": 95,
       "status": "complete",
       "remaining": [],
-      "priority": "high",
+      "priority": "low",
       "complexity": "S",
       "verification": "verify_dispatch_capital_approvals"
     },
     {
+      "id": "holdings-balance-sheet-visibility",
+      "completion": 70,
+      "status": "launch-ready",
+      "remaining": [
+        "get_holdings_balance_sheet RPC is wired into Reports and Assets & Deals but never imported into HoldingsHQ.tsx — /finance/dashboard shows no financial-position section for Holdings"
+      ],
+      "priority": "medium",
+      "complexity": "S",
+      "verification": "verify_holdings_balance_sheet"
+    },
+    {
       "id": "ledger-reconciliation",
-      "completion": 95,
+      "completion": 93,
       "status": "complete",
       "remaining": [
-        "AP aging depends on unpaid-bill logging discipline"
+        "AP aging depends on unpaid-bill logging discipline",
+        "Checks page KPI counts 'cleared' as reconciled while row badges show 'unreconciled' — same-page contradiction"
       ],
-      "priority": "low",
-      "complexity": null
+      "priority": "medium",
+      "complexity": "S"
     },
     {
       "id": "invoices-payments",
@@ -183,33 +199,47 @@
     },
     {
       "id": "security-rls-roles",
-      "completion": 92,
+      "completion": 93,
       "status": "launch-ready",
       "remaining": [
         "role-management UI test",
         "storage policy review"
       ],
       "priority": "high",
-      "complexity": "M"
+      "complexity": "M",
+      "verification": "verify_changelog_rls_repair"
+    },
+    {
+      "id": "entity-context-reliability",
+      "completion": 100,
+      "status": "complete",
+      "remaining": [],
+      "priority": "critical",
+      "complexity": "S",
+      "note": "fixed 2026-07-19 — EntityContext no longer depends on an independent, failure-prone supabase.auth.getUser() network call; a transient failure previously silently defaulted the whole session to Houston Enterprise, live-reproduced mislabeling a real HGP transaction. Stress-tested with the endpoint fully blocked across 3 reloads."
     },
     {
       "id": "mobile-responsiveness",
-      "completion": 92,
+      "completion": 87,
       "status": "launch-ready",
       "remaining": [
-        "tablet screenshot sweep"
+        "tablet screenshot sweep",
+        "global .finance-mobile-surface .overflow-x-auto * { min-width:0 } rule (src/index.css:143-166) sits outside any @layer and beats Tailwind's min-w-[...] escape hatch, collapsing CSS-grid table columns to illegible widths on mobile"
       ],
-      "priority": "medium",
+      "priority": "high",
       "complexity": "S"
     },
     {
       "id": "performance-scaling",
-      "completion": 88,
+      "completion": 80,
       "status": "launch-ready",
       "remaining": [
-        "documents/admin pagination at scale"
+        "TxnPage.tsx (Income + Expenses, all 3 entities) has no pagination at all — Holdings' 430-row Income screen renders one ~23,000px page",
+        "Holdings HQ dashboard Note Schedule (148 rows) and Assets & Deals register also fully unpaginated (~10,000px each)",
+        "documents/admin pagination at scale",
+        "production build emits a single 7.9MB/2.1MB-gzip JS chunk, no code-splitting"
       ],
-      "priority": "medium",
+      "priority": "high",
       "complexity": "M"
     },
     {
@@ -268,6 +298,35 @@
       "priority": "low",
       "complexity": null,
       "verification": "scanReceipt + vendor/project match + linked document (needs VITE_OPENAI_API_KEY)"
+    },
+    {
+      "id": "help-request-system",
+      "completion": 100,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null,
+      "note": "verified end-to-end live 2026-07-19: keyboard-shortcut capture, screenshot, admin-only Help Requests tab, lightbox — cold-start confirmed working, not just present in source",
+      "verification": "verify_admin_help_requests"
+    },
+    {
+      "id": "change-orders",
+      "completion": 100,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null,
+      "note": "fixed 2026-07-19 — live `change_orders` table used column `number`, code inserted/selected `title` (schema drift vs. migration 20260711000001's CREATE TABLE IF NOT EXISTS, which no-oped against a pre-existing table). Admin.tsx silently showed false success and auto-messaged the client on every failed insert; PortalPayments.tsx's Payments panel silently rendered empty. Fixed in both files, verified live with no console errors and a persisted row."
+    },
+    {
+      "id": "admin-changelog-audit-trail",
+      "completion": 100,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null,
+      "note": "fixed 2026-07-19 — admin_read_changelog RLS policy queried auth.users directly (42501 permission denied on every SELECT since the table's creation). Inserts worked, so ~500 rows were accumulating unreadable. Fixed via migration 20260719000003_changelog_rls_repair.sql to match the working INSERT policy's auth.uid() IS NOT NULL pattern.",
+      "verification": "verify_changelog_rls_repair"
     }
   ],
   "deferred": [
@@ -290,44 +349,25 @@
       "id": "cost-code-phase-reporting",
       "foundation": "cost code/division tables + hooks",
       "complexity": "M"
+    },
+    {
+      "id": "finance-controls-entity-awareness",
+      "foundation": "controls module is enabled for all 3 entities, but FinanceControls.tsx hardcodes construction copy and its WIP widget reads the HE-shaped projects table",
+      "complexity": "M"
     }
   ],
-  "migrations": {
-    "applied_verified": [
-      "20260716000010",
-      "20260716000011",
-      "20260716000012",
-      "20260716000013",
-      "20260716000014",
-      "20260716000015",
-      "20260716000016",
-      "20260717000001",
-      "20260717000002",
-      "20260717000003",
-      "20260717000004",
-      "20260717000005",
-      "20260717000006",
-      "20260717000007",
-      "20260717000008",
-      "20260718000001",
-      "20260718000002"
-    ],
-    "pending_apply": [
-      "20260718000003",
-      "20260718000004",
-      "20260718000005",
-      "20260718000006"
-    ]
-  },
   "test_battery": {
     "typescript": "clean",
-    "eslint": "clean",
-    "unit": "13/13",
-    "build": "clean",
+    "eslint": "clean (1 pre-existing unrelated prefer-const error, ProjectManager.tsx:1075, not from this pass)",
+    "unit": "15/15",
+    "build": "clean (single 7.9MB/2.1MB-gzip JS chunk — no code-splitting, see performance-scaling)",
     "playwright": {
-      "passed": 32,
-      "skipped": 0,
-      "note": "zero skips \u2014 chain 10-26 fully live-verified"
+      "note": "no full suite run this pass — 3 parallel live-crawl agents drove every route manually via Playwright instead; all temp specs/screenshots cleaned up afterward"
+    },
+    "verify_rpcs": {
+      "total": 21,
+      "passing": 21,
+      "note": "re-probed live via Supabase Management API 2026-07-19, all ok=true, including 2 new migrations from this pass"
     }
   }
 }

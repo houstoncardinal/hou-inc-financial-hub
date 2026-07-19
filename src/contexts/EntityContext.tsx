@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { recordSystemHealthEvent } from '@/lib/systemHealth';
 
 /* ── Entity definitions ──────────────────────────────────────────────── */
 export interface Entity {
@@ -73,46 +75,51 @@ const EntityContext = createContext<EntityContextValue>({
 });
 
 export function EntityProvider({ children }: { children: ReactNode }) {
+  const { session, loading: authLoading } = useAuth();
   const [entity, setEntityState] = useState<Entity | null>(null);
   const [ready,  setReady]       = useState(false);
 
   useEffect(() => {
-    async function load() {
-      // URL param (e.g. from Admin deep-link) takes priority over stored preference.
-      const params = new URLSearchParams(window.location.search);
-      const paramId = params.get('entity');
-      if (paramId) {
-        const found = ENTITIES.find(e => e.id === paramId);
-        if (found) {
-          setEntityState(found);
-          // Persist this as the new preference so next visit remembers it.
-          supabase.auth.updateUser({ data: { [META_KEY]: found.id } }).catch(() => {});
-          setReady(true);
-          return;
-        }
-      }
+    // Wait for AuthProvider's own getSession()/onAuthStateChange resolution
+    // instead of firing an independent supabase.auth.getUser() network call —
+    // that redundant call could fail transiently (flaky connection) and, being
+    // silently swallowed, would revert every page to the fallback entity
+    // (Houston Enterprise) with no visible error, mislabeling financial data
+    // entered under a different legal entity. The session is already reliably
+    // resolved and kept fresh by AuthProvider, so read from it directly.
+    if (authLoading) return;
 
-      // No URL param — restore from Supabase auth metadata.
-      try {
-        const { data } = await supabase.auth.getUser();
-        const id = data.user?.user_metadata?.[META_KEY] as string | undefined;
-        if (id) {
-          const found = ENTITIES.find(e => e.id === id);
-          if (found) setEntityState(found);
-        }
-      } catch {
-        // Supabase auth unavailable — start with no selection.
-      } finally {
+    // URL param (e.g. from Admin deep-link) takes priority over stored preference.
+    const params = new URLSearchParams(window.location.search);
+    const paramId = params.get('entity');
+    if (paramId) {
+      const found = ENTITIES.find(e => e.id === paramId);
+      if (found) {
+        setEntityState(found);
+        // Persist this as the new preference so next visit remembers it.
+        supabase.auth.updateUser({ data: { [META_KEY]: found.id } }).catch(err => {
+          recordSystemHealthEvent({ area: 'entity-context:persist', severity: 'warning', message: String(err), details: { entityId: found.id } });
+        });
         setReady(true);
+        return;
       }
     }
-    load();
-  }, []);
+
+    // No URL param — restore from the already-resolved session, no network call.
+    const id = session?.user?.user_metadata?.[META_KEY] as string | undefined;
+    if (id) {
+      const found = ENTITIES.find(e => e.id === id);
+      if (found) setEntityState(found);
+    }
+    setReady(true);
+  }, [authLoading, session]);
 
   const setEntity = (e: Entity | null) => {
     setEntityState(e);
     // Persist to Supabase user metadata — durable across devices and sessions.
-    supabase.auth.updateUser({ data: { [META_KEY]: e?.id ?? null } }).catch(() => {});
+    supabase.auth.updateUser({ data: { [META_KEY]: e?.id ?? null } }).catch(err => {
+      recordSystemHealthEvent({ area: 'entity-context:persist', severity: 'warning', message: String(err), details: { entityId: e?.id ?? null } });
+    });
   };
 
   useEffect(() => {
