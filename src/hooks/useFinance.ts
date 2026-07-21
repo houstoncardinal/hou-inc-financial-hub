@@ -406,6 +406,55 @@ export const useFinanceCommitments = () => {
   });
 };
 
+/** EAC-based WIP reconciliation (percent-complete/earned-revenue/over-under-billed
+    from the PM's Cost-to-Complete forecast) — additive alongside the
+    cost-ratio-based useFinanceControlSummary() above, not a replacement. */
+export const useWipReconciliation = () => {
+  const { entity, ready } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useQuery({
+    queryKey: ['wip-reconciliation', entityId],
+    enabled: ready,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_wip_reconciliation' as never, { p_entity_id: entityId });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
+export const useCreateCommitmentLine = () => {
+  const qc = useQueryClient();
+  const { entity } = useEntity();
+  const entityId = entity?.id ?? 'houston-enterprise';
+  return useMutation({
+    mutationFn: async (line: { commitment_id: string; cost_code_id: string; description?: string; unit_price: number; quantity: number }) => {
+      const { error } = await supabase.from('finance_commitment_lines' as never).insert(line as never);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['finance-commitments', entityId] });
+      qc.invalidateQueries({ queryKey: ['finance-commitment-lines'] });
+    },
+  });
+};
+
+export const useFinanceCommitmentLines = (commitmentId: string | null) => {
+  return useQuery({
+    queryKey: ['finance-commitment-lines', commitmentId],
+    enabled: !!commitmentId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('finance_commitment_lines' as never)
+        .select('*, finance_cost_codes:cost_code_id(code, name)')
+        .eq('commitment_id', commitmentId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+};
+
 export const useBankMatchSuggestions = () => {
   const { entity, ready } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';

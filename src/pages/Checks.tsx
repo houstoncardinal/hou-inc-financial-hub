@@ -25,6 +25,8 @@ import { useEntity } from '@/contexts/EntityContext';
 import { screenHeaderFor } from '@/lib/entityFinance';
 import { FinanceRangePicker, financeRangeLabel, isInFinanceRange } from '@/lib/financeTime';
 import { useFinanceChangelog } from '@/hooks/useFinanceChangelog';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   Area, AreaChart, Bar, BarChart, ResponsiveContainer,
   Tooltip as RechartsTooltip, XAxis, YAxis,
@@ -394,6 +396,9 @@ export default function Checks() {
       || c.entity_label?.toLowerCase().includes(s)
       || c.projects?.name?.toLowerCase().includes(s);
   }), [checks, q, statusFilter, timePeriod]);
+  const CHECKS_PAGE_SIZE = 20;
+  const { page: checksPage, setPage: setChecksPage, pageCount: checksPageCount, paged: pagedChecks } =
+    usePagination(filtered, CHECKS_PAGE_SIZE, `${q}|${statusFilter}|${timePeriod}`);
   const payeeLabel = (c: any) => {
     const base = c.payee_name || 'Unassigned payee';
     return isHoldings && c.entity_label ? `${c.entity_label} · ${base}` : base;
@@ -729,7 +734,7 @@ export default function Checks() {
         <div className="lg:hidden space-y-2.5">
           {filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
-          ) : filtered.map((c: any) => (
+          ) : pagedChecks.map((c: any) => (
             <div key={c.id} className="chk-mobile-card p-2.5 space-y-2 cursor-pointer" onClick={() => setDetailRow(c)}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -792,6 +797,8 @@ export default function Checks() {
             </div>
           ))}
         </div>
+        <PaginationBar page={checksPage} pageCount={checksPageCount} total={filtered.length} pageSize={CHECKS_PAGE_SIZE}
+          onPageChange={setChecksPage} itemLabel="checks" className="lg:hidden mt-3" />
 
         {/* Desktop table */}
         <div className="hidden lg:block chk-panel overflow-x-auto">
@@ -810,7 +817,7 @@ export default function Checks() {
           </div>
           {filtered.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No checks issued.</div>
-          ) : filtered.map((c: any) => (
+          ) : pagedChecks.map((c: any) => (
             <div key={c.id} className="chk-table-grid grid gap-2 px-3 py-2 border-b border-border last:border-b-0 text-[12px] font-mono-tab chk-row items-center cursor-pointer" onClick={() => setDetailRow(c)}>
               <div className="font-semibold truncate text-[11px]">#{c.check_number || 'Draft'}</div>
               <div className="min-w-0">
@@ -867,6 +874,12 @@ export default function Checks() {
               </div>
             </div>
           ))}
+          {filtered.length > CHECKS_PAGE_SIZE && (
+            <div className="px-4 py-3 border-t border-border">
+              <PaginationBar page={checksPage} pageCount={checksPageCount} total={filtered.length} pageSize={CHECKS_PAGE_SIZE}
+                onPageChange={setChecksPage} itemLabel="checks" />
+            </div>
+          )}
         </div>
       </div>
 

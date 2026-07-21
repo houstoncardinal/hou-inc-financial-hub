@@ -27,6 +27,10 @@ import {
 import { useEntity } from '@/contexts/EntityContext';
 import { financeProfileFor } from '@/lib/entityFinance';
 import { useAuth } from '@/hooks/useAuth';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
+import { INCOME_PAYMENT_METHODS, EXPENSE_PAYMENT_METHODS, INVOICE_LINK_PROVIDERS, COST_PHASES } from '@/lib/financeFieldOptions';
+import { CategorySelect } from '@/components/CategorySelect';
 import { useInvoices } from '@/hooks/useInvoices';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
@@ -55,45 +59,6 @@ import {
    holding-company categories for Holdings. Defined once in
    src/lib/entityFinance.ts and resolved from the selected entity below. */
 
-const INCOME_PAYMENT_METHODS = [
-  { value: 'check',           label: 'Check' },
-  { value: 'ach_wire',        label: 'ACH / Wire' },
-  { value: 'credit_card',     label: 'Credit Card' },
-  { value: 'financing_draw',  label: 'Financing Draw' },
-  { value: 'cash',            label: 'Cash' },
-  { value: 'other',           label: 'Other' },
-];
-
-const INVOICE_LINK_PROVIDERS = [
-  { value: 'stripe', label: 'Stripe' },
-  { value: 'quickbooks', label: 'QuickBooks' },
-  { value: 'other', label: 'Other Link' },
-];
-
-const EXPENSE_PAYMENT_METHODS = [
-  { value: 'check',       label: 'Check' },
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'ach',         label: 'ACH' },
-  { value: 'net_30',      label: 'NET 30' },
-  { value: 'net_60',      label: 'NET 60' },
-  { value: 'net_90',      label: 'NET 90' },
-  { value: 'cash',        label: 'Cash' },
-  { value: 'wire',        label: 'Wire' },
-  { value: 'other',       label: 'Other' },
-];
-
-const COST_PHASES = [
-  'Phase 1: Site Prep & Demo',
-  'Phase 2: Foundation & Concrete',
-  'Phase 3: Framing & Structure',
-  'Phase 4: Rough-Ins (MEP)',
-  'Phase 5: Exterior & Roofing',
-  'Phase 6: Insulation & Drywall',
-  'Phase 7: Finishes & Fixtures',
-  'Phase 8: Landscaping & Final',
-  'General / Overhead',
-];
-
 const num = (value: string | number | null | undefined) => {
   const parsed = typeof value === 'number' ? value : parseFloat(value || '');
   return Number.isFinite(parsed) ? parsed : 0;
@@ -118,35 +83,6 @@ const blankAllocation = () => ({
 const REF_REQUIRED_METHODS = new Set(['check', 'ach_wire', 'ach', 'wire']);
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
-
-function CategorySelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
-  const [custom, setCustom] = useState(false);
-  const [customVal, setCustomVal] = useState('');
-  if (custom) {
-    return (
-      <div className="flex gap-2">
-        <Input value={customVal} onChange={e => setCustomVal(e.target.value)} placeholder="Type custom category..." className="rounded-none h-10 flex-1 text-sm" />
-        <button onClick={() => { if (customVal.trim()) { onChange(customVal.trim()); setCustomVal(''); setCustom(false); } }} className="px-3 border border-border hover:bg-secondary/50 transition-colors text-xs">Set</button>
-        <button onClick={() => setCustom(false)} className="px-3 border border-border hover:bg-secondary/50 transition-colors text-xs text-muted-foreground"><X className="w-3 h-3" /></button>
-      </div>
-    );
-  }
-  return (
-    <div className="flex gap-2">
-      <div className="flex-1">
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger className="rounded-none h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
-          <SelectContent>
-            {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <button onClick={() => setCustom(true)} className="px-3 border border-border hover:bg-secondary/50 transition-colors text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0">
-        <Plus className="w-3 h-3" /> Add
-      </button>
-    </div>
-  );
-}
 
 function FieldLabel({ label, filled }: { label: string; filled?: boolean }) {
   return (
@@ -775,6 +711,9 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     () => txns.filter((t: any) => isInFinanceRange(t.transaction_date, timePeriod)),
     [txns, timePeriod]
   );
+  const TXN_PAGE_SIZE = 20;
+  const { page: txnPage, setPage: setTxnPage, pageCount: txnPageCount, paged: pagedTxns } =
+    usePagination(filteredTxns, TXN_PAGE_SIZE, timePeriod);
   const partyLabel = (t: any) => {
     const base = isIncome ? (t.source_name || t.vendors?.name || '—') : (t.vendors?.name || '—');
     return isHoldings && t.entity_label ? `${t.entity_label} · ${base}` : base;
@@ -1764,7 +1703,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
         <div className="sm:hidden space-y-2.5">
           {filteredTxns.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">No records.</div>
-          ) : filteredTxns.map((t: any) => (
+          ) : pagedTxns.map((t: any) => (
             <div key={t.id} className="txn-record-card p-3 space-y-2 cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{fmtDate(t.transaction_date)}</span>
@@ -1797,6 +1736,8 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
             </div>
           ))}
         </div>
+        <PaginationBar page={txnPage} pageCount={txnPageCount} total={filteredTxns.length} pageSize={TXN_PAGE_SIZE}
+          onPageChange={setTxnPage} itemLabel={isIncome ? 'income records' : 'expense records'} className="sm:hidden mt-3" />
 
         {/* Desktop table */}
         <div className="hidden sm:block txn-panel">
@@ -1810,7 +1751,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
           </div>
           {filteredTxns.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted-foreground">No records.</div>
-          ) : filteredTxns.map((t: any) => (
+          ) : pagedTxns.map((t: any) => (
             <div key={t.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab txn-row items-center cursor-pointer" onClick={() => setDetailRow(t)}>
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
               <div className="col-span-3 truncate">{partyLabel(t)}</div>
@@ -1835,6 +1776,12 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               </div>
             </div>
           ))}
+          {filteredTxns.length > TXN_PAGE_SIZE && (
+            <div className="px-4 py-3 border-t border-border">
+              <PaginationBar page={txnPage} pageCount={txnPageCount} total={filteredTxns.length} pageSize={TXN_PAGE_SIZE}
+                onPageChange={setTxnPage} itemLabel={isIncome ? 'income records' : 'expense records'} />
+            </div>
+          )}
         </div>
       </div>
       <TransactionInspector txn={detailRow} kind={kind} onClose={() => setDetailRow(null)} />

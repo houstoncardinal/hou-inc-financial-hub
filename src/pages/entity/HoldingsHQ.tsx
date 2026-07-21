@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFinanceChangelog } from '@/hooks/useFinanceChangelog';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine,
   ResponsiveContainer, Scatter, ScatterChart, Tooltip as RechartsTooltip,
@@ -297,6 +299,9 @@ export default function HoldingsHQ() {
   useEntityOpsRealtime();
 
   const { data: notes = [], isLoading: notesLoading } = useHoldingsNotes();
+  const NOTES_PAGE_SIZE = 10;
+  const { page: notesPage, setPage: setNotesPage, pageCount: notesPageCount, paged: pagedNotes } =
+    usePagination(notes as any[], NOTES_PAGE_SIZE);
   const { data: activity = [], isLoading: activityLoading } = useCapitalActivity();
   const { data: payments = [] } = useNotePayments();
   const { data: consolidated = {} } = useConsolidatedEntityTotals();
@@ -661,6 +666,10 @@ export default function HoldingsHQ() {
   };
 
   const pendingApprovals = (activity as any[]).filter(a => a.approval_status === 'pending');
+  const settledActivity = (activity as any[]).filter(a => a.approval_status !== 'pending');
+  const CAPITAL_PAGE_SIZE = 10;
+  const { page: capitalPage, setPage: setCapitalPage, pageCount: capitalPageCount, paged: pagedCapital } =
+    usePagination(settledActivity, CAPITAL_PAGE_SIZE);
 
   const decideApproval = async (a: any, decision: 'approved' | 'rejected') => {
     try {
@@ -1092,7 +1101,7 @@ export default function HoldingsHQ() {
                 <div className="heh-row grid grid-cols-[1.3fr_.9fr_.7fr_.9fr_.9fr_.6fr_.8fr_.9fr_.5fr] gap-2 bg-secondary/45 heh-k items-center">
                   <div>Counterparty</div><div>Type</div><div>Direction</div><div>Principal</div><div>Outstanding</div><div>Rate</div><div>Payment</div><div>Maturity</div><div></div>
                 </div>
-                {(notes as any[]).map(n => (
+                {pagedNotes.map(n => (
                   <div key={n.id} className="heh-row grid grid-cols-[1.3fr_.9fr_.7fr_.9fr_.9fr_.6fr_.8fr_.9fr_.5fr] gap-2 items-center">
                     <div className="min-w-0">
                       <div className="font-bold truncate">{n.counterparty_name}</div>
@@ -1135,6 +1144,12 @@ export default function HoldingsHQ() {
                 )}
               </div>
             </div>
+            {(notes as any[]).length > NOTES_PAGE_SIZE && (
+              <div className="pt-2.5 mt-1 border-t border-border/60">
+                <PaginationBar page={notesPage} pageCount={notesPageCount} total={(notes as any[]).length} pageSize={NOTES_PAGE_SIZE}
+                  onPageChange={setNotesPage} itemLabel="notes" />
+              </div>
+            )}
 
             {(payments as any[]).length > 0 && (
               <>
@@ -1198,8 +1213,8 @@ export default function HoldingsHQ() {
                 </div>
               </div>
             )}
-            <div className="space-y-1.5 max-h-80 overflow-y-auto">
-              {(activity as any[]).filter(a => a.approval_status !== 'pending').map(a => {
+            <div className="space-y-1.5">
+              {pagedCapital.map(a => {
                 const meta = ACTIVITY_TYPES[a.activity_type] ?? ACTIVITY_TYPES.distribution;
                 return (
                   <div key={a.id} className="border border-border px-2.5 py-2 text-xs flex items-center justify-between gap-3">
@@ -1233,6 +1248,12 @@ export default function HoldingsHQ() {
                 </div>
               )}
             </div>
+            {settledActivity.length > CAPITAL_PAGE_SIZE && (
+              <div className="pt-2.5 mt-1 border-t border-border/60">
+                <PaginationBar page={capitalPage} pageCount={capitalPageCount} total={settledActivity.length} pageSize={CAPITAL_PAGE_SIZE}
+                  onPageChange={setCapitalPage} itemLabel="capital activity entries" />
+              </div>
+            )}
           </section>
 
           {/* ── Reporting note ── */}

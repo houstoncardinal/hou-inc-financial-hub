@@ -41,6 +41,8 @@ import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
 import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
 import { ProjectGantt } from '@/components/project-detail/ProjectGantt';
 import { FlushTabs } from '@/components/project-detail/FlushTabs';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 /* ── Status config ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
@@ -379,6 +381,13 @@ export default function ProjectDetail() {
       ...enriched.checksList.map((c: any)  => ({ id: c.id, date: c.issue_date,       type: 'Check',   ref: `#${c.check_number} · ${c.payee_name}`,           amount: -Number(c.amount) })),
     ].sort((a, b) => b.date.localeCompare(a.date));
   }, [enriched]);
+
+  const ACTIVITY_PAGE_SIZE = 20;
+  const { page: activityPage, setPage: setActivityPage, pageCount: activityPageCount, paged: pagedActivity } =
+    usePagination(sortedActivity, ACTIVITY_PAGE_SIZE);
+  const DOCS_PAGE_SIZE = 20;
+  const { page: docsPage, setPage: setDocsPage, pageCount: docsPageCount, paged: pagedProjectDocs } =
+    usePagination(projectDocs, DOCS_PAGE_SIZE);
 
   const costBreakdown = useMemo(() => {
     if (!enriched) return [];
@@ -1059,7 +1068,7 @@ export default function ProjectDetail() {
                 <div className="col-span-3 sm:col-span-1 text-right">Actions</div>
               </div>
               <AnimatePresence>
-                {projectDocs.map((doc, i) => (
+                {pagedProjectDocs.map((doc, i) => (
                   <motion.div key={doc.id}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1110,6 +1119,10 @@ export default function ProjectDetail() {
               <div className="px-4 py-2.5 border-t border-border bg-secondary/20 text-[9px] text-muted-foreground flex justify-between">
                 <span>{projectDocs.length} document{projectDocs.length !== 1 ? 's' : ''}</span>
                 <span>All files stored securely · never auto-deleted</span>
+              </div>
+              <div className="px-4 py-3 border-t border-border">
+                <PaginationBar page={docsPage} pageCount={docsPageCount} total={projectDocs.length} pageSize={DOCS_PAGE_SIZE}
+                  onPageChange={setDocsPage} itemLabel="documents" />
               </div>
             </div>
           )}
@@ -1234,7 +1247,7 @@ export default function ProjectDetail() {
             <div className="pd-panel overflow-hidden">
               {/* Mobile card view */}
               <div className="sm:hidden divide-y divide-border">
-                {sortedActivity.map((a: any) => (
+                {pagedActivity.map((a: any) => (
                   <div key={a.id} className="px-4 py-3 pd-row space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border text-muted-foreground">{a.type}</span>
@@ -1252,6 +1265,10 @@ export default function ProjectDetail() {
                     {enriched.net >= 0 ? '+' : '−'}{fmtUSD(Math.abs(enriched.net))}
                   </span>
                 </div>
+                <div className="px-4 py-3 border-t border-border">
+                  <PaginationBar page={activityPage} pageCount={activityPageCount} total={sortedActivity.length} pageSize={ACTIVITY_PAGE_SIZE}
+                    onPageChange={setActivityPage} itemLabel="activity entries" />
+                </div>
               </div>
 
               {/* Desktop table */}
@@ -1262,7 +1279,7 @@ export default function ProjectDetail() {
                   <div className="col-span-5">Reference</div>
                   <div className="col-span-2 text-right">Amount</div>
                 </div>
-                {sortedActivity.map((a: any) => (
+                {pagedActivity.map((a: any) => (
                   <div key={a.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab pd-row items-center">
                     <div className="col-span-3 text-muted-foreground text-[11px]">{fmtDate(a.date)}</div>
                     <div className="col-span-2"><span className="text-[9px] uppercase tracking-[0.14em] px-1.5 py-0.5 border border-border">{a.type}</span></div>
@@ -1279,6 +1296,10 @@ export default function ProjectDetail() {
                   <div className={`col-span-2 text-right font-bold text-[12px] ${enriched.net >= 0 ? 'text-positive' : 'text-accent'}`}>
                     {enriched.net >= 0 ? '+' : '−'}{fmtUSD(Math.abs(enriched.net))}
                   </div>
+                </div>
+                <div className="px-4 py-3 border-t border-border">
+                  <PaginationBar page={activityPage} pageCount={activityPageCount} total={sortedActivity.length} pageSize={ACTIVITY_PAGE_SIZE}
+                    onPageChange={setActivityPage} itemLabel="activity entries" />
                 </div>
               </div>
             </div>

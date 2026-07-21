@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import PageHeader from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { generateLedgerReport, generateLedgerRecordReport, savePDF, downloadLedgerExcel } from '@/lib/reports';
 import { useEntity } from '@/contexts/EntityContext';
+import { financeProfileFor } from '@/lib/entityFinance';
 import { supabase } from '@/integrations/supabase/client';
+import { CategorySelect } from '@/components/CategorySelect';
+import {
+  TRANSACTION_STATUS, CHECK_STATUS, TRANSACTION_PAYMENT_STATUS,
+  TRANSACTION_APPROVAL_STATUS, CHECK_APPROVAL_STATUS, CHECK_PRINT_STATUS, CHECK_DELIVERY_STATUS,
+  RECEIPT_STATUS, BILLABLE_STATUS, REIMBURSABLE_STATUS, INVOICE_LINK_PROVIDERS,
+  INCOME_PAYMENT_METHODS, EXPENSE_PAYMENT_METHODS, COST_PHASES, COST_TYPES,
+} from '@/lib/financeFieldOptions';
 import { buildFinanceBuckets, FinanceRangePicker, financeRangeLabel, isInFinanceRange, parseFinanceDate } from '@/lib/financeTime';
 import {
   FileText, Table2, Trash2, CheckSquare,
@@ -44,12 +52,6 @@ const EXPENSE_CATEGORIES = [
 const INCOME_CATEGORIES = [
   'Client Payment', 'Retainer', 'Project Milestone', 'Consulting Fee',
   'Reimbursement', 'Interest Income', 'Grant', 'Investment', 'Refund', 'Other Income',
-];
-
-const COST_PHASES = [
-  'Phase 1: Site Prep & Demo', 'Phase 2: Foundation & Concrete', 'Phase 3: Framing & Structure',
-  'Phase 4: Rough-Ins (MEP)', 'Phase 5: Exterior & Roofing', 'Phase 6: Insulation & Drywall',
-  'Phase 7: Finishes & Fixtures', 'Phase 8: Landscaping & Final', 'General / Overhead',
 ];
 
 const INCOME_METHODS  = [{ v:'check',label:'Check' },{ v:'ach_wire',label:'ACH / Wire' },{ v:'credit_card',label:'Credit Card' },{ v:'financing_draw',label:'Financing Draw' },{ v:'cash',label:'Cash' },{ v:'other',label:'Other' }];
@@ -762,8 +764,10 @@ function LedgerMobileSheet({
 
 export default function Ledger() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const { entity } = useEntity();
+  const entityProfile = financeProfileFor(entity?.id);
   const { user } = useAuth();
   const { data: checks = [] } = useChecks();
   const { data: income = [] } = useTransactions('income');
@@ -1034,6 +1038,25 @@ export default function Ledger() {
       return yTouch.localeCompare(xTouch);
     });
   }, [checks, income, expenses, project, type, q, timePeriod]);
+
+  /* Deep‑link support — e.g. from the admin Overview's Ledger Activity card
+     (?openKind=income|expense|check&openId=<uuid>): jump straight to that
+     entry's detail drawer, independent of whatever page/filter is active. */
+  useEffect(() => {
+    const openId = searchParams.get('openId');
+    const openKind = searchParams.get('openKind');
+    if (!openId || !openKind) return;
+    const match = scopedRows.find(r => String(r.id) === openId && r._kind === openKind);
+    if (match) {
+      setDetailRow(match);
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('openId');
+        next.delete('openKind');
+        return next;
+      }, { replace: true });
+    }
+  }, [searchParams, scopedRows, setSearchParams]);
 
   const rows = useMemo(() => scopedRows.filter(r => queueMatches(r, queueFilter)), [scopedRows, queueFilter, duplicateRefs]);
 
@@ -1423,6 +1446,15 @@ export default function Ledger() {
   };
 
   const fld = (label: string) => <Label className="micro-label mb-1.5 block">{label}</Label>;
+  const optionSelect = (value: string, onChange: (v: string) => void, options: { value: string; label: string }[], disabled?: boolean, placeholder = 'Select...') => (
+    <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="rounded-none h-10"><SelectValue placeholder={placeholder} /></SelectTrigger>
+      <SelectContent>
+        {options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+        {value && !options.some(o => o.value === value) && <SelectItem value={value}>{value.replace(/_/g, ' ')}</SelectItem>}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <AppShell>
@@ -1873,22 +1905,22 @@ export default function Ledger() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   {fld('Status')}
-                  <Input className="rounded-none h-10" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} />
+                  {optionSelect(editForm.status, v => setEditForm(f => ({ ...f, status: v })), editRow?._kind === 'check' ? CHECK_STATUS : TRANSACTION_STATUS)}
                 </div>
                 <div>
                   {fld('Payment Status')}
-                  <Input className="rounded-none h-10" value={editForm.payment_status} onChange={e => setEditForm(f => ({ ...f, payment_status: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                  {optionSelect(editForm.payment_status, v => setEditForm(f => ({ ...f, payment_status: v })), TRANSACTION_PAYMENT_STATUS, editRow?._kind === 'check')}
                 </div>
                 <div>
                   {fld('Approval Status')}
-                  <Input className="rounded-none h-10" value={editForm.approval_status} onChange={e => setEditForm(f => ({ ...f, approval_status: e.target.value }))} />
+                  {optionSelect(editForm.approval_status, v => setEditForm(f => ({ ...f, approval_status: v })), editRow?._kind === 'check' ? CHECK_APPROVAL_STATUS : TRANSACTION_APPROVAL_STATUS)}
                 </div>
               </div>
               {editRow?._kind === 'check' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                  <div>{fld('Print Status')}<Input className="rounded-none h-10" value={editForm.print_status} onChange={e => setEditForm(f => ({ ...f, print_status: e.target.value }))} /></div>
-                  <div>{fld('Delivery Status')}<Input className="rounded-none h-10" value={editForm.delivery_status} onChange={e => setEditForm(f => ({ ...f, delivery_status: e.target.value }))} /></div>
-                  <div>{fld('Void Reason')}<Input className="rounded-none h-10" value={editForm.void_reason} onChange={e => setEditForm(f => ({ ...f, void_reason: e.target.value }))} /></div>
+                  <div>{fld('Print Status')}{optionSelect(editForm.print_status, v => setEditForm(f => ({ ...f, print_status: v })), CHECK_PRINT_STATUS)}</div>
+                  <div>{fld('Delivery Status')}{optionSelect(editForm.delivery_status, v => setEditForm(f => ({ ...f, delivery_status: v })), CHECK_DELIVERY_STATUS)}</div>
+                  <div>{fld('Void Reason')}<Input className="rounded-none h-10" value={editForm.void_reason} onChange={e => setEditForm(f => ({ ...f, void_reason: e.target.value }))} placeholder="Reason (if voiding)" /></div>
                 </div>
               )}
               <div className={`grid grid-cols-1 ${editRow?._kind !== 'income' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3 mt-3`}>
@@ -1937,22 +1969,27 @@ export default function Ledger() {
                 </div>
                 <div>
                   {fld('Category')}
-                  <Input className="rounded-none h-10" value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                  <CategorySelect
+                    value={editForm.category}
+                    onChange={v => setEditForm(f => ({ ...f, category: v }))}
+                    options={editRow?._kind === 'income' ? entityProfile.incomeCategories : entityProfile.expenseCategories}
+                    disabled={editRow?._kind === 'check'}
+                  />
                 </div>
                 <div>
                   {fld('Payment Method')}
-                  <Input className="rounded-none h-10" value={editForm.payment_method} onChange={e => setEditForm(f => ({ ...f, payment_method: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                  {optionSelect(editForm.payment_method, v => setEditForm(f => ({ ...f, payment_method: v })), editRow?._kind === 'income' ? INCOME_PAYMENT_METHODS : EXPENSE_PAYMENT_METHODS, editRow?._kind === 'check')}
                 </div>
                 <div>
                   {fld('Cost Type')}
-                  <Input className="rounded-none h-10" value={editForm.cost_type} onChange={e => setEditForm(f => ({ ...f, cost_type: e.target.value }))} disabled={editRow?._kind === 'check'} />
+                  {optionSelect(editForm.cost_type, v => setEditForm(f => ({ ...f, cost_type: v })), COST_TYPES, editRow?._kind === 'check')}
                 </div>
               </div>
               <div>
                 {fld('Cost Phase / Memo')}
                 <div className="grid grid-cols-1 sm:grid-cols-[0.8fr_1.2fr] gap-3">
-                  <Input className="rounded-none h-10" value={editForm.cost_phase} onChange={e => setEditForm(f => ({ ...f, cost_phase: e.target.value }))} disabled={editRow?._kind === 'check'} />
-                  <Input className="rounded-none h-10" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+                  {optionSelect(editForm.cost_phase, v => setEditForm(f => ({ ...f, cost_phase: v })), COST_PHASES.map(p => ({ value: p, label: p })), editRow?._kind === 'check', 'Select cost phase')}
+                  <Input className="rounded-none h-10" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Notes" />
                 </div>
               </div>
               </section>
@@ -1962,15 +1999,15 @@ export default function Ledger() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       {fld('Receipt Status')}
-                      <Input className="rounded-none h-10" value={editForm.receipt_status} onChange={e => setEditForm(f => ({ ...f, receipt_status: e.target.value }))} />
+                      {optionSelect(editForm.receipt_status, v => setEditForm(f => ({ ...f, receipt_status: v })), RECEIPT_STATUS)}
                     </div>
                     <div>
                       {fld('Billable Status')}
-                      <Input className="rounded-none h-10" value={editForm.billable_status} onChange={e => setEditForm(f => ({ ...f, billable_status: e.target.value }))} />
+                      {optionSelect(editForm.billable_status, v => setEditForm(f => ({ ...f, billable_status: v })), BILLABLE_STATUS)}
                     </div>
                     <div>
                       {fld('Reimbursable Status')}
-                      <Input className="rounded-none h-10" value={editForm.reimbursable_status} onChange={e => setEditForm(f => ({ ...f, reimbursable_status: e.target.value }))} />
+                      {optionSelect(editForm.reimbursable_status, v => setEditForm(f => ({ ...f, reimbursable_status: v })), REIMBURSABLE_STATUS)}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1980,7 +2017,7 @@ export default function Ledger() {
                     </div>
                     <div>
                       {fld('Invoice Provider')}
-                      <Input className="rounded-none h-10" value={editForm.external_invoice_provider} onChange={e => setEditForm(f => ({ ...f, external_invoice_provider: e.target.value }))} />
+                      {optionSelect(editForm.external_invoice_provider, v => setEditForm(f => ({ ...f, external_invoice_provider: v })), INVOICE_LINK_PROVIDERS)}
                     </div>
                     <div>
                       {fld('Invoice Number')}

@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 const DOC_TYPES: { value: DocType | 'all'; label: string }[] = [
   { value: 'all', label: 'All Documents' },
@@ -504,6 +506,9 @@ export default function Documents() {
     }
     return true;
   });
+  const DOCUMENTS_PAGE_SIZE = 24;
+  const { page: docsPage, setPage: setDocsPage, pageCount: docsPageCount, paged: pagedDocs } =
+    usePagination(filteredDocs, DOCUMENTS_PAGE_SIZE, `${filterType}|${search}`);
 
   // Counts by type
   const counts: Partial<Record<DocType | 'all', number>> = { all: docs.length };
@@ -689,13 +694,13 @@ export default function Documents() {
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {filteredDocs.map(doc => (
+            {pagedDocs.map(doc => (
               <DocumentCard key={doc.id} doc={doc} onClick={() => setSelectedDoc(doc)} />
             ))}
           </div>
         ) : (
           <div className="border border-border divide-y divide-border">
-            {filteredDocs.map(doc => {
+            {pagedDocs.map(doc => {
               const typeColor = DOC_TYPE_COLORS[doc.doc_type] ?? '#78716c';
               const extracted = doc.extracted_data ?? {};
               return (
@@ -729,6 +734,8 @@ export default function Documents() {
             })}
           </div>
         )}
+        <PaginationBar page={docsPage} pageCount={docsPageCount} total={filteredDocs.length} pageSize={DOCUMENTS_PAGE_SIZE}
+          onPageChange={setDocsPage} itemLabel="documents" className="mt-4" />
       </div>
 
       {/* Upload Modal */}

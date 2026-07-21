@@ -1,56 +1,90 @@
-import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ShieldCheck, Users, ClipboardList, Inbox, FileCheck, Calendar,
-  ChevronRight, RefreshCw, ArrowUpRight, Bell, HelpCircle, Menu,
-  FileText, UserCheck, CheckCircle2, FolderKanban,
-} from 'lucide-react';
-import {
-  AreaChart, Area, PieChart, Pie, Cell, Sector,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  Area, ComposedChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
+import {
+  ShieldCheck, ClipboardList, Inbox, FileCheck, Calendar,
+  ChevronRight, RefreshCw, ArrowUpRight, Bell,
+  FileText, CheckCircle2, History, HardHat,
+  ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, X,
+  MessageSquare, FolderKanban, Layers, Activity, ZoomOut,
+} from 'lucide-react';
+import { MeetingsCalendar, type CalendarMeeting } from './MeetingsCalendar';
+import { usePagination } from '@/hooks/usePagination';
 
-const AC = '#9D7E3F';
+const LEDGER_PAGE_SIZE = 8;
 
-/* ── Luxury palette — muted, harmonious, construction-finance grade ── */
-const LUX = {
-  gold:      '#C9A962',
-  goldDeep:  '#9D7E3F',
-  steel:     '#4C7FA3',
-  copper:    '#C4795A',
-  viridian:  '#4E8A74',
-  violet:    '#8E7CB0',
-  rose:      '#B26E85',
+/* ── Monochrome luxury palette — black, white, subtle neutrals ── */
+const BLACK   = '#0A0A0A';
+const CHARCOAL = '#1A1A1A';
+const STEEL   = '#6B7280';
+const SILVER  = '#9CA3AF';
+const BORDER   = '#E5E7EB';
+
+/* Micro accent colors — used sparingly as small dots or thin lines */
+const ACCENTS = {
+  indigo: '#3B6E91',
+  green:  '#16A34A',
+  red:    '#DC2626',
+  gold:   '#D97706',
 };
 
-/* ── AV4 visual system: sharp luxury cards with inner light + gold wash ── */
-const AV4_CSS = `
-.av4-int{position:relative;border-radius:12px;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05),0 1px 0 rgba(255,255,255,.45) inset;transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease;}
-.av4-int::before{content:'';position:absolute;inset:0;border-radius:12px;background:linear-gradient(145deg,rgba(157,126,63,.06),transparent 44%);pointer-events:none;}
-.av4-int:hover{box-shadow:0 10px 26px rgba(10,10,10,.09);transform:translateY(-1px);border-color:hsl(var(--foreground)/.18);}
-.dark .av4-int{background:hsl(var(--card));box-shadow:0 1px 4px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.05) inset;}
-.av4-static:hover{transform:none;}
-.av4-head{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid hsl(var(--border)/.65);}
-.av4-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:hsl(var(--foreground));}
-.av4-foot{border-top:1px solid hsl(var(--border)/.65);background:hsl(var(--secondary)/.24);border-radius:0 0 12px 12px;}
-.av4-link{font-size:10.5px;font-weight:700;color:${AC};white-space:nowrap;transition:opacity .15s ease;}
-.av4-link:hover{opacity:.72;}
-.av4-chiprow{display:inline-flex;align-items:center;gap:6px;border:1px solid hsl(var(--border));background:hsl(var(--background));border-radius:9px;padding:6px 10px;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:hsl(var(--muted-foreground));transition:color .18s ease,border-color .18s ease;}
-button.av4-chiprow:hover{color:${AC};border-color:rgba(157,126,63,.5);}
-.av4-seg{display:inline-flex;border:1px solid hsl(var(--border));border-radius:9px;background:hsl(var(--secondary)/.4);padding:2px;}
-.av4-seg button{border-radius:7px;padding:4px 10px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:hsl(var(--muted-foreground));transition:all .18s ease;}
-.av4-seg button.on{background:hsl(var(--background));color:hsl(var(--foreground));box-shadow:0 1px 3px rgba(10,10,10,.12);}
-.av4-toggle{display:inline-flex;align-items:center;gap:5px;border-radius:9999px;border:1px solid hsl(var(--border));padding:3px 9px;font-size:9.5px;font-weight:700;color:hsl(var(--muted-foreground));transition:all .18s ease;cursor:pointer;}
-.av4-toggle.off{opacity:.38;}
-.av4-toggle:hover{border-color:hsl(var(--foreground)/.3);}
-@media(max-width:767px){
-  .av4-mobile-kpi{min-height:58px;border-radius:9px;}
-  .av4-mobile-kpi-row{gap:7px!important;padding:7px 8px!important;}
-  .av4-mobile-kpi-icon{width:26px!important;height:26px!important;border-radius:8px!important;}
-  .av4-mobile-kpi-title{font-size:10px!important;}
-  .av4-mobile-kpi-sub{font-size:8.5px!important;}
-  .av4-mobile-kpi-value{font-size:16px!important;}
-}
+const NET_COLOR = '#2563EB';
+const RETAINAGE_COLOR = '#F59E0B';
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+const OV_CSS = `
+.ov-card{position:relative;background:#fff;border-radius:20px;border:1px solid ${BORDER};box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);transition:box-shadow .3s cubic-bezier(.16,1,.3,1),transform .3s cubic-bezier(.16,1,.3,1),border-color .2s ease;}
+.ov-card:hover{border-color:rgba(0,0,0,.16);box-shadow:0 6px 18px rgba(0,0,0,.05),0 18px 44px rgba(0,0,0,.08);}
+.ov-crumb{font-size:11.5px;}
+.ov-btn-outline{display:inline-flex;align-items:center;gap:6px;border:1px solid ${BORDER};background:#fff;color:#374151;border-radius:10px;padding:8px 14px;font-size:12.5px;font-weight:600;transition:all .2s cubic-bezier(.16,1,.3,1);}
+.ov-btn-outline:hover{border-color:#111;color:#111;transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.1);}
+.ov-btn-outline:active{transform:translateY(0) scale(.96);}
+.ov-btn-primary{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:8px 16px;font-size:12.5px;font-weight:700;color:#fff;background:${BLACK};box-shadow:0 9px 24px rgba(0,0,0,.18);transition:all .2s cubic-bezier(.16,1,.3,1);border:none;}
+.ov-btn-primary:hover{transform:translateY(-2px);box-shadow:0 15px 34px rgba(0,0,0,.26);}
+.ov-btn-primary:active{transform:translateY(0) scale(.96);}
+.ov-premium{position:relative;overflow:hidden;border-radius:20px;background:${BLACK};color:#fff;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 42px rgba(0,0,0,.22);transition:box-shadow .32s cubic-bezier(.16,1,.3,1),transform .32s cubic-bezier(.16,1,.3,1);}
+.ov-premium::before{content:'';position:absolute;left:12%;right:12%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);pointer-events:none;}
+.ov-premium:hover{transform:translateY(-3px);box-shadow:0 28px 60px rgba(0,0,0,.32);}
+.ov-title{font-size:11px;font-weight:700;letter-spacing:.04em;color:#111827;}
+.ov-link{font-size:11.5px;font-weight:600;color:#111;white-space:nowrap;transition:opacity .15s ease;}
+.ov-link:hover{opacity:.6;}
+.ov-divide>*+*{border-top:1px solid ${BORDER};}
+.ov-row{transition:background-color .2s ease;}
+.ov-row:hover{background:#FAFAFF;}
+.ov-chip{display:inline-flex;align-items:center;gap:5px;border-radius:9999px;border:1px solid ${BORDER};padding:4px 10px;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:${STEEL};transition:all .2s cubic-bezier(.34,1.56,.64,1);cursor:pointer;}
+.ov-chip.on{background:${BLACK};border-color:${BLACK};color:#fff;}
+.ov-chip:hover:not(.on){border-color:#111;color:#111;transform:translateY(-1px);}
+.shine-edge{position:relative;}
+.shine-edge::after{content:'';position:absolute;inset:0;padding:1px;pointer-events:none;background:linear-gradient(115deg,transparent 35%,rgba(10,10,10,.5) 50%,transparent 65%);background-size:250% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:terminal-shine-sweep 3.2s linear infinite;}
+@keyframes terminal-shine-sweep{0%{background-position:220% 0;}100%{background-position:-220% 0;}}
+.ov-icon-pop{transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
+.group:hover .ov-icon-pop,.ov-row:hover .ov-icon-pop,.ov-premium:hover .ov-icon-pop{transform:scale(1.1) rotate(-3deg);}
+.ov-avatar{transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
+.ov-row:hover .ov-avatar{transform:scale(1.08);}
+.ov-badge-live{animation:ov-badge-breathe 2.4s ease-in-out infinite;}
+@keyframes ov-badge-breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+.ov-pipeline{background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 1px 2px rgba(0,0,0,.025),0 18px 46px rgba(0,0,0,.075);}
+.ov-pipeline::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 92% -14%,rgba(0,0,0,.04),transparent 32%);}
+.ov-pipeline-stage{scroll-snap-align:start;transition:background-color .25s ease,transform .3s cubic-bezier(.16,1,.3,1);}
+.ov-pipeline-stage:hover{background:rgba(0,0,0,.02);transform:translateY(-2px);}
+.ov-flow-node{animation:ov-flow-pulse 3.2s ease-in-out infinite;}
+.ov-flow-line{position:absolute;left:34px;right:-18px;top:50%;height:1px;background:linear-gradient(90deg,rgba(0,0,0,.38),rgba(0,0,0,.09));overflow:hidden;}
+.ov-flow-line::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(10,10,10,.7) 48%,transparent 100%);background-size:35% 100%;background-repeat:no-repeat;animation:ov-flow-travel 2.8s linear infinite;}
+@keyframes ov-flow-pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,0,0,.1);}50%{box-shadow:0 0 0 6px rgba(0,0,0,0);}}
+@keyframes ov-flow-travel{0%{background-position:-55% 0;}100%{background-position:155% 0;}}
+@media (prefers-reduced-motion:reduce){.ov-flow-node,.ov-flow-line::after{animation:none!important;}}
+.cal-day{border:1px solid transparent;color:#374151;transition:all .2s cubic-bezier(.34,1.56,.64,1);}
+.cal-day:hover{background:#F9FAFB;transform:scale(1.06);}
+.cal-today{border:1.5px solid ${BLACK};color:${BLACK};font-weight:800;}
+.cal-selected{background:${BLACK};color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:all .3s cubic-bezier(.34,1.56,.64,1);}
+.cal-nav-btn{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1px solid ${BORDER};color:${STEEL};transition:all .2s cubic-bezier(.16,1,.3,1);flex-shrink:0;}
+.cal-nav-btn:hover{border-color:${BLACK};color:${BLACK};transform:translateY(-1px);box-shadow:0 4px 10px rgba(16,24,40,.06);}
+.cal-nav-btn:active{transform:scale(.94);}
+.cal-weekday{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${SILVER};text-align:center;}
 `;
 
 function timeAgo(ts: string | null | undefined): string {
@@ -65,103 +99,245 @@ function timeAgo(ts: string | null | undefined): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+const fmtMoney = (n: number, decimals = 2) =>
+  Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const n = parseInt(h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
 const BRIEF_PILL: Record<string, { bg: string; fg: string }> = {
-  in_progress:            { bg: 'rgba(78,138,116,0.12)', fg: LUX.viridian },
-  consultation_scheduled: { bg: 'rgba(142,124,176,0.12)', fg: LUX.violet },
-  reviewing:              { bg: 'rgba(76,127,163,0.12)', fg: LUX.steel },
-  submitted:              { bg: 'rgba(201,169,98,0.14)', fg: LUX.goldDeep },
+  in_progress:            { bg: 'rgba(22,163,74,0.08)', fg: ACCENTS.green },
+  consultation_scheduled: { bg: 'rgba(59,110,145,0.08)', fg: ACCENTS.indigo },
+  reviewing:              { bg: 'rgba(6,182,212,0.08)', fg: '#06B6D4' },
+  submitted:              { bg: 'rgba(217,119,6,0.10)', fg: ACCENTS.gold },
+};
+
+const CHECK_STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
+  cleared:  { bg: 'rgba(22,163,74,0.08)', fg: ACCENTS.green },
+  pending:  { bg: 'rgba(217,119,6,0.10)', fg: ACCENTS.gold },
+  voided:   { bg: 'rgba(107,114,128,0.10)', fg: STEEL },
 };
 
 export interface OverviewProps {
   adminName: string;
   clients: any[];
   briefs: Record<string, any>;
+  allMsgs: Record<string, any[]>;
   allDocs: Record<string, any[]>;
   allMeetings: Record<string, any[]>;
   contactForms: any[];
   startBriefs: any[];
   helpRequests: any[];
-  /** Houston Enterprise finance projects only — entity-scoped upstream. */
   projects: any[];
+  checks: any[];
+  transactions: any[];
   onSelectTab: (tab: string) => void;
   onOpenClient: (clientId: string, subTab?: string) => void;
   onRefresh: () => void;
   onOpenFinance: () => void;
+  onOpenLedgerEntry: (kind: 'income' | 'expense' | 'check', id: string) => void;
+  onSaveMeeting: (input: {
+    id?: string; clientId: string; type: string; date: string; time: string;
+    format: 'In-Person' | 'Video Call' | 'Phone Call';
+    status: 'requested' | 'confirmed' | 'completed' | 'cancelled';
+    notes: string;
+  }) => Promise<void>;
+  onDeleteMeeting: (clientId: string, meetingId: string, meetingType: string) => Promise<void>;
+  onConfirmMeeting: (clientId: string, meetingId: string, meetingType: string, date: string, time: string) => Promise<void>;
+  onCancelMeeting: (clientId: string, meetingId: string, meetingType: string) => Promise<void>;
   onOpenMobileNav: () => void;
   onViewDocument: (url: string) => void;
 }
 
-/* ══ Luxury pipeline donut ══ */
-function PipelineDonut({ slices, onSelect }: {
-  slices: { label: string; value: number; color: string; tab: string }[];
-  onSelect: (tab: string) => void;
-}) {
-  const [active, setActive] = useState<number | null>(null);
-  const data = slices.filter(s => s.value > 0);
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const shown = active !== null && data[active] ? data[active] : null;
-
-  const activeShape = (props: any) => (
-    <g>
-      <Sector cx={props.cx} cy={props.cy} innerRadius={props.innerRadius - 1.5} outerRadius={props.outerRadius + 5}
-        startAngle={props.startAngle} endAngle={props.endAngle} fill={props.fill} cornerRadius={6} />
-      <Sector cx={props.cx} cy={props.cy} innerRadius={props.outerRadius + 8} outerRadius={props.outerRadius + 9.5}
-        startAngle={props.startAngle} endAngle={props.endAngle} fill={props.fill} opacity={0.35} />
-    </g>
+/* ── Enterprise‑grade chart tooltip — detailed, multi-layered ── */
+function FinanceTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const income    = payload.find((p: any) => p.dataKey === 'income')?.value ?? 0;
+  const expense   = payload.find((p: any) => p.dataKey === 'expense')?.value ?? 0;
+  const retainage = payload.find((p: any) => p.dataKey === 'retainage')?.value ?? 0;
+  const net       = income - expense;
+  const margin    = income > 0 ? ((net / income) * 100) : null;
+  return (
+    <div className="rounded-2xl border px-4 py-3 shadow-2xl min-w-[190px]" style={{ borderColor: BORDER, background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(8px)' }}>
+      <div className="flex items-center justify-between gap-4 mb-2 pb-2 border-b" style={{ borderColor: BORDER }}>
+        <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: SILVER }}>{label}</span>
+        <span className="text-[7px] font-bold uppercase tracking-[0.16em] bg-gray-100 px-2 py-0.5 rounded" style={{ color: STEEL }}>Click to drill</span>
+      </div>
+      <div className="flex items-center justify-between gap-4 py-1">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#10B981' }} />
+          <span className="text-[10.5px] font-medium" style={{ color: STEEL }}>Revenue</span>
+        </div>
+        <span className="text-[11px] font-bold tabular-nums" style={{ color: '#10B981' }}>+${income.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+      </div>
+      <div className="flex items-center justify-between gap-4 py-1">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#EF4444' }} />
+          <span className="text-[10.5px] font-medium" style={{ color: STEEL }}>Expenses</span>
+        </div>
+        <span className="text-[11px] font-bold tabular-nums" style={{ color: '#EF4444' }}>-${expense.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+      </div>
+      {retainage > 0 && (
+        <div className="flex items-center justify-between gap-4 py-1">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#F59E0B' }} />
+            <span className="text-[10.5px] font-medium" style={{ color: STEEL }}>Retainage</span>
+          </div>
+          <span className="text-[11px] font-bold tabular-nums" style={{ color: '#F59E0B' }}>${retainage.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-4 mt-2 pt-2 border-t" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <span className="w-5 h-[2px] rounded-full" style={{ backgroundColor: NET_COLOR }} />
+          <span className="text-[10.5px] font-bold" style={{ color: BLACK }}>Net</span>
+        </div>
+        <span className="text-[11px] font-bold tabular-nums" style={{ color: net >= 0 ? '#10B981' : '#EF4444' }}>
+          {net < 0 ? '-' : '+'}${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        </span>
+      </div>
+      {margin !== null && (
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <span className="text-[10.5px] font-medium" style={{ color: STEEL }}>Margin</span>
+          <span className="text-[10.5px] font-bold tabular-nums" style={{ color: margin >= 0 ? '#10B981' : '#EF4444' }}>{margin.toFixed(1)}%</span>
+        </div>
+      )}
+    </div>
   );
+}
 
-  if (total === 0) {
-    return <div className="flex-1 flex items-center justify-center py-8 text-[11.5px] text-muted-foreground">No pipeline activity yet.</div>;
-  }
+/* ── Multi‑layered finance chart — revenue/expense areas + net & retainage lines, with click‑to‑toggle legend ── */
+const FIN_SERIES = [
+  { key: 'income',    label: 'Revenue',   color: '#10B981' },
+  { key: 'expense',   label: 'Expenses',  color: '#EF4444' },
+  { key: 'net',       label: 'Net',       color: NET_COLOR },
+  { key: 'retainage', label: 'Retainage', color: RETAINAGE_COLOR },
+] as const;
+
+function FinanceChart({ data, timeframe, onTimeframeChange }: {
+  data: { label: string; income: number; expense: number; retainage: number; net: number }[];
+  timeframe: string;
+  onTimeframeChange: (t: string) => void;
+}) {
+  const TIMEFRAMES = ['1D', '1W', '1M', '3M', '6M', '1Y'];
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const toggleSeries = (key: string) => setHiddenSeries(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  /* Scroll‑to‑zoom — hovering the chart and scrolling compresses (fewer, wider‑spaced points)
+     or widens (more, denser points) the visible window, independent of the 1D…1Y buckets.
+     Uses a native listener (not React's onWheel) so preventDefault actually stops page scroll. */
+  const MIN_WINDOW = 4;
+  const [windowSize, setWindowSize] = useState<number | null>(null);
+  useEffect(() => { setWindowSize(null); }, [data.length, timeframe]);
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = chartWrapRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setWindowSize(prev => {
+        const current = prev ?? data.length;
+        const step = Math.max(1, Math.round(current * 0.15));
+        const next = current + (e.deltaY < 0 ? -step : step);
+        return Math.min(data.length, Math.max(MIN_WINDOW, next));
+      });
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [data.length]);
+  const visibleData = useMemo(() => data.slice(-(windowSize ?? data.length)), [data, windowSize]);
+  const isZoomed = windowSize !== null && windowSize < data.length;
+  const hasRetainage = data.some(d => Math.abs(d.retainage) > 0);
 
   return (
-    <div className="flex items-center gap-4 px-4 py-3 flex-1 min-h-0">
-      <div className="relative shrink-0" style={{ width: 148, height: 148 }}>
-        <ResponsiveContainer width={148} height={148}>
-          <PieChart>
-            <defs>
-              {data.map((s, i) => (
-                <linearGradient key={i} id={`pipe-g-${i}`} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={s.color} stopOpacity={1} />
-                  <stop offset="100%" stopColor={s.color} stopOpacity={0.62} />
-                </linearGradient>
-              ))}
-            </defs>
-            <Pie
-              data={data} dataKey="value" nameKey="label" cx="50%" cy="50%"
-              innerRadius={49} outerRadius={64} paddingAngle={data.length > 1 ? 3.5 : 0}
-              cornerRadius={6} stroke="none" isAnimationActive
-              activeIndex={active ?? undefined} activeShape={activeShape}
-              onMouseEnter={(_, i) => setActive(i)} onMouseLeave={() => setActive(null)}
-              onClick={(_, i) => data[i] && onSelect(data[i].tab)}
-              style={{ cursor: 'pointer' }}
-            >
-              {data.map((s, i) => <Cell key={i} fill={`url(#pipe-g-${i})`} />)}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="text-[22px] font-bold font-mono-tab leading-none" style={{ color: shown ? shown.color : undefined }}>
-            {shown ? shown.value : total}
-          </div>
-          <div className="text-[7.5px] uppercase tracking-[0.18em] text-muted-foreground font-bold mt-1 text-center px-3 leading-tight">
-            {shown ? shown.label : 'Total Pipeline'}
-          </div>
-        </div>
+    <div className="relative flex flex-col h-full">
+      {/* Time‑range selector — positioned top‑right of the chart area */}
+      <div className="relative flex items-center justify-end gap-1.5 mb-1 flex-wrap">
+        {isZoomed && (
+          <button
+            onClick={() => setWindowSize(null)}
+            className="flex items-center gap-1 px-2 py-1 text-[8.5px] font-bold uppercase tracking-[0.06em] rounded-md text-gray-500 hover:text-black hover:bg-gray-100 transition-colors"
+          >
+            <ZoomOut className="w-2.5 h-2.5" strokeWidth={2.5} /> Reset zoom
+          </button>
+        )}
+        {TIMEFRAMES.map(t => (
+          <button
+            key={t}
+            onClick={() => onTimeframeChange(t)}
+            className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em] rounded-md transition-all duration-150 ${
+              timeframe === t
+                ? 'bg-black text-white shadow-[0_2px_8px_rgba(0,0,0,.15)]'
+                : 'text-gray-400 hover:text-black hover:bg-gray-100'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
-      <div className="flex-1 min-w-0 space-y-1">
-        {data.map((s, i) => {
-          const pct = (s.value / total) * 100;
-          const on = active === i;
+      <div ref={chartWrapRef} className="relative flex-1 min-h-[150px]" title="Scroll to zoom the timeline">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={visibleData} margin={{ top: 6, right: 8, left: 2, bottom: 2 }}>
+            <defs>
+              <linearGradient id="fin-income-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10B981" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#10B981" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="fin-expense-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#EF4444" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke={BORDER} strokeDasharray="3 3" strokeOpacity={0.6} />
+            <XAxis dataKey="label" tick={{ fontSize: 8.5, fill: SILVER, fontWeight: 600 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            {/* One shared currency scale for every series — each line's height is a true, directly comparable reading, never a rescaled illusion */}
+            <YAxis hide domain={['auto', 'auto']} />
+            <Tooltip content={<FinanceTooltip />} cursor={{ stroke: BORDER, strokeDasharray: '3 3', strokeOpacity: 0.7 }} />
+            <ReferenceLine y={0} stroke={SILVER} strokeOpacity={0.6} strokeDasharray="2 3" />
+            {!hiddenSeries.has('income') && (
+              <Area type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} fill="url(#fin-income-fill)"
+                dot={{ r: 2.5, strokeWidth: 0, fill: '#10B981' }} isAnimationActive animationDuration={900} animationEasing="ease-out"
+                activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+            )}
+            {!hiddenSeries.has('expense') && (
+              <Area type="monotone" dataKey="expense" stroke="#EF4444" strokeWidth={2} fill="url(#fin-expense-fill)"
+                dot={{ r: 2.5, strokeWidth: 0, fill: '#EF4444' }} isAnimationActive animationDuration={900} animationEasing="ease-out"
+                activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+            )}
+            {!hiddenSeries.has('net') && (
+              <Line type="monotone" dataKey="net" stroke={NET_COLOR} strokeWidth={2.5}
+                dot={{ r: 2.5, strokeWidth: 0, fill: NET_COLOR }} isAnimationActive animationDuration={900} animationEasing="ease-out"
+                activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+            )}
+            {!hiddenSeries.has('retainage') && (
+              <Line type="monotone" dataKey="retainage" stroke={RETAINAGE_COLOR} strokeWidth={1.75} strokeDasharray="4 3"
+                dot={{ r: 2.5, strokeWidth: 0, fill: RETAINAGE_COLOR }} isAnimationActive animationDuration={900} animationEasing="ease-out"
+                activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff' }} />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Interactive legend — click any series to isolate/hide it */}
+      <div className="flex items-center justify-center gap-3 sm:gap-5 mt-2.5 pt-2.5 border-t flex-wrap" style={{ borderColor: BORDER }}>
+        {FIN_SERIES.map(item => {
+          const off = hiddenSeries.has(item.key);
+          const faint = item.key === 'retainage' && !hasRetainage;
           return (
-            <button key={s.label} onClick={() => onSelect(s.tab)}
-              onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}
-              className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors"
-              style={{ backgroundColor: on ? `${s.color}12` : 'transparent' }}>
-              <span className="w-2 h-2 rounded-full shrink-0 transition-transform" style={{ backgroundColor: s.color, transform: on ? 'scale(1.35)' : undefined }} />
-              <span className="flex-1 min-w-0 text-[10.5px] font-medium text-muted-foreground truncate">{s.label}</span>
-              <span className="text-[11px] font-bold font-mono-tab text-foreground">{s.value}</span>
-              <span className="text-[9px] font-bold font-mono-tab w-9 text-right shrink-0" style={{ color: s.color }}>{pct.toFixed(0)}%</span>
+            <button
+              key={item.key}
+              onClick={() => toggleSeries(item.key)}
+              className="flex items-center gap-1.5 transition-opacity duration-150"
+              style={{ opacity: off ? 0.3 : faint ? 0.55 : 1 }}
+              title={faint ? 'No retainage held in this period' : `Toggle ${item.label}`}
+            >
+              <span className="w-2.5 h-[3px] rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="text-[8.5px] font-semibold uppercase tracking-[0.04em]" style={{ color: STEEL, textDecoration: off ? 'line-through' : 'none' }}>{item.label}</span>
             </button>
           );
         })}
@@ -170,447 +346,635 @@ function PipelineDonut({ slices, onSelect }: {
   );
 }
 
-/* ══ Activity chart tooltip ══ */
-function ActivityTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + (p.value ?? 0), 0);
+/* ── Bullet graph row — measure (contract value) against a target (budget), with qualitative bands ── */
+function BulletBar({ label, sub, value, target, max, color }: {
+  label: string; sub?: string | null; value: number; target: number; max: number; color: string;
+}) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  const targetPct = target > 0 && max > 0 ? Math.min(100, (target / max) * 100) : null;
   return (
-    <div className="rounded-xl border border-border bg-background px-3 py-2.5 shadow-xl min-w-[140px]">
-      <div className="text-[9px] uppercase tracking-[0.16em] font-black text-muted-foreground mb-1.5">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
-          <span className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: p.stroke }} />{p.dataKey}
-          </span>
-          <span className="text-[11px] font-bold font-mono-tab text-foreground">{p.value}</span>
-        </div>
-      ))}
-      <div className="flex items-center justify-between gap-4 mt-1 pt-1 border-t border-border">
-        <span className="text-[9px] uppercase tracking-[0.12em] font-bold text-muted-foreground">Total</span>
-        <span className="text-[11px] font-bold font-mono-tab" style={{ color: AC }}>{total}</span>
+    <div className="flex items-center gap-2.5">
+      <div className="w-[92px] shrink-0 min-w-0">
+        <div className="text-[9.5px] font-bold text-black truncate">{label}</div>
+        {sub && <div className="text-[8px] font-semibold truncate" style={{ color: sub.startsWith('+') ? ACCENTS.green : ACCENTS.red }}>{sub}</div>}
       </div>
+      <div className="relative flex-1 h-4">
+        {/* Qualitative bands — 60 / 85 / 100% reference zones */}
+        <div className="absolute inset-0 top-1 bottom-1 rounded-sm overflow-hidden flex">
+          <div className="h-full" style={{ width: '60%', background: '#EEF0F2' }} />
+          <div className="h-full" style={{ width: '25%', background: '#E5E7EB' }} />
+          <div className="h-full" style={{ width: '15%', background: '#DADDE1' }} />
+        </div>
+        {/* Measure bar */}
+        <div className="absolute top-[5px] bottom-[5px] left-0 rounded-sm transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
+        {/* Target marker (budget) */}
+        {targetPct !== null && (
+          <div className="absolute top-0 bottom-0 w-[2px]" style={{ left: `calc(${targetPct}% - 1px)`, background: BLACK }} />
+        )}
+      </div>
+      <div className="w-[58px] shrink-0 text-right text-[9.5px] font-bold tabular-nums text-black">${fmtMoney(value, 0)}</div>
     </div>
   );
 }
 
 export function OverviewDashboard({
-  adminName, clients, briefs, allDocs, allMeetings, contactForms, startBriefs,
-  helpRequests, projects,
-  onSelectTab, onOpenClient, onRefresh, onOpenFinance, onOpenMobileNav, onViewDocument,
+  adminName, clients, briefs, allMsgs, allDocs, allMeetings, contactForms, startBriefs,
+  helpRequests, projects, checks, transactions,
+  onSelectTab, onOpenClient, onRefresh, onOpenFinance, onOpenLedgerEntry,
+  onSaveMeeting, onDeleteMeeting, onConfirmMeeting, onCancelMeeting,
+  onOpenMobileNav, onViewDocument,
 }: OverviewProps) {
-  const [range, setRange] = useState<7 | 14 | 30>(7);
-  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const [timeframe, setTimeframe] = useState('1Y');
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense' | 'check'>('all');
+  // Color picker removed — card uses fixed black/white aesthetic
 
-  /* ── Derived data (Houston Enterprise scope) ── */
+  /* ── Derived data ── */
   const pendingApprovals = clients.filter((c: any) => c.status === 'pending_approval');
-  const approvedClients  = clients.filter((c: any) => c.status === 'approved' || !c.status);
   const flatDocs  = Object.entries(allDocs).flatMap(([cId, ds]) => (ds ?? []).map((d: any) => ({ ...d, clientId: cId })));
   const flatMeets = Object.entries(allMeetings).flatMap(([cId, ms]) => (ms ?? []).map((m: any) => ({ ...m, clientId: cId })));
   const pendingDocs  = flatDocs.filter((d: any) => d.status === 'uploaded');
   const pendingMeets = flatMeets.filter((m: any) => m.status === 'requested');
   const openHelp = helpRequests.filter((r: any) => r.status !== 'resolved').length;
   const submittedBriefs = Object.values(briefs).filter((b: any) => b.status === 'submitted').length;
-  const queueCount = pendingApprovals.length + pendingDocs.length + pendingMeets.length;
   const firstName = adminName.split(' ')[0];
-  const briefsTotal = startBriefs.length + Object.keys(briefs).length;
   const activeProjects = projects.filter((p: any) => p.status === 'active').length;
-
-  /* Real insight computations */
-  const DAY = 86400000;
-  const within = (ts: any, days: number) => ts && Date.now() - new Date(ts).getTime() < days * DAY;
-  const newClients30 = approvedClients.filter((c: any) => within(c.createdAt ?? c.created_at, 30)).length;
-  const newBriefs7 = startBriefs.filter((s: any) => within(s.submitted_at ?? s.submittedAt, 7)).length
-    + Object.values(briefs).filter((b: any) => within(b.submittedAt ?? b.submitted_at, 7)).length;
-  const nextMeeting = flatMeets
-    .filter((m: any) => (m.status === 'confirmed' || m.status === 'requested') && m.date && new Date(m.date + 'T23:59:59') >= new Date())
-    .sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)))[0];
-
-  /* ── Stat cards (finance proj-intel style, admin insights) ── */
-  const STATS = [
-    { label: 'Pending Approvals', value: pendingApprovals.length, icon: ShieldCheck, color: LUX.gold,
-      sub: pendingApprovals.length > 0 ? 'Action required' : 'Queue clear',
-      urgent: pendingApprovals.length > 0, foot: 'Account access', tab: 'approvals' },
-    { label: 'Active Clients', value: approvedClients.length, icon: Users, color: LUX.steel,
-      sub: newClients30 > 0 ? `+${newClients30} in 30 days` : 'No new this month', foot: 'Portal accounts', tab: 'clients' },
-    { label: 'Project Briefs', value: briefsTotal, icon: ClipboardList, color: LUX.copper,
-      sub: newBriefs7 > 0 ? `${newBriefs7} new this week` : 'None this week', foot: 'Web + portal', tab: 'leads' },
-    { label: 'Projects', value: projects.length, icon: FolderKanban, color: LUX.viridian,
-      sub: `${activeProjects} active now`, foot: 'Houston Enterprise', tab: 'projects' },
-    { label: 'Pending Documents', value: pendingDocs.length, icon: FileCheck, color: LUX.violet,
-      sub: pendingDocs.length > 0 ? 'Awaiting review' : 'Queue clear', foot: 'Client uploads', tab: 'documents' },
-    { label: 'Meetings', value: pendingMeets.length, icon: Calendar, color: LUX.rose,
-      sub: nextMeeting ? `Next ${new Date(nextMeeting.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'None scheduled',
-      foot: 'Requests pending', tab: 'meetings' },
-  ];
-
-  /* ── Pipeline slices — HE only, matches the card taxonomy ── */
-  const pipelineSlices = [
-    { label: 'Portal Clients',   value: approvedClients.length,   color: LUX.steel,    tab: 'clients' },
-    { label: 'Project Briefs',   value: briefsTotal,              color: LUX.gold,     tab: 'leads' },
-    { label: 'Account Requests', value: pendingApprovals.length,  color: LUX.copper,   tab: 'approvals' },
-    { label: 'Active Projects',  value: projects.length,          color: LUX.viridian, tab: 'projects' },
-  ];
-
-  /* ── Activity series (daily, real timestamps) ── */
-  const activityData = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const mk = () => new Array(range).fill(0);
-    const series: Record<string, number[]> = { Leads: mk(), Clients: mk(), Documents: mk(), Meetings: mk() };
-    const bump = (arr: number[], ts: string | null | undefined) => {
-      if (!ts) return;
-      const t = new Date(ts); if (isNaN(t.getTime())) return;
-      t.setHours(0, 0, 0, 0);
-      const idx = Math.floor((t.getTime() - today.getTime()) / DAY) + (range - 1);
-      if (idx >= 0 && idx < range) arr[idx]++;
+  const totalProjects = projects.length;
+  const totalLeads = startBriefs.length + contactForms.length;
+  const lifecycleCounts = useMemo(() => {
+    const rows = [...startBriefs, ...contactForms];
+    const count = (status: string) => rows.filter((lead: any) => (lead.lead_status || 'lead_capture') === status).length;
+    return {
+      lead_capture: count('lead_capture'), site_audit: count('site_audit'),
+      estimation: count('estimation'), client_review: count('client_review'),
+      awarded: count('awarded'), lost: count('lost'), contracting: count('contracting'),
     };
-    startBriefs.forEach((s: any) => bump(series.Leads, s.submitted_at ?? s.submittedAt));
-    contactForms.forEach((f: any) => bump(series.Leads, f.created_at));
-    clients.forEach((c: any) => bump(series.Clients, c.createdAt ?? c.created_at));
-    flatDocs.forEach((d: any) => bump(series.Documents, d.uploadedAt ?? d.uploaded_at));
-    flatMeets.forEach((m: any) => bump(series.Meetings, m.createdAt ?? m.created_at));
-    return Array.from({ length: range }, (_, i) => {
-      const d = new Date(today.getTime() - (range - 1 - i) * DAY);
-      return {
-        name: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        Leads: series.Leads[i], Clients: series.Clients[i],
-        Documents: series.Documents[i], Meetings: series.Meetings[i],
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, clients, startBriefs, contactForms, allDocs, allMeetings]);
+  }, [startBriefs, contactForms]);
+  const clientName = (id: string) => clients.find((c: any) => c.id === id)?.name ?? 'Client';
 
-  const CHART_SERIES = [
-    { key: 'Leads',     color: LUX.viridian },
-    { key: 'Clients',   color: LUX.steel },
-    { key: 'Documents', color: LUX.violet },
-    { key: 'Meetings',  color: LUX.gold },
-  ];
-  const toggleSeries = (key: string) => setHiddenSeries(prev => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else if (next.size < CHART_SERIES.length - 1) next.add(key);
-    return next;
+  const totalMessages = Object.values(allMsgs).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
+  const totalNotifications = pendingApprovals.length + pendingDocs.length + pendingMeets.length + openHelp + submittedBriefs;
+
+  /* ── Time-scoped finance data ── */
+  const now = Date.now();
+  const DAY = 86400000;
+  const timeframeDays = timeframe === '1D' ? 1 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : timeframe === '6M' ? 180 : 365;
+  const bucketCount = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : timeframe === '3M' ? 12 : timeframe === '6M' ? 24 : 12;
+
+  const chartData = useMemo(() => {
+    const buckets = new Array(bucketCount).fill(0).map(() => ({ income: 0, expense: 0 }));
+    const bucketMs = (timeframeDays * DAY) / bucketCount;
+
+    transactions.forEach((t: any) => {
+      const ts = new Date(t.transaction_date).getTime();
+      if (isNaN(ts) || ts < now - timeframeDays * DAY || ts > now) return;
+      const idx = Math.min(bucketCount - 1, Math.floor((now - ts) / bucketMs));
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income') buckets[idx].income += amt;
+      else buckets[idx].expense += amt;
+    });
+
+    checks.forEach((c: any) => {
+      const ts = new Date(c.issue_date).getTime();
+      if (isNaN(ts) || ts < now - timeframeDays * DAY || ts > now) return;
+      const idx = Math.min(bucketCount - 1, Math.floor((now - ts) / bucketMs));
+      buckets[idx].expense += Number(c.amount) || 0;
+    });
+
+    // Reverse so oldest is first, and format labels
+    const reversed = buckets.reverse();
+    return reversed.map((b, i) => {
+      const bucketEnd = new Date(now - (bucketCount - 1 - i) * bucketMs);
+      const label = timeframe === '1D'
+        ? bucketEnd.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+        : timeframe === '1W' || timeframe === '1M'
+          ? bucketEnd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+          : bucketEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const retainageForBucket = checks.filter((c: any) => {
+        const ts = new Date(c.issue_date).getTime();
+        if (isNaN(ts) || ts < now - timeframeDays * DAY || ts > now) return false;
+        const idx = Math.min(bucketCount - 1, Math.floor((now - ts) / bucketMs));
+        return idx === bucketCount - 1 - i;
+      }).reduce((sum: number, c: any) => sum + (Number(c.retainage_held) || 0), 0);
+      return { label, income: b.income, expense: b.expense, retainage: retainageForBucket, net: b.income - b.expense };
+    });
+  }, [transactions, checks, timeframe, timeframeDays, bucketCount, now]);
+
+  /* ── Finance summary totals for the selected timeframe ── */
+  const periodTotalRevenue  = chartData.reduce((s, b) => s + b.income, 0);
+  const periodTotalExpenses = chartData.reduce((s, b) => s + b.expense, 0);
+  const periodNet           = periodTotalRevenue - periodTotalExpenses;
+
+  /* ── Checks ── */
+  const outstandingChecks = checks.filter((c: any) => c.status === 'pending').length;
+  const openChecksValue = checks.filter((c: any) => c.status === 'pending').reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0);
+
+  const activeContractValue = projects
+    .filter((p: any) => p.status === 'active')
+    .reduce((s: number, p: any) => s + (Number(p.current_contract_value) || 0), 0);
+
+  /* ── Contract vs. budget bullet graph — real per‑project figures, largest active contracts first ── */
+  const contractBullets = useMemo(() => {
+    return projects
+      .filter((p: any) => p.status === 'active' && Number(p.current_contract_value) > 0)
+      .slice()
+      .sort((a: any, b: any) => Number(b.current_contract_value) - Number(a.current_contract_value))
+      .slice(0, 4)
+      .map((p: any) => {
+        const contract = Number(p.current_contract_value) || 0;
+        const budget = Number(p.budget) || 0;
+        const marginPct = budget > 0 ? ((contract - budget) / budget) * 100 : null;
+        return { id: p.id, name: p.name || p.code || 'Project', contract, budget, marginPct };
+      });
+  }, [projects]);
+  const bulletScaleMax = useMemo(() => {
+    const vals = contractBullets.flatMap(b => [b.contract, b.budget]);
+    return Math.max(...vals, 1) * 1.15;
+  }, [contractBullets]);
+  const totalEstCostToComplete = useMemo(() => projects
+    .filter((p: any) => p.status === 'active')
+    .reduce((s: number, p: any) => s + (Number(p.estimated_cost_to_complete) || 0), 0), [projects]);
+  const PROJECT_COLORS = [BLACK, ACCENTS.indigo, ACCENTS.gold, STEEL];
+
+  /* ── Luxury bento items — monochrome, minimal ── */
+  const bentoItems = useMemo(() => [
+    {
+      key: 'projects',
+      icon: FolderKanban,
+      label: 'Active Projects',
+      value: `${activeProjects}`,
+      sub: `${totalProjects} total`,
+      accent: BLACK,
+      detail: `$${fmtMoney(activeContractValue, 0)} contract value`,
+      onClick: () => onSelectTab('projects'),
+    },
+    {
+      key: 'meetings',
+      icon: Calendar,
+      label: 'Meetings',
+      value: `${flatMeets.length}`,
+      sub: `${flatMeets.filter(m => m.status === 'confirmed').length} upcoming`,
+      accent: ACCENTS.indigo,
+      detail: `${pendingMeets.length} pending confirmation`,
+      onClick: () => onSelectTab('meetings'),
+    },
+    {
+      key: 'messages',
+      icon: MessageSquare,
+      label: 'Messages',
+      value: `${totalMessages}`,
+      sub: `${Object.keys(allMsgs).length} conversations`,
+      accent: ACCENTS.gold,
+      detail: `${Math.ceil(totalMessages / Math.max(1, Object.keys(allMsgs).length))} avg per thread`,
+      onClick: () => onSelectTab('clients'),
+    },
+    {
+      key: 'notifications',
+      icon: Bell,
+      label: 'Notifications',
+      value: `${totalNotifications}`,
+      sub: totalNotifications > 0 ? `${openHelp} help · ${pendingApprovals.length} approvals` : 'All clear',
+      accent: totalNotifications > 0 ? ACCENTS.red : ACCENTS.green,
+      detail: totalNotifications > 0 ? 'Requires attention' : 'No pending items',
+      onClick: () => onSelectTab('notifications'),
+    },
+  ], [activeProjects, totalProjects, activeContractValue, flatMeets.length, pendingMeets.length, totalMessages, allMsgs, totalNotifications, openHelp, pendingApprovals.length, onSelectTab]);
+
+  /* ── Ledger feed ── */
+  const ledgerFeed = useMemo(() => {
+    const rows: { id: string; rawId: string; kind: 'income' | 'expense' | 'check'; label: string; amount: number; status?: string; ts: string }[] = [];
+    transactions.forEach((t: any) => rows.push({
+      id: `t-${t.id}`, rawId: t.id, kind: t.type === 'income' ? 'income' : 'expense',
+      label: t.description || t.category || (t.type === 'income' ? 'Income' : 'Expense'),
+      amount: Number(t.amount) || 0, status: t.status, ts: t.transaction_date,
+    }));
+    checks.forEach((c: any) => rows.push({
+      id: `c-${c.id}`, rawId: c.id, kind: 'check', label: `Check #${c.check_number ?? '—'} · ${c.payee_name ?? 'Payee'}`,
+      amount: Number(c.amount) || 0, status: c.status, ts: c.issue_date,
+    }));
+    return rows.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  }, [transactions, checks]);
+  const filteredLedger = ledgerFeed.filter(r => {
+    if (ledgerFilter !== 'all' && r.kind !== ledgerFilter) return false;
+    return true;
   });
+  const ledgerPagination = usePagination(filteredLedger, LEDGER_PAGE_SIZE, ledgerFilter);
+
+  /* ── Calendar ── */
+  const calendarMeetings: CalendarMeeting[] = useMemo(() => flatMeets.map((m: any) => ({
+    id: m.id, clientId: m.clientId, clientName: clientName(m.clientId),
+    type: m.type, date: m.date, time: m.time, format: m.format, status: m.status, notes: m.notes ?? '',
+  })), [flatMeets, clients]);
+  const clientOptions = useMemo(() => clients
+    .map((c: any) => ({ id: c.id, name: c.name ?? 'Client' }))
+    .sort((a: any, b: any) => a.name.localeCompare(b.name)), [clients]);
 
   /* ── Tasks ── */
   const tasks = [
-    ...(pendingApprovals.length > 0 ? [{ id: 'approvals', icon: ShieldCheck, color: LUX.gold, title: `${pendingApprovals.length} account application${pendingApprovals.length > 1 ? 's' : ''}`, sub: 'Waiting for review', action: 'Review', tab: 'approvals' }] : []),
-    ...(pendingDocs.length > 0 ? [{ id: 'docs', icon: FileCheck, color: LUX.violet, title: 'Verify client documents', sub: `${pendingDocs.length} pending review`, action: 'Review', tab: 'documents' }] : []),
-    ...(submittedBriefs > 0 ? [{ id: 'briefs', icon: ClipboardList, color: LUX.copper, title: 'Review project briefs', sub: `${submittedBriefs} submitted`, action: 'View', tab: 'clients' }] : []),
-    ...(pendingMeets.length > 0 ? [{ id: 'meets', icon: Calendar, color: LUX.rose, title: 'Confirm meeting requests', sub: `${pendingMeets.length} awaiting`, action: 'Schedule', tab: 'meetings' }] : []),
-    ...(openHelp > 0 ? [{ id: 'help', icon: Bell, color: LUX.steel, title: 'Respond to help requests', sub: `${openHelp} open`, action: 'Reply', tab: 'notifications' }] : []),
+    ...(pendingApprovals.length > 0 ? [{ id: 'approvals', icon: ShieldCheck, title: `${pendingApprovals.length} account application${pendingApprovals.length > 1 ? 's' : ''}`, sub: 'Waiting for review', action: 'Review', tab: 'approvals' }] : []),
+    ...(pendingDocs.length > 0 ? [{ id: 'docs', icon: FileCheck, title: 'Verify client documents', sub: `${pendingDocs.length} pending review`, action: 'Review', tab: 'documents' }] : []),
+    ...(submittedBriefs > 0 ? [{ id: 'briefs', icon: ClipboardList, title: 'Review project briefs', sub: `${submittedBriefs} submitted`, action: 'View', tab: 'clients' }] : []),
+    ...(pendingMeets.length > 0 ? [{ id: 'meets', icon: Calendar, title: 'Confirm meeting requests', sub: `${pendingMeets.length} awaiting`, action: 'Schedule', tab: 'meetings' }] : []),
+    ...(openHelp > 0 ? [{ id: 'help', icon: Bell, title: 'Respond to help requests', sub: `${openHelp} open`, action: 'Reply', tab: 'notifications' }] : []),
   ];
-  const visibleTasks = tasks.slice(0, 4);
-
-  /* ── Feeds (capped — View all opens the detailed tab) ── */
-  const activityFeed = useMemo(() => {
-    const events: { id: string; ts: string; icon: any; color: string; title: string; sub: string }[] = [];
-    clients.forEach((c: any) => {
-      const created = c.createdAt ?? c.created_at;
-      if (created) events.push({ id: `reg-${c.id}`, ts: created, icon: Users, color: LUX.steel, title: 'New account request', sub: c.name });
-      if (c.approved_at) events.push({ id: `app-${c.id}`, ts: c.approved_at, icon: UserCheck, color: LUX.viridian, title: 'Portal client approved', sub: c.name });
-    });
-    flatDocs.forEach((d: any) => {
-      const up = d.uploadedAt ?? d.uploaded_at;
-      if (up) events.push({ id: `doc-${d.id}`, ts: up, icon: FileText, color: LUX.violet, title: 'Document uploaded', sub: d.name });
-    });
-    Object.entries(briefs).forEach(([cId, b]: [string, any]) => {
-      const ts = b.submittedAt ?? b.submitted_at;
-      if (ts) events.push({ id: `brf-${cId}`, ts, icon: ClipboardList, color: LUX.gold, title: 'Project brief submitted', sub: b.type || 'Project brief' });
-    });
-    [...startBriefs, ...contactForms].forEach((l: any, i: number) => {
-      const ts = l.submitted_at ?? l.submittedAt ?? l.created_at;
-      if (ts) events.push({ id: `lead-${l.id ?? i}`, ts, icon: Inbox, color: LUX.copper, title: 'Lead captured via website', sub: l.name ? `New lead — ${l.name}` : 'New lead' });
-    });
-    flatMeets.forEach((m: any) => {
-      const ts = m.createdAt ?? m.created_at;
-      if (ts) events.push({ id: `meet-${m.id}`, ts, icon: Calendar, color: LUX.rose, title: 'Meeting requested', sub: `${m.type ?? 'Meeting'} · ${m.date ?? ''}` });
-    });
-    return events.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 4);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, briefs, allDocs, allMeetings, startBriefs, contactForms]);
+  const visibleTasks = tasks.slice(0, 3);
 
   const recentDocs = flatDocs
     .filter((d: any) => d.uploadedAt ?? d.uploaded_at)
     .sort((a: any, b: any) => new Date(b.uploadedAt ?? b.uploaded_at).getTime() - new Date(a.uploadedAt ?? a.uploaded_at).getTime())
     .slice(0, 3);
 
-  const recentClients = [...approvedClients]
-    .sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
-    .slice(0, 3);
-
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} className="space-y-3">
-      <style>{AV4_CSS}</style>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }} className="space-y-4">
+      <style>{OV_CSS}</style>
 
       {/* ══ Header ══ */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-3 min-w-0">
-          <button className="md:hidden flex items-center justify-center w-9 h-9 shrink-0 rounded-xl border border-border text-muted-foreground hover:text-accent hover:border-accent transition-colors"
-            onClick={onOpenMobileNav} aria-label="Open menu">
-            <Menu className="w-4 h-4" strokeWidth={1.7} />
-          </button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-[19px] sm:text-[23px] font-bold tracking-tight text-foreground leading-tight">
-              Welcome back, {firstName} <span aria-hidden>👋</span>
+            <div className="ov-crumb flex items-center gap-1.5 text-gray-400 font-medium mb-1">
+              <span>Admin</span><span className="text-gray-300 mx-0.5">/</span><span style={{ color: BLACK }} className="font-bold">Overview</span>
+            </div>
+            <h1 className="text-[21px] sm:text-[25px] font-bold tracking-tight text-gray-900 leading-tight">
+              Welcome back, {firstName}
             </h1>
-            <p className="text-[11.5px] text-muted-foreground mt-0.5">Houston Enterprise · client pipeline &amp; delivery, live.</p>
+            <p className="text-[12px] text-gray-500 mt-0.5">Houston Enterprise · financial command center</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="hidden lg:inline-flex av4-chiprow">
-            Live Data <span className="w-1.5 h-1.5 rounded-full bg-positive animate-pulse" />
-          </span>
-          <button onClick={() => onSelectTab('notifications')} className="hidden sm:inline-flex av4-chiprow">
-            <HelpCircle className="w-3 h-3" strokeWidth={2.2} /> {openHelp} Help
-          </button>
-          <button onClick={() => onSelectTab('approvals')} className="hidden sm:inline-flex av4-chiprow">
-            <Bell className="w-3 h-3" strokeWidth={2.2} /> {queueCount} Queue
-          </button>
-          <button onClick={onRefresh}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-background px-3 py-2 text-[11px] font-semibold text-foreground hover:border-accent/50 hover:text-accent transition-colors">
-            <RefreshCw className="w-3 h-3" strokeWidth={1.8} /> Refresh
-          </button>
-          <button onClick={onOpenFinance}
-            className="inline-flex items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[11px] font-bold text-white hover:opacity-90 transition-opacity"
-            style={{ background: `linear-gradient(135deg, ${LUX.goldDeep}, ${LUX.gold})` }}>
-            Finance <ArrowUpRight className="w-3 h-3" strokeWidth={2.4} />
-          </button>
+          <button onClick={onRefresh} className="ov-btn-outline"><RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />Refresh</button>
+          <button onClick={() => onSelectTab('changelog')} className="ov-btn-outline"><History className="w-3.5 h-3.5" strokeWidth={2} />Changelog</button>
+          <button onClick={onOpenFinance} className="ov-btn-primary">Open Finance<ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.4} /></button>
         </div>
       </div>
 
-      {/* ══ Stat intelligence rail ══ */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
-        {STATS.map(s => (
-          <button key={s.label} onClick={() => onSelectTab(s.tab)} className="av4-int av4-mobile-kpi text-left min-w-0 group overflow-hidden">
-            {/* Desktop / tablet: intel card */}
-            <div className="hidden md:block">
-              <div className="relative p-2.5 pb-2">
-                <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                  <span className="flex items-center gap-1.5 text-[8px] uppercase tracking-[0.16em] font-bold text-foreground/60 min-w-0">
-                    <s.icon className="w-3 h-3 shrink-0" style={{ color: s.color }} strokeWidth={1.9} />
-                    <span className="truncate">{s.label}</span>
-                  </span>
-                  <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground/40 group-hover:text-accent group-hover:translate-x-0.5 transition-all" strokeWidth={2.2} />
+      {/* ══ Finance hero — enterprise‑grade, time‑scoped, multi‑layered ══ */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="ov-card xl:col-span-8 p-5 sm:p-6 flex flex-col overflow-hidden h-full">
+          {/* Top row: Net Income hero + timeframe selector */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-baseline gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10B981' }} />
+                  <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: STEEL }}>Net Income</span>
                 </div>
-                <div className="text-[20px] font-bold font-mono-tab leading-tight text-foreground">{s.value}</div>
-                <div className={`text-[9px] mt-0.5 truncate ${s.urgent ? 'font-bold' : 'text-muted-foreground'}`} style={s.urgent ? { color: LUX.copper } : undefined}>{s.sub}</div>
-              </div>
-              <div className="av4-foot relative px-2.5 py-1 flex items-center justify-between gap-2">
-                <span className="text-[7.5px] uppercase tracking-[0.14em] font-bold text-foreground/45 truncate">{s.foot}</span>
-                <ArrowUpRight className="w-2.5 h-2.5 shrink-0" style={{ color: s.color }} strokeWidth={2.4} />
+                <span className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-none text-black tabular-nums">
+                  {periodNet < 0 ? '−$' : '$'}{fmtMoney(periodNet)}
+                </span>
               </div>
             </div>
-            {/* Mobile: thin horizontal row */}
-            <div className="av4-mobile-kpi-row md:hidden relative flex items-center gap-3 px-3 py-2">
-              <span className="absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="av4-mobile-kpi-icon w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.color}16` }}>
-                <s.icon className="w-3.5 h-3.5" style={{ color: s.color }} strokeWidth={1.9} />
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="av4-mobile-kpi-title block text-[11.5px] font-bold text-foreground truncate leading-tight">{s.label}</span>
-                <span className={`av4-mobile-kpi-sub block text-[9.5px] truncate ${s.urgent ? 'font-bold' : 'text-muted-foreground'}`} style={s.urgent ? { color: LUX.copper } : undefined}>{s.sub}</span>
-              </span>
-              <span className="av4-mobile-kpi-value text-[18px] font-bold font-mono-tab text-foreground shrink-0">{s.value}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" strokeWidth={2} />
+          </div>
+
+          {/* KPI stat row — clean, professional, color‑coded */}
+          <div className="grid grid-cols-3 gap-4 mt-5 pb-4 border-b" style={{ borderColor: BORDER }}>
+            {[
+              { label: 'Revenue', value: `+$${fmtMoney(periodTotalRevenue, 0)}`, color: '#10B981', dot: true },
+              { label: 'Expenses', value: `−$${fmtMoney(periodTotalExpenses, 0)}`, color: '#EF4444', dot: true },
+              { label: 'Open Checks', value: `${outstandingChecks} · $${fmtMoney(openChecksValue, 0)}`, color: '#F59E0B', dot: false },
+            ].map(stat => (
+              <div key={stat.label} className="flex flex-col">
+                <div className="flex items-center gap-1.5 mb-1">
+                  {stat.dot && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stat.color }} />}
+                  <span className="text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: STEEL }}>{stat.label}</span>
+                </div>
+                <span className="text-[14px] sm:text-[16px] font-bold tabular-nums text-black">{stat.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart with integrated timeframe selector */}
+          <div className="mt-3 flex-1 flex flex-col min-h-0">
+            <FinanceChart data={chartData} timeframe={timeframe} onTimeframeChange={setTimeframe} />
+          </div>
+        </div>
+
+        {/* Right column: Active Contract Value + compact bento */}
+        <div className="xl:col-span-4 flex flex-col gap-2.5">
+          {/* Active Contract Value — professional light theme */}
+          <motion.button 
+            onClick={() => onSelectTab('projects')}
+            className="relative overflow-hidden rounded-2xl p-5 text-left group"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #E5E7EB',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)',
+              transition: 'all .3s cubic-bezier(.16,1,.3,1)',
+            }}>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: '#6B7280' }}>Active Contract Value</span>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB' }}>
+                  <HardHat className="w-4 h-4" style={{ color: '#0A0A0A' }} strokeWidth={2} />
+                </span>
+              </div>
+              <div className="text-[24px] font-bold tracking-tight tabular-nums mb-4 text-black">${fmtMoney(activeContractValue, 0)}</div>
+
+              {/* Bullet graph — contracted value vs. cost budget, largest active projects first */}
+              <div className="mb-3 rounded-lg p-3" style={{ background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[8.5px] font-bold uppercase tracking-[0.1em]" style={{ color: '#9CA3AF' }}>Contract vs. Budget</span>
+                  <span className="flex items-center gap-1 text-[8px] font-semibold" style={{ color: '#9CA3AF' }}>
+                    <span className="w-2 h-[2px]" style={{ background: '#0A0A0A' }} /> Budget target
+                  </span>
+                </div>
+                {contractBullets.length === 0 ? (
+                  <div className="py-5 text-center text-[10px]" style={{ color: '#9CA3AF' }}>No active contracted projects yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {contractBullets.map((b, i) => (
+                      <BulletBar
+                        key={b.id}
+                        label={b.name}
+                        sub={b.marginPct !== null ? `${b.marginPct >= 0 ? '+' : ''}${b.marginPct.toFixed(0)}% margin` : null}
+                        value={b.contract}
+                        target={b.budget}
+                        max={bulletScaleMax}
+                        color={PROJECT_COLORS[i % PROJECT_COLORS.length]}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-[9px] pt-2.5 mt-1 border-t" style={{ borderColor: '#F3F4F6' }}>
+                <div>
+                  <div style={{ color: '#9CA3AF' }} className="text-[8px] font-medium mb-0.5">Entity</div>
+                  <div className="font-semibold text-black truncate">Houston Enterprise</div>
+                </div>
+                <div>
+                  <div style={{ color: '#9CA3AF' }} className="text-[8px] font-medium mb-0.5">Projects</div>
+                  <div className="font-semibold tabular-nums text-black">{activeProjects} Active</div>
+                </div>
+                <div className="text-right">
+                  <div style={{ color: '#9CA3AF' }} className="text-[8px] font-medium mb-0.5">Est. Cost to Complete</div>
+                  <div className="font-semibold tabular-nums text-black">${fmtMoney(totalEstCostToComplete, 0)}</div>
+                </div>
+              </div>
             </div>
-            <span className="absolute inset-x-0 bottom-0 h-[2px] hidden md:block" style={{ backgroundColor: s.color }} />
-          </button>
-        ))}
+          </motion.button>
+
+          {/* Modern metric cards — compact, tinted, 3-up on desktop, extra-compact on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+            {[
+              { key: 'messages', icon: MessageSquare, label: 'Messages', value: totalMessages, sub: `${Object.keys(allMsgs).length} conversations`, color: ACCENTS.indigo, tab: 'clients' },
+              { key: 'meetings', icon: Calendar, label: 'Meetings', value: flatMeets.length, sub: `${pendingMeets.length} pending`, color: ACCENTS.gold, tab: 'meetings' },
+              { key: 'notifications', icon: Bell, label: 'Notifications', value: totalNotifications, sub: totalNotifications > 0 ? 'Needs attention' : 'All clear', color: totalNotifications > 0 ? ACCENTS.red : ACCENTS.green, tab: 'notifications' },
+            ].map(card => (
+              <motion.button
+                key={card.key}
+                onClick={() => onSelectTab(card.tab)}
+                className="relative overflow-hidden rounded-xl p-2.5 sm:p-2.5 text-left group"
+                style={{
+                  background: `linear-gradient(160deg, ${hexToRgba(card.color, 0.08)}, #ffffff 58%)`,
+                  border: `1px solid ${hexToRgba(card.color, 0.18)}`,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 6px 16px rgba(0,0,0,0.05)',
+                  transition: 'all .3s cubic-bezier(.16,1,.3,1)',
+                }}>
+                {/* Mobile — icon + label side‑by‑side, number centered vertically inside the card */}
+                <div className="relative flex sm:hidden items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(card.color, 0.14), border: `1px solid ${hexToRgba(card.color, 0.26)}` }}>
+                    <card.icon className="w-4 h-4" style={{ color: card.color }} strokeWidth={2} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-black truncate">{card.label}</div>
+                    <div className="text-[8.5px] font-semibold truncate" style={{ color: '#6B7280' }}>{card.sub}</div>
+                  </div>
+                  <span className="text-[19px] font-bold tracking-tight tabular-nums text-black shrink-0">{card.value}</span>
+                </div>
+                {/* Desktop / tablet — compact vertical layout for the 3‑up grid */}
+                <div className="relative hidden sm:flex sm:flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(card.color, 0.14), border: `1px solid ${hexToRgba(card.color, 0.26)}` }}>
+                      <card.icon className="w-3.5 h-3.5" style={{ color: card.color }} strokeWidth={2} />
+                    </span>
+                    <span className="text-[16px] font-bold tracking-tight tabular-nums text-black">{card.value}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-black truncate">{card.label}</div>
+                    <div className="text-[8px] font-semibold truncate" style={{ color: '#6B7280' }}>{card.sub}</div>
+                  </div>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* ══ Approval strip (slim) ══ */}
-      {pendingApprovals.length > 0 && (
-        <div className="av4-int av4-static flex items-center gap-3 px-3.5 py-2">
-          <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: LUX.goldDeep }} strokeWidth={1.8} />
-          <div className="flex-1 min-w-0 text-[11.5px] text-foreground truncate">
-            <span className="font-bold">{pendingApprovals.length} account application{pendingApprovals.length > 1 ? 's' : ''}</span>
-            <span className="text-muted-foreground"> waiting — {pendingApprovals.map((c: any) => c.name).slice(0, 2).join(', ')}</span>
+      {/* ══ Construction pursuit lifecycle ══ */}
+      <div className="ov-pipeline relative overflow-hidden rounded-[20px] text-gray-900">
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-black/10">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-bold text-black/55">
+              <span className="w-6 h-px bg-black/60" /> Preconstruction Pipeline
+            </div>
+            <div className="text-[15px] sm:text-[17px] font-bold mt-1 text-gray-900">From inquiry to contract</div>
+            <div className="text-[10px] text-gray-500 mt-1">{totalLeads} opportunities in pipeline</div>
           </div>
-          <button onClick={() => onSelectTab('approvals')}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white hover:opacity-90 transition-opacity"
-            style={{ background: `linear-gradient(135deg, ${LUX.goldDeep}, ${LUX.gold})` }}>
-            Review Now
+          <button onClick={() => onSelectTab('leads')} className="inline-flex items-center justify-center gap-1.5 rounded-full border border-black/15 bg-black px-3 py-2 text-[10px] font-bold text-white shadow-sm hover:-translate-y-0.5 hover:shadow-lg transition-all w-full sm:w-auto">
+            Manage <ArrowUpRight className="w-3 h-3" strokeWidth={2.4} />
           </button>
         </div>
-      )}
-
-      {/* ══ Pipeline · Activity · Tasks ══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-3 items-stretch">
-
-        {/* Pipeline */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden xl:col-span-4">
-          <div className="av4-head">
-            <div className="av4-title">Pipeline Overview</div>
-            <button onClick={() => onSelectTab('analytics')} className="av4-link">Analytics →</button>
-          </div>
-          <PipelineDonut slices={pipelineSlices} onSelect={onSelectTab} />
+        
+        {/* Mobile: 2x3 grid layout to show all 6 cards */}
+        <div className="sm:hidden grid grid-cols-3 gap-2.5 px-4 py-3">
+          {[
+            { n: '01', label: 'Lead Capture', value: lifecycleCounts.lead_capture, icon: Inbox, color: '#6B7280', accent: 'rgba(107,114,128,0.12)' },
+            { n: '02', label: 'Site Audit', value: lifecycleCounts.site_audit, icon: HardHat, color: '#2563EB', accent: 'rgba(37,99,235,0.12)' },
+            { n: '03', label: 'Estimate & Bid', value: lifecycleCounts.estimation, icon: Receipt, color: '#7C3AED', accent: 'rgba(124,58,237,0.12)' },
+            { n: '04', label: 'Client Review', value: lifecycleCounts.client_review, icon: ClipboardList, color: '#D97706', accent: 'rgba(217,119,6,0.12)' },
+            { n: '05', label: 'Award Decision', value: lifecycleCounts.awarded + lifecycleCounts.lost, icon: CheckCircle2, color: '#059669', accent: 'rgba(5,150,105,0.12)' },
+            { n: '06', label: 'Contracting', value: lifecycleCounts.contracting, icon: FileCheck, color: '#16A34A', accent: 'rgba(22,163,74,0.12)' },
+          ].map((stage, index) => (
+            <button key={stage.n} onClick={() => onSelectTab('leads')}
+              className="rounded-lg p-2.5 text-left transition-all active:scale-95"
+              style={{ 
+                background: `linear-gradient(135deg, ${stage.accent} 0%, transparent 100%)`,
+                border: `1px solid ${stage.color}25`,
+                boxShadow: `0 1px 2px ${stage.color}10`
+              }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center bg-white border" style={{ borderColor: `${stage.color}30`, color: stage.color }}>
+                  <stage.icon className="w-2.5 h-2.5" strokeWidth={2} />
+                </span>
+                <span className="text-[6px] font-bold tracking-wider" style={{ color: stage.color }}>{stage.n}</span>
+              </div>
+              <div className="text-[16px] font-bold tabular-nums mb-0.5" style={{ color: stage.color }}>{stage.value}</div>
+              <div className="text-[8px] font-semibold text-gray-800 leading-tight">{stage.label}</div>
+            </button>
+          ))}
         </div>
 
-        {/* Activity */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden xl:col-span-5">
-          <div className="av4-head flex-wrap">
-            <div className="av4-title">Activity Overview</div>
-            <div className="av4-seg">
-              {([7, 14, 30] as const).map(r => (
-                <button key={r} className={range === r ? 'on' : ''} onClick={() => setRange(r)}>{r}D</button>
-              ))}
+        {/* Desktop: Full grid layout */}
+        <div className="hidden sm:relative sm:flex sm:overflow-x-auto sm:snap-x sm:snap-mandatory sm:grid sm:grid-cols-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[
+            { n: '01', label: 'Lead Capture', sub: 'New briefs', value: lifecycleCounts.lead_capture, icon: Inbox, color: '#6B7280', accent: 'rgba(107,114,128,0.08)' },
+            { n: '02', label: 'Site Audit', sub: 'Field assessed', value: lifecycleCounts.site_audit, icon: HardHat, color: '#2563EB', accent: 'rgba(37,99,235,0.08)' },
+            { n: '03', label: 'Estimate & Bid', sub: 'Pricing prepared', value: lifecycleCounts.estimation, icon: Receipt, color: '#7C3AED', accent: 'rgba(124,58,237,0.08)' },
+            { n: '04', label: 'Client Review', sub: 'Under review', value: lifecycleCounts.client_review, icon: ClipboardList, color: '#D97706', accent: 'rgba(217,119,6,0.08)' },
+            { n: '05', label: 'Award Decision', sub: `${lifecycleCounts.awarded} won · ${lifecycleCounts.lost} lost`, value: lifecycleCounts.awarded + lifecycleCounts.lost, icon: CheckCircle2, color: '#059669', accent: 'rgba(5,150,105,0.08)' },
+            { n: '06', label: 'Contracting', sub: 'Mobilization ready', value: lifecycleCounts.contracting, icon: FileCheck, color: '#16A34A', accent: 'rgba(22,163,74,0.08)' },
+          ].map((stage, index) => (
+            <button key={stage.n} onClick={() => onSelectTab('leads')}
+              className="ov-pipeline-stage group relative min-w-0 min-h-[140px] p-4 text-left border-r border-black/[0.07] last:border-r-0"
+              style={{ background: `linear-gradient(135deg, ${stage.accent} 0%, transparent 100%)` }}>
+              <div className="relative h-8 flex items-center justify-between gap-2">
+                <span className="ov-flow-node relative z-10 w-7 h-7 rounded-full flex items-center justify-center border bg-white" style={{ borderColor: `${stage.color}30`, color: stage.color, animationDelay: `${index * 180}ms` }}>
+                  <stage.icon className="w-3.5 h-3.5" strokeWidth={1.6} />
+                </span>
+                {index < 5 && <span className="ov-flow-line" style={{ animationDelay: `${index * 160}ms` }} />}
+                <span className="text-[8px] font-bold tracking-[0.18em] text-black/20">{stage.n}</span>
+              </div>
+              <div className="text-[22px] font-bold mt-2 tabular-nums" style={{ color: stage.color }}>{stage.value}</div>
+              <div className="text-[10px] font-semibold leading-tight text-gray-800 mt-1">{stage.label}</div>
+              <div className="text-[8.5px] text-gray-400 mt-0.5 leading-tight">{stage.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ══ Meetings & Ledger Activity ══ */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+      <div className="xl:col-span-5">
+        <MeetingsCalendar
+          meetings={calendarMeetings}
+          onOpenMeeting={(clientId) => onOpenClient(clientId, 'meetings')}
+          clientOptions={clientOptions}
+          onSaveMeeting={onSaveMeeting}
+          onDeleteMeeting={onDeleteMeeting}
+          onConfirmMeeting={onConfirmMeeting}
+          onCancelMeeting={onCancelMeeting}
+          compact
+        />
+      </div>
+
+      <div className="ov-card xl:col-span-7 flex flex-col overflow-hidden h-full">
+        <div className="border-b shrink-0" style={{ borderColor: BORDER }}>
+          <div className="flex items-center justify-between gap-3 px-4 pt-3">
+            <div className="ov-title shrink-0">Ledger Activity</div>
+            <button onClick={onOpenFinance} className="ov-link text-[10px] whitespace-nowrap shrink-0">View Ledger →</button>
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto px-4 py-2.5">
+            {(['all', 'income', 'expense', 'check'] as const).map(f => (
+              <button key={f} className={`ov-chip shrink-0 ${ledgerFilter === f ? 'on' : ''}`} onClick={() => setLedgerFilter(f)}>
+                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="ov-divide flex-1 overflow-y-auto">
+          {filteredLedger.length === 0 && (
+            <div className="px-4 py-10 text-center text-[11.5px] text-gray-400">No activity for this filter.</div>
+          )}
+          {ledgerPagination.paged.map((r, i) => {
+            const IconCmp = r.kind === 'income' ? TrendingUp : r.kind === 'expense' ? TrendingDown : Receipt;
+            const color = r.kind === 'income' ? ACCENTS.green : r.kind === 'expense' ? ACCENTS.red : STEEL;
+            const statusMeta = r.status ? (CHECK_STATUS_COLORS[String(r.status).toLowerCase()] ?? { bg: '#F3F4F6', fg: STEEL }) : null;
+            return (
+              <button key={r.id} onClick={() => onOpenLedgerEntry(r.kind, r.rawId)}
+                title="View this entry in the Ledger"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ov-row group">
+                <span className={`ov-icon-pop w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${i === 0 && ledgerPagination.page === 1 ? 'shine-edge' : ''}`} style={{ backgroundColor: `${color}12` }}>
+                  <IconCmp className="w-3.5 h-3.5" style={{ color }} strokeWidth={1.6} />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11.5px] font-semibold text-gray-900 truncate">{r.label}</span>
+                    {statusMeta && (
+                      <span className="rounded-full px-1.5 py-[1px] text-[7.5px] font-bold uppercase tracking-[0.03em] whitespace-nowrap shrink-0" style={{ backgroundColor: statusMeta.bg, color: statusMeta.fg }}>
+                        {r.status}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[8.5px] text-gray-400">{r.ts ? new Date(r.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11.5px] font-bold tabular-nums" style={{ color: r.kind === 'income' ? ACCENTS.green : (r.kind === 'expense' ? ACCENTS.red : '#111827') }}>
+                    {r.kind === 'income' ? '+' : '-'}${fmtMoney(r.amount, 0)}
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-gray-300 opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0" strokeWidth={2.2} />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {ledgerPagination.pageCount > 1 && (
+          <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 border-t" style={{ borderColor: BORDER }}>
+            <span className="text-[9.5px] font-semibold text-gray-400">
+              {(ledgerPagination.page - 1) * ledgerPagination.pageSize + 1}–{Math.min(ledgerPagination.page * ledgerPagination.pageSize, ledgerPagination.total)} of {ledgerPagination.total}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => ledgerPagination.setPage(p => Math.max(1, p - 1))}
+                disabled={ledgerPagination.page === 1}
+                className="ov-chip disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ← Prev
+              </button>
+              <span className="text-[9.5px] font-bold text-gray-500 px-1.5 whitespace-nowrap">{ledgerPagination.page} / {ledgerPagination.pageCount}</span>
+              <button
+                onClick={() => ledgerPagination.setPage(p => Math.min(ledgerPagination.pageCount, p + 1))}
+                disabled={ledgerPagination.page === ledgerPagination.pageCount}
+                className="ov-chip disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
             </div>
           </div>
-          <div className="px-1.5 pt-2 flex-1 min-h-[168px]">
-            <ResponsiveContainer width="100%" height={172}>
-              <AreaChart data={activityData} margin={{ top: 4, right: 10, left: -22, bottom: 0 }}>
-                <defs>
-                  {CHART_SERIES.map(s => (
-                    <linearGradient key={s.key} id={`act-g-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={s.color} stopOpacity={0.22} />
-                      <stop offset="100%" stopColor={s.color} stopOpacity={0} />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.5} strokeDasharray="3 5" />
-                <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false}
-                  interval={range === 7 ? 0 : range === 14 ? 2 : 6} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={30} />
-                <Tooltip content={<ActivityTooltip />} cursor={{ stroke: 'hsl(var(--border))', strokeDasharray: '3 3' }} />
-                {CHART_SERIES.filter(s => !hiddenSeries.has(s.key)).map(s => (
-                  <Area key={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={2}
-                    fill={`url(#act-g-${s.key})`} dot={false} activeDot={{ r: 3.5, strokeWidth: 1.5, stroke: 'hsl(var(--background))' }} />
-                ))}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-1.5 px-3 py-2 border-t border-border/65">
-            {CHART_SERIES.map(s => {
-              const off = hiddenSeries.has(s.key);
-              return (
-                <button key={s.key} onClick={() => toggleSeries(s.key)} className={`av4-toggle ${off ? 'off' : ''}`} title={off ? `Show ${s.key}` : `Hide ${s.key}`}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }} /> {s.key}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
+      </div>
+      </div>
 
-        {/* Tasks */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden lg:col-span-2 xl:col-span-3">
-          <div className="av4-head">
-            <div className="av4-title">Tasks &amp; Alerts</div>
-            <button onClick={() => onSelectTab('notifications')} className="av4-link">View all</button>
+      {/* ══ Tasks & Documents ══ */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        <div className="ov-card xl:col-span-7 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: BORDER }}>
+            <div className="ov-title">Tasks & Alerts</div>
+            <button onClick={() => onSelectTab('notifications')} className="ov-link text-[10px]">View all</button>
           </div>
-          <div className="px-2.5 py-2.5 space-y-1.5 flex-1">
+          <div className="p-3 space-y-2">
             {visibleTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle2 className="w-7 h-7 mb-2" style={{ color: LUX.viridian }} strokeWidth={1.3} />
-                <div className="text-[12px] font-semibold text-foreground">All caught up</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">No pending tasks right now.</div>
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CheckCircle2 className="w-6 h-6 mb-2" style={{ color: ACCENTS.green }} strokeWidth={1.2} />
+                <div className="text-[12px] font-semibold text-gray-900">All caught up</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">No pending tasks.</div>
               </div>
             ) : visibleTasks.map(t => (
               <button key={t.id} onClick={() => onSelectTab(t.tab)}
-                className="w-full flex items-center gap-2.5 rounded-[10px] border border-border px-2.5 py-2 text-left hover:border-accent/45 hover:bg-secondary/30 transition-colors group">
-                <span className="w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${t.color}16` }}>
-                  <t.icon className="w-3 h-3" style={{ color: t.color }} strokeWidth={1.9} />
+                className="w-full flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors group" style={{ borderColor: BORDER }}>
+                <span className="ov-icon-pop w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${BLACK}05` }}>
+                  <t.icon className="w-3.5 h-3.5 text-gray-600" strokeWidth={1.5} />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-[11px] font-bold text-foreground truncate leading-tight">{t.title}</span>
-                  <span className="block text-[9.5px] text-muted-foreground truncate">{t.sub}</span>
+                  <span className="block text-[11px] font-semibold text-gray-900 truncate">{t.title}</span>
+                  <span className="block text-[9px] text-gray-500 truncate">{t.sub}</span>
                 </span>
-                <span className="av4-link inline-flex items-center gap-0.5 shrink-0">
-                  {t.action} <ChevronRight className="w-2.5 h-2.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.6} />
+                <span className="text-[9.5px] font-semibold text-gray-700 shrink-0">
+                  {t.action} <ChevronRight className="w-2.5 h-2.5 inline group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
                 </span>
               </button>
             ))}
-            {tasks.length > visibleTasks.length && (
-              <button onClick={() => onSelectTab('notifications')} className="w-full text-center text-[9.5px] font-bold text-muted-foreground hover:text-accent transition-colors py-1">
-                +{tasks.length - visibleTasks.length} more task{tasks.length - visibleTasks.length > 1 ? 's' : ''}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ══ Clients · Activity · Documents ══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch">
-
-        {/* Recent clients */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden">
-          <div className="av4-head">
-            <div className="av4-title">Recent Clients</div>
-            <button onClick={() => onSelectTab('clients')} className="av4-link">View all →</button>
-          </div>
-          <div className="divide-y divide-border/65 flex-1">
-            {recentClients.length === 0 && <div className="px-4 py-8 text-center text-[11.5px] text-muted-foreground">No approved clients yet.</div>}
-            {recentClients.map((c: any) => {
-              const brief = briefs[c.id];
-              const pill = brief ? (BRIEF_PILL[brief.status] ?? BRIEF_PILL.submitted) : null;
-              return (
-                <button key={c.id} onClick={() => onOpenClient(c.id, 'brief')}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-secondary/40 transition-colors group">
-                  <span className="w-8 h-8 rounded-full flex items-center justify-center text-[9.5px] font-black shrink-0"
-                    style={{ backgroundColor: 'rgba(157,126,63,0.12)', color: LUX.goldDeep }}>
-                    {(c.name ?? '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-[11.5px] font-bold text-foreground truncate leading-tight">{c.name}</span>
-                    <span className="block text-[9.5px] text-muted-foreground truncate">{c.email}</span>
-                  </span>
-                  {pill ? (
-                    <span className="rounded-full px-2 py-0.5 text-[8.5px] font-bold capitalize whitespace-nowrap" style={{ backgroundColor: pill.bg, color: pill.fg }}>
-                      {String(brief.status).replace(/_/g, ' ')}
-                    </span>
-                  ) : (
-                    <span className="rounded-full px-2 py-0.5 text-[8.5px] font-bold bg-secondary text-muted-foreground whitespace-nowrap">No Brief</span>
-                  )}
-                  <ChevronRight className="w-3 h-3 text-muted-foreground/50 group-hover:text-accent transition-colors shrink-0" strokeWidth={2} />
-                </button>
-              );
-            })}
           </div>
         </div>
 
-        {/* Recent activity */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden">
-          <div className="av4-head">
-            <div className="av4-title">Recent Activity</div>
-            <button onClick={() => onSelectTab('changelog')} className="av4-link">View all →</button>
+        <div className="ov-card xl:col-span-5 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: BORDER }}>
+            <div className="ov-title">Documents</div>
+            <button onClick={() => onSelectTab('documents')} className="ov-link text-[10px]">View all →</button>
           </div>
-          <div className="divide-y divide-border/65 flex-1">
-            {activityFeed.length === 0 && <div className="px-4 py-8 text-center text-[11.5px] text-muted-foreground">No activity yet.</div>}
-            {activityFeed.map(e => (
-              <div key={e.id} className="flex items-center gap-2.5 px-3.5 py-2">
-                <span className="w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${e.color}14` }}>
-                  <e.icon className="w-3 h-3" style={{ color: e.color }} strokeWidth={1.9} />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[11px] font-semibold text-foreground truncate leading-tight">{e.title}</span>
-                  <span className="block text-[9.5px] text-muted-foreground truncate">{e.sub}</span>
-                </span>
-                <span className="text-[9px] text-muted-foreground shrink-0">{timeAgo(e.ts)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Documents */}
-        <div className="av4-int av4-static flex flex-col overflow-hidden lg:col-span-2 xl:col-span-1">
-          <div className="av4-head">
-            <div className="av4-title">Documents</div>
-            <button onClick={() => onSelectTab('documents')} className="av4-link">View all →</button>
-          </div>
-          <div className="divide-y divide-border/65 flex-1">
-            {recentDocs.length === 0 && <div className="px-4 py-8 text-center text-[11.5px] text-muted-foreground">No documents uploaded yet.</div>}
+          <div className="ov-divide">
+            {recentDocs.length === 0 && <div className="px-4 py-6 text-center text-[11.5px] text-gray-400">No documents yet.</div>}
             {recentDocs.map((d: any) => {
               const isPdf = String(d.fileType ?? d.file_type ?? '').toUpperCase().includes('PDF');
-              const color = isPdf ? LUX.copper : LUX.steel;
+              const color = isPdf ? ACCENTS.gold : STEEL;
               const up = d.uploadedAt ?? d.uploaded_at;
               return (
                 <button key={d.id} onClick={() => d.file_url ? onViewDocument(d.file_url) : onSelectTab('documents')}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-secondary/40 transition-colors">
-                  <span className="w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}14` }}>
-                    <FileText className="w-3 h-3" style={{ color }} strokeWidth={1.9} />
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors ov-row">
+                  <span className="ov-icon-pop w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}12` }}>
+                    <FileText className="w-3 h-3" style={{ color }} strokeWidth={1.5} />
                   </span>
-                  <span className="flex-1 min-w-0 text-[11px] font-semibold text-foreground truncate">{d.name}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0">{d.file_size || ''}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0 w-12 text-right">
+                  <span className="flex-1 min-w-0 text-[11px] font-semibold text-gray-900 truncate">{d.name}</span>
+                  <span className="text-[8.5px] text-gray-400 shrink-0">
                     {up ? new Date(up).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                   </span>
                 </button>

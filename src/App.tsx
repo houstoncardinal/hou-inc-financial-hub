@@ -68,6 +68,7 @@ import PortalInvite     from "./pages/portal/PortalInvite";
 
 // Admin
 import Admin from "./pages/Admin";
+import ProjectForecasting from "./pages/admin/ProjectForecasting";
 
 // Finance dashboard
 import EntitySelect  from "./pages/EntitySelect";
@@ -223,6 +224,7 @@ const App = () => (
 
                 {/* ── Admin (admin-role only) ── */}
                 <Route path="/admin"             element={<RoleGuard allowed={['admin']}><Admin /></RoleGuard>} />
+                <Route path="/admin/projects/:id/forecasting" element={<RoleGuard allowed={['admin', 'project_manager']}><ProjectForecasting /></RoleGuard>} />
 
                 {/* ── Finance sector (single shared EntityProvider) ── */}
                 <Route path="/auth"             element={<Auth />} />

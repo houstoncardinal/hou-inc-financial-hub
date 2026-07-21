@@ -45,10 +45,10 @@ SELECT * FROM verify_hgp_job_payments();
 SELECT * FROM verify_hgp_procurement_scheduling();
 ```
 
-Every row must show `ok = true`. As of 2026-07-19, **all 21** verification
+Every row must show `ok = true`. As of 2026-07-19, **all 23** verification
 RPCs on the live project return only `ok = true` (re-probed directly via the
 Supabase Management API, not assumed) — the full migration chain through
-`20260719000003_changelog_rls_repair.sql` is applied, including several
+`20260719000005_ctc_combined_ap_guard_fix.sql` is applied, including several
 migrations this doc and the tracker had previously and incorrectly marked
 "pending apply." See `platform-completeness-tracker.md`'s "Migration gate
 status" section for the complete list.
@@ -117,7 +117,7 @@ migration to apply in its skip message.
 
 ## 7. Go / No-Go
 
-- [x] All 21 verification RPCs return only `ok = true` (live-probed 2026-07-19)
+- [x] All 23 verification RPCs return only `ok = true` (live-probed 2026-07-19)
 - [x] `npm run build` clean (single large JS chunk — see punch list below)
 - [x] `tsc`/`eslint`/Vitest clean (2026-07-19); no full Playwright suite run this
       pass — 3 parallel live-crawl agents manually drove every route instead

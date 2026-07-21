@@ -1,8 +1,10 @@
 # HOU INC Platform Completeness Tracker
 
-Last updated: 2026-07-19 (full-platform deep audit + live-repair pass — see
-findings section at the bottom). Companion machine-readable
-file: `platform-completeness-tracker.json` — update both together.
+Last updated: 2026-07-19 (pagination sweep + transaction-drawer redesign +
+Ledger correction-form dropdown pass — see note at the bottom; full-platform
+deep audit + live-repair pass earlier the same day, findings section further
+down). Companion machine-readable file: `platform-completeness-tracker.json`
+— update both together.
 
 **Scoring rules**: a row is *Complete* only when the workflow is database-backed,
 UI-exposed, and covered by a passing automated test or live verification RPC.
@@ -14,11 +16,11 @@ grounded in the verification RPCs and test suite, not vibes.
 
 | Scope | Completion | Status |
 |---|---|---|
-| **Platform overall** | **93%** | Launch-ready, with a short punch list below |
+| **Platform overall** | **95%** | Launch-ready, with a short punch list below |
 | Public Website | 90% | Launch-ready |
 | Client Portal | 86% | Launch-ready |
 | Admin Dashboard | 90% | Launch-ready |
-| Finance Dashboard | 93% | Launch-ready |
+| Finance Dashboard | 96% | Launch-ready |
 
 ## By entity
 
@@ -38,6 +40,7 @@ grounded in the verification RPCs and test suite, not vibes.
 | Document requests/uploads | 90 | Launch-ready | Portal upload automated test | Low | S | Admin presets + typed requests; `documents` bucket; entity tag chips |
 | Project management (admin ↔ finance sync) | 95 | Complete | — | Low | — | FK link + depth-guarded triggers; live playwright |
 | Construction finance (WIP/draws/retainage/CO/commitments) | 95 | Complete | Cost-code/phase report polish | Low | M | 7-check `verify_finance_launch_migrations()`; live draw test |
+| Cost-to-Complete forecasting / EAC-WIP / AP compliance (HE) | 96 | Complete | Cost-code line items are still manually entered per commitment (no bulk import); red/yellow thresholds are fixed constants, not per-project configurable | Low | S | `verify_ctc_commitments_wip()` + `verify_ctc_combined_ap_guard_fix()` live; trigger stress-tested with real inserts (see note below) |
 | Generator operations (inventory/plans/visits/jobs) | 96 | Complete | Recurring maintenance billing automation | Med | M | `verify_hgp_field_ops` + inventory/procurement/job-payment live tests |
 | Storm response (outages → dispatch) | 90 | Complete | Edge-function polling (terms-gated); site map overlay | Med | L | Live outage→dispatch playwright test |
 | HGP dispatch (technician/status) | 95 | Complete | — | Low | — | `verify_dispatch_capital_approvals()` live |
@@ -51,7 +54,7 @@ grounded in the verification RPCs and test suite, not vibes.
 | Reporting/exports | 95 | Launch-ready | Add automated PDF visual regression later | Low | M | Entity Reports tab, pay apps, cost-code, HGP ops, Holdings board packet |
 | Security/RLS/roles | 93 | Launch-ready | `admin_changelog` SELECT policy queried `auth.users` directly (42501 permission denied, audit trail always showed empty) — **fixed this pass**, migration `20260719000003`; role-management UI still lacks an automated test; storage policy review pass still open | High | M | Recursion-repair verified; owner-RLS on all entity tables; `verify_changelog_rls_repair()` live |
 | Mobile responsiveness | 87 | Launch-ready | Global rule `src/index.css:143-166` (`.finance-mobile-surface .overflow-x-auto * { min-width:0 }`) sits outside any `@layer` and beats Tailwind's `min-w-[...]` escape hatch on CSS-grid "table" listings — collapses columns to illegible widths on mobile (confirmed on HGP Generator Units/Unit Margin and Holdings Assets & Deals register; likely affects Charts/Ledger/Projects/Admin too, same pattern); tablet screenshot sweep still open | High | S | Playwright mobile overflow tests green on the screens they cover; new gap found via live screenshot, not covered by existing tests |
-| Performance/scaling | 80 | Launch-ready | `TxnPage.tsx` (Income + Expenses, all 3 entities) has **no pagination at all** — Holdings' 430-row Income screen renders a single ~23,000px page; Holdings HQ dashboard's Note Schedule (148 rows) and the Assets & Deals register are also fully unpaginated (~10,000px each). Ledger/Checks/HgpJobs already paginate correctly — same fix pattern just needs applying here | High | M | Server-side ledger paging + summary RPCs; new gap found via live crawl, not previously tracked |
+| Performance/scaling | 92 | Launch-ready | **Fixed 2026-07-19** — added a shared `usePagination`/`PaginationBar` pattern and applied it across every remaining unbounded list found in the finance dashboard: Income/Expenses (`TxnPage.tsx`), Checks, Vendors, Invoices, Documents, Clients, Projects (via `FinanceControls.tsx`'s control summary), HGP Inventory parts register, Storm Response outage events, Procurement hedge opportunities, Holdings HQ Note Schedule + Capital Activity, Holdings Assets & Deals/Fixed Assets/Notes registers, and every per-project tab in `ProjectBreakdown.tsx` (SOV, Milestones, Draws, Change Orders, Add-Ons, Payments, Expenses, Audit) plus `ProjectDetail.tsx`'s Activity/Documents tabs. Remaining: production build still emits a single 7.9MB/2.1MB-gzip JS chunk (no code-splitting) | Low | M | Live Playwright sweep across 11 screens post-fix: zero console errors; `tsc`/`eslint`/Vitest/build all clean |
 | Launch documentation | 95 | Complete | Keep in sync per pass | Low | — | `enterprise-launch-readiness-checklist.md` + this tracker |
 | Entity-context reliability (multi-entity switching) | 100 | Complete — fixed this pass | `EntityContext.tsx` restored the active entity via an independent `supabase.auth.getUser()` network call on every mount; a transient failure was silently swallowed and defaulted the whole session to Houston Enterprise with no visible error — live-reproduced causing a real HGP transaction to get created under the wrong legal entity. Fixed by sourcing from `useAuth()`'s already-resolved session instead of a redundant network call; stress-tested with the `auth/v1/user` endpoint fully blocked across 3 reloads, entity selection held | Critical (fixed) | S | Live Playwright repro: entity survives 6 reloads incl. 3 with the endpoint blocked |
 
@@ -81,7 +84,12 @@ period close → `20260718000005` fixed assets depreciation → `20260718000006`
 holdings balance sheet → `20260718000007` HE procurement/hedge engine →
 `20260718000008` entity client accounts → `20260718000009` finance/client
 portal separation → `20260719000001` admin help requests → `20260719000002`
-ledger sort-by-recency → `20260719000003` changelog RLS repair.
+ledger sort-by-recency → `20260719000003` changelog RLS repair →
+`20260719000004` commitments/CTC-forecasting/EAC-WIP/AP-compliance-guard →
+`20260719000005` combined transactions+checks AP guard fix (same day
+follow-up, closes a cross-table exposure loophole found via live testing).
+23 `verify_*()` diagnostics now pass (added `verify_ctc_commitments_wip()`
+and `verify_ctc_combined_ap_guard_fix()`).
 
 Baseline test battery, re-run 2026-07-19: `tsc --noEmit` clean, `eslint`
 clean (one pre-existing, unrelated `prefer-const` error in
@@ -153,3 +161,79 @@ rather than fixed opportunistically:
   being fully live and verified.
 - Public-site pages all share one generic `<title>` tag rather than
   per-page titles — minor SEO gap, not functional.
+
+## 2026-07-19 (same day, follow-up pass) — pagination sweep + transaction UX polish
+
+User-reported pain point: several finance screens rendered every row at once
+with no way to page through them. Fixed by building a shared
+`src/hooks/usePagination.ts` + `src/components/PaginationBar.tsx` pair and
+applying it everywhere an unbounded list was found — see the updated
+Performance/scaling row above for the full list of screens. Verified with a
+live Playwright sweep across 11 screens (entity switching + every touched
+page) showing zero console errors, plus a clean `tsc`/`eslint`/Vitest/build
+pass.
+
+Same pass also (1) rebuilt `src/components/FinanceDetailDrawer.tsx` (the
+Vendors detail panel) to match the more polished icon-labeled/stat-tile card
+design already used by the Income/Expense and Checks transaction inspectors,
+and (2) converted the Ledger "Signed Correction" edit form's ~13 free-text
+status/category/payment-method/cost-type fields to real dropdowns sourced
+from the live DB CHECK constraints (new `src/lib/financeFieldOptions.ts`),
+extracting the category picker into a shared `src/components/CategorySelect.tsx`
+used by both the Ledger form and the Income/Expense guided forms so they
+can never drift out of sync with each other or with what the database
+actually accepts.
+
+## 2026-07-19 (later same day) — Commitments, Cost-to-Complete forecasting, EAC-based WIP, AP compliance guard (Houston Enterprise)
+
+Built the construction-ERP layer requested: cost-code line items on
+subcontract/PO commitments, a project-manager Cost-to-Complete worksheet, an
+earned-value (EAC) WIP reconciliation feed, and a database trigger enforcing
+subcontractor billing discipline. Migration `20260719000004` (schema, RPCs,
+trigger) plus a same-day fix migration `20260719000005` — see below.
+
+**Discovered before building anything**: most of the "core schema" the
+request assumed didn't exist yet actually did — `finance_commitments`,
+`finance_cost_codes`, and a cost-ratio WIP view/RPC were all already live
+from earlier work. Built additively on top rather than recreating: new
+`finance_commitment_lines` (cost-code breakdown per commitment),
+`finance_project_cost_budgets` (per-project-per-cost-code original budget +
+PM's live forecasted-cost-to-complete), `finance_lien_waivers`, an
+orthogonal `transactions.compliance_hold` flag (not overloading the
+already-locked `status` CHECK constraint), `get_cost_to_complete_worksheet()`
++ `upsert_project_cost_budget()` RPCs, and `get_wip_reconciliation()`
+(EAC-based, additive alongside the existing cost-ratio WIP RPC — both are
+shown side by side in `/finance/controls` with an explanation of the
+difference). Seeded a starter 17-code construction cost-code list for HE
+since the master list existed but had never been populated.
+
+**UI**: `/admin/projects/:id/forecasting` (new `src/pages/admin/ProjectForecasting.tsx`,
+gated to `admin`/`project_manager`, reusing a new shared `AdminPinGate`
+component so it sits in the same security perimeter as `/admin` without
+duplicating the PIN logic) — a dense desktop grid / mobile-card worksheet
+with inline-editable Original Budget and Forecasted Cost to Complete cells
+(debounced autosave), color-coded variance flags, and an "Add Cost Code"
+picker. `/finance/controls` gained a WIP Reconciliation section and the
+existing Committed Costs panel gained expandable cost-code line-item entry
+per commitment. `ProjectBreakdown.tsx`'s Draws tab now blocks new draw
+creation with a clear banner + deep-link when any cost code is red-flagged,
+and the Overview tab surfaces a "Cost-to-Complete Forecast" quick action once
+a project has commitments.
+
+**Bug found and fixed via live testing, not code review**: the AP compliance
+trigger's max-dollar guard originally computed prior-invoiced exposure
+*separately per table* — a check-insert only summed prior checks, a
+transaction-insert only summed prior transactions — so a vendor could bypass
+a commitment's dollar cap entirely by mixing payment methods, exactly the
+loophole the migration's own comment claimed to close. Live-reproduced: $800
+in prior expense transactions plus a new $500 check (combined exposure
+$1,300 against a $1,000 commitment) was incorrectly allowed. Fixed in
+`20260719000005_ctc_combined_ap_guard_fix.sql` to sum both tables together;
+re-tested with real inserts (three-stage test: first draw succeeds with no
+hold, second draw succeeds but flips `compliance_hold`/`lien_waiver_status`
+to pending since no matching received lien waiver exists for the prior
+draw's exact dollar amount, third draw across the combined cap is hard-blocked
+with a clear exception naming the commitment, both totals, and the overrun
+amount) — confirmed correct on both the `transactions` and `checks` sides.
+All test data (commitment, line, budget row, transactions, checks) deleted
+after verification.

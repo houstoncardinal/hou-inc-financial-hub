@@ -11,6 +11,8 @@ import { useCapitalActivity, useConsolidatedEntityTotals, useHoldingsBalanceShee
 import { useAuth } from '@/hooks/useAuth';
 import { ENTITIES } from '@/contexts/EntityContext';
 import { fmtDate, fmtUSD } from '@/lib/format';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import { toast } from 'sonner';
 import {
   ArrowLeftRight, BarChart3, Building2, CircleDollarSign, Landmark,
@@ -71,6 +73,14 @@ export default function HoldingsAssets() {
   const { data: deals = [] } = useProjects();
   const { data: fixedAssets = [] } = useFixedAssets();
   const { data: notes = [] } = useHoldingsNotes();
+
+  const REGISTER_PAGE_SIZE = 12;
+  const { page: dealsPage, setPage: setDealsPage, pageCount: dealsPageCount, paged: pagedDeals } =
+    usePagination(deals as any[], REGISTER_PAGE_SIZE);
+  const { page: assetsPage, setPage: setAssetsPage, pageCount: assetsPageCount, paged: pagedAssets } =
+    usePagination(fixedAssets as any[], REGISTER_PAGE_SIZE);
+  const { page: notesPage, setPage: setNotesPage, pageCount: notesPageCount, paged: pagedNotesReg } =
+    usePagination(notes as any[], REGISTER_PAGE_SIZE);
   const { data: capital = [] } = useCapitalActivity();
   const { data: balance } = useHoldingsBalanceSheet();
   const { data: consolidated = {} } = useConsolidatedEntityTotals();
@@ -182,7 +192,7 @@ export default function HoldingsAssets() {
                   <div className="asset-row grid grid-cols-[1.4fr_.8fr_.9fr_.9fr_1.3fr_.4fr] gap-2 bg-secondary/45 asset-k">
                     <div>Asset / Deal</div><div>Type</div><div>Status</div><div>Value Basis</div><div>Notes</div><div></div>
                   </div>
-                  {(deals as any[]).map(d => (
+                  {(tab === 'overview' ? (deals as any[]).slice(0, 6) : pagedDeals).map(d => (
                     <div key={d.id} className="asset-row grid grid-cols-[1.4fr_.8fr_.9fr_.9fr_1.3fr_.4fr] gap-2 items-center">
                       <div className="min-w-0">
                         <div className="font-bold truncate">{d.name}</div>
@@ -201,6 +211,12 @@ export default function HoldingsAssets() {
                   {!(deals as any[]).length && <div className="py-12 text-center text-sm text-muted-foreground">No Holdings assets or deals yet.</div>}
                 </div>
               </div>
+              {tab === 'deals' && (deals as any[]).length > REGISTER_PAGE_SIZE && (
+                <div className="pt-2.5 mt-1 border-t border-border/60">
+                  <PaginationBar page={dealsPage} pageCount={dealsPageCount} total={(deals as any[]).length} pageSize={REGISTER_PAGE_SIZE}
+                    onPageChange={setDealsPage} itemLabel="assets & deals" />
+                </div>
+              )}
             </section>
           )}
 
@@ -208,7 +224,7 @@ export default function HoldingsAssets() {
             <section className="asset-panel p-3 sm:p-4">
               <div className="asset-k mb-3">Fixed Asset Register</div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-                {(fixedAssets as any[]).slice(0, tab === 'assets' ? undefined : 6).map(a => (
+                {(tab === 'assets' ? pagedAssets : (fixedAssets as any[]).slice(0, 6)).map(a => (
                   <div key={a.id} className="border border-border p-3 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -226,6 +242,12 @@ export default function HoldingsAssets() {
                 ))}
                 {!(fixedAssets as any[]).length && <div className="text-sm text-muted-foreground border border-border p-4">No fixed assets registered yet.</div>}
               </div>
+              {tab === 'assets' && (fixedAssets as any[]).length > REGISTER_PAGE_SIZE && (
+                <div className="pt-2.5 mt-2 border-t border-border/60">
+                  <PaginationBar page={assetsPage} pageCount={assetsPageCount} total={(fixedAssets as any[]).length} pageSize={REGISTER_PAGE_SIZE}
+                    onPageChange={setAssetsPage} itemLabel="fixed assets" />
+                </div>
+              )}
             </section>
           )}
 
@@ -233,7 +255,7 @@ export default function HoldingsAssets() {
             <section className="asset-panel p-3 sm:p-4">
               <div className="asset-k mb-3">Debt, Notes & Capital Structure</div>
               <div className="space-y-1.5">
-                {(notes as any[]).map(n => (
+                {(tab === 'overview' ? (notes as any[]).slice(0, 6) : pagedNotesReg).map(n => (
                   <div key={n.id} className="asset-row grid grid-cols-[1.3fr_.7fr_.8fr_.8fr_.8fr] gap-2 items-center">
                     <div className="min-w-0"><div className="font-bold truncate">{n.counterparty_name}</div><div className="text-[9px] text-muted-foreground">{entityName(n.counterparty_entity_id)}</div></div>
                     <div><span className={`asset-pill ${n.direction === 'receivable' ? 'text-positive' : 'text-destructive'}`}>{n.direction}</span></div>
@@ -244,6 +266,12 @@ export default function HoldingsAssets() {
                 ))}
                 {!(notes as any[]).length && <div className="text-sm text-muted-foreground border border-border p-4">No notes recorded yet.</div>}
               </div>
+              {tab === 'notes' && (notes as any[]).length > REGISTER_PAGE_SIZE && (
+                <div className="pt-2.5 mt-2 border-t border-border/60">
+                  <PaginationBar page={notesPage} pageCount={notesPageCount} total={(notes as any[]).length} pageSize={REGISTER_PAGE_SIZE}
+                    onPageChange={setNotesPage} itemLabel="notes" />
+                </div>
+              )}
             </section>
           )}
 

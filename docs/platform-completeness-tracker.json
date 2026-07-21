@@ -1,9 +1,9 @@
 {
   "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
   "updated": "2026-07-19",
-  "pass": "full-platform-deep-audit-live-repair",
+  "pass": "ctc-forecasting-eac-wip-ap-compliance-guard",
   "overall": {
-    "completion": 93,
+    "completion": 95,
     "status": "launch-ready-with-punch-list"
   },
   "apps": {
@@ -20,13 +20,13 @@
       "status": "launch-ready"
     },
     "finance_dashboard": {
-      "completion": 93,
+      "completion": 96,
       "status": "launch-ready"
     }
   },
   "entities": {
     "houston-enterprise": {
-      "completion": 94,
+      "completion": 95,
       "status": "launch-ready"
     },
     "houston-generator-pros": {
@@ -98,6 +98,19 @@
       ],
       "priority": "low",
       "complexity": "M"
+    },
+    {
+      "id": "ctc-forecasting-eac-wip-ap-compliance",
+      "completion": 96,
+      "status": "complete",
+      "remaining": [
+        "cost-code line items are manually entered per commitment, no bulk import",
+        "red/yellow variance thresholds are fixed constants (10% / $5000), not per-project configurable"
+      ],
+      "priority": "low",
+      "complexity": "S",
+      "note": "built 2026-07-19 — finance_commitment_lines, finance_project_cost_budgets, finance_lien_waivers, get_cost_to_complete_worksheet/upsert_project_cost_budget/get_wip_reconciliation RPCs, verify_subcontractor_invoice trigger (max-dollar hard block + lien-waiver soft flag). UI: /admin/projects/:id/forecasting worksheet, WIP Reconciliation + commitment-line entry in /finance/controls, draw-block guard in ProjectBreakdown.tsx. A cross-table (transactions vs checks) exposure bug in the trigger's dollar guard was found via live SQL testing and fixed same-day in migration 20260719000005 before this was marked complete.",
+      "verification": "verify_ctc_commitments_wip, verify_ctc_combined_ap_guard_fix"
     },
     {
       "id": "generator-operations",
@@ -231,16 +244,14 @@
     },
     {
       "id": "performance-scaling",
-      "completion": 80,
+      "completion": 92,
       "status": "launch-ready",
       "remaining": [
-        "TxnPage.tsx (Income + Expenses, all 3 entities) has no pagination at all — Holdings' 430-row Income screen renders one ~23,000px page",
-        "Holdings HQ dashboard Note Schedule (148 rows) and Assets & Deals register also fully unpaginated (~10,000px each)",
-        "documents/admin pagination at scale",
         "production build emits a single 7.9MB/2.1MB-gzip JS chunk, no code-splitting"
       ],
-      "priority": "high",
-      "complexity": "M"
+      "priority": "low",
+      "complexity": "M",
+      "note": "fixed 2026-07-19 — shared usePagination/PaginationBar pattern applied across every unbounded list in the finance dashboard (Income/Expenses, Checks, Vendors, Invoices, Documents, Clients, Projects control summary, HGP inventory/storm/procurement, Holdings HQ note schedule + capital activity, Holdings assets/notes registers, and every ProjectBreakdown/ProjectDetail tab). Live Playwright sweep across 11 screens post-fix showed zero console errors."
     },
     {
       "id": "launch-documentation",
@@ -362,12 +373,12 @@
     "unit": "15/15",
     "build": "clean (single 7.9MB/2.1MB-gzip JS chunk — no code-splitting, see performance-scaling)",
     "playwright": {
-      "note": "no full suite run this pass — 3 parallel live-crawl agents drove every route manually via Playwright instead; all temp specs/screenshots cleaned up afterward"
+      "note": "no full suite run this pass — targeted live Playwright + direct SQL checks per feature instead (Ledger correction form dropdowns, redesigned vendor drawer, 11-screen pagination sweep with zero console errors, CTC worksheet + WIP section + commitment-line entry live end-to-end, AP compliance trigger stress-tested with real inserts including a 3-stage max-dollar/lien-waiver test); all temp specs/screenshots and test data cleaned up afterward"
     },
     "verify_rpcs": {
-      "total": 21,
-      "passing": 21,
-      "note": "re-probed live via Supabase Management API 2026-07-19, all ok=true, including 2 new migrations from this pass"
+      "total": 23,
+      "passing": 23,
+      "note": "re-probed live via Supabase Management API 2026-07-19, all ok=true, including 4 new migrations from this pass (20260719000004, 20260719000005)"
     }
   }
 }

@@ -13,6 +13,8 @@ import {
   Building2, CalendarClock, CheckCircle2, ClipboardList, Edit3, Home,
   Mail, MapPin, Phone, Plus, Search, Trash2, UserRound, Zap,
 } from 'lucide-react';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 const CSS = `
 .clients-shell{background:linear-gradient(180deg,hsl(var(--secondary)/.28),transparent 240px);}
@@ -123,6 +125,9 @@ export default function Clients() {
     const q = query.trim().toLowerCase();
     return (clients as any[]).filter(c => !q || [c.name, c.company, c.email, c.phone, c.site_address, c.city, c.zip, c.project_name].filter(Boolean).join(' ').toLowerCase().includes(q));
   }, [clients, query]);
+  const CLIENTS_PAGE_SIZE = 20;
+  const { page: clientsPage, setPage: setClientsPage, pageCount: clientsPageCount, paged: pagedClients } =
+    usePagination(filtered, CLIENTS_PAGE_SIZE, query);
 
   const reset = () => setForm(blank);
 
@@ -345,7 +350,7 @@ export default function Clients() {
                 <div>Client</div><div>Location</div><div>Financials</div><div>{isHgp ? 'Service' : 'Project'}</div><div>Actions</div>
               </div>
               <div className="divide-y divide-border">
-                {filtered.map((c: any) => {
+                {pagedClients.map((c: any) => {
                   const row = summaryRows.find(r => r.id === c.id);
                   return (
                     <button key={c.id} type="button" onClick={() => setSelectedId(c.id)} className={`clients-row w-full text-left py-3 transition-colors ${selected?.id === c.id ? 'bg-secondary/45' : 'hover:bg-secondary/25'}`}>
@@ -367,6 +372,12 @@ export default function Clients() {
                 })}
                 {!filtered.length && <div className="py-10 text-center text-sm text-muted-foreground">No client accounts yet.</div>}
               </div>
+              {filtered.length > CLIENTS_PAGE_SIZE && (
+                <div className="pt-3 mt-1 border-t border-border">
+                  <PaginationBar page={clientsPage} pageCount={clientsPageCount} total={filtered.length} pageSize={CLIENTS_PAGE_SIZE}
+                    onPageChange={setClientsPage} itemLabel="clients" />
+                </div>
+              )}
             </div>
 
             <div className="clients-card p-4">

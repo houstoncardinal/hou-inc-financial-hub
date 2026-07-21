@@ -21,6 +21,8 @@ import {
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/reports';
 import FinanceDetailDrawer from '@/components/FinanceDetailDrawer';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 const blank = {
   name: '',
@@ -80,6 +82,9 @@ export default function Vendors() {
     const complianceScore = Math.max(0, 100 - (needsW9 ? 34 : 0) - (insuranceExpired ? 28 : 0) - (!v.contact_email ? 10 : 0) - (!v.ein && v.requires_1099 ? 14 : 0));
     return { ...v, totalPaid: checksTotal + expTotal, txnCount, needsW9, insuranceExpired, complianceScore };
   }), [vendors, checks, expenses, q]);
+  const VENDORS_PAGE_SIZE = 20;
+  const { page: vendorsPage, setPage: setVendorsPage, pageCount: vendorsPageCount, paged: pagedVendors } =
+    usePagination(enriched, VENDORS_PAGE_SIZE, q);
 
   const vendorStats = useMemo(() => {
     const totalPaid = enriched.reduce((s: number, v: any) => s + v.totalPaid, 0);
@@ -304,7 +309,7 @@ export default function Vendors() {
         {/* Mobile card view */}
         <div className="sm:hidden space-y-3">
           {enriched.length === 0 ? <div className="py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
-            enriched.map((v: any) => (
+            pagedVendors.map((v: any) => (
               <div key={v.id} className="vnd-card p-3 space-y-2 cursor-pointer" onClick={() => setDetailRow(v)}>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">{v.name}</span>
@@ -337,6 +342,8 @@ export default function Vendors() {
               </div>
             ))}
         </div>
+        <PaginationBar page={vendorsPage} pageCount={vendorsPageCount} total={enriched.length} pageSize={VENDORS_PAGE_SIZE}
+          onPageChange={setVendorsPage} itemLabel="vendors" className="sm:hidden mt-3" />
 
         {/* Desktop table */}
         <div className="hidden sm:block vnd-panel">
@@ -344,7 +351,7 @@ export default function Vendors() {
             <div className="col-span-3">Vendor</div><div className="col-span-2">Email</div><div className="col-span-1">Phone</div><div className="col-span-2">Compliance</div><div className="col-span-1 text-right">Txns</div><div className="col-span-2 text-right">Total Paid</div><div className="col-span-1 text-right">—</div>
           </div>
           {enriched.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted-foreground">No vendors registered.</div> :
-            enriched.map((v: any) => (
+            pagedVendors.map((v: any) => (
               <div key={v.id} className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab vnd-row items-center cursor-pointer" onClick={() => setDetailRow(v)}>
                 <div className="col-span-3 font-medium min-w-0">
                   <div className="truncate">{v.name}</div>
@@ -380,6 +387,12 @@ export default function Vendors() {
                 </div>
               </div>
             ))}
+          {enriched.length > VENDORS_PAGE_SIZE && (
+            <div className="px-4 py-3 border-t border-border">
+              <PaginationBar page={vendorsPage} pageCount={vendorsPageCount} total={enriched.length} pageSize={VENDORS_PAGE_SIZE}
+                onPageChange={setVendorsPage} itemLabel="vendors" />
+            </div>
+          )}
         </div>
       </div>
       </div>

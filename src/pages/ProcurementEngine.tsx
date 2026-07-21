@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { scrapeUrl } from '@/integrations/firecrawl';
 import { fmtUSD, fmtDate } from '@/lib/format';
 import { toast } from 'sonner';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   AlertTriangle, ArrowRight, Brain, Building2, CheckCircle2, ClipboardList,
   ExternalLink, FileText, Mail, Plus, RefreshCw, Search, Send, ShoppingCart,
@@ -415,6 +417,9 @@ export default function ProcurementEngine() {
     const q = query.toLowerCase().trim();
     return hedge.filter(row => !q || [row.display_material, row.category, row.best_supplier_name].filter(Boolean).join(' ').toLowerCase().includes(q));
   }, [hedge, query]);
+  const HEDGE_PAGE_SIZE = 20;
+  const { page: hedgePage, setPage: setHedgePage, pageCount: hedgePageCount, paged: pagedHedge } =
+    usePagination(filteredHedge, HEDGE_PAGE_SIZE, query);
 
   const kpis = useMemo(() => {
     const openReqs = requirements.filter(r => ['open', 'quoted'].includes(r.status));
@@ -603,7 +608,7 @@ export default function ProcurementEngine() {
             <div>Material Package</div><div>Demand</div><div>Projects</div><div>Best Price</div><div>Signal</div>
           </div>
           <div className="divide-y divide-border">
-            {filteredHedge.map(row => {
+            {pagedHedge.map(row => {
               const tone = riskTone(row);
               return (
                 <button key={`${row.normalized_material}-${row.unit}`} type="button" className="proc-grid-row w-full text-left py-3 hover:bg-secondary/30 transition-colors" onClick={() => setSelectedMaterial(row.display_material)}>
@@ -625,6 +630,12 @@ export default function ProcurementEngine() {
             })}
             {!filteredHedge.length && <div className="py-10 text-center text-sm text-muted-foreground">No open material requirements match this search.</div>}
           </div>
+          {filteredHedge.length > HEDGE_PAGE_SIZE && (
+            <div className="pt-3 mt-1 border-t border-border">
+              <PaginationBar page={hedgePage} pageCount={hedgePageCount} total={filteredHedge.length} pageSize={HEDGE_PAGE_SIZE}
+                onPageChange={setHedgePage} itemLabel="materials" />
+            </div>
+          )}
         </section>
 
         <section className="grid grid-cols-1 xl:grid-cols-[.9fr_1.1fr] gap-4">

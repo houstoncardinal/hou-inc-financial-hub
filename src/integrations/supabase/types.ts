@@ -300,6 +300,8 @@ export type Database = {
           finance_project_id: string | null
           id: string
           internal_notes: string | null
+          latitude: number | null
+          longitude: number | null
           portal_client_id: string | null
           progress_pct: number
           project_code: string | null
@@ -332,6 +334,8 @@ export type Database = {
           finance_project_id?: string | null
           id?: string
           internal_notes?: string | null
+          latitude?: number | null
+          longitude?: number | null
           portal_client_id?: string | null
           progress_pct?: number
           project_code?: string | null
@@ -364,6 +368,8 @@ export type Database = {
           finance_project_id?: string | null
           id?: string
           internal_notes?: string | null
+          latitude?: number | null
+          longitude?: number | null
           portal_client_id?: string | null
           progress_pct?: number
           project_code?: string | null
@@ -904,9 +910,11 @@ export type Database = {
         Row: {
           budget_range: string | null
           company: string | null
+          converted_admin_project_id: string | null
           created_at: string
           email: string
           id: string
+          lead_status: string
           message: string
           name: string
           phone: string | null
@@ -915,9 +923,11 @@ export type Database = {
         Insert: {
           budget_range?: string | null
           company?: string | null
+          converted_admin_project_id?: string | null
           created_at?: string
           email: string
           id?: string
+          lead_status?: string
           message: string
           name: string
           phone?: string | null
@@ -926,15 +936,25 @@ export type Database = {
         Update: {
           budget_range?: string | null
           company?: string | null
+          converted_admin_project_id?: string | null
           created_at?: string
           email?: string
           id?: string
+          lead_status?: string
           message?: string
           name?: string
           phone?: string | null
           service_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contact_submissions_converted_admin_project_id_fkey"
+            columns: ["converted_admin_project_id"]
+            isOneToOne: false
+            referencedRelation: "admin_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       documents: {
         Row: {
@@ -5665,13 +5685,16 @@ export type Database = {
       start_project_submissions: {
         Row: {
           budget: string | null
+          converted_admin_project_id: string | null
           description: string | null
           email: string
           id: string
+          lead_status: string
           location: string | null
           name: string
           phone: string | null
           priorities: string[] | null
+          project_title: string | null
           scope: string | null
           source: string
           sqft: string | null
@@ -5681,13 +5704,16 @@ export type Database = {
         }
         Insert: {
           budget?: string | null
+          converted_admin_project_id?: string | null
           description?: string | null
           email: string
           id?: string
+          lead_status?: string
           location?: string | null
           name: string
           phone?: string | null
           priorities?: string[] | null
+          project_title?: string | null
           scope?: string | null
           source?: string
           sqft?: string | null
@@ -5697,13 +5723,16 @@ export type Database = {
         }
         Update: {
           budget?: string | null
+          converted_admin_project_id?: string | null
           description?: string | null
           email?: string
           id?: string
+          lead_status?: string
           location?: string | null
           name?: string
           phone?: string | null
           priorities?: string[] | null
+          project_title?: string | null
           scope?: string | null
           source?: string
           sqft?: string | null
@@ -5711,7 +5740,15 @@ export type Database = {
           submitted_at?: string
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "start_project_submissions_converted_admin_project_id_fkey"
+            columns: ["converted_admin_project_id"]
+            isOneToOne: false
+            referencedRelation: "admin_projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_health_events: {
         Row: {
@@ -6738,6 +6775,10 @@ export type Database = {
           p_project_title: string
           p_subject: string
         }
+        Returns: Json
+      }
+      transition_inbound_lead: {
+        Args: { p_lead_id: string; p_source: string; p_status: string }
         Returns: Json
       }
       user_has_entity_role: {

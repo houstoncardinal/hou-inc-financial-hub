@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
@@ -29,6 +31,8 @@ import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCa
 import { KpiGrid, PanelHeader, EmptyState, GuidedEntryIntro, WorkflowDialog } from '@/components/project-detail/formPrimitives';
 import { FlushTabs } from '@/components/project-detail/FlushTabs';
 import { ProjectTransactionLedger } from '@/components/project-detail/ProjectTransactionLedger';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 type SubTab = 'overview' | 'sov' | 'milestones' | 'draws' | 'cos' | 'addons' | 'payments' | 'expenses' | 'reconciliation' | 'notes' | 'audit';
@@ -290,9 +294,25 @@ function Bar({ value, max, hex }: { value: number; max: number; hex?: string }) 
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function ProjectBreakdown({ project, enriched, projectDocs = [] }: { project: any; enriched: any; projectDocs?: any[] }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { entity } = useEntity();
   const entityId  = entity?.id ?? 'houston-enterprise';
   const projectId = project?.id;
+
+  /* Cost-to-Complete worksheet — feeds the red-flag draw block below and the
+     forecasting deep-link in the Summary tab. HE-only feature; harmless
+     no-op query for other entities (their projects will just have no rows). */
+  const { data: ctcWorksheet = [] } = useQuery({
+    queryKey: ['ctc-worksheet', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_cost_to_complete_worksheet' as any, { p_project_id: projectId });
+      if (error) throw error;
+      return (data ?? []) as { flag: 'ok' | 'yellow' | 'red' }[];
+    },
+  });
+  const ctcHasRedFlag = ctcWorksheet.some(r => r.flag === 'red');
+  const ctcHasCommitments = ctcWorksheet.length > 0;
 
   /* ── navigation ──────────────────────────────────────────────────────────── */
   const [subTab, setSubTab] = useState<SubTab>('overview');
@@ -574,6 +594,29 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
     })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [scopeItems, milestones, changeOrders, addOns, draws, enriched?.incomeList, enriched?.expenseList]);
 
+  /* ── Pagination — one instance per list feed. SOV appears in both the SOV tab
+     and the Reconciliation tab, so those two get independent page state. ── */
+  const SOV_PAGE_SIZE = 20;
+  const { page: sovPage, setPage: setSovPage, pageCount: sovPageCount, paged: pagedScopeItems } =
+    usePagination(scopeItems, SOV_PAGE_SIZE);
+  const { page: reconSovPage, setPage: setReconSovPage, pageCount: reconSovPageCount, paged: pagedReconScopeItems } =
+    usePagination(scopeItems, SOV_PAGE_SIZE);
+  const MS_PAGE_SIZE = 15;
+  const { page: msPage, setPage: setMsPage, pageCount: msPageCount, paged: pagedMilestones } =
+    usePagination(milestones, MS_PAGE_SIZE);
+  const DRAW_PAGE_SIZE = 15;
+  const { page: drawPage, setPage: setDrawPage, pageCount: drawPageCount, paged: pagedDraws } =
+    usePagination(draws, DRAW_PAGE_SIZE);
+  const CO_PAGE_SIZE = 15;
+  const { page: coPage, setPage: setCoPage, pageCount: coPageCount, paged: pagedChangeOrders } =
+    usePagination(changeOrders, CO_PAGE_SIZE);
+  const ADDON_PAGE_SIZE = 15;
+  const { page: addOnPage, setPage: setAddOnPage, pageCount: addOnPageCount, paged: pagedAddOns } =
+    usePagination(addOns, ADDON_PAGE_SIZE);
+  const AUDIT_PAGE_SIZE = 25;
+  const { page: auditPage, setPage: setAuditPage, pageCount: auditPageCount, paged: pagedAuditEntries } =
+    usePagination(auditEntries, AUDIT_PAGE_SIZE);
+
   /* ── Monthly billed-vs-paid series (last 12 months) for the Billing vs Payments chart. ── */
   const billingVsPaymentsSeries = useMemo(() => {
     const months: { key: string; period: string }[] = [];
@@ -755,7 +798,13 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const deleteMS = async (id: string) => { if (!confirm('Delete this milestone?')) return; await (supabase as any).from('project_milestones').delete().eq('id', id); toast.success('Deleted'); load(); };
 
   /* Draw */
-  const openAddDraw = () => { setDrawForm(blankDraw()); setEditDrawId(null); setShowDraw(true); };
+  const openAddDraw = () => {
+    if (ctcHasRedFlag) {
+      toast.error('New draws are blocked', { description: 'This project has a cost code over the Cost-to-Complete variance threshold. Resolve it in the forecasting worksheet before requesting another draw.' });
+      return;
+    }
+    setDrawForm(blankDraw()); setEditDrawId(null); setShowDraw(true);
+  };
   const openEditDraw = (d: DrawSchedule) => { setDrawForm({ milestone_name: d.milestone_name, draw_amount: String(d.draw_amount), scheduled_date: d.scheduled_date ?? '', status: d.status, notes: d.notes ?? '', invoice_number: d.invoice_number ?? '', billing_period_start: d.billing_period_start ?? '', billing_period_end: d.billing_period_end ?? '' }); setEditDrawId(d.id); setShowDraw(true); };
   const syncFundedDrawIncome = async (draw: SavedDraw) => {
     if (!user?.id || !projectId) throw new Error('Sign in and open an active project before syncing funded draw income');
@@ -884,7 +933,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
   const contextualAction = (() => {
     if (subTab === 'sov') return { label: 'Add Scope Item', onClick: openAddSOV };
     if (subTab === 'milestones') return { label: 'Add Milestone', onClick: openAddMS };
-    if (subTab === 'draws') return { label: 'Add Draw', onClick: openAddDraw };
+    if (subTab === 'draws') return { label: ctcHasRedFlag ? 'Draws Blocked' : 'Add Draw', onClick: openAddDraw, disabled: ctcHasRedFlag };
     if (subTab === 'cos') return { label: 'Add Change Order', onClick: openAddCO };
     if (subTab === 'addons') return { label: 'Add Add-On', onClick: openAddAddOn };
     if (subTab === 'notes') return { label: 'Edit Notes', onClick: () => setShowNotes(true), disabled: savingNotes };
@@ -982,6 +1031,11 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         { label: 'Create CO', sub: 'New change order', icon: TrendingUp, color: '#f59e0b', onClick: () => { setSubTab('cos'); openAddCO(); } },
                         { label: 'Record Payment', sub: 'Log incoming payment', icon: Receipt, color: '#10b981', onClick: () => { setSubTab('payments'); setAutoOpenLog('income'); } },
                         { label: 'Record Expense', sub: 'Log project expense', icon: Wallet, color: '#ef4444', onClick: () => { setSubTab('expenses'); setAutoOpenLog('expense'); } },
+                        ...(ctcHasCommitments ? [{
+                          label: 'Cost-to-Complete Forecast', sub: ctcHasRedFlag ? 'Over threshold — review now' : 'PM forecasting worksheet',
+                          icon: AlertTriangle, color: ctcHasRedFlag ? '#dc2626' : '#9D7E3F',
+                          onClick: () => navigate(`/admin/projects/${projectId}/forecasting`),
+                        }] : []),
                       ].map(a => (
                         <button key={a.label} onClick={a.onClick} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-secondary/50 rounded-md transition-colors group">
                           <span className="pdv2-icon-chip" style={{ backgroundColor: `${a.color}1a` }}>
@@ -1254,7 +1308,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     <>
                     {/* Mobile card view */}
                     <div className="sm:hidden divide-y divide-border">
-                      {scopeItems.map(item => {
+                      {pagedScopeItems.map(item => {
                         const rev  = Number(item.contract_amount) + Number(item.change_order_amount) - Number(item.approved_credit_amount || 0);
                         const earn = rev * Number(item.percent_complete) / 100;
                         const ws = item.work_status ?? 'not_started';
@@ -1295,6 +1349,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">{scopeItems.length} line item{scopeItems.length !== 1 ? 's' : ''}</span>
                         <span className="font-mono-tab text-sm font-bold text-foreground">{fmtUSD(fin.sovRevisedTotal)}</span>
                       </div>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={sovPage} pageCount={sovPageCount} total={scopeItems.length} pageSize={SOV_PAGE_SIZE}
+                          onPageChange={setSovPage} itemLabel="scope items" />
+                      </div>
                     </div>
 
                     {/* Desktop table */}
@@ -1308,7 +1366,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </thead>
                         <tbody>
-                          {scopeItems.map(item => {
+                          {pagedScopeItems.map(item => {
                             const rev  = Number(item.contract_amount) + Number(item.change_order_amount) - Number(item.approved_credit_amount || 0);
                             const earn = rev * Number(item.percent_complete) / 100;
                             const rem  = rev - Number(item.total_billed);
@@ -1350,6 +1408,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </tfoot>
                       </table>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={sovPage} pageCount={sovPageCount} total={scopeItems.length} pageSize={SOV_PAGE_SIZE}
+                          onPageChange={setSovPage} itemLabel="scope items" />
+                      </div>
                     </div>
                     </>
                   )}
@@ -1454,8 +1516,9 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                 {milestones.length === 0 ? (
                   <EmptyState text="No milestones yet — add your first milestone above." />
                 ) : (
+                  <>
                   <div className="divide-y divide-border">
-                    {milestones.map(m => {
+                    {pagedMilestones.map(m => {
                       const meta = MS_STATUS[m.status] ?? MS_STATUS.not_started;
                       return (
                         <div key={m.id} className="px-4 py-4 pd-row">
@@ -1488,6 +1551,11 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                       );
                     })}
                   </div>
+                  <div className="px-4 py-3 border-t border-border">
+                    <PaginationBar page={msPage} pageCount={msPageCount} total={milestones.length} pageSize={MS_PAGE_SIZE}
+                      onPageChange={setMsPage} itemLabel="milestones" />
+                  </div>
+                  </>
                 )}
                 </div>
               </div>
@@ -1511,6 +1579,19 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
 	                  <PanelHeader
 	                    label={`Draw Schedule — ${draws.length} Request${draws.length !== 1 ? 's' : ''}`}
 	                  />
+
+                  {ctcHasRedFlag && (
+                    <div className="mx-4 mt-3 px-3 py-2.5 border border-destructive/35 bg-destructive/5 flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-destructive">New draws are blocked</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          One or more cost codes on this project are over the Cost-to-Complete variance threshold.{' '}
+                          <Link to={`/admin/projects/${projectId}/forecasting`} className="underline hover:text-foreground">Open the forecasting worksheet</Link> to review and resolve before requesting another draw.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {showDraw && (
                     <WorkflowDialog
@@ -1581,7 +1662,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     <>
                     {/* Mobile card view */}
                     <div className="sm:hidden divide-y divide-border">
-                      {draws.map(d => {
+                      {pagedDraws.map(d => {
                         const meta = DRAW_STATUS[d.status];
                         return (
                           <div key={d.id} className="px-4 py-4 pd-row space-y-2">
@@ -1611,6 +1692,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-bold">{draws.length} draw{draws.length !== 1 ? 's' : ''}</span>
                         <span className="font-mono-tab text-sm font-bold text-foreground">{fmtUSD(draws.reduce((s, d) => s + Number(d.draw_amount), 0))}</span>
                       </div>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={drawPage} pageCount={drawPageCount} total={draws.length} pageSize={DRAW_PAGE_SIZE}
+                          onPageChange={setDrawPage} itemLabel="draws" />
+                      </div>
                     </div>
 
                     {/* Desktop table */}
@@ -1624,7 +1709,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </thead>
                         <tbody>
-                          {draws.map(d => {
+                          {pagedDraws.map(d => {
                             const meta = DRAW_STATUS[d.status];
                             return (
                               <tr key={d.id} className="border-b border-border pd-row">
@@ -1658,6 +1743,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </tfoot>
                       </table>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={drawPage} pageCount={drawPageCount} total={draws.length} pageSize={DRAW_PAGE_SIZE}
+                          onPageChange={setDrawPage} itemLabel="draws" />
+                      </div>
                     </div>
                     </>
                   )}
@@ -1768,7 +1857,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     <>
                     {/* Mobile card view */}
                     <div className="sm:hidden divide-y divide-border">
-                      {changeOrders.map(c => {
+                      {pagedChangeOrders.map(c => {
                         const signed = CO_SIGN[c.type] * Number(c.amount);
                         const statusColor = c.status === 'approved' ? 'text-emerald-500' : c.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
                         return (
@@ -1794,6 +1883,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </div>
                         );
                       })}
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={coPage} pageCount={coPageCount} total={changeOrders.length} pageSize={CO_PAGE_SIZE}
+                          onPageChange={setCoPage} itemLabel="change orders" />
+                      </div>
                     </div>
 
                     {/* Desktop table */}
@@ -1807,7 +1900,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </thead>
                         <tbody>
-                          {changeOrders.map(c => {
+                          {pagedChangeOrders.map(c => {
                             const signed = CO_SIGN[c.type] * Number(c.amount);
                             const statusColor = c.status === 'approved' ? 'text-emerald-500' : c.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
                             return (
@@ -1835,6 +1928,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           })}
                         </tbody>
                       </table>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={coPage} pageCount={coPageCount} total={changeOrders.length} pageSize={CO_PAGE_SIZE}
+                          onPageChange={setCoPage} itemLabel="change orders" />
+                      </div>
                     </div>
                     </>
                   )}
@@ -1981,7 +2078,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     <>
                     {/* Mobile card view */}
                     <div className="sm:hidden divide-y divide-border">
-                      {addOns.map(a => {
+                      {pagedAddOns.map(a => {
                         const signed = AO_SIGN[a.kind] * Number(a.amount);
                         const statusColor = a.status === 'approved' ? 'text-emerald-500' : a.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
                         return (
@@ -2009,6 +2106,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </div>
                         );
                       })}
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={addOnPage} pageCount={addOnPageCount} total={addOns.length} pageSize={ADDON_PAGE_SIZE}
+                          onPageChange={setAddOnPage} itemLabel="add-ons" />
+                      </div>
                     </div>
 
                     {/* Desktop table */}
@@ -2022,7 +2123,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </thead>
                         <tbody>
-                          {addOns.map(a => {
+                          {pagedAddOns.map(a => {
                             const signed = AO_SIGN[a.kind] * Number(a.amount);
                             const statusColor = a.status === 'approved' ? 'text-emerald-500' : a.status === 'rejected' ? 'text-destructive' : 'text-amber-500';
                             return (
@@ -2052,6 +2153,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           })}
                         </tbody>
                       </table>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={addOnPage} pageCount={addOnPageCount} total={addOns.length} pageSize={ADDON_PAGE_SIZE}
+                          onPageChange={setAddOnPage} itemLabel="add-ons" />
+                      </div>
                     </div>
                     </>
                   )}
@@ -2171,7 +2276,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </thead>
                         <tbody>
-                          {scopeItems.map(item => {
+                          {pagedReconScopeItems.map(item => {
                             const rev  = Number(item.contract_amount) + Number(item.change_order_amount) - Number(item.approved_credit_amount || 0);
                             const earn = rev * Number(item.percent_complete) / 100;
                             const paid = incomeByScope[item.id] || 0;
@@ -2199,6 +2304,10 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                           </tr>
                         </tfoot>
                       </table>
+                      <div className="px-4 py-3 border-t border-border">
+                        <PaginationBar page={reconSovPage} pageCount={reconSovPageCount} total={scopeItems.length} pageSize={SOV_PAGE_SIZE}
+                          onPageChange={setReconSovPage} itemLabel="scope items" />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2296,7 +2405,7 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                     </div>
                   ) : (
                     <div className="divide-y divide-border">
-                      {auditEntries.map(e => (
+                      {pagedAuditEntries.map(e => (
                         <div key={e.id} className="pd-row flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3">
                           {/* icon + badge */}
                           <div className="flex items-center gap-2 sm:shrink-0">
@@ -2324,10 +2433,12 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                   )}
 
                   {auditEntries.length > 0 && (
-                    <div className="px-4 py-2.5 border-t border-border bg-secondary/30">
+                    <div className="px-4 py-2.5 border-t border-border bg-secondary/30 space-y-2">
                       <p className="text-[10px] text-muted-foreground/60">
                         {auditEntries.length} record{auditEntries.length !== 1 ? 's' : ''} · sorted by created date (newest first)
                       </p>
+                      <PaginationBar page={auditPage} pageCount={auditPageCount} total={auditEntries.length} pageSize={AUDIT_PAGE_SIZE}
+                        onPageChange={setAuditPage} itemLabel="audit entries" />
                     </div>
                   )}
                 </div>

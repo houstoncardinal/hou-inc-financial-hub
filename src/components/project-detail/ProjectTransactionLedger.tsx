@@ -9,6 +9,8 @@ import { DateInput } from '@/components/ui/date-input';
 import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { useUpsert } from '@/hooks/useFinance';
 import { KpiGrid, PanelHeader, EmptyState, GuidedEntryIntro, WorkflowDialog } from '@/components/project-detail/formPrimitives';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 /* ── ProjectTransactionLedger ──────────────────────────────────────────────────
    The real, two-way Payments/Expenses system for a project: log a transaction,
@@ -312,6 +314,10 @@ export function ProjectTransactionLedger({
     () => [...transactions].sort((a, b) => (b.transaction_date ?? '').localeCompare(a.transaction_date ?? '')),
     [transactions],
   );
+  const TX_PAGE_SIZE = 20;
+  const { page: txPage, setPage: setTxPage, pageCount: txPageCount, paged: pagedTransactions } =
+    usePagination(sorted, TX_PAGE_SIZE);
+  const txItemLabel = isIncome ? 'payments' : 'expenses';
 
   const stats = useMemo(() => {
     const total = transactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -410,7 +416,7 @@ export function ProjectTransactionLedger({
           <>
             {/* Mobile cards */}
             <div className="sm:hidden divide-y divide-border">
-              {sorted.map(t => (
+              {pagedTransactions.map(t => (
                 <button key={t.id} onClick={() => setDetailRow(t)} className="w-full text-left px-4 py-3.5 space-y-2 hover:bg-secondary/30 transition-colors">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -430,6 +436,10 @@ export function ProjectTransactionLedger({
                 </button>
               ))}
             </div>
+            <div className="sm:hidden px-4 py-3 border-t border-border">
+              <PaginationBar page={txPage} pageCount={txPageCount} total={sorted.length} pageSize={TX_PAGE_SIZE}
+                onPageChange={setTxPage} itemLabel={txItemLabel} />
+            </div>
 
             {/* Desktop table */}
             <div className="hidden sm:block overflow-x-auto">
@@ -442,7 +452,7 @@ export function ProjectTransactionLedger({
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map(t => (
+                  {pagedTransactions.map(t => (
                     <tr key={t.id} onClick={() => setDetailRow(t)} className="border-b border-border pd-row cursor-pointer">
                       <td className="px-4 py-3 text-muted-foreground font-mono-tab whitespace-nowrap">{fmtDate(t.transaction_date)}</td>
                       <td className="px-4 py-3 text-foreground">{t.source_name || t.description || '—'}</td>
@@ -467,6 +477,10 @@ export function ProjectTransactionLedger({
                   </tr>
                 </tfoot>
               </table>
+              <div className="px-4 py-3 border-t border-border">
+                <PaginationBar page={txPage} pageCount={txPageCount} total={sorted.length} pageSize={TX_PAGE_SIZE}
+                  onPageChange={setTxPage} itemLabel={txItemLabel} />
+              </div>
             </div>
           </>
         )}

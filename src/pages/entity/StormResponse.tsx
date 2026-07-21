@@ -24,6 +24,8 @@ import {
 } from '@/hooks/useEntityOps';
 import { fmtDate } from '@/lib/format';
 import { toast } from 'sonner';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   CloudLightning, Plus, MapPin, Users, Siren, ExternalLink,
   RadioTower, Trash2, Zap, RefreshCw, ShieldCheck, Crosshair, X,
@@ -217,6 +219,9 @@ export default function StormResponse() {
     for (const i of impacts as any[]) (map[i.outage_event_id] ??= []).push(i);
     return map;
   }, [impacts]);
+  const EVENTS_PAGE_SIZE = 15;
+  const { page: eventsPage, setPage: setEventsPage, pageCount: eventsPageCount, paged: pagedEvents } =
+    usePagination(events as any[], EVENTS_PAGE_SIZE);
 
   const providerTrend = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -451,7 +456,7 @@ export default function StormResponse() {
             <section className="st-panel p-3 sm:p-4">
               <div className="st-k mb-2">Outage Events</div>
               <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1">
-                {(events as any[]).map(ev => {
+                {pagedEvents.map(ev => {
                   const meta = OUTAGE_STATUS[ev.status] ?? OUTAGE_STATUS.active;
                   const evImpacts = impactsByEvent[ev.id] ?? [];
                   return (
@@ -525,6 +530,12 @@ export default function StormResponse() {
                   </div>
                 )}
               </div>
+              {(events as any[]).length > EVENTS_PAGE_SIZE && (
+                <div className="pt-2.5 mt-1 border-t border-border/60">
+                  <PaginationBar page={eventsPage} pageCount={eventsPageCount} total={(events as any[]).length} pageSize={EVENTS_PAGE_SIZE}
+                    onPageChange={setEventsPage} itemLabel="outage events" />
+                </div>
+              )}
             </section>
 
             <div className="space-y-3.5">

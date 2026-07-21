@@ -88,12 +88,12 @@ interface FormData {
   scopes: string[]; sqft: string; location: string;
   budget: string; startTimeline: string;
   priorities: string[];
-  name: string; email: string; phone: string; description: string;
+  projectTitle: string; name: string; email: string; phone: string; description: string;
 }
 const INIT: FormData = {
   type: '', scopes: [], sqft: '', location: '', budget: '',
   startTimeline: '', priorities: [],
-  name: '', email: '', phone: '', description: '',
+  projectTitle: '', name: '', email: '', phone: '', description: '',
 };
 
 const slide = {
@@ -135,6 +135,7 @@ export default function StartProject() {
     if (s === 4 && !data.budget) errs.budget = 'Please select a budget range';
     if (s === 5 && !data.startTimeline) errs.timeline = 'Please select a timeline';
     if (s === 6) {
+      if (!data.projectTitle.trim()) errs.projectTitle = 'Project title is required';
       if (!data.name.trim()) errs.name = 'Full name is required';
       if (!data.email.trim()) errs.email = 'Email is required';
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errs.email = 'Enter a valid email address';
@@ -149,7 +150,7 @@ export default function StartProject() {
     if (step === 3) return data.sqft !== '' && data.location !== '';
     if (step === 4) return data.budget !== '';
     if (step === 5) return data.startTimeline !== '';
-    if (step === 6) return data.name.trim() !== '' && data.email.trim() !== '';
+    if (step === 6) return data.projectTitle.trim() !== '' && data.name.trim() !== '' && data.email.trim() !== '';
     return true;
   };
 
@@ -161,6 +162,7 @@ export default function StartProject() {
       setSubmitError('');
       try {
         const { error } = await supabase.from('start_project_submissions').insert({
+          project_title: data.projectTitle.trim(),
           name: data.name, email: data.email, phone: data.phone || null,
           type: data.type, scope: data.scopes.join(', '), sqft: data.sqft,
           location: data.location, budget: data.budget,
@@ -236,6 +238,7 @@ export default function StartProject() {
             <div style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.4em', fontWeight: 700, color: 'rgba(255,255,255,0.26)', marginBottom: 16 }}>Brief Summary</div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
               {[
+                ['Project Title', data.projectTitle || '—'],
                 ['Project Type', data.type === 'residential' ? 'Residential' : 'Commercial'],
                 ['Scope', data.scopes.map(s => s.replace(/_/g, ' ')).join(', ') || '—'],
                 ['Size', SQFT_OPTS.find(o => o.v === data.sqft)?.l ? SQFT_OPTS.find(o => o.v === data.sqft)!.l + ' sq ft' : '—'],
@@ -826,8 +829,9 @@ function StepContact({ data, set, fieldErrors, scopes, SQFT_OPTS: sqftOpts, BUDG
 }) {
   return (
     <div>
-      <QHead q="How should we reach you?" sub="Your information is private and only used to follow up on your project." />
+      <QHead q="Name your project and tell us how to reach you." sub="A clear project title keeps your brief connected from first review through delivery and finance." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <Field label="Project Title" value={data.projectTitle} onChange={v => set('projectTitle', v)} placeholder="e.g. River Oaks Residence Renovation" required error={fieldErrors.projectTitle} icon={Building2} />
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Full Name" value={data.name} onChange={v => set('name', v)} placeholder="Your full name" required error={fieldErrors.name} icon={User} />
           <Field label="Email Address" type="email" value={data.email} onChange={v => set('email', v)} placeholder="you@example.com" required error={fieldErrors.email} icon={Mail} />
@@ -868,6 +872,7 @@ function StepContact({ data, set, fieldErrors, scopes, SQFT_OPTS: sqftOpts, BUDG
           <div style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: MUTED, marginBottom: 14 }}>Your Brief So Far</div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             {[
+              ['Project', data.projectTitle || '—'],
               ['Type', data.type === 'residential' ? 'Residential' : 'Commercial'],
               ['Scope', data.scopes.map(s => scopes.find(x => x.value === s)?.label || s).join(', ') || '—'],
               ['Size', sqftOpts.find(o => o.v === data.sqft)?.l ? sqftOpts.find(o => o.v === data.sqft)!.l + ' sq ft' : '—'],

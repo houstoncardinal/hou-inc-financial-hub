@@ -11,15 +11,21 @@ import { useAuth, ROLE_LABELS, type AppRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
 import {
   useBankMatchSuggestions,
+  useCreateCommitmentLine,
   useFinanceAgingSummary,
+  useFinanceCommitmentLines,
   useFinanceCommitments,
   useFinanceControlSummary,
+  useFinanceCostCodes,
   useProjects,
   useVendors,
+  useWipReconciliation,
 } from '@/hooks/useFinance';
 import { supabase } from '@/integrations/supabase/client';
 import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   BadgeDollarSign,
   Banknote,
@@ -76,6 +82,52 @@ function Metric({ label, value, sub, icon: Icon, color = '#9D7E3F' }: any) {
   );
 }
 
+/** Cost-code line-item breakdown for a single commitment — the piece the
+    Cost-to-Complete worksheet needs to compute "Commitments" per cost code. */
+function CommitmentLinesPanel({ commitmentId, costCodes }: { commitmentId: string; costCodes: any[] }) {
+  const { data: lines = [] } = useFinanceCommitmentLines(commitmentId);
+  const createLine = useCreateCommitmentLine();
+  const [form, setForm] = useState({ cost_code_id: '', description: '', unit_price: '', quantity: '1' });
+
+  const submit = () => {
+    if (!form.cost_code_id) { toast.error('Pick a cost code'); return; }
+    createLine.mutate({
+      commitment_id: commitmentId,
+      cost_code_id: form.cost_code_id,
+      description: form.description || undefined,
+      unit_price: num(form.unit_price),
+      quantity: num(form.quantity) || 1,
+    }, {
+      onSuccess: () => { setForm({ cost_code_id: '', description: '', unit_price: '', quantity: '1' }); toast.success('Line added'); },
+      onError: (e: any) => toast.error(e.message || 'Failed to add line'),
+    });
+  };
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border/60 space-y-1.5">
+      {lines.map((l: any) => (
+        <div key={l.id} className="flex items-center justify-between gap-2 text-[10px]">
+          <span className="truncate text-muted-foreground">
+            {l.finance_cost_codes?.code ?? '—'} · {l.description || l.finance_cost_codes?.name || 'Line item'} · qty {num(l.quantity)} × {fmtUSD(num(l.unit_price))}
+          </span>
+          <span className="font-mono-tab font-bold shrink-0">{fmtUSD(num(l.total_budget_line))}</span>
+        </div>
+      ))}
+      {!lines.length && <div className="text-[10px] text-muted-foreground">No cost-code lines yet — add one below.</div>}
+      <div className="grid grid-cols-2 sm:grid-cols-[1.3fr_1fr_.7fr_.7fr_auto] gap-1.5 mt-2">
+        <Select value={form.cost_code_id} onValueChange={v => setForm(f => ({ ...f, cost_code_id: v }))}>
+          <SelectTrigger className="fc-field h-8 text-[11px]"><SelectValue placeholder="Cost code" /></SelectTrigger>
+          <SelectContent>{costCodes.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.code} · {c.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Input className="fc-field h-8 text-[11px]" placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+        <Input className="fc-field h-8 text-[11px]" placeholder="Unit price" value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} />
+        <Input className="fc-field h-8 text-[11px]" placeholder="Qty" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+        <button className="fc-action !h-8" onClick={submit} disabled={createLine.isPending}>+ Line</button>
+      </div>
+    </div>
+  );
+}
+
 function parseBankCsv(text: string) {
   return text
     .split(/\r?\n/)
@@ -101,6 +153,8 @@ export default function FinanceControls() {
   const { data: controls = [] } = useFinanceControlSummary();
   const { data: aging = [] } = useFinanceAgingSummary();
   const { data: commitments = [] } = useFinanceCommitments();
+  const { data: costCodes = [] } = useFinanceCostCodes();
+  const [expandedCommitmentId, setExpandedCommitmentId] = useState<string | null>(null);
   const { data: suggestions = [] } = useBankMatchSuggestions();
   const { data: projects = [] } = useProjects();
   const { data: vendors = [] } = useVendors();
@@ -135,6 +189,14 @@ export default function FinanceControls() {
     const committed = controls.reduce((s: number, r: any) => s + num(r.committed_cost), 0);
     return { budget, earned, cost, pendingCo, ar, arRetainage, apRetainage, committed, margin: earned - cost };
   }, [controls]);
+  const CONTROLS_PAGE_SIZE = 12;
+  const { page: controlsPage, setPage: setControlsPage, pageCount: controlsPageCount, paged: pagedControls } =
+    usePagination(controls as any[], CONTROLS_PAGE_SIZE);
+
+  const { data: wipRows = [] } = useWipReconciliation();
+  const WIP_PAGE_SIZE = 12;
+  const { page: wipPage, setPage: setWipPage, pageCount: wipPageCount, paged: pagedWip } =
+    usePagination(wipRows as any[], WIP_PAGE_SIZE);
 
   const agingMap = useMemo(() => {
     const out: Record<string, number> = {};
@@ -282,7 +344,7 @@ export default function FinanceControls() {
               <div className="text-[10px] text-muted-foreground font-mono-tab hidden sm:block">{controls.length} projects</div>
             </div>
             <div className="sm:hidden space-y-2">
-              {(controls as any[]).map(row => (
+              {pagedControls.map(row => (
                 <div key={row.project_id} className="fc-mobile-control">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -313,11 +375,13 @@ export default function FinanceControls() {
               ))}
               {!controls.length && <div className="py-12 text-center text-sm text-muted-foreground">No project control data yet.</div>}
             </div>
+            <PaginationBar page={controlsPage} pageCount={controlsPageCount} total={controls.length} pageSize={CONTROLS_PAGE_SIZE}
+              onPageChange={setControlsPage} itemLabel="projects" className="sm:hidden mt-3" />
             <div className="hidden sm:block overflow-x-auto">
               <div className="fc-table fc-row bg-secondary/45 fc-k">
                 <div>Project</div><div>% Complete</div><div>Revenue</div><div>Actual Cost</div><div>Margin</div><div>AR Open</div><div>Pending CO</div><div>Over/Under</div>
               </div>
-              {(controls as any[]).map(row => (
+              {pagedControls.map(row => (
                 <div key={row.project_id} className="fc-table fc-row">
                   <div className="min-w-0">
                     <div className="font-bold truncate">{row.project_name}</div>
@@ -333,6 +397,92 @@ export default function FinanceControls() {
                 </div>
               ))}
               {!controls.length && <div className="py-12 text-center text-sm text-muted-foreground">No project control data yet.</div>}
+              {controls.length > CONTROLS_PAGE_SIZE && (
+                <div className="px-3 py-3 border-t border-border">
+                  <PaginationBar page={controlsPage} pageCount={controlsPageCount} total={controls.length} pageSize={CONTROLS_PAGE_SIZE}
+                    onPageChange={setControlsPage} itemLabel="projects" />
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="fc-panel p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <div className="fc-k">Forecast-Based · Actual / (Actual + PM's Cost-to-Complete)</div>
+                <h2 className="text-base font-bold mt-1">WIP Reconciliation</h2>
+                <p className="text-[10px] text-muted-foreground mt-1 max-w-xl">
+                  A different number from "% Complete" above — that one is cost-ratio (actual ÷ budget). This one is
+                  earned-value (actual ÷ (actual + the PM's own forecasted cost-to-complete)), the true AIA-style
+                  percent complete once a project has commitments and a forecast entered.
+                </p>
+              </div>
+              <div className="text-[10px] text-muted-foreground font-mono-tab hidden sm:block shrink-0">{wipRows.length} projects</div>
+            </div>
+            <div className="sm:hidden space-y-2">
+              {pagedWip.map((row: any) => (
+                <div key={row.project_id} className="fc-mobile-control">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-black truncate">{row.project_name}</div>
+                      <div className={`text-[10px] mt-0.5 font-bold uppercase tracking-wide ${row.classification === 'over_billed' ? 'text-warning' : row.classification === 'under_billed' ? 'text-blue-500' : 'text-muted-foreground'}`}>
+                        {row.classification === 'over_billed' ? 'Over-billed (liability)' : row.classification === 'under_billed' ? 'Under-billed (asset)' : 'Balanced'}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="fc-k">EAC Complete</div>
+                      <div className="font-mono-tab font-black">{num(row.percent_complete).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mt-3">
+                    {[
+                      ['Contract Value', fmtUSD(num(row.contract_value)), 'text-foreground'],
+                      ['Actual Cost', fmtUSD(num(row.actual_cost_to_date)), 'text-foreground'],
+                      ['PM Forecast ETC', fmtUSD(num(row.pm_forecasted_etc)), 'text-foreground'],
+                      ['Earned Revenue', fmtUSD(num(row.earned_revenue)), 'text-positive'],
+                      ['Billed to Date', fmtUSD(num(row.billed_to_date)), 'text-foreground'],
+                      ['Over/Under', fmtUSD(num(row.over_under_billed)), row.classification === 'over_billed' ? 'text-warning' : row.classification === 'under_billed' ? 'text-blue-500' : 'text-positive'],
+                    ].map(([label, value, cls]: any) => (
+                      <div key={label} className="fc-mobile-stat">
+                        <div className="fc-k">{label}</div>
+                        <div className={`font-mono-tab font-bold text-[12px] mt-1 ${cls}`}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!wipRows.length && <div className="py-12 text-center text-sm text-muted-foreground">No WIP data yet.</div>}
+            </div>
+            <PaginationBar page={wipPage} pageCount={wipPageCount} total={wipRows.length} pageSize={WIP_PAGE_SIZE}
+              onPageChange={setWipPage} itemLabel="projects" className="sm:hidden mt-3" />
+            <div className="hidden sm:block overflow-x-auto">
+              <div className="fc-table fc-row bg-secondary/45 fc-k">
+                <div>Project</div><div>EAC Complete</div><div>Contract Value</div><div>Actual Cost</div><div>PM Forecast ETC</div><div>Earned Revenue</div><div>Billed</div><div>Over/Under</div>
+              </div>
+              {pagedWip.map((row: any) => (
+                <div key={row.project_id} className="fc-table fc-row">
+                  <div className="min-w-0">
+                    <div className="font-bold truncate">{row.project_name}</div>
+                    <div className={`text-[10px] capitalize ${row.classification === 'over_billed' ? 'text-warning' : row.classification === 'under_billed' ? 'text-blue-500' : 'text-muted-foreground'}`}>
+                      {row.classification.replace(/_/g, '-')}
+                    </div>
+                  </div>
+                  <div className="font-mono-tab font-bold">{num(row.percent_complete).toFixed(1)}%</div>
+                  <div className="font-mono-tab">{fmtUSD(num(row.contract_value))}</div>
+                  <div className="font-mono-tab">{fmtUSD(num(row.actual_cost_to_date))}</div>
+                  <div className="font-mono-tab">{fmtUSD(num(row.pm_forecasted_etc))}</div>
+                  <div className="font-mono-tab text-positive">{fmtUSD(num(row.earned_revenue))}</div>
+                  <div className="font-mono-tab">{fmtUSD(num(row.billed_to_date))}</div>
+                  <div className={`font-mono-tab font-bold ${row.classification === 'over_billed' ? 'text-warning' : row.classification === 'under_billed' ? 'text-blue-500' : 'text-positive'}`}>{fmtUSD(num(row.over_under_billed))}</div>
+                </div>
+              ))}
+              {!wipRows.length && <div className="py-12 text-center text-sm text-muted-foreground">No WIP data yet.</div>}
+              {wipRows.length > WIP_PAGE_SIZE && (
+                <div className="px-3 py-3 border-t border-border">
+                  <PaginationBar page={wipPage} pageCount={wipPageCount} total={wipRows.length} pageSize={WIP_PAGE_SIZE}
+                    onPageChange={setWipPage} itemLabel="projects" />
+                </div>
+              )}
             </div>
           </section>
 
@@ -393,16 +543,26 @@ export default function FinanceControls() {
               </div>
               <Textarea className="rounded-none mt-2 text-xs" rows={2} placeholder="Notes" value={commitment.notes} onChange={e => setCommitment(f => ({ ...f, notes: e.target.value }))} />
               <button className="fc-primary mt-2" onClick={() => createCommitment.mutate()}><BriefcaseBusiness className="w-3.5 h-3.5" /> Save Commitment</button>
-              <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
-                {(commitments as any[]).slice(0, 8).map(c => (
-                  <div key={c.id} className="border border-border px-2 py-2 text-xs flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-bold truncate">{c.title}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{c.projects?.name || 'Unassigned'} · {c.vendors?.name || 'No vendor'}</div>
+              <div className="mt-3 space-y-1.5 max-h-[28rem] overflow-y-auto">
+                {(commitments as any[]).slice(0, 8).map(c => {
+                  const isOpen = expandedCommitmentId === c.id;
+                  return (
+                    <div key={c.id} className="border border-border px-2 py-2 text-xs">
+                      <button type="button" className="w-full flex items-center justify-between gap-3 text-left" onClick={() => setExpandedCommitmentId(isOpen ? null : c.id)}>
+                        <div className="min-w-0">
+                          <div className="font-bold truncate">{c.title}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{c.projects?.name || 'Unassigned'} · {c.vendors?.name || 'No vendor'}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono-tab font-bold">{fmtUSD(num(c.revised_amount))}</div>
+                          <div className="text-[9px] text-muted-foreground mt-0.5">{isOpen ? 'Hide lines ▲' : 'Cost-code lines ▾'}</div>
+                        </div>
+                      </button>
+                      {isOpen && <CommitmentLinesPanel commitmentId={c.id} costCodes={costCodes as any[]} />}
                     </div>
-                    <div className="font-mono-tab font-bold">{fmtUSD(num(c.revised_amount))}</div>
-                  </div>
-                ))}
+                  );
+                })}
+                {!(commitments as any[]).length && <div className="text-[11px] text-muted-foreground py-2">No commitments logged yet.</div>}
               </div>
             </section>
 

@@ -24,6 +24,8 @@ import {
 import { Download, ShoppingCart, X } from 'lucide-react';
 import { fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   Package, PackagePlus, PackageMinus, SlidersHorizontal, Boxes, Zap,
   AlertTriangle, Plus, Pencil, Trash2, Search, History, Wrench,
@@ -279,6 +281,9 @@ export default function HgpInventory() {
     return Number(isLow(b)) - Number(isLow(a)) || String(a.name).localeCompare(String(b.name));
   }),
   [livePartsAll, categoryFilter, lowOnly, search, sortBy]);
+  const PARTS_PAGE_SIZE = 20;
+  const { page: partsPage, setPage: setPartsPage, pageCount: partsPageCount, paged: pagedParts } =
+    usePagination(filteredParts, PARTS_PAGE_SIZE, `${categoryFilter}|${lowOnly}|${search}|${sortBy}`);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: livePartsAll.length };
@@ -554,7 +559,7 @@ export default function HgpInventory() {
               <div className="inv-row grid grid-cols-[1.6fr_.8fr_.9fr_.6fr_.6fr_.7fr_.8fr_.9fr_1fr] gap-2 bg-secondary/45 inv-k items-center">
                 <div>Part</div><div>SKU</div><div>Category</div><div>On Hand</div><div>Reorder</div><div>Unit Cost</div><div>Value</div><div>Supplier</div><div className="text-right">Actions</div>
               </div>
-              {filteredParts.map(p => {
+              {pagedParts.map(p => {
                 const low = isLow(p);
                 const negative = num(p.qty_on_hand) < 0;
                 const vendor = (vendors as any[]).find(v => v.id === p.vendor_id);
@@ -606,6 +611,12 @@ export default function HgpInventory() {
               )}
             </div>
           </div>
+          {filteredParts.length > PARTS_PAGE_SIZE && (
+            <div className="pt-2.5 border-t border-border/60">
+              <PaginationBar page={partsPage} pageCount={partsPageCount} total={filteredParts.length} pageSize={PARTS_PAGE_SIZE}
+                onPageChange={setPartsPage} itemLabel="parts" />
+            </div>
+          )}
 
           {/* ── Movement ledger ── */}
           <div className="inv-panel p-3">

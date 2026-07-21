@@ -13,6 +13,8 @@ import { fmtUSD, fmtDate, todayLocalDate } from '@/lib/format';
 import { Plus, Trash2, Eye, FileText, Table2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateInvoicesReport, savePDF, downloadInvoiceExcel } from '@/lib/reports';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 const STATUS_STYLES: Record<string, string> = {
   draft:   'bg-muted text-muted-foreground border-border',
@@ -41,6 +43,9 @@ export default function Invoices() {
     }
     return true;
   });
+  const INVOICES_PAGE_SIZE = 20;
+  const { page: invoicesPage, setPage: setInvoicesPage, pageCount: invoicesPageCount, paged: pagedInvoices } =
+    usePagination(filtered, INVOICES_PAGE_SIZE, `${q}|${statusFilter}`);
 
   const exportPDF = () => {
     const doc = generateInvoicesReport(invoices.map(inv => ({
@@ -156,10 +161,12 @@ export default function Invoices() {
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Create Your First Invoice
               </Button>
             </div>
-          ) : filtered.map(inv => (
+          ) : pagedInvoices.map(inv => (
             <InvoiceCard key={inv.id} inv={inv} onEdit={() => navigate(`/invoices/${inv.id}`)} onDelete={() => remove(inv.id)} onStatusChange={s => update(inv.id, { status: s })} />
           ))}
         </div>
+        <PaginationBar page={invoicesPage} pageCount={invoicesPageCount} total={filtered.length} pageSize={INVOICES_PAGE_SIZE}
+          onPageChange={setInvoicesPage} itemLabel="invoices" className="sm:hidden mt-3" />
 
         {/* Desktop table */}
         <div className="hidden sm:block border border-border">
@@ -173,7 +180,7 @@ export default function Invoices() {
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> Create Invoice
               </Button>
             </div>
-          ) : filtered.map(inv => (
+          ) : pagedInvoices.map(inv => (
             <div key={inv.id} className="grid grid-cols-[1.2fr_2fr_1.5fr_1fr_1.5fr_1fr_auto] gap-3 px-4 py-3 border-b border-border last:border-b-0 text-sm font-mono-tab inv-row items-center group">
               <div className="font-semibold text-foreground">{inv.invoice_number}</div>
               <div>
@@ -220,6 +227,12 @@ export default function Invoices() {
               </div>
             </div>
           ))}
+          {filtered.length > INVOICES_PAGE_SIZE && (
+            <div className="px-4 py-3 border-t border-border">
+              <PaginationBar page={invoicesPage} pageCount={invoicesPageCount} total={filtered.length} pageSize={INVOICES_PAGE_SIZE}
+                onPageChange={setInvoicesPage} itemLabel="invoices" />
+            </div>
+          )}
         </div>
       </div>
     </AppShell>

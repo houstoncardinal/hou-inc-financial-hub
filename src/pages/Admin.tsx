@@ -6,13 +6,13 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Users, MessageSquare, BarChart3, Image,
+  Users, MessageSquare, Activity, Image,
   ArrowUpRight, TrendingUp,
   Edit3, FileText, Calendar,
-  RefreshCw,
+  RefreshCw, BarChart3, DollarSign,
   ChevronRight, ChevronDown, Send, CheckCircle2, XCircle,
   Video, Phone, MapPin, FileCheck,
-  Inbox, DollarSign,
+  Inbox, Wallet,
   ArrowLeft, ClipboardList, UserCheck, UserX, ShieldCheck,
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus,
@@ -32,7 +32,9 @@ import autoTable from 'jspdf-autotable';
 import { makeDoc, tblCfg, addDecorations, buildSheet, writeWorkbook } from '@/lib/reports';
 import { PDV2_CSS } from '@/components/project-detail/cardStyles';
 import { StatCard } from '@/components/project-detail/StatCard';
-import { AdminSidebar, AdminNavGroup } from '@/components/admin/design/AdminSidebar';
+import { AdminNavGroup } from '@/components/admin/design/AdminSidebar';
+import { TerminalTopBar, TerminalRail } from '@/components/admin/terminal/TerminalNav';
+import { ENTITIES } from '@/contexts/EntityContext';
 import { ActionButton } from '@/components/admin/design/ActionButton';
 import { AdminTable } from '@/components/admin/design/AdminTable';
 import { VerticalTimeline } from '@/components/admin/design/VerticalTimeline';
@@ -47,7 +49,6 @@ import {
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const G500  = '#8A8580';
 const AC    = '#9D7E3F';
-const SERIF = "'Cormorant Garamond', Georgia, serif";
 
 /* ── Supabase data loaders ───────────────────────────────────────────── */
 async function loadPortalData() {
@@ -322,40 +323,69 @@ const COMMON_DOCUMENT_REQUESTS = {
   ],
 } as const;
 
-/* ── Glass card helpers ──────────────────────────────────────────────── */
+/* ── Enterprise indigo system ─────────────────────────────────────────
+   /admin gets a fixed, self-contained palette (scoped to .admin-dashboard)
+   independent of the site-wide theme switcher — every hsl(var(--token))
+   rule below (and the shared .pdv2-card/agl/snav utility classes reused
+   across every tab) automatically repaints to this palette. ── */
 const ADMIN_CSS = `
-  .admin-dashboard{background:
-    linear-gradient(180deg,hsl(var(--secondary)/0.35),hsl(var(--background)) 220px),
-    hsl(var(--background));}
-  .admin-dashboard .pdv2-card{border-radius:8px;box-shadow:0 1px 2px rgba(10,10,10,0.035),0 10px 28px rgba(10,10,10,0.04);}
-  .admin-dashboard .pdv2-card:has(.pdv2-label){position:relative;overflow:hidden;background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,0.05),0 1px 0 rgba(255,255,255,0.45) inset;background-image:linear-gradient(145deg,rgba(157,126,63,0.045),transparent 42%);padding:12px!important;}
-  .admin-dashboard .pdv2-card:has(.pdv2-label)::after{content:'';position:absolute;inset-x:0;bottom:0;height:2px;background:linear-gradient(90deg,rgba(157,126,63,.85),rgba(157,126,63,.18));}
-  .admin-dashboard .pdv2-card:has(.pdv2-label):hover{box-shadow:0 8px 22px rgba(10,10,10,0.08),0 2px 8px rgba(10,10,10,0.035);transform:translateY(-1px);border-color:hsl(var(--foreground)/0.2);}
+  .admin-dashboard{
+    --background: 0 0% 100%;
+    --foreground: 0 0% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 5%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 97%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 0% 5%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 17 79% 41%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 88%;
+    --input: 0 0% 86%;
+    --ring: 0 0% 5%;
+    --positive: 142 71% 35%;
+    --warning: 17 79% 41%;
+    background: hsl(var(--background));
+  }
+  .admin-dashboard main{position:relative;z-index:1;}
+  .admin-dashboard .pdv2-card{border-radius:20px;box-shadow:0 1px 2px rgba(0,0,0,.025),0 12px 34px rgba(0,0,0,.055);border:1px solid rgba(0,0,0,.085);transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s cubic-bezier(.16,1,.3,1),border-color .2s ease;}
+  .admin-dashboard .pdv2-card:has(.pdv2-label){position:relative;overflow:hidden;background:hsl(var(--background));border:1px solid rgba(0,0,0,.085);box-shadow:0 10px 30px rgba(0,0,0,.055);padding:14px!important;}
+  .admin-dashboard .pdv2-card:has(.pdv2-label)::after{content:'';position:absolute;left:20%;right:20%;top:0;height:1px;background:linear-gradient(90deg,transparent,hsl(var(--accent)/.55),transparent);}
+  .admin-dashboard .pdv2-card:has(.pdv2-label):hover{box-shadow:0 22px 48px rgba(0,0,0,.12);transform:translateY(-3px);border-color:rgba(0,0,0,.2);}
   .admin-dashboard .pdv2-card:has(.pdv2-label) .text-xl{font-size:18px!important;line-height:1.1!important;}
   .admin-dashboard .pdv2-card:has(.pdv2-label) .pdv2-label{font-size:8px!important;letter-spacing:.16em!important;font-weight:800!important;color:hsl(var(--foreground)/.62)!important;}
-  .admin-dashboard .pdv2-card:hover{transform:none;border-color:hsl(var(--foreground)/0.16);}
-  .admin-page-wrap{width:100%;max-width:1680px;margin:0 auto;}
-  .admin-command-bar{background:hsl(var(--background)/0.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 1px 0 hsl(var(--border)),0 12px 34px rgba(10,10,10,0.045);}
+  .admin-dashboard .pdv2-card:hover{transform:translateY(-2px);box-shadow:0 22px 50px rgba(0,0,0,.105);border-color:rgba(0,0,0,.18);}
+  .admin-page-wrap{width:100%;max-width:1720px;margin:0 auto;}
+  .admin-command-bar{background:rgba(255,255,255,.92);backdrop-filter:blur(18px);border-bottom:1px solid rgba(0,0,0,.07);box-shadow:0 8px 26px rgba(0,0,0,.035);}
   .admin-table-wrap table thead th{position:sticky;top:0;z-index:1;}
   .admin-focus-card{border-left:3px solid hsl(var(--accent));}
-  .admin-soft-panel{border:1px solid hsl(var(--border));border-radius:8px;background:hsl(var(--background));}
-  .admin-segment{display:inline-flex;align-items:center;gap:6px;border:1px solid hsl(var(--border));background:hsl(var(--background));border-radius:8px;padding:4px;}
-  .admin-segment button{border-radius:6px;}
-  .agl{background:rgba(255,255,255,0.80)!important;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,0.90)!important;box-shadow:0 2px 20px rgba(10,10,10,0.055),inset 0 1px 0 rgba(255,255,255,0.98)!important;}
-  .agl-h{transition:box-shadow .32s cubic-bezier(.22,1,.36,1),transform .32s cubic-bezier(.22,1,.36,1)!important;}
-  .agl-h:hover{box-shadow:0 14px 52px rgba(10,10,10,0.11),0 4px 14px rgba(10,10,10,0.055),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-3px);}
-  .agl-stat{background:rgba(255,255,255,0.82)!important;backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);border:1px solid rgba(255,255,255,0.92)!important;box-shadow:0 3px 18px rgba(10,10,10,0.05),inset 0 1px 0 rgba(255,255,255,1)!important;transition:box-shadow .35s cubic-bezier(.22,1,.36,1),transform .35s cubic-bezier(.22,1,.36,1),border-color .35s ease!important;}
-  .agl-stat:hover{box-shadow:0 22px 68px rgba(10,10,10,0.13),0 6px 20px rgba(10,10,10,0.07),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-5px);border-color:rgba(157,126,63,0.28)!important;}
-  .agl-urg{background:rgba(245,158,11,0.06)!important;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(245,158,11,0.38)!important;box-shadow:0 3px 20px rgba(245,158,11,0.07),inset 0 1px 0 rgba(255,255,255,0.9)!important;transition:box-shadow .35s cubic-bezier(.22,1,.36,1),transform .35s cubic-bezier(.22,1,.36,1)!important;}
-  .agl-urg:hover{box-shadow:0 20px 60px rgba(245,158,11,0.14),inset 0 1px 0 rgba(255,255,255,1)!important;transform:translateY(-4px);}
-  .agl-tbl tr:hover td{background-color:rgba(157,126,63,0.032)!important;transition:background-color .18s ease;}
-  .agl-tbl thead tr:hover th,.agl-tbl thead tr:hover td{background-color:rgba(245,244,242,0.7)!important;}
-  .agl-row:hover{background-color:rgba(157,126,63,0.04)!important;transition:background-color .18s ease;}
+  .admin-soft-panel{border:1px solid rgba(0,0,0,.08);border-radius:20px;background:hsl(var(--background));box-shadow:0 12px 34px rgba(0,0,0,.05);}
+  .admin-segment{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(0,0,0,.1);background:hsl(var(--background));border-radius:999px;padding:4px;box-shadow:0 5px 18px rgba(0,0,0,.045);}
+  .admin-segment button{border-radius:999px;}
+  .agl{background:hsl(var(--background))!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border:1px solid rgba(0,0,0,.085)!important;box-shadow:0 12px 34px rgba(0,0,0,.055)!important;border-radius:20px!important;}
+  .agl-h{transition:border-color .2s ease!important;}
+  .agl-h:hover{box-shadow:0 24px 52px rgba(0,0,0,.12)!important;transform:translateY(-3px)!important;border-color:rgba(0,0,0,.2)!important;}
+  .agl-stat{background:hsl(var(--background))!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border:1px solid rgba(0,0,0,.085)!important;box-shadow:0 10px 30px rgba(0,0,0,.05)!important;border-radius:20px!important;transition:all .28s cubic-bezier(.16,1,.3,1)!important;}
+  .agl-stat:hover{box-shadow:0 22px 48px rgba(0,0,0,.12)!important;transform:translateY(-3px)!important;border-color:rgba(0,0,0,.2)!important;}
+  .agl-urg{background:rgba(239,68,68,0.035)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border:1px solid rgba(239,68,68,0.22)!important;box-shadow:0 10px 30px rgba(239,68,68,.055)!important;border-radius:20px!important;}
+  .agl-urg:hover{box-shadow:0 22px 48px rgba(239,68,68,.11)!important;transform:translateY(-3px)!important;}
+  .agl-tbl tr:hover td{background-color:hsl(var(--accent)/0.04)!important;transition:background-color .18s ease;}
+  .agl-tbl thead tr:hover th,.agl-tbl thead tr:hover td{background-color:hsl(var(--muted))!important;}
+  .agl-row:hover{background-color:hsl(var(--accent)/0.05)!important;transition:background-color .18s ease;}
   .snav-item{position:relative;transition:color .22s ease,background-color .22s ease!important;}
-  .snav-item::after{content:'';position:absolute;inset:0;opacity:0;background:linear-gradient(90deg,rgba(157,126,63,0.14) 0%,transparent 80%);transition:opacity .25s ease;pointer-events:none;}
+  .snav-item::after{content:'';position:absolute;inset:0;opacity:0;background:hsl(var(--accent)/0.08);transition:opacity .25s ease;pointer-events:none;}
   .snav-item:hover::after{opacity:1;}
-  .snav-active::after{opacity:1;background:linear-gradient(90deg,rgba(157,126,63,0.20) 0%,transparent 80%)!important;}
-  .status-pill{border-radius:9999px!important;padding:3px 10px!important;font-size:8px!important;letter-spacing:.18em!important;font-weight:800!important;border:1px solid currentColor;line-height:1.35;}
+  .snav-active::after{opacity:1;background:hsl(var(--accent)/0.12)!important;}
+  .status-pill{border-radius:999px!important;padding:4px 10px!important;font-size:8px!important;letter-spacing:.14em!important;font-weight:800!important;border:1px solid currentColor;line-height:1.35;}
+  .admin-dashboard input,.admin-dashboard select,.admin-dashboard textarea{border-radius:12px;transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease;}
+  .admin-dashboard input:hover,.admin-dashboard select:hover,.admin-dashboard textarea:hover{border-color:rgba(0,0,0,.24);}
+  .admin-dashboard input:focus,.admin-dashboard select:focus,.admin-dashboard textarea:focus{box-shadow:0 0 0 4px rgba(0,0,0,.055);}
   .admin-dashboard table{border-collapse:separate;border-spacing:0;}
   .admin-dashboard,.admin-dashboard *{box-sizing:border-box;}
   .admin-dashboard main,.admin-dashboard section,.admin-dashboard article,.admin-dashboard .pdv2-card{max-width:100%;}
@@ -369,7 +399,7 @@ const ADMIN_CSS = `
     .admin-page-wrap{max-width:100%;padding-left:12px!important;padding-right:12px!important;padding-top:12px!important;padding-bottom:12px!important;}
     .admin-command-bar{position:sticky;top:0;}
     .admin-command-bar .admin-page-wrap{gap:10px!important;padding-top:10px!important;padding-bottom:10px!important;}
-    .admin-dashboard .pdv2-card{border-radius:8px!important;}
+    .admin-dashboard .pdv2-card{border-radius:14px!important;}
     .admin-dashboard .space-y-5 > :not([hidden]) ~ :not([hidden]){margin-top:12px!important;}
     .admin-dashboard .space-y-4 > :not([hidden]) ~ :not([hidden]){margin-top:10px!important;}
     .admin-dashboard .space-y-3 > :not([hidden]) ~ :not([hidden]){margin-top:8px!important;}
@@ -384,7 +414,7 @@ const ADMIN_CSS = `
   @media(max-width:480px){
     .admin-dashboard .admin-table-wrap table,.admin-dashboard .overflow-x-auto table{min-width:620px;}
     .admin-page-wrap{padding-left:10px!important;padding-right:10px!important;}
-    .admin-dashboard .pdv2-card{box-shadow:0 1px 2px rgba(10,10,10,.045)!important;}
+    .admin-dashboard .pdv2-card{box-shadow:0 1px 2px rgba(16,24,40,.04)!important;}
   }
 `;
 
@@ -415,6 +445,34 @@ function StatusBadge({ label, style }: { label: string; style: { bg: string; col
       style={{ backgroundColor: style.bg, color: style.color, display: 'inline-block' }}>
       {label.replace(/_/g, ' ')}
     </span>
+  );
+}
+
+const LEAD_STAGES = [
+  { value: 'lead_capture', label: 'Pending · Lead Capture & Review', short: 'Pending Review', color: '#64748B' },
+  { value: 'site_audit', label: 'Site Audit & Feasibility', short: 'Site Audit', color: '#0284C7' },
+  { value: 'estimation', label: 'Estimate & Bid Submission', short: 'Bid Preparation', color: '#7C3AED' },
+  { value: 'client_review', label: 'Client Review · Negotiation', short: 'Client Review', color: '#D97706' },
+  { value: 'awarded', label: 'Approved · Project Awarded', short: 'Approved / Awarded', color: '#059669' },
+  { value: 'contracting', label: 'Contracting & Retainer Clearance', short: 'Contracting', color: '#2563EB' },
+  { value: 'lost', label: 'Rejected · Not Awarded', short: 'Rejected / Lost', color: '#DC2626' },
+] as const;
+
+function LeadLifecycleSelect({ value, saving, onChange }: {
+  value?: string; saving?: boolean; onChange: (value: string) => void;
+}) {
+  const current = LEAD_STAGES.find(s => s.value === value) ?? LEAD_STAGES[0];
+  return (
+    <label className="relative inline-flex items-center rounded-xl border bg-background shadow-sm transition-all hover:shadow-md"
+      style={{ borderColor: `${current.color}55` }} onClick={e => e.stopPropagation()}>
+      <span className="absolute left-3 w-2 h-2 rounded-full pointer-events-none" style={{ backgroundColor: current.color, boxShadow: `0 0 0 4px ${current.color}16` }} />
+      <select value={current.value} disabled={saving} onChange={e => onChange(e.target.value)}
+        aria-label="Project lifecycle status"
+        className="appearance-none bg-transparent pl-8 pr-9 py-2.5 text-[10px] sm:text-[11px] font-bold text-foreground outline-none cursor-pointer disabled:cursor-wait min-w-[190px] sm:min-w-[230px]">
+        {LEAD_STAGES.map(stage => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
+      </select>
+      <ChevronDown className={`absolute right-3 w-3.5 h-3.5 pointer-events-none ${saving ? 'animate-pulse' : ''}`} style={{ color: current.color }} strokeWidth={2.4} />
+    </label>
   );
 }
 
@@ -565,6 +623,7 @@ export default function Admin() {
   /* ── Leads state ── */
   const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
+  const [leadStatusSaving, setLeadStatusSaving] = useState<string | null>(null);
 
   /* ── Help requests (client portal) ── */
   const [helpRequests, setHelpRequests] = useState<any[]>([]);
@@ -583,6 +642,10 @@ export default function Admin() {
   /* ── Mobile nav ── */
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  /* ── Terminal shell: multi-entity switching + local dark mode ── */
+  const [activeEntityId, setActiveEntityId] = useState('houston-enterprise');
+  const [terminalDark, setTerminalDark] = useState(false);
+
   /* ── Scroll to top whenever tab changes ── */
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior }); }, [tab]);
 
@@ -595,6 +658,33 @@ export default function Admin() {
   const allLeads        = [...startBriefs, ...contactForms].length;
   const pendingApprovals = clients.filter((c: any) => c.status === 'pending_approval');
   const approvedClients  = clients.filter((c: any) => c.status === 'approved' || !c.status);
+
+  const handleLeadStatusChange = async (source: 'start_project' | 'contact', lead: any, nextStatus: string) => {
+    const saveKey = `${source}:${lead.id}`;
+    setLeadStatusSaving(saveKey);
+    try {
+      const { data: result, error } = await (supabase as any).rpc('transition_inbound_lead', {
+        p_source: source, p_lead_id: lead.id, p_status: nextStatus,
+      });
+      if (error) throw error;
+      await refreshData();
+      if (nextStatus === 'awarded') {
+        toast({
+          title: result?.admin_project_id ? 'Project awarded and created' : 'Project awarded',
+          description: result?.finance_project_id
+            ? 'The project is now linked in Admin Projects and Houston Enterprise Finance.'
+            : 'The Admin project was created; the finance bridge will synchronize it automatically.',
+        });
+      } else {
+        const label = LEAD_STAGES.find(s => s.value === nextStatus)?.label ?? nextStatus;
+        toast({ title: 'Lifecycle updated', description: `${lead.project_title || lead.company || lead.name || 'Lead'} moved to ${label}.` });
+      }
+    } catch (error: any) {
+      toast({ title: 'Could not update lifecycle', description: error?.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setLeadStatusSaving(null);
+    }
+  };
 
   const clientName = (id: string) => clients.find((c: any) => c.id === id)?.name ?? '—';
   const openHelpCount = helpRequests.filter((r: any) => r.status !== 'resolved').length;
@@ -800,9 +890,43 @@ export default function Admin() {
     await refreshData();
   };
 
+  /* ── Overview calendar — full meeting CRUD (client‑agnostic, unlike the per‑client
+     sub‑tab handlers above). Writes to the same portal_meetings table, so the live
+     Supabase channel already wired up in refreshData()'s effect propagates the change
+     to the global Meetings tab and every client's own Meetings sub‑tab automatically. ── */
+  const handleOverviewMeetingSave = async (input: {
+    id?: string; clientId: string; type: string; date: string; time: string;
+    format: 'In-Person' | 'Video Call' | 'Phone Call';
+    status: 'requested' | 'confirmed' | 'completed' | 'cancelled';
+    notes: string;
+  }) => {
+    const payload = {
+      type: input.type.trim(), date: input.date, time: input.time,
+      format: input.format, status: input.status, notes: input.notes.trim(),
+    };
+    if (input.id) {
+      await adminUpdateMeeting(input.id, payload);
+      await logAdminAction('meeting_updated', input.clientId, `${payload.type} ${payload.date} ${payload.time}`);
+      await logChangelog('updated', 'meeting', 'admin', input.id, payload.type, BUILDER.name, { client: clientName(input.clientId), ...payload });
+    } else {
+      await adminCreateMeeting(input.clientId, payload);
+      await adminSendMessage(input.clientId, `Meeting scheduled: ${payload.type} on ${payload.date} at ${payload.time} via ${payload.format}.${payload.notes ? ` ${payload.notes}` : ''} — ${BUILDER.name}`);
+      await logAdminAction('meeting_created', input.clientId, `${payload.type} ${payload.date} ${payload.time}`);
+      await logChangelog('created', 'meeting', 'admin', input.clientId, payload.type, BUILDER.name, { client: clientName(input.clientId), ...payload });
+    }
+    await refreshData();
+  };
+
+  const handleOverviewMeetingDelete = async (clientId: string, meetId: string, meetType: string) => {
+    await supabase.from('portal_meetings').delete().eq('id', meetId);
+    await logAdminAction('meeting_deleted', clientId, meetType);
+    await logChangelog('deleted', 'meeting', 'admin', meetId, meetType, BUILDER.name, { client: clientName(clientId) });
+    await refreshData();
+  };
+
   /* ── Nav items ── */
   const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ComponentType<any>; desc?: string; badge?: number; urgent?: boolean }[] = [
-    { key: 'overview',   label: 'Overview',          icon: BarChart3,    desc: 'Command center' },
+    { key: 'overview',   label: 'Overview',          icon: Activity,     desc: 'Command center' },
     { key: 'approvals',  label: 'Account Requests',  icon: ShieldCheck,  desc: 'Access review', badge: pendingApprovals.length || undefined, urgent: pendingApprovals.length > 0 },
     { key: 'clients',    label: 'Portal Clients',    icon: Users,        desc: 'Profiles & CRM', badge: approvedClients.length },
     { key: 'leads',      label: 'Inbound Leads',     icon: Inbox,        desc: 'Website pipeline', badge: allLeads },
@@ -811,7 +935,7 @@ export default function Admin() {
     { key: 'projects',   label: 'Projects',          icon: FolderKanban, desc: 'Delivery control' },
     { key: 'portfolio',  label: 'Portfolio',         icon: Image,        desc: 'Public work' },
     { key: 'map',        label: 'Client Map',        icon: Map,          desc: 'Geo coverage' },
-    { key: 'finance',    label: 'Finance Data',      icon: DollarSign,   desc: 'Entity snapshot' },
+    { key: 'finance',    label: 'Finance Data',      icon: Wallet,       desc: 'Entity snapshot' },
     { key: 'analytics',  label: 'Analytics',         icon: TrendingUp,   desc: 'Pipeline metrics' },
     { key: 'notifications', label: 'Notifications',  icon: Bell,         desc: 'Client help', badge: openHelpCount || undefined, urgent: openHelpCount > 0 },
     { key: 'changelog',  label: 'Changelog',         icon: History,      desc: 'Audit trail' },
@@ -821,17 +945,15 @@ export default function Admin() {
   /* ════════ LOCK SCREEN ════════ */
   if (!unlocked) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-secondary/40">
-        <motion.div className="w-full max-w-sm relative bg-background border border-border rounded-xl overflow-hidden shadow-xl"
+      <div className="admin-dashboard min-h-screen flex items-center justify-center px-4" style={{ background: 'hsl(var(--background))' }}>
+        <style>{ADMIN_CSS}</style>
+        <motion.div className="w-full max-w-sm relative bg-card border border-border rounded-3xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,.14)]"
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="h-[3px] bg-accent" />
           <div className="p-8 sm:p-10">
-            <div className="flex items-center gap-3 mb-9">
-              <div className="w-px h-8 bg-accent" />
-              <div>
-                <div className="text-[9px] font-black tracking-[0.18em] uppercase text-foreground" style={{ fontFamily: SERIF }}>Houston Enterprise</div>
-                <div className="text-[7px] uppercase tracking-[0.42em] text-accent">Admin Dashboard · Secure Access</div>
-              </div>
+            <div className="mb-9">
+              <img src="/helogo.png" alt="Houston Enterprise" className="h-8 w-auto object-contain" />
+              <div className="text-[8px] uppercase tracking-[0.28em] text-muted-foreground font-bold mt-2">Admin Console</div>
             </div>
             <div className="text-[28px] font-bold text-foreground leading-tight mb-1.5">Admin Access</div>
             <p className="text-[12px] text-muted-foreground mb-8">Enter your 6-digit PIN to access the dashboard.</p>
@@ -841,7 +963,7 @@ export default function Admin() {
                 {pin.map((digit, i) => (
                   <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1} value={digit} autoFocus={i === 0}
                     onChange={e => handlePinDigit(i, e.target.value)} onKeyDown={e => handlePinKeyDown(i, e)}
-                    className={`outline-none text-center text-[20px] font-bold rounded-lg text-foreground transition-colors ${digit ? 'border-2 border-accent bg-accent/5' : 'border-2 border-border bg-background focus:border-accent'}`}
+                    className={`outline-none text-center text-[20px] font-bold rounded-sm tabular-nums text-foreground transition-colors ${digit ? 'border-2 border-accent bg-accent/5' : 'border-2 border-border bg-background focus:border-accent'}`}
                     style={{ width: 44, height: 52, flexShrink: 0, caretColor: 'transparent' }}
                   />
                 ))}
@@ -849,7 +971,7 @@ export default function Admin() {
             </div>
             {pinError && <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[11px] mt-3 mb-0 text-destructive">{pinError}</motion.p>}
             <div className="mt-8 pt-6 border-t border-border">
-              <Link to="/" className="text-[10px] uppercase tracking-[0.22em] font-semibold text-muted-foreground hover:text-foreground transition-colors">← Back to Website</Link>
+              <Link to="/" className="text-[10px] uppercase tracking-[0.22em] font-semibold text-muted-foreground hover:text-accent transition-colors">← Back to Website</Link>
             </div>
           </div>
         </motion.div>
@@ -869,26 +991,49 @@ export default function Admin() {
 
   /* ════════ DASHBOARD ════════ */
   return (
-    <div className="admin-dashboard flex bg-background" style={{ height: '100vh', overflow: 'hidden' }}>
+    <div className="admin-dashboard flex flex-col" style={{ height: '100vh', overflow: 'hidden' }}>
       <style>{ADMIN_CSS}</style>
       <style>{PDV2_CSS}</style>
 
-      {/* Sidebar */}
-      <AdminSidebar
-        groups={NAV_GROUPS}
-        activeKey={tab}
-        onSelect={key => { setTab(key as AdminTab); setSelectedClientId(null); }}
-        mobileOpen={mobileNavOpen}
-        onCloseMobile={() => setMobileNavOpen(false)}
-        onLock={handleLogout}
-        onBackToWebsite={() => navigate('/')}
-        onOpenPortal={() => navigate('/portal')}
-        onOpenFinance={() => navigate('/finance')}
-        user={ADMIN_USER}
-      />
+      {/* Top bar — persists across all tabs, holds global utilities.
+          Dark mode is scoped to the terminal shell only (via this "contents" wrapper),
+          not the page content, since the content panels don't have dark-mode text colors yet. */}
+      <div className={`contents ${terminalDark ? 'dark' : ''}`}>
+        <TerminalTopBar
+          dark={terminalDark}
+          onToggleDark={() => setTerminalDark(v => !v)}
+          notificationCount={openHelpCount}
+          userName={ADMIN_USER.name}
+          userRole={ADMIN_USER.role}
+          onOpenMobileNav={() => setMobileNavOpen(true)}
+        />
+      </div>
 
-      {/* Main */}
-      <main className="flex-1 md:ml-64 flex flex-col overflow-y-auto">
+      <div className="flex-1 flex min-h-0">
+        {/* Rail */}
+        <div className={`contents ${terminalDark ? 'dark' : ''}`}>
+          <TerminalRail
+            groups={NAV_GROUPS}
+            activeKey={tab}
+            onSelect={key => { setTab(key as AdminTab); setSelectedClientId(null); }}
+            mobileOpen={mobileNavOpen}
+            onCloseMobile={() => setMobileNavOpen(false)}
+            onLock={handleLogout}
+            onBackToWebsite={() => navigate('/')}
+            onOpenPortal={() => navigate('/portal')}
+            onOpenFinance={() => navigate('/finance')}
+            user={ADMIN_USER}
+          />
+        </div>
+
+        {/* Main */}
+        <main className="flex-1 flex flex-col overflow-y-auto min-w-0">
+        {activeEntityId !== 'houston-enterprise' && (
+          <div className="shrink-0 px-4 py-2 border-b border-slate-300 dark:border-neutral-700 bg-orange-50 dark:bg-orange-950/20 text-[11.5px] text-orange-800 dark:text-orange-300 font-medium flex items-center gap-2">
+            <span className="font-extrabold uppercase tracking-wider text-[10px]">Notice —</span>
+            Admin console for {ENTITIES.find(e => e.id === activeEntityId)?.name} is not yet provisioned. Showing Houston Enterprise data below.
+          </div>
+        )}
         {/* Top bar (overview renders its own welcome header instead) */}
         {tab !== 'overview' && (
         <div className="admin-command-bar sticky top-0 z-30">
@@ -939,7 +1084,7 @@ export default function Admin() {
           </div>
         )}
 
-        {tab !== 'map' && <div className="admin-page-wrap px-4 md:px-6 py-5 md:py-7">
+        {tab !== 'map' && <div className={`admin-page-wrap px-4 md:px-6 pb-5 md:pb-7 ${tab === 'overview' ? 'pt-2 md:pt-3' : 'pt-5 md:pt-7'}`}>
 
           {/* ══════ OVERVIEW ══════ */}
           {tab === 'overview' && (
@@ -947,16 +1092,24 @@ export default function Admin() {
               adminName={ADMIN_USER.name}
               clients={clients}
               briefs={briefs}
+              allMsgs={allMsgs}
               allDocs={allDocs}
               allMeetings={allMeetings}
               contactForms={contactForms}
               startBriefs={startBriefs}
               helpRequests={helpRequests}
               projects={finProjects}
+              checks={finChecks}
+              transactions={finTxns}
               onSelectTab={t => { setTab(t as AdminTab); setSelectedClientId(null); }}
               onOpenClient={(id, sub) => { setTab('clients'); setSelectedClientId(id); setClientSubTab((sub as any) ?? 'brief'); }}
               onRefresh={refreshData}
               onOpenFinance={() => navigate('/finance')}
+              onOpenLedgerEntry={(kind, id) => navigate(`/ledger?openKind=${kind}&openId=${id}`)}
+              onSaveMeeting={handleOverviewMeetingSave}
+              onDeleteMeeting={handleOverviewMeetingDelete}
+              onConfirmMeeting={handleMeetingConfirm}
+              onCancelMeeting={handleMeetingCancel}
               onOpenMobileNav={() => setMobileNavOpen(true)}
               onViewDocument={url => viewDocument(url, toast)}
             />
@@ -1921,12 +2074,14 @@ export default function Admin() {
 
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-[13px] font-bold text-foreground">{s.name || 'Anonymous'}</span>
+                                  <span className="text-[13px] font-bold text-foreground">{s.project_title || `${s.name || 'Unnamed'} Project`}</span>
                                   <StatusBadge label={s.type === 'commercial' ? 'Commercial' : 'Residential'} style={s.type === 'commercial' ? { bg: 'rgba(37,99,235,0.08)', color: '#2563eb' } : { bg: 'rgba(157,126,63,0.1)', color: AC }} />
                                   <StatusBadge label={timelineLabel} style={urgency} />
+                                  <StatusBadge label={(LEAD_STAGES.find(stage => stage.value === (s.lead_status || 'lead_capture')) ?? LEAD_STAGES[0]).short}
+                                    style={{ bg: `${(LEAD_STAGES.find(stage => stage.value === (s.lead_status || 'lead_capture')) ?? LEAD_STAGES[0]).color}14`, color: (LEAD_STAGES.find(stage => stage.value === (s.lead_status || 'lead_capture')) ?? LEAD_STAGES[0]).color }} />
                                 </div>
                                 <div className="text-[11px] mt-0.5 truncate text-muted-foreground">
-                                  {s.email}{s.phone ? ` · ${s.phone}` : ''}
+                                  {s.name || 'Anonymous'} · {s.email}{s.phone ? ` · ${s.phone}` : ''}
                                   {scopeLabel ? ` · ${scopeLabel}` : ''}
                                 </div>
                               </div>
@@ -1984,6 +2139,7 @@ export default function Admin() {
                                       <div className="text-[8px] uppercase tracking-[0.36em] font-bold mb-4 text-muted-foreground">Project Details</div>
                                       <div className="flex flex-col gap-3.5">
                                         {[
+                                          ['Project Title', s.project_title || `${s.name || 'Unnamed'} Project`],
                                           ['Project Type',  s.type === 'commercial' ? 'Commercial' : 'Residential'],
                                           ['Scope of Work', fmtScope(s.scope || '') || '—'],
                                           ['Square Footage', SQFT_LBL[s.sqft] || (s.sqft?.replace(/_/g, ' ') || '—')],
@@ -2032,6 +2188,14 @@ export default function Admin() {
 
                                   {/* Action bar */}
                                   <div className="px-5 py-3 bg-secondary/30 flex items-center gap-2 flex-wrap">
+                                    <div className="w-full flex items-center justify-between gap-3 mb-1 pb-3 border-b border-border/70 flex-wrap">
+                                      <div>
+                                        <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">Project Lifecycle</div>
+                                        <div className="text-[10px] text-muted-foreground mt-0.5">Awarding creates and links the delivery project automatically.</div>
+                                      </div>
+                                      <LeadLifecycleSelect value={s.lead_status} saving={leadStatusSaving === `start_project:${s.id}`}
+                                        onChange={value => handleLeadStatusChange('start_project', s, value)} />
+                                    </div>
                                     {s.email && (
                                       <>
                                         <a href={`mailto:${s.email}?subject=${encodeURIComponent('Your Houston Enterprise Project Brief — Next Steps')}&body=${encodeURIComponent(`Hi ${s.name?.split(' ')[0] || 'there'},\n\nThank you for submitting your project brief to Houston Enterprise. We've reviewed your details and would love to schedule a complimentary consultation.\n\nPlease feel free to reply to this email or call us at (281) 915-9595.\n\nBest,\n${BUILDER.name}\nHouston Enterprise · (281) 915-9595`)}`}
@@ -2090,6 +2254,14 @@ export default function Admin() {
                           <Mail className="w-3 h-3" strokeWidth={2} /> Invite to Portal
                         </a>
                       )}
+                      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="text-[8px] uppercase tracking-[0.28em] font-bold text-muted-foreground">Project Lifecycle</div>
+                          {f.converted_admin_project_id && <div className="text-[10px] text-positive mt-1">Linked delivery project created</div>}
+                        </div>
+                        <LeadLifecycleSelect value={f.lead_status} saving={leadStatusSaving === `contact:${f.id}`}
+                          onChange={value => handleLeadStatusChange('contact', f, value)} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2771,7 +2943,8 @@ export default function Admin() {
 
         {/* Mobile bottom spacer */}
         <div className="md:hidden h-16 shrink-0" />
-      </main>
+        </main>
+      </div>
 
       {/* Mobile bottom toolbar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch h-[60px] bg-background border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
