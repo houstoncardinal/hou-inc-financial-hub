@@ -20,4 +20,18 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        /* React/React DOM change far less often than app code and are used on
+           every route — keeping them in one stable vendor chunk means a new
+           app release doesn't force browsers to re-download React itself, and
+           they're never duplicated across the many per-route chunks that
+           React.lazy() (see src/App.tsx) now creates for every page. */
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
+  },
 }));

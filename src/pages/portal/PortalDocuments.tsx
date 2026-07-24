@@ -9,10 +9,10 @@ import PortalLayout from '@/components/PortalLayout';
 import { usePortal, PortalDocument } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const BORDER = '#E5E0D9';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const BORDER = '#E5E7EB';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 
 const STORAGE_BUCKET = 'portal-documents';
@@ -41,7 +41,7 @@ function statusStyle(status: PortalDocument['status']): { color: string; bg: str
     case 'approved': return { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: 'Approved' };
     case 'pending':  return { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Upload Required' };
     case 'rejected': return { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',  label: 'Rejected — Re-upload' };
-    default:         return { color: MUTED,     bg: 'rgba(26,20,16,0.06)', label: status };
+    default:         return { color: MUTED,     bg: 'rgba(17,24,39,0.06)', label: status };
   }
 }
 
@@ -86,6 +86,7 @@ export default function PortalDocuments() {
   useEffect(() => {
     if (!loaded) return;
     if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
   }, [client, loaded, navigate]);
 
   // Check that the storage bucket exists; if not, surface a clear setup warning.
@@ -102,7 +103,7 @@ export default function PortalDocuments() {
   }, [getDocuments]);
 
   // ── Now safe to return early after all hooks ──
-  if (!loaded || !client) return null;
+  if (!loaded || !client || (client.status && client.status !== 'approved')) return null;
 
   const refresh = () => setDocs(getDocuments());
 
@@ -209,9 +210,9 @@ export default function PortalDocuments() {
 
         {/* ── Header ── */}
         <motion.div className="flex items-start justify-between gap-4 mb-6 sm:mb-8"
-          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38 }}>
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>
           <div className="min-w-0">
-            <div className="text-[7px] sm:text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>
+            <div className="text-[7px] sm:text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: ACCENT }}>
               Document Center
             </div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(22px, 4vw, 36px)', color: DARK, lineHeight: 1.08 }}>
@@ -229,7 +230,7 @@ export default function PortalDocuments() {
           </div>
           <button onClick={() => startUpload(null)}
             className="hidden md:flex items-center gap-2 text-[9px] uppercase tracking-[0.26em] font-black px-5 py-3 shrink-0 transition-opacity hover:opacity-85"
-            style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+            style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
             <Upload className="w-3.5 h-3.5" strokeWidth={2} />
             Upload
           </button>
@@ -264,12 +265,12 @@ export default function PortalDocuments() {
               {t.label}
               {t.count > 0 && (
                 <span className="text-[8px] font-black px-1.5 py-0.5"
-                  style={{ backgroundColor: tab === t.key ? 'rgba(26,20,16,0.08)' : 'rgba(26,20,16,0.05)', color: tab === t.key ? DARK : MUTED }}>
+                  style={{ backgroundColor: tab === t.key ? 'rgba(17,24,39,0.08)' : 'rgba(17,24,39,0.05)', color: tab === t.key ? DARK : MUTED }}>
                   {t.count}
                 </span>
               )}
               {tab === t.key && (
-                <motion.div className="absolute bottom-0 inset-x-0 h-0.5" style={{ backgroundColor: GOLD }} layoutId="doc-tab" />
+                <motion.div className="absolute bottom-0 inset-x-0 h-0.5" style={{ backgroundColor: ACCENT }} layoutId="doc-tab" />
               )}
             </button>
           ))}
@@ -278,14 +279,14 @@ export default function PortalDocuments() {
         {/* ── Document list ── */}
         <motion.div className="space-y-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.14 }}>
           {filteredDocs.length === 0 && (
-            <div className="py-16 sm:py-20 text-center" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}>
+            <div className="py-16 sm:py-20 rounded-2xl text-center" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}>
               <FolderOpen className="w-8 h-8 mx-auto mb-3" style={{ color: BORDER }} strokeWidth={1} />
               <div className="text-[13px] font-light mb-4" style={{ color: MUTED }}>
                 {docs.length === 0 ? 'No documents yet. Upload your first file.' : 'No documents in this category.'}
               </div>
               <button onClick={() => startUpload(null)}
                 className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-black px-5 py-2.5 transition-opacity hover:opacity-85"
-                style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+                style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
                 <Upload className="w-3.5 h-3.5" strokeWidth={2} />
                 Upload Document
               </button>
@@ -311,7 +312,7 @@ export default function PortalDocuments() {
 
                 {/* Icon */}
                 <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: 'rgba(26,20,16,0.04)', border: `1px solid ${BORDER}` }}>
+                  style={{ backgroundColor: 'rgba(17,24,39,0.04)', border: `1px solid ${BORDER}` }}>
                   <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: MUTED }} strokeWidth={1.5} />
                 </div>
 
@@ -329,12 +330,12 @@ export default function PortalDocuments() {
                     )}
                     {doc.requestedBy && (
                       <><span>·</span>
-                      <span className="font-semibold" style={{ color: GOLD }}>Req. by {doc.requestedBy}</span></>
+                      <span className="font-semibold" style={{ color: ACCENT }}>Req. by {doc.requestedBy}</span></>
                     )}
                   </div>
                   {doc.description && (
                     <div className="text-[9px] sm:text-[10px] mt-0.5 font-light line-clamp-1"
-                      style={{ color: 'rgba(26,20,16,0.38)' }}>
+                      style={{ color: 'rgba(17,24,39,0.38)' }}>
                       {doc.description}
                     </div>
                   )}
@@ -359,7 +360,7 @@ export default function PortalDocuments() {
                   {(doc.status === 'pending' || doc.status === 'rejected') && (
                     <button onClick={() => startUpload(doc.id)}
                       className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[9px] uppercase tracking-[0.16em] font-black px-2.5 sm:px-3 py-2 transition-opacity hover:opacity-80 active:opacity-60"
-                      style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+                      style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
                       <Upload className="w-3 h-3" strokeWidth={2} />
                       <span>Upload</span>
                     </button>
@@ -367,27 +368,27 @@ export default function PortalDocuments() {
                   {canPreview && (
                     <button onClick={() => setPreviewDoc(doc)} title="Preview"
                       className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-colors"
-                      style={{ color: 'rgba(26,20,16,0.28)' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(26,20,16,0.28)'; }}>
+                      style={{ color: 'rgba(17,24,39,0.28)' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = ACCENT; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(17,24,39,0.28)'; }}>
                       <Eye className="w-3.5 h-3.5" strokeWidth={1.5} />
                     </button>
                   )}
                   {hasFile && (
                     <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" title="Download"
                       className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-colors"
-                      style={{ color: 'rgba(26,20,16,0.28)', textDecoration: 'none' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = GOLD; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(26,20,16,0.28)'; }}>
+                      style={{ color: 'rgba(17,24,39,0.28)', textDecoration: 'none' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = ACCENT; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(17,24,39,0.28)'; }}>
                       <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
                     </a>
                   )}
                   {canDelete && (
                     <button onClick={() => setDeleteConfirm(doc)} title="Delete"
                       className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center transition-colors"
-                      style={{ color: 'rgba(26,20,16,0.22)' }}
+                      style={{ color: 'rgba(17,24,39,0.22)' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(26,20,16,0.22)'; }}>
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(17,24,39,0.22)'; }}>
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
                     </button>
                   )}
@@ -397,15 +398,18 @@ export default function PortalDocuments() {
           })}
         </motion.div>
 
-        {/* Mobile upload button */}
-        <div className="md:hidden mt-5">
-          <button onClick={() => startUpload(null)}
-            className="w-full flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.26em] font-black py-4 transition-opacity hover:opacity-85 active:opacity-70"
-            style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
-            <Upload className="w-4 h-4" strokeWidth={2} />
-            Upload Document
-          </button>
-        </div>
+        {/* Mobile upload button — only when there's a list to scroll past;
+            the empty state above already has its own identical CTA. */}
+        {filteredDocs.length > 0 && (
+          <div className="md:hidden mt-5">
+            <button onClick={() => startUpload(null)}
+              className="w-full flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.26em] font-black py-4 rounded-xl transition-opacity hover:opacity-85 active:opacity-70"
+              style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
+              <Upload className="w-4 h-4" strokeWidth={2} />
+              Upload Document
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Preview Modal ── */}
@@ -422,17 +426,17 @@ export default function PortalDocuments() {
               <div className="flex items-center justify-between px-4 sm:px-6 py-4 shrink-0"
                 style={{ borderBottom: `1px solid ${BORDER}` }}>
                 <div className="min-w-0 mr-4">
-                  <div className="text-[7px] uppercase tracking-[0.36em] font-bold mb-0.5" style={{ color: GOLD }}>Preview</div>
+                  <div className="text-[7px] uppercase tracking-[0.36em] font-bold mb-0.5" style={{ color: ACCENT }}>Preview</div>
                   <div className="text-[12px] sm:text-[13px] font-bold truncate" style={{ color: DARK }}>{previewDoc.name}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <a href={previewDoc.fileUrl} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-black px-3 sm:px-4 py-2 transition-opacity hover:opacity-80"
-                    style={{ backgroundColor: GOLD, color: '#FAF7F2', textDecoration: 'none' }}>
+                    style={{ backgroundColor: ACCENT, color: '#F8FAFC', textDecoration: 'none' }}>
                     <Download className="w-3 h-3" strokeWidth={2} />
                     <span className="hidden sm:inline">Download</span>
                   </a>
-                  <button onClick={() => setPreviewDoc(null)} className="w-8 h-8 flex items-center justify-center transition-colors"
+                  <button onClick={() => setPreviewDoc(null)} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                     style={{ color: MUTED }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = DARK; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = MUTED; }}>
@@ -440,7 +444,7 @@ export default function PortalDocuments() {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto flex items-center justify-center p-4" style={{ minHeight: 0, backgroundColor: 'rgba(26,20,16,0.02)' }}>
+              <div className="flex-1 overflow-auto flex items-center justify-center p-4" style={{ minHeight: 0, backgroundColor: 'rgba(17,24,39,0.02)' }}>
                 {isImage(previewDoc.fileType) ? (
                   <img src={previewDoc.fileUrl} alt={previewDoc.name} className="max-w-full max-h-full object-contain" style={{ maxHeight: '72vh' }} />
                 ) : isPDF(previewDoc.fileType) ? (
@@ -451,7 +455,7 @@ export default function PortalDocuments() {
                     <p className="text-[12px] font-light mb-4" style={{ color: MUTED }}>Preview unavailable for this file type.</p>
                     <a href={previewDoc.fileUrl} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-black px-5 py-3 transition-opacity hover:opacity-80"
-                      style={{ backgroundColor: GOLD, color: '#FAF7F2', textDecoration: 'none' }}>
+                      style={{ backgroundColor: ACCENT, color: '#F8FAFC', textDecoration: 'none' }}>
                       <Download className="w-3.5 h-3.5" strokeWidth={2} /> Open File
                     </a>
                   </div>
@@ -510,7 +514,7 @@ export default function PortalDocuments() {
 
               <div className="flex items-start justify-between mb-5">
                 <div>
-                  <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-1" style={{ color: GOLD }}>
+                  <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-1" style={{ color: ACCENT }}>
                     {uploading.docId ? 'Fulfill Required Document' : 'Upload Document'}
                   </div>
                   <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '20px', color: DARK, lineHeight: 1.1 }}>
@@ -534,14 +538,14 @@ export default function PortalDocuments() {
               <div
                 className="border-2 border-dashed flex flex-col items-center justify-center py-9 px-4 mb-4 cursor-pointer transition-colors"
                 style={{
-                  borderColor: dragOver ? GOLD : selectedFile ? GOLD : BORDER,
-                  backgroundColor: dragOver ? 'rgba(157,126,63,0.04)' : selectedFile ? 'rgba(157,126,63,0.03)' : 'rgba(26,20,16,0.02)',
+                  borderColor: dragOver ? ACCENT : selectedFile ? ACCENT : BORDER,
+                  backgroundColor: dragOver ? 'rgba(0,0,0,0.04)' : selectedFile ? 'rgba(0,0,0,0.03)' : 'rgba(17,24,39,0.02)',
                 }}
                 onClick={() => !busy && fileRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFilePick(f); }}>
-                <Upload className="w-6 h-6 mb-3" style={{ color: selectedFile ? GOLD : BORDER }} strokeWidth={1.5} />
+                <Upload className="w-6 h-6 mb-3" style={{ color: selectedFile ? ACCENT : BORDER }} strokeWidth={1.5} />
                 {selectedFile ? (
                   <div className="text-center">
                     <div className="text-[13px] font-semibold" style={{ color: DARK }}>{selectedFile.name}</div>
@@ -573,11 +577,11 @@ export default function PortalDocuments() {
               {busy && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: GOLD }}>Uploading…</span>
+                    <span className="text-[9px] uppercase tracking-[0.2em] font-bold" style={{ color: ACCENT }}>Uploading…</span>
                     <span className="text-[10px] font-light" style={{ color: MUTED }}>{Math.round(Math.min(progress, 100))}%</span>
                   </div>
-                  <div className="h-0.5 overflow-hidden" style={{ backgroundColor: 'rgba(26,20,16,0.07)' }}>
-                    <motion.div className="h-full" style={{ backgroundColor: GOLD }}
+                  <div className="h-0.5 overflow-hidden" style={{ backgroundColor: 'rgba(17,24,39,0.07)' }}>
+                    <motion.div className="h-full" style={{ backgroundColor: ACCENT }}
                       animate={{ width: `${Math.min(progress, 100)}%` }} transition={{ duration: 0.3 }} />
                   </div>
                 </div>
@@ -586,7 +590,7 @@ export default function PortalDocuments() {
               <div className="flex gap-3">
                 <button onClick={handleUpload} disabled={!selectedFile || busy}
                   className="flex-1 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.24em] font-black py-3.5 transition-opacity disabled:opacity-40 hover:opacity-85"
-                  style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+                  style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
                   {busy ? 'Uploading…' : <><Upload className="w-3.5 h-3.5" strokeWidth={2} /> Upload File</>}
                 </button>
                 {!busy && (

@@ -24,8 +24,9 @@ const HEH = '#2C5F8A';
 const ASSET_CSS = `
 .asset-shell{background:linear-gradient(180deg,rgba(44,95,138,.055),transparent 210px);}
 .asset-panel{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.05),0 1px 0 rgba(255,255,255,.45) inset;}
-.asset-card{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.045);position:relative;overflow:hidden;}
+.asset-card{background:hsl(var(--background));border:1px solid hsl(var(--border));border-radius:16px;box-shadow:0 1px 3px rgba(10,10,10,.045);position:relative;overflow:hidden;transition:box-shadow .2s cubic-bezier(.16,1,.3,1),transform .2s cubic-bezier(.16,1,.3,1);}
 .asset-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#2C5F8A);}
+.asset-card:hover{box-shadow:0 10px 28px rgba(10,10,10,.09);transform:translateY(-2px);}
 .asset-k{font-size:8px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .asset-v{font-size:18px;line-height:1.05;font-weight:950;margin-top:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .asset-sub{font-size:10px;color:hsl(var(--muted-foreground));margin-top:5px;line-height:1.25;}

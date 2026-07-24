@@ -155,7 +155,16 @@
     overflow-x: clip;
   }
 
-  .finance-mobile-surface * {
+  /* Lets flex/grid children shrink below their content size (the default
+     min-width:auto on flex items otherwise causes horizontal overflow) —
+     but this rule sits outside any @layer, so being unlayered CSS it beats
+     ANY @layer-based Tailwind utility regardless of specificity or source
+     order, including deliberate min-w-[...] widths on table cells that are
+     meant to stay legible inside a horizontally-scrolling table. Excluding
+     .overflow-x-auto (the wrapper class every scrollable table in this app
+     already uses) and its descendants keeps the flex-shrink fix while no
+     longer collapsing those tables' columns to illegible widths on mobile. */
+  .finance-mobile-surface *:not(.overflow-x-auto, .overflow-x-auto *) {
     min-width: 0;
   }
 

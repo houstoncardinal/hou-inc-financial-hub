@@ -13,13 +13,17 @@ const SIDEBAR_CSS = `
 .term-nav-active::before{opacity:1!important;transform:scaleY(1)!important;}
 .term-nav-icon{color:#0A0A0A;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
 .term-nav-item:hover .term-nav-icon{transform:scale(1.08) translateX(2px);}
-.term-nav-label{font-size:12.5px;font-weight:500;letter-spacing:-.01em;color:#0A0A0A;transition:color .2s ease;}
+.term-nav-label{font-size:11.5px;font-weight:500;letter-spacing:-.01em;color:#0A0A0A;transition:color .2s ease;}
 .term-nav-active .term-nav-label{font-weight:700;}
-.term-badge{height:18px;min-width:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;letter-spacing:.02em;padding:0 5px;transition:all .25s cubic-bezier(.22,1,.36,1);}
+.term-badge{height:17px;min-width:17px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;letter-spacing:.02em;padding:0 5px;transition:all .25s cubic-bezier(.22,1,.36,1);}
 .term-group-label{font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#4B5563;transition:color .2s ease;}
 .term-group-label:hover{color:#0A0A0A;}
 .term-footer-item{transition:all .22s cubic-bezier(.22,1,.36,1);border-radius:10px;color:#0A0A0A;}
 .term-footer-item:hover{background:rgba(0,0,0,.05);}
+/* Scrollable only as a safety net for very short viewports — never show the
+   scrollbar chrome itself, which read as visual clutter in a fixed‑height rail. */
+.term-rail-scroll{scrollbar-width:none;-ms-overflow-style:none;}
+.term-rail-scroll::-webkit-scrollbar{display:none;width:0;height:0;}
 `;
 
 /* ══ Top bar — persists across /admin/*, global utilities. Desktop and mobile render
@@ -113,19 +117,19 @@ function RailNavList({ groups, activeKey, onSelect, collapsed }: {
   });
 
   return (
-    <nav className="flex-1 overflow-y-auto min-h-0 py-3 px-2">
+    <nav className="term-rail-scroll flex-1 overflow-y-auto min-h-0 py-2 px-2">
       {groups.map(group => {
         const isGroupCollapsed = collapsedGroups.has(group.label);
         return (
-          <div key={group.label} className="mb-1">
+          <div key={group.label} className="mb-0.5">
             {!collapsed && (
-              <button onClick={() => toggleGroup(group.label)} className="term-group-label w-full flex items-center justify-between gap-2 px-2.5 pt-3 pb-1.5">
+              <button onClick={() => toggleGroup(group.label)} className="term-group-label w-full flex items-center justify-between gap-2 px-2.5 pt-2 pb-1">
                 <span>{group.label}</span>
                 <ChevronDown className={`w-2.5 h-2.5 shrink-0 transition-transform duration-200 ${isGroupCollapsed ? '-rotate-90' : ''}`} strokeWidth={2.5} />
               </button>
             )}
             {(!isGroupCollapsed || collapsed) && (
-              <div className="space-y-0.5">
+              <div className="space-y-0">
                 {group.items.map(item => {
                   const active = item.key === activeKey;
                   const Icon = item.icon;
@@ -134,12 +138,12 @@ function RailNavList({ groups, activeKey, onSelect, collapsed }: {
                       key={item.key}
                       onClick={() => onSelect(item.key)}
                       title={collapsed ? item.label : undefined}
-                      className={`term-nav-item w-full flex items-center gap-2.5 px-2.5 py-[9px] text-left transition-all ${
+                      className={`term-nav-item w-full flex items-center gap-2 px-2.5 py-[6px] text-left transition-all ${
                         active ? 'term-nav-active' : ''
                       }`}
                     >
-                      <span className="term-nav-icon flex items-center justify-center shrink-0" style={{ width: 20, height: 20 }}>
-                        <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.1 : 1.6} />
+                      <span className="term-nav-icon flex items-center justify-center shrink-0" style={{ width: 18, height: 18 }}>
+                        <Icon className="w-4 h-4" strokeWidth={active ? 2.1 : 1.6} />
                       </span>
                       {!collapsed && (
                         <span className={`term-nav-label flex-1 min-w-0 truncate leading-tight ${active ? 'font-medium' : ''}`}>
@@ -178,37 +182,37 @@ function RailFooter({ onLock, onBackToWebsite, onOpenPortal, onOpenFinance, user
   collapsed: boolean;
 }) {
   return (
-    <div className="border-t border-slate-200 dark:border-neutral-700 py-2 px-2 shrink-0">
-      <div className="space-y-0.5">
-        <button onClick={onBackToWebsite} className="term-footer-item w-full flex items-center gap-2.5 px-2.5 py-[9px] text-[12px] font-medium">
-          <Globe className="w-[15px] h-[15px] shrink-0" strokeWidth={1.7} />
+    <div className="border-t border-slate-200 dark:border-neutral-700 py-1.5 px-2 shrink-0">
+      <div className="space-y-0">
+        <button onClick={onBackToWebsite} className="term-footer-item w-full flex items-center gap-2 px-2.5 py-[6px] text-[11.5px] font-medium">
+          <Globe className="w-3.5 h-3.5 shrink-0" strokeWidth={1.7} />
           {!collapsed && 'Back to Website'}
         </button>
         {onOpenPortal && (
-          <button onClick={onOpenPortal} className="term-footer-item w-full flex items-center gap-2.5 px-2.5 py-[9px] text-[12px] font-medium">
-            <ExternalLink className="w-[15px] h-[15px] shrink-0" strokeWidth={1.7} />
+          <button onClick={onOpenPortal} className="term-footer-item w-full flex items-center gap-2 px-2.5 py-[6px] text-[11.5px] font-medium">
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" strokeWidth={1.7} />
             {!collapsed && 'Client Portal'}
           </button>
         )}
         {onOpenFinance && (
-          <button onClick={onOpenFinance} className="term-footer-item w-full flex items-center gap-2.5 px-2.5 py-[9px] text-[12px] font-medium">
-            <Wallet className="w-[15px] h-[15px] shrink-0" strokeWidth={1.7} />
+          <button onClick={onOpenFinance} className="term-footer-item w-full flex items-center gap-2 px-2.5 py-[6px] text-[11.5px] font-medium">
+            <Wallet className="w-3.5 h-3.5 shrink-0" strokeWidth={1.7} />
             {!collapsed && 'Finance Dashboard'}
           </button>
         )}
-        <button onClick={onLock} className="term-footer-item w-full flex items-center gap-2.5 px-2.5 py-[9px] text-[12px] font-medium hover:!text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/20">
-          <Lock className="w-[15px] h-[15px] shrink-0" strokeWidth={1.7} />
+        <button onClick={onLock} className="term-footer-item w-full flex items-center gap-2 px-2.5 py-[6px] text-[11.5px] font-medium hover:!text-red-600 hover:!bg-red-50 dark:hover:!bg-red-950/20">
+          <Lock className="w-3.5 h-3.5 shrink-0" strokeWidth={1.7} />
           {!collapsed && 'Lock Dashboard'}
         </button>
       </div>
       {user && !collapsed && (
-        <div className="mt-2 mx-1 rounded-xl p-2.5 border border-slate-100 dark:border-neutral-800 flex items-center gap-2.5 bg-slate-50/50 dark:bg-neutral-900/50">
-          <span className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 text-white" style={{ backgroundColor: '#0A0A0A' }}>
+        <div className="mt-1.5 mx-1 rounded-xl p-2 border border-slate-100 dark:border-neutral-800 flex items-center gap-2 bg-slate-50/50 dark:bg-neutral-900/50">
+          <span className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 text-white" style={{ backgroundColor: '#0A0A0A' }}>
             {user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[11px] font-semibold text-slate-800 dark:text-neutral-100 truncate leading-tight">{user.name}</span>
-            <span className="block text-[9px] text-slate-400 dark:text-neutral-500 truncate">{user.role}</span>
+            <span className="block text-[10.5px] font-semibold text-slate-800 dark:text-neutral-100 truncate leading-tight">{user.name}</span>
+            <span className="block text-[8.5px] text-slate-400 dark:text-neutral-500 truncate">{user.role}</span>
           </span>
         </div>
       )}
@@ -241,7 +245,7 @@ export function TerminalRail({
         <RailFooter onLock={onLock} onBackToWebsite={onBackToWebsite} onOpenPortal={onOpenPortal} onOpenFinance={onOpenFinance} user={user} collapsed={collapsed} />
         <button
           onClick={() => setCollapsed(v => !v)}
-          className="shrink-0 flex items-center justify-center py-2 border-t border-slate-200 dark:border-neutral-700 text-slate-300 dark:text-neutral-600 hover:text-slate-500 dark:hover:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-900 transition-colors"
+          className="shrink-0 flex items-center justify-center py-1.5 border-t border-slate-200 dark:border-neutral-700 text-slate-300 dark:text-neutral-600 hover:text-slate-500 dark:hover:text-neutral-400 hover:bg-slate-50 dark:hover:bg-neutral-900 transition-colors"
           aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
         >
           {collapsed ? <PanelLeftOpen className="w-3.5 h-3.5" strokeWidth={1.7} /> : <PanelLeftClose className="w-3.5 h-3.5" strokeWidth={1.7} />}

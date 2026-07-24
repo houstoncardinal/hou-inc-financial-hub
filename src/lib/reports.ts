@@ -37,42 +37,58 @@ const fmtGeneratedAt = () => new Date().toLocaleString('en-US', {
   year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
 });
 
-/* ── PDF building blocks ── */
+/* ── PDF building blocks ──
+   entityLabel defaults to 'Houston Enterprise' for backward compatibility,
+   but every generator that knows its real entity (or is inherently scoped to
+   one) passes the correct name so the header/footer never mislabel a
+   Generator Pros or Holdings document as Houston Enterprise. */
+const DEFAULT_ENTITY = 'Houston Enterprise';
 
-export function makeDoc(title: string, sub: string, orientation: 'portrait' | 'landscape' = 'portrait'): { doc: jsPDF; y: number } {
+export function makeDoc(
+  title: string,
+  sub: string,
+  entityLabel: string = DEFAULT_ENTITY,
+  orientation: 'portrait' | 'landscape' = 'portrait',
+): { doc: jsPDF; y: number } {
   const doc = new jsPDF({ format: 'letter', unit: 'mm', orientation });
   const { w } = pageDims(doc);
 
-  // Thin enterprise document header
+  // Top accent bar
   doc.setFillColor(...C.accent);
-  doc.rect(0, 0, w, 1.4, 'F');
+  doc.rect(0, 0, w, 2.1, 'F');
+
+  // Monogram mark
+  doc.setFillColor(...C.black);
+  doc.roundedRect(M, 5.4, 7, 7, 1.3, 1.3, 'F');
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.white);
+  doc.text('H', M + 3.5, 10, { align: 'center' });
 
   doc.setDrawColor(...C.border);
-  doc.setLineWidth(0.25);
-  doc.line(M, 22, w - M, 22);
+  doc.setLineWidth(0.3);
+  doc.line(M, 24.5, w - M, 24.5);
 
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...C.black);
-  doc.text('HOU INC', M, 11.5);
+  doc.text('HOU INC', M + 10, 9.6);
   doc.setFontSize(6.2);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.muted);
-  doc.text('Houston Enterprise Financial Records', M, 16);
+  doc.text(`${entityLabel} Financial Records`, M + 10, 13.9);
   doc.setFontSize(5.4);
   doc.setTextColor(...C.muted);
-  doc.text(fmtGeneratedAt(), M, 19.8);
+  doc.text(fmtGeneratedAt(), M + 10, 17.8);
 
   doc.setFontSize(6.4);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.muted);
   doc.text(sub, w - M, 10.5, { align: 'right', maxWidth: 82 });
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...C.black);
-  doc.text(title, w - M, 17, { align: 'right', maxWidth: 92 });
+  doc.text(title, w - M, 18, { align: 'right', maxWidth: 92 });
 
-  return { doc, y: 28 };
+  return { doc, y: 31 };
 }
 
 interface Metric { label: string; value: string; color?: [number, number, number] }
@@ -82,34 +98,37 @@ export function drawMetrics(doc: jsPDF, y: number, metrics: Metric[]): number {
   const n = metrics.length;
   const gap = 3;
   const bw = (w - 2 * M - gap * (n - 1)) / n;
+  const bh = 18.5;
   metrics.forEach((m, i) => {
     const x = M + i * (bw + gap);
-    doc.setFillColor(248, 248, 248);
+    doc.setFillColor(250, 250, 250);
     doc.setDrawColor(...C.border);
     doc.setLineWidth(0.25);
-    doc.rect(x, y, bw, 15, 'FD');
-    // Left accent edge
+    doc.roundedRect(x, y, bw, bh, 1.4, 1.4, 'FD');
+    // Top accent bar
     doc.setFillColor(...(m.color ?? C.accent));
-    doc.rect(x, y, 1.4, 15, 'F');
-    doc.setFontSize(5.6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-    doc.text(m.label.toUpperCase(), x + 3.4, y + 6);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(m.color ?? C.black));
-    doc.text(m.value, x + 3.4, y + 12.2, { maxWidth: bw - 5 });
+    doc.rect(x + 0.3, y + 0.3, bw - 0.6, 1.6, 'F');
+    doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
+    doc.text(m.label.toUpperCase(), x + 4, y + 8);
+    doc.setFontSize(10.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(m.color ?? C.black));
+    doc.text(m.value, x + 4, y + 15, { maxWidth: bw - 7 });
   });
-  return y + 19;
+  return y + bh + 5;
 }
 
 export function sectionLabel(doc: jsPDF, y: number, label: string): number {
   const { w } = pageDims(doc);
+  doc.setFillColor(...C.accent);
+  doc.rect(M, y - 3.1, 1.3, 3.8, 'F');
   doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.muted);
-  doc.text(label.toUpperCase(), M, y);
+  doc.text(label.toUpperCase(), M + 3, y);
   doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
   const lw = doc.getTextWidth(label.toUpperCase());
-  doc.line(M + lw + 2, y - 0.5, w - M, y - 0.5);
+  doc.line(M + lw + 5, y - 0.5, w - M, y - 0.5);
   return y + 5;
 }
 
-export function addDecorations(doc: jsPDF, title: string) {
+export function addDecorations(doc: jsPDF, title: string, entityLabel: string = DEFAULT_ENTITY) {
   const { w, h } = pageDims(doc);
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
@@ -127,10 +146,11 @@ export function addDecorations(doc: jsPDF, title: string) {
 
     // Footer
     const fy = h - 14;
+    doc.setFillColor(...C.accent); doc.rect(0, h - 1.6, w, 1.6, 'F');
     doc.setDrawColor(...C.border); doc.setLineWidth(0.25);
     doc.line(M, fy, w - M, fy);
     doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...C.muted);
-    doc.text('HOU INC · Houston Enterprise Financial Records', M, fy + 4.5);
+    doc.text(`HOU INC · ${entityLabel} Financial Records`, M, fy + 4.5);
     doc.text(`Generated ${fmtGeneratedAt()}`, w / 2, fy + 4.5, { align: 'center' });
     doc.setFont('helvetica', 'bold');
     doc.text(`Page ${i} of ${n}  ·  CONFIDENTIAL`, w - M, fy + 4.5, { align: 'right' });
@@ -144,22 +164,22 @@ export const tblCfg = (startY: number) => ({
   headStyles: {
     fillColor: [246, 246, 246] as [number, number, number],
     textColor: C.black,
-    fontStyle: 'bold' as const, fontSize: 6.1,
-    cellPadding: { top: 2.3, bottom: 2.3, left: 2.4, right: 2.4 },
+    fontStyle: 'bold' as const, fontSize: 6.2,
+    cellPadding: { top: 2.5, bottom: 2.5, left: 2.6, right: 2.6 },
     lineColor: C.border,
     lineWidth: 0.2,
   },
   bodyStyles: {
-    fontSize: 6.4, textColor: C.black,
-    cellPadding: { top: 2.1, bottom: 2.1, left: 2.4, right: 2.4 },
+    fontSize: 6.5, textColor: C.black,
+    cellPadding: { top: 2.2, bottom: 2.2, left: 2.6, right: 2.6 },
     overflow: 'linebreak' as const,
-    minCellHeight: 4.6,
+    minCellHeight: 4.8,
   },
   alternateRowStyles: { fillColor: C.altRow },
   footStyles: {
     fillColor: [241, 241, 241] as [number, number, number],
-    textColor: C.black, fontStyle: 'bold' as const, fontSize: 6.5,
-    cellPadding: { top: 2.8, bottom: 2.8, left: 2.4, right: 2.4 },
+    textColor: C.black, fontStyle: 'bold' as const, fontSize: 6.6,
+    cellPadding: { top: 2.9, bottom: 2.9, left: 2.6, right: 2.6 },
   },
   tableLineColor: C.border,
   tableLineWidth: 0.2,
@@ -171,13 +191,15 @@ export const tblCfg = (startY: number) => ({
 export function generateTransactionReport(
   data: any[],
   kind: 'income' | 'expense',
-  _period?: string
+  _period?: string,
+  entityLabel: string = 'Houston Enterprise'
 ) {
   const isIncome = kind === 'income';
   const label = isIncome ? 'Income' : 'Expenses';
   const { doc, y } = makeDoc(
     `${label} Ledger`,
-    `HOU INC · ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`
+    `HOU INC · ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`,
+    entityLabel
   );
 
   const total   = data.reduce((s: number, t: any) => s + Number(t.amount), 0);
@@ -215,15 +237,15 @@ export function generateTransactionReport(
     ]],
   });
 
-  addDecorations(doc, `${label} Ledger`);
+  addDecorations(doc, `${label} Ledger`, entityLabel);
   return doc;
 }
 
 /* ────────────────────────────────────────────
    PDF: Check Register
 ──────────────────────────────────────────── */
-export function generateCheckRegisterReport(checks: any[], _filter?: string) {
-  const { doc, y } = makeDoc('Check Register', 'HOU INC · Instrument Ledger');
+export function generateCheckRegisterReport(checks: any[], _filter?: string, entityLabel: string = 'Houston Enterprise') {
+  const { doc, y } = makeDoc('Check Register', 'HOU INC · Instrument Ledger', entityLabel);
 
   const total   = checks.reduce((s: number, c: any) => s + Number(c.amount), 0);
   const cleared = checks.filter((c: any) => c.status === 'cleared').reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -268,7 +290,7 @@ export function generateCheckRegisterReport(checks: any[], _filter?: string) {
     ]],
   });
 
-  addDecorations(doc, 'Check Register');
+  addDecorations(doc, 'Check Register', entityLabel);
   return doc;
 }
 
@@ -280,9 +302,10 @@ export function generateLedgerReport(
   expenses: any[],
   checks: any[],
   projectFilter?: string,
-  typeFilter?: string
+  typeFilter?: string,
+  entityLabel: string = 'Houston Enterprise'
 ) {
-  const { doc, y } = makeDoc('General Ledger', 'HOU INC · Unified Ledger');
+  const { doc, y } = makeDoc('General Ledger', 'HOU INC · Unified Ledger', entityLabel);
 
   const all = [
     ...checks.map((c: any) => ({ date: c.issue_date, type: 'Check',   ref: `#${c.check_number}`,      party: c.payee_name, project: c.projects?.name, amount: -Number(c.amount) })),
@@ -317,7 +340,7 @@ export function generateLedgerReport(
     r.party,
     r.project || '—',
     {
-      content: r.amount >= 0 ? `+${fmtUSD(Math.abs(r.amount))}` : `−${fmtUSD(Math.abs(r.amount))}`,
+      content: r.amount >= 0 ? `+${fmtUSD(Math.abs(r.amount))}` : `-${fmtUSD(Math.abs(r.amount))}`,
       styles: { halign: 'right', fontStyle: 'bold', textColor: r.amount >= 0 ? C.positive : C.black },
     },
   ]);
@@ -337,14 +360,14 @@ export function generateLedgerReport(
     ]],
   });
 
-  addDecorations(doc, 'General Ledger');
+  addDecorations(doc, 'General Ledger', entityLabel);
   return doc;
 }
 
 /* ────────────────────────────────────────────
    PDF: Individual Ledger Record
 ──────────────────────────────────────────── */
-export function generateLedgerRecordReport(row: any) {
+export function generateLedgerRecordReport(row: any, entityLabel: string = 'Houston Enterprise') {
   const raw = row?.raw ?? {};
   const isCredit = Number(row?.amount ?? 0) >= 0;
   const date = row?.date || raw.transaction_date || raw.issue_date;
@@ -363,7 +386,7 @@ export function generateLedgerRecordReport(row: any) {
         : raw.payment_method === 'credit_card'
           ? 'Card / Processor Reference'
           : 'Payment Reference';
-  const { doc, y } = makeDoc('Houston Enterprise Ledger Record', `${row?.type || 'Finance Entry'} · ${method}`);
+  const { doc, y } = makeDoc('Ledger Record', `${row?.type || 'Finance Entry'} · ${method}`, entityLabel);
 
   const signedAmount = `${isCredit ? '+' : '-'}${fmtUSD(Math.abs(Number(row?.amount || 0)))}`;
   let my = drawMetrics(doc, y, [
@@ -462,15 +485,15 @@ export function generateLedgerRecordReport(row: any) {
   doc.setTextColor(...C.black);
   doc.text(doc.splitTextToSize(String(memo), PW - M * 2 - 8), M + 4, y2 + 10);
 
-  addDecorations(doc, 'Houston Enterprise Ledger Record');
+  addDecorations(doc, 'Ledger Record', entityLabel);
   return doc;
 }
 
 /* ────────────────────────────────────────────
    PDF: Project Portfolio
 ──────────────────────────────────────────── */
-export function generateProjectReport(projects: any[]) {
-  const { doc, y } = makeDoc('Project Portfolio', 'HOU INC · Executive Project Packet');
+export function generateProjectReport(projects: any[], entityLabel: string = 'Houston Enterprise') {
+  const { doc, y } = makeDoc('Project Portfolio', 'HOU INC · Executive Project Packet', entityLabel);
 
   const n = (v: any) => Number(v ?? 0) || 0;
   const totalBudget = projects.reduce((s: number, p: any) => s + n(p.current_contract_value ?? p.contract_value ?? p.budget), 0);
@@ -579,7 +602,7 @@ export function generateProjectReport(projects: any[]) {
     cy += cardH + 5;
   });
 
-  addDecorations(doc, 'Project Portfolio');
+  addDecorations(doc, 'Project Portfolio', entityLabel);
   return doc;
 }
 
@@ -604,7 +627,7 @@ export function generateProjectReconciliationReport({
   payments: any[];
   fin: any;
 }) {
-  const { doc, y: headerY } = makeDoc('Houston Enterprise Reconciliation', project?.name || 'Project', 'landscape');
+  const { doc, y: headerY } = makeDoc('Houston Enterprise Reconciliation', project?.name || 'Project', 'Houston Enterprise', 'landscape');
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 8; // tighter than the shared M=18 — landscape needs the room for 5 draw columns
   const drawCols = draws.slice(0, 5);
@@ -729,7 +752,7 @@ export function generateProjectReconciliationReport({
     });
   }
 
-  addDecorations(doc, 'Houston Enterprise Reconciliation');
+  addDecorations(doc, 'Houston Enterprise Reconciliation', 'Houston Enterprise');
   return doc;
 }
 
@@ -748,8 +771,8 @@ export interface InvoiceSummary {
   total: number;
 }
 
-export function generateInvoicesReport(invoices: InvoiceSummary[]) {
-  const { doc, y } = makeDoc('Invoice Register', 'HOU INC · Billing');
+export function generateInvoicesReport(invoices: InvoiceSummary[], entityLabel: string = 'Houston Enterprise') {
+  const { doc, y } = makeDoc('Invoice Register', 'HOU INC · Billing', entityLabel);
 
   const totalAmt    = invoices.reduce((s, i) => s + i.total, 0);
   const paidAmt     = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total, 0);
@@ -798,7 +821,7 @@ export function generateInvoicesReport(invoices: InvoiceSummary[]) {
     ]],
   });
 
-  addDecorations(doc, 'Invoice Register');
+  addDecorations(doc, 'Invoice Register', entityLabel);
   return doc;
 }
 
@@ -1145,7 +1168,7 @@ export function generateExecutiveSummaryReport(opts: {
   sections: ExecSummarySection[];
   narrative?: string;
 }) {
-  const { doc, y } = makeDoc(opts.reportTitle, `HOU INC · ${opts.entityLabel}`);
+  const { doc, y } = makeDoc(opts.reportTitle, `HOU INC · ${opts.entityLabel}`, opts.entityLabel);
   let cy = drawMetrics(doc, y, opts.metrics.slice(0, 4));
   for (const s of opts.sections) {
     cy = kvSection(doc, cy + 2, s.label, s.rows.map(r => [r.label, r.value, r.color] as [string, string, [number, number, number]?]));
@@ -1156,7 +1179,7 @@ export function generateExecutiveSummaryReport(opts: {
     const lines = doc.splitTextToSize(opts.narrative, pageDims(doc).w - 2 * M);
     doc.text(lines, M, cy);
   }
-  addDecorations(doc, opts.reportTitle);
+  addDecorations(doc, opts.reportTitle, opts.entityLabel);
   return doc;
 }
 
@@ -1173,7 +1196,7 @@ function agingMap(aging: AgingRow[]) {
 const AGING_BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
 
 export function generateAgingReport(aging: AgingRow[], entityLabel: string) {
-  const { doc, y } = makeDoc('AR / AP Aging', `HOU INC · ${entityLabel}`);
+  const { doc, y } = makeDoc('AR / AP Aging', `HOU INC · ${entityLabel}`, entityLabel);
   const map = agingMap(aging);
   const arTotal = AGING_BUCKETS.reduce((s, b) => s + (map[`ar:${b}`] || 0), 0);
   const apTotal = AGING_BUCKETS.reduce((s, b) => s + (map[`ap:${b}`] || 0), 0);
@@ -1197,7 +1220,7 @@ export function generateAgingReport(aging: AgingRow[], entityLabel: string) {
       { content: fmtUSD(apTotal), styles: { halign: 'right', fontStyle: 'bold' } },
     ]],
   });
-  addDecorations(doc, 'AR / AP Aging');
+  addDecorations(doc, 'AR / AP Aging', entityLabel);
   return doc;
 }
 
@@ -1226,8 +1249,8 @@ function aggregateSpend(transactions: any[], checks: any[]) {
   return Object.values(byParty).map(v => ({ ...v, total: v.txn + v.checks })).sort((a, b) => b.total - a.total);
 }
 
-export function generateVendorSpendReport(vendors: any[], transactions: any[], checks: any[], termLabel: string) {
-  const { doc, y } = makeDoc(`${termLabel} Spend`, 'HOU INC · Spend Analysis');
+export function generateVendorSpendReport(vendors: any[], transactions: any[], checks: any[], termLabel: string, entityLabel: string = 'Houston Enterprise') {
+  const { doc, y } = makeDoc(`${termLabel} Spend`, 'HOU INC · Spend Analysis', entityLabel);
   const list = aggregateSpend(transactions, checks);
   const total = list.reduce((s, v) => s + v.total, 0);
   const my = drawMetrics(doc, y, [
@@ -1244,7 +1267,7 @@ export function generateVendorSpendReport(vendors: any[], transactions: any[], c
     columnStyles: { 4: { halign: 'right' } },
     foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
   });
-  addDecorations(doc, `${termLabel} Spend`);
+  addDecorations(doc, `${termLabel} Spend`, entityLabel);
   return doc;
 }
 
@@ -1261,7 +1284,7 @@ export function downloadVendorSpendExcel(transactions: any[], checks: any[], ter
 export interface AuditEventRow { date: string; source: string; action: string; table_name?: string; user_label?: string; details?: string }
 
 export function generateAuditTrailReport(events: AuditEventRow[], entityLabel: string) {
-  const { doc, y } = makeDoc('Audit & Activity Trail', `HOU INC · ${entityLabel}`);
+  const { doc, y } = makeDoc('Audit & Activity Trail', `HOU INC · ${entityLabel}`, entityLabel);
   const sources = new Set(events.map(e => e.source)).size;
   const my = drawMetrics(doc, y, [
     { label: 'Total Events', value: String(events.length) },
@@ -1278,7 +1301,7 @@ export function generateAuditTrailReport(events: AuditEventRow[], entityLabel: s
       e.source, e.action, e.table_name || '—', e.user_label || '—', e.details || '—',
     ]),
   });
-  addDecorations(doc, 'Audit & Activity Trail');
+  addDecorations(doc, 'Audit & Activity Trail', entityLabel);
   return doc;
 }
 
@@ -1292,7 +1315,7 @@ export function downloadAuditTrailExcel(events: AuditEventRow[], entityLabel: st
    Report: User & Role Access (shared)
 ──────────────────────────────────────────── */
 export function generateRoleAccessReport(roles: any[], entityLabel: string) {
-  const { doc, y } = makeDoc('User & Role Access', `HOU INC · ${entityLabel}`);
+  const { doc, y } = makeDoc('User & Role Access', `HOU INC · ${entityLabel}`, entityLabel);
   const my = drawMetrics(doc, y, [
     { label: 'Total Assignments', value: String(roles.length) },
     { label: 'Active', value: String(roles.filter((r: any) => r.is_active).length) },
@@ -1304,7 +1327,7 @@ export function generateRoleAccessReport(roles: any[], entityLabel: string) {
     head: [['User', 'Role', 'Status', 'Assigned', 'Notes']],
     body: roles.map((r: any) => [r.user_id, String(r.role).replace(/_/g, ' '), r.is_active ? 'Active' : 'Inactive', r.assigned_at?.slice(0, 10) || '—', r.notes || '—']),
   });
-  addDecorations(doc, 'User & Role Access');
+  addDecorations(doc, 'User & Role Access', entityLabel);
   return doc;
 }
 
@@ -1342,7 +1365,7 @@ function payAppMath(input: PayAppInput) {
 }
 
 export function generatePayApplicationReport(input: PayAppInput) {
-  const { doc, y } = makeDoc('Application for Payment', `${input.projectName} · Application #${input.applicationNumber}`);
+  const { doc, y } = makeDoc('Application for Payment', `${input.projectName} · Application #${input.applicationNumber}`, 'Houston Enterprise');
   const m = payAppMath(input);
   const { w } = pageDims(doc);
 
@@ -1365,10 +1388,10 @@ export function generatePayApplicationReport(input: PayAppInput) {
     ['3. Contract Sum to Date (Line 1 + 2)', fmtUSD(m.contractSumToDate)],
     ['4. Total Completed & Stored to Date', fmtUSD(input.completedStoredToDate)],
     [`5. Retainage (${input.retainagePercent.toFixed(1)}%)`, fmtUSD(input.retainageHeld)],
-    ['6. Total Earned Less Retainage (Line 4 − 5)', fmtUSD(m.earnedLessRetainage)],
+    ['6. Total Earned Less Retainage (Line 4 - 5)', fmtUSD(m.earnedLessRetainage)],
     ['7. Less Previous Certificates for Payment', fmtUSD(input.previousPayments)],
-    ['8. CURRENT PAYMENT DUE (Line 6 − 7)', fmtUSD(m.currentPaymentDue), C.accent],
-    ['9. Balance to Finish, Including Retainage (Line 3 − 6)', fmtUSD(m.balanceToFinish)],
+    ['8. CURRENT PAYMENT DUE (Line 6 - 7)', fmtUSD(m.currentPaymentDue), C.accent],
+    ['9. Balance to Finish, Including Retainage (Line 3 - 6)', fmtUSD(m.balanceToFinish)],
   ]);
 
   if (input.changeOrders.length) {
@@ -1397,7 +1420,7 @@ export function generatePayApplicationReport(input: PayAppInput) {
   doc.text('Contractor Signature / Date', M, cy + 4);
   doc.text('Owner / Client Signature / Date', w - M - 62, cy + 4);
 
-  addDecorations(doc, `Application for Payment #${input.applicationNumber}`);
+  addDecorations(doc, `Application for Payment #${input.applicationNumber}`, 'Houston Enterprise');
   return doc;
 }
 
@@ -1425,7 +1448,7 @@ export function downloadPayApplicationExcel(input: PayAppInput) {
    spend-by-code report, not a fabricated budget-vs-actual.
 ──────────────────────────────────────────── */
 export function generateCostCodeReport(costCodes: any[], transactions: any[], entityLabel: string) {
-  const { doc, y } = makeDoc('Cost Code / Phase Spend', `HOU INC · ${entityLabel}`);
+  const { doc, y } = makeDoc('Cost Code / Phase Spend', `HOU INC · ${entityLabel}`, entityLabel);
   const spend: Record<string, { amount: number; count: number }> = {};
   transactions.filter((t: any) => t.type === 'expense' && t.cost_phase).forEach((t: any) => {
     const key = t.cost_phase;
@@ -1455,7 +1478,7 @@ export function generateCostCodeReport(costCodes: any[], transactions: any[], en
     columnStyles: { 4: { halign: 'right' } },
     foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
   });
-  addDecorations(doc, 'Cost Code / Phase Spend');
+  addDecorations(doc, 'Cost Code / Phase Spend', entityLabel);
   return doc;
 }
 
@@ -1473,7 +1496,7 @@ export function downloadCostCodeExcel(costCodes: any[], transactions: any[], ent
    Report: Houston Enterprise · Fixed Assets Register
 ──────────────────────────────────────────── */
 export function generateFixedAssetsReport(assets: any[], entityLabel: string) {
-  const { doc, y } = makeDoc('Fixed Asset Register', `HOU INC · ${entityLabel} · Book Basis`);
+  const { doc, y } = makeDoc('Fixed Asset Register', `HOU INC · ${entityLabel} · Book Basis`, entityLabel);
   const cost = assets.reduce((s: number, a: any) => s + Number(a.cost_basis || 0), 0);
   const accum = assets.reduce((s: number, a: any) => s + Number(a.accumulated_depreciation || 0), 0);
   const nbv = assets.reduce((s: number, a: any) => s + Number(a.net_book_value || 0), 0);
@@ -1501,7 +1524,7 @@ export function generateFixedAssetsReport(assets: any[], entityLabel: string) {
   doc.setFontSize(6); doc.setFont('helvetica', 'italic'); doc.setTextColor(...C.muted);
   const noteY = (doc as any).lastAutoTable.finalY + 5;
   doc.text('Book-basis straight-line / declining-balance depreciation for internal management reporting — not prepared as a tax (MACRS) schedule.', M, noteY);
-  addDecorations(doc, 'Fixed Asset Register');
+  addDecorations(doc, 'Fixed Asset Register', entityLabel);
   return doc;
 }
 
@@ -1518,7 +1541,7 @@ export function downloadFixedAssetsExcel(assets: any[], entityLabel: string) {
    Report: HGP · Model Profitability
 ──────────────────────────────────────────── */
 export function generateModelProfitabilityReport(models: Array<{ model: string; units: number; revenue: number; costs: number; margin: number; marginPct: number }>) {
-  const { doc, y } = makeDoc('Generator Model Profitability', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Generator Model Profitability', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const revenue = models.reduce((s, m) => s + m.revenue, 0);
   const margin = models.reduce((s, m) => s + m.margin, 0);
   const my = drawMetrics(doc, y, [
@@ -1537,7 +1560,7 @@ export function generateModelProfitabilityReport(models: Array<{ model: string; 
     foot: [['Total', String(models.reduce((s, m) => s + m.units, 0)), fmtUSD(revenue), fmtUSD(models.reduce((s, m) => s + m.costs, 0)),
       { content: fmtUSD(margin), styles: { fontStyle: 'bold' } }, '']],
   });
-  addDecorations(doc, 'Generator Model Profitability');
+  addDecorations(doc, 'Generator Model Profitability', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1551,7 +1574,7 @@ export function downloadModelProfitabilityExcel(models: Array<{ model: string; u
    Report: HGP · Inventory Valuation
 ──────────────────────────────────────────── */
 export function generateInventoryValuationReport(parts: any[]) {
-  const { doc, y } = makeDoc('Inventory Valuation', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Inventory Valuation', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const totalValue = parts.reduce((s: number, p: any) => s + Number(p.qty_on_hand || 0) * Number(p.unit_cost || 0), 0);
   const lowStock = parts.filter((p: any) => Number(p.qty_on_hand || 0) <= Number(p.reorder_point || 0));
   const my = drawMetrics(doc, y, [
@@ -1571,7 +1594,7 @@ export function generateInventoryValuationReport(parts: any[]) {
     }),
     foot: [[{ content: 'Total', colSpan: 5, styles: { fontStyle: 'bold' } }, { content: fmtUSD(totalValue), styles: { halign: 'right', fontStyle: 'bold' } }, '']],
   });
-  addDecorations(doc, 'Inventory Valuation');
+  addDecorations(doc, 'Inventory Valuation', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1586,7 +1609,7 @@ export function downloadInventoryValuationExcel(parts: any[]) {
 ──────────────────────────────────────────── */
 export function generateLowStockReorderReport(parts: any[]) {
   const low = parts.filter((p: any) => Number(p.qty_on_hand || 0) <= Number(p.reorder_point || 0));
-  const { doc, y } = makeDoc('Low Stock / Reorder', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Low Stock / Reorder', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const exposure = low.reduce((s: number, p: any) => s + Number(p.reorder_qty || p.reorder_point * 2 || 0) * Number(p.unit_cost || 0), 0);
   const my = drawMetrics(doc, y, [
     { label: 'Parts Below Reorder Point', value: String(low.length), color: low.length > 0 ? C.negative : C.positive },
@@ -1602,7 +1625,7 @@ export function generateLowStockReorderReport(parts: any[]) {
       return [p.sku || '—', p.name, String(p.qty_on_hand), String(p.reorder_point), String(qty), fmtUSD(qty * Number(p.unit_cost || 0)), p.vendors?.name || '—'];
     }),
   });
-  addDecorations(doc, 'Low Stock / Reorder');
+  addDecorations(doc, 'Low Stock / Reorder', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1610,7 +1633,7 @@ export function generateLowStockReorderReport(parts: any[]) {
    Report: HGP · Purchase Order / Procurement
 ──────────────────────────────────────────── */
 export function generatePurchaseOrderReport(pos: any[]) {
-  const { doc, y } = makeDoc('Purchase Order / Procurement', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Purchase Order / Procurement', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const total = pos.reduce((s: number, p: any) => s + Number(p.total_amount || 0), 0);
   const ordered = pos.filter((p: any) => p.status === 'ordered').reduce((s: number, p: any) => s + Number(p.total_amount || 0), 0);
   const my = drawMetrics(doc, y, [
@@ -1627,7 +1650,7 @@ export function generatePurchaseOrderReport(pos: any[]) {
       { content: fmtUSD(p.total_amount), styles: { halign: 'right', fontStyle: 'bold' } }]),
     foot: [[{ content: 'Total', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(total), styles: { halign: 'right', fontStyle: 'bold' } }]],
   });
-  addDecorations(doc, 'Purchase Order / Procurement');
+  addDecorations(doc, 'Purchase Order / Procurement', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1641,7 +1664,7 @@ export function downloadPurchaseOrderExcel(pos: any[]) {
    Report: HGP · Deposits & Open Balances
 ──────────────────────────────────────────── */
 export function generateDepositsOpenBalancesReport(jobs: any[]) {
-  const { doc, y } = makeDoc('Deposits & Open Balances', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Deposits & Open Balances', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const active = jobs.filter((j: any) => !['completed', 'lost'].includes(j.stage));
   const deposits = active.reduce((s: number, j: any) => s + (Number(j.deposit_amount) || 0), 0);
   const balance = active.reduce((s: number, j: any) => s + Math.max((Number(j.quoted_amount) || 0) - (Number(j.deposit_amount) || 0), 0), 0);
@@ -1659,7 +1682,7 @@ export function generateDepositsOpenBalancesReport(jobs: any[]) {
       { content: fmtUSD(Math.max((Number(j.quoted_amount) || 0) - (Number(j.deposit_amount) || 0), 0)), styles: { halign: 'right', fontStyle: 'bold', textColor: C.accent } }]),
     foot: [[{ content: 'Total Open Balance', colSpan: 4, styles: { fontStyle: 'bold' } }, { content: fmtUSD(balance), styles: { halign: 'right', fontStyle: 'bold' } }]],
   });
-  addDecorations(doc, 'Deposits & Open Balances');
+  addDecorations(doc, 'Deposits & Open Balances', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1667,7 +1690,7 @@ export function generateDepositsOpenBalancesReport(jobs: any[]) {
    Report: HGP · Warranty Expiration
 ──────────────────────────────────────────── */
 export function generateWarrantyExpirationReport(units: any[]) {
-  const { doc, y } = makeDoc('Warranty Expiration', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Warranty Expiration', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const withWarranty = units.filter((u: any) => u.warranty_end);
   const today = new Date();
   const expiring90 = withWarranty.filter((u: any) => {
@@ -1691,7 +1714,7 @@ export function generateWarrantyExpirationReport(units: any[]) {
         { content: isExpired ? 'EXPIRED' : 'ACTIVE', styles: { fontStyle: 'bold', textColor: isExpired ? C.negative : C.positive } }];
     }),
   });
-  addDecorations(doc, 'Warranty Expiration');
+  addDecorations(doc, 'Warranty Expiration', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1699,7 +1722,7 @@ export function generateWarrantyExpirationReport(units: any[]) {
    Report: HGP · Customer Site Registry
 ──────────────────────────────────────────── */
 export function generateCustomerSiteRegistryReport(sites: any[]) {
-  const { doc, y } = makeDoc('Customer Site Registry', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Customer Site Registry', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const geocoded = sites.filter((s: any) => s.latitude && s.longitude).length;
   const my = drawMetrics(doc, y, [
     { label: 'Registered Sites', value: String(sites.length) },
@@ -1712,7 +1735,7 @@ export function generateCustomerSiteRegistryReport(sites: any[]) {
     head: [['Customer', 'Address', 'City', 'Utility', 'Under Agreement']],
     body: sites.map((s: any) => [s.customer_name, s.site_address || '—', s.city || '—', s.utility_provider || '—', s.agreement_id ? 'Yes' : 'No']),
   });
-  addDecorations(doc, 'Customer Site Registry');
+  addDecorations(doc, 'Customer Site Registry', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1720,7 +1743,7 @@ export function generateCustomerSiteRegistryReport(sites: any[]) {
    Report: HGP · Service Visit Revenue
 ──────────────────────────────────────────── */
 export function generateServiceVisitRevenueReport(visits: any[]) {
-  const { doc, y } = makeDoc('Service Visit Revenue', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Service Visit Revenue', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const completed = visits.filter((v: any) => v.status === 'completed');
   const revenue = completed.reduce((s: number, v: any) => s + (Number(v.revenue) || 0), 0);
   const cost = completed.reduce((s: number, v: any) => s + (Number(v.cost) || 0), 0);
@@ -1741,7 +1764,7 @@ export function generateServiceVisitRevenueReport(visits: any[]) {
     body: Object.entries(byType).map(([type, r]) => [String(type).replace(/_/g, ' '), String(r.count), fmtUSD(r.revenue)]),
     foot: [['Total', String(completed.length), { content: fmtUSD(revenue), styles: { halign: 'right', fontStyle: 'bold' } }]],
   });
-  addDecorations(doc, 'Service Visit Revenue');
+  addDecorations(doc, 'Service Visit Revenue', 'Houston Generator Pros');
   return doc;
 }
 
@@ -1749,7 +1772,7 @@ export function generateServiceVisitRevenueReport(visits: any[]) {
    Report: Holdings · Notes Payable / Receivable
 ──────────────────────────────────────────── */
 export function generateNotesReport(notes: any[]) {
-  const { doc, y } = makeDoc('Notes Payable / Receivable', 'HOU INC · Houston Enterprise Holdings');
+  const { doc, y } = makeDoc('Notes Payable / Receivable', 'HOU INC · Houston Enterprise Holdings', 'Houston Enterprise Holdings');
   const receivable = notes.filter((n: any) => n.direction === 'receivable' && n.status === 'active').reduce((s: number, n: any) => s + Number(n.outstanding_balance || 0), 0);
   const payable = notes.filter((n: any) => n.direction === 'payable' && n.status === 'active').reduce((s: number, n: any) => s + Number(n.outstanding_balance || 0), 0);
   const my = drawMetrics(doc, y, [
@@ -1766,7 +1789,7 @@ export function generateNotesReport(notes: any[]) {
       fmtUSD(n.principal), { content: fmtUSD(n.outstanding_balance), styles: { fontStyle: 'bold', textColor: n.direction === 'receivable' ? C.positive : C.negative } },
       `${Number(n.interest_rate || 0).toFixed(2)}%`, n.maturity_date?.slice(0, 10) || '—', String(n.status).replace(/_/g, ' ')]),
   });
-  addDecorations(doc, 'Notes Payable / Receivable');
+  addDecorations(doc, 'Notes Payable / Receivable', 'Houston Enterprise Holdings');
   return doc;
 }
 
@@ -1780,7 +1803,7 @@ export function downloadNotesExcel(notes: any[]) {
    Report: Holdings · Capital Activity
 ──────────────────────────────────────────── */
 export function generateCapitalActivityReport(activity: any[]) {
-  const { doc, y } = makeDoc('Capital Activity', 'HOU INC · Houston Enterprise Holdings');
+  const { doc, y } = makeDoc('Capital Activity', 'HOU INC · Houston Enterprise Holdings', 'Houston Enterprise Holdings');
   const sum = (t: string) => activity.filter((a: any) => a.activity_type === t).reduce((s: number, a: any) => s + Number(a.amount || 0), 0);
   const my = drawMetrics(doc, y, [
     { label: 'Contributions ITD', value: fmtUSD(sum('capital_contribution')), color: C.positive },
@@ -1795,7 +1818,7 @@ export function generateCapitalActivityReport(activity: any[]) {
     body: activity.map((a: any) => [a.activity_date?.slice(0, 10), String(a.activity_type).replace(/_/g, ' '), a.related_entity_id || '—',
       { content: fmtUSD(a.amount), styles: { halign: 'right', fontStyle: 'bold' } }, a.memo || '—']),
   });
-  addDecorations(doc, 'Capital Activity');
+  addDecorations(doc, 'Capital Activity', 'Houston Enterprise Holdings');
   return doc;
 }
 
@@ -1809,7 +1832,7 @@ export function downloadCapitalActivityExcel(activity: any[]) {
    Report: Holdings · Covenant Compliance
 ──────────────────────────────────────────── */
 export function generateCovenantComplianceReport(covenants: any[]) {
-  const { doc, y } = makeDoc('Covenant Compliance', 'HOU INC · Houston Enterprise Holdings');
+  const { doc, y } = makeDoc('Covenant Compliance', 'HOU INC · Houston Enterprise Holdings', 'Houston Enterprise Holdings');
   const breached = covenants.filter((c: any) => c.status === 'breached').length;
   const atRisk = covenants.filter((c: any) => c.status === 'at_risk').length;
   const my = drawMetrics(doc, y, [
@@ -1827,7 +1850,7 @@ export function generateCovenantComplianceReport(covenants: any[]) {
       { content: String(c.status).replace(/_/g, ' ').toUpperCase(), styles: { fontStyle: 'bold', textColor: c.status === 'breached' ? C.negative : c.status === 'at_risk' ? C.accent : C.positive } },
       c.last_tested_date?.slice(0, 10) || '—']),
   });
-  addDecorations(doc, 'Covenant Compliance');
+  addDecorations(doc, 'Covenant Compliance', 'Houston Enterprise Holdings');
   return doc;
 }
 
@@ -1842,7 +1865,7 @@ export interface HoldingsBalanceSheet {
 }
 
 export function generateBalanceSheetReport(bs: HoldingsBalanceSheet) {
-  const { doc, y } = makeDoc('Statement of Financial Position', `HOU INC · Houston Enterprise Holdings · As of ${fmtDateLong(bs.as_of_date)}`);
+  const { doc, y } = makeDoc('Statement of Financial Position', `HOU INC · Houston Enterprise Holdings · As of ${fmtDateLong(bs.as_of_date)}`, 'Houston Enterprise Holdings');
   let cy = drawMetrics(doc, y, [
     { label: 'Total Assets', value: fmtUSD(bs.total_assets) },
     { label: 'Total Liabilities', value: fmtUSD(bs.total_liabilities) },
@@ -1858,7 +1881,7 @@ export function generateBalanceSheetReport(bs: HoldingsBalanceSheet) {
     ['TOTAL LIABILITIES', fmtUSD(bs.total_liabilities), C.accent],
   ]);
   cy = kvSection(doc, cy, "Owners' Equity", [
-    ["Owners' Equity (Total Assets − Total Liabilities)", fmtUSD(bs.owners_equity), C.accent],
+    ["Owners' Equity (Total Assets - Total Liabilities)", fmtUSD(bs.owners_equity), C.accent],
   ]);
   cy = kvSection(doc, cy, 'Capital Activity Since Inception (supplementary)', [
     ['Capital Contributions', fmtUSD(bs.capital_contributions_itd)],
@@ -1874,7 +1897,7 @@ export function generateBalanceSheetReport(bs: HoldingsBalanceSheet) {
     pageDims(doc).w - 2 * M,
   );
   doc.text(lines, M, cy + 2);
-  addDecorations(doc, 'Statement of Financial Position');
+  addDecorations(doc, 'Statement of Financial Position', 'Houston Enterprise Holdings');
   return doc;
 }
 
@@ -1911,7 +1934,7 @@ export function generateBoardPacketReport(opts: {
   pendingApprovals: any[];
   managementNotes?: string;
 }) {
-  const { doc, y } = makeDoc('Consolidated Board Packet', `HOU INC · Houston Enterprise Holdings · ${opts.periodLabel}`);
+  const { doc, y } = makeDoc('Consolidated Board Packet', `HOU INC · Houston Enterprise Holdings · ${opts.periodLabel}`, 'Houston Enterprise Holdings');
   const activeNotes = opts.notes.filter((n: any) => n.status === 'active');
   const maturingSoon = activeNotes.filter((n: any) => {
     if (!n.maturity_date) return false;
@@ -1922,7 +1945,7 @@ export function generateBoardPacketReport(opts: {
   let cy = drawMetrics(doc, y, [
     { label: 'Total Assets', value: fmtUSD(opts.balanceSheet.total_assets) },
     { label: "Owners' Equity", value: fmtUSD(opts.balanceSheet.owners_equity), color: opts.balanceSheet.owners_equity >= 0 ? C.positive : C.negative },
-    { label: 'Maturing ≤180d', value: String(maturingSoon.length), color: maturingSoon.length > 0 ? C.accent : C.positive },
+    { label: 'Maturing Within 180d', value: String(maturingSoon.length), color: maturingSoon.length > 0 ? C.accent : C.positive },
     { label: 'Pending Approvals', value: String(opts.pendingApprovals.length), color: opts.pendingApprovals.length > 0 ? C.accent : C.positive },
   ]);
 
@@ -1981,7 +2004,7 @@ export function generateBoardPacketReport(opts: {
     doc.text(doc.splitTextToSize(opts.managementNotes, pageDims(doc).w - 2 * M), M, cy);
   }
 
-  addDecorations(doc, 'Consolidated Board Packet');
+  addDecorations(doc, 'Consolidated Board Packet', 'Houston Enterprise Holdings');
   return doc;
 }
 
@@ -1989,7 +2012,7 @@ export function generateBoardPacketReport(opts: {
    Report: HGP · Technician Workload
 ──────────────────────────────────────────── */
 export function generateTechnicianWorkloadReport(jobs: any[], visits: any[]) {
-  const { doc, y } = makeDoc('Technician Workload', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Technician Workload', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const byTech: Record<string, { jobs: number; visits: number; hours: number; revenue: number }> = {};
   const bump = (name: string) => byTech[name] ?? (byTech[name] = { jobs: 0, visits: 0, hours: 0, revenue: 0 });
   jobs.filter((j: any) => j.technician && !['completed', 'lost'].includes(j.stage)).forEach((j: any) => {
@@ -2012,7 +2035,7 @@ export function generateTechnicianWorkloadReport(jobs: any[], visits: any[]) {
     head: [['Technician', 'Open Jobs', 'Visits', 'Labor Hours', 'Visit Revenue']],
     body: rows.map(r => [r.name, String(r.jobs), String(r.visits), r.hours.toFixed(1), fmtUSD(r.revenue)]),
   });
-  addDecorations(doc, 'Technician Workload');
+  addDecorations(doc, 'Technician Workload', 'Houston Generator Pros');
   return doc;
 }
 
@@ -2020,14 +2043,14 @@ export function generateTechnicianWorkloadReport(jobs: any[], visits: any[]) {
    Report: HGP · Service Agreement Renewals
 ──────────────────────────────────────────── */
 export function generateServiceAgreementRenewalReport(agreements: any[]) {
-  const { doc, y } = makeDoc('Service Agreement Renewals', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Service Agreement Renewals', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const active = agreements.filter((a: any) => a.status === 'active');
   const today = new Date();
   const expiring90 = active.filter((a: any) => a.end_date && (new Date(a.end_date).getTime() - today.getTime()) / 86400000 <= 90);
   const annualValue = active.reduce((s: number, a: any) => s + (Number(a.annual_value) || 0), 0);
   const my = drawMetrics(doc, y, [
     { label: 'Active Agreements', value: String(active.length) },
-    { label: 'Renewing ≤90 Days', value: String(expiring90.length), color: expiring90.length > 0 ? C.accent : C.positive },
+    { label: 'Renewing Within 90 Days', value: String(expiring90.length), color: expiring90.length > 0 ? C.accent : C.positive },
     { label: 'Recurring Annual Value', value: fmtUSD(annualValue), color: C.positive },
   ]);
   const ty = sectionLabel(doc, my + 2, 'Agreement Detail');
@@ -2041,7 +2064,7 @@ export function generateServiceAgreementRenewalReport(agreements: any[]) {
         styles: { fontStyle: 'bold', textColor: a.end_date && (new Date(a.end_date).getTime() - today.getTime()) / 86400000 <= 90 ? C.accent : C.positive } },
     ]),
   });
-  addDecorations(doc, 'Service Agreement Renewals');
+  addDecorations(doc, 'Service Agreement Renewals', 'Houston Generator Pros');
   return doc;
 }
 
@@ -2049,7 +2072,7 @@ export function generateServiceAgreementRenewalReport(agreements: any[]) {
    Report: HGP · Emergency Service / Outage Response
 ──────────────────────────────────────────── */
 export function generateEmergencyResponseReport(jobs: any[], impacts: any[]) {
-  const { doc, y } = makeDoc('Emergency Service / Outage Response', 'HOU INC · Houston Generator Pros');
+  const { doc, y } = makeDoc('Emergency Service / Outage Response', 'HOU INC · Houston Generator Pros', 'Houston Generator Pros');
   const emergencyJobs = jobs.filter((j: any) => j.emergency);
   const revenue = emergencyJobs.reduce((s: number, j: any) => s + (Number(j.quoted_amount) || 0), 0);
   const matched = impacts.filter((i: any) => i.hgp_customer_sites);
@@ -2065,7 +2088,7 @@ export function generateEmergencyResponseReport(jobs: any[], impacts: any[]) {
     head: [['Customer', 'Stage', 'Technician', 'Dispatch', 'Quoted']],
     body: emergencyJobs.map((j: any) => [j.customer_name, String(j.stage).replace(/_/g, ' '), j.technician || '—', String(j.dispatch_status || 'unassigned').replace(/_/g, ' '), fmtUSD(j.quoted_amount)]),
   });
-  addDecorations(doc, 'Emergency Service / Outage Response');
+  addDecorations(doc, 'Emergency Service / Outage Response', 'Houston Generator Pros');
   return doc;
 }
 
@@ -2073,7 +2096,7 @@ export function generateEmergencyResponseReport(jobs: any[], impacts: any[]) {
    Report: Documents (shared)
 ──────────────────────────────────────────── */
 export function generateDocumentsReport(documents: any[], entityLabel: string) {
-  const { doc, y } = makeDoc('Documents Report', `HOU INC · ${entityLabel}`);
+  const { doc, y } = makeDoc('Documents Report', `HOU INC · ${entityLabel}`, entityLabel);
   const byType: Record<string, number> = {};
   documents.forEach((d: any) => { byType[d.doc_type] = (byType[d.doc_type] || 0) + 1; });
   const my = drawMetrics(doc, y, [
@@ -2091,7 +2114,7 @@ export function generateDocumentsReport(documents: any[], entityLabel: string) {
       d.linked_project_id ? 'Project' : d.linked_transaction_id ? 'Transaction' : d.linked_invoice_id ? 'Invoice' : d.linked_check_id ? 'Check' : '—',
     ]),
   });
-  addDecorations(doc, 'Documents Report');
+  addDecorations(doc, 'Documents Report', entityLabel);
   return doc;
 }
 

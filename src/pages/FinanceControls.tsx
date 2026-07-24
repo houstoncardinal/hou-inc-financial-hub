@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth, ROLE_LABELS, type AppRole } from '@/hooks/useAuth';
 import { useEntity } from '@/contexts/EntityContext';
+import { financeProfileFor } from '@/lib/entityFinance';
 import {
   useBankMatchSuggestions,
   useCreateCommitmentLine,
@@ -150,6 +151,15 @@ export default function FinanceControls() {
   const { user } = useAuth();
   const { entity } = useEntity();
   const entityId = entity?.id ?? 'houston-enterprise';
+  const profile = financeProfileFor(entityId);
+  /* WIP/percent-complete and cost-code commitments are construction-specific
+     concepts (retainage, change orders, earned value against a contract) that
+     don't map onto generator install/service jobs or holding-company asset
+     deals — the nav's own copy already describes Controls as just "Aging,
+     bank matching & roles" for those two entities, so this keeps the actual
+     page consistent with what the nav already promises instead of showing
+     unrelated stray `projects` rows dressed up as construction WIP. */
+  const isConstruction = profile.overview === 'construction';
   const { data: controls = [] } = useFinanceControlSummary();
   const { data: aging = [] } = useFinanceAgingSummary();
   const { data: commitments = [] } = useFinanceCommitments();
@@ -321,20 +331,34 @@ export default function FinanceControls() {
       <style>{CONTROL_CSS}</style>
       <PageHeader
         eyebrow="Finance Launch Controls"
-        title="Construction Finance Command Center"
-        description="WIP, retainage, aging, commitments, bank matching, and role controls for launch operations."
-        actions={<button className="fc-primary" onClick={verifyMigrations}><ShieldCheck className="w-3.5 h-3.5" /> Verify Migrations</button>}
+        title={profile.controlsHeader.title}
+        description={profile.controlsHeader.description}
+        actions={isConstruction && <button className="fc-primary" onClick={verifyMigrations}><ShieldCheck className="w-3.5 h-3.5" /> Verify Migrations</button>}
       />
 
       <div className="fc-shell border-t border-border/50">
         <div className="px-4 sm:px-8 py-4 space-y-4">
+          {!isConstruction && (
+            <div className="fc-panel p-3 sm:p-4 flex items-start gap-3">
+              <ShieldCheck className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" strokeWidth={1.7} />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                WIP/percent-complete and cost-code commitments are construction contract concepts (retainage, change
+                orders, earned value) that don't apply to {profile.terms.projects.toLowerCase()} — this screen shows
+                aging, bank matching, and role controls only.
+              </p>
+            </div>
+          )}
+
+          {isConstruction && (
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
             <Metric label="Revised Contract" value={fmtUSD(totals.budget)} sub={`${controls.length} active project controls`} icon={BriefcaseBusiness} color="#111827" />
             <Metric label="Earned Revenue" value={fmtUSD(totals.earned)} sub={`Margin ${fmtUSD(totals.margin)}`} icon={TrendingUp} color="#059669" />
             <Metric label="Retainage Net" value={fmtUSD(totals.arRetainage - totals.apRetainage)} sub={`AR ${fmtUSD(totals.arRetainage)} · AP ${fmtUSD(totals.apRetainage)}`} icon={BadgeDollarSign} color="#9D7E3F" />
             <Metric label="Pending CO Exposure" value={fmtUSD(totals.pendingCo)} sub={`Committed costs ${fmtUSD(totals.committed)}`} icon={Clock3} color="#d97706" />
           </div>
+          )}
 
+          {isConstruction && (
           <section className="fc-panel p-3 sm:p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
@@ -405,7 +429,9 @@ export default function FinanceControls() {
               )}
             </div>
           </section>
+          )}
 
+          {isConstruction && (
           <section className="fc-panel p-3 sm:p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
@@ -485,6 +511,7 @@ export default function FinanceControls() {
               )}
             </div>
           </section>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_.9fr] gap-4">
             <section className="fc-panel p-3 sm:p-4">
@@ -524,7 +551,8 @@ export default function FinanceControls() {
             </section>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${isConstruction ? 'xl:grid-cols-2' : ''}`}>
+            {isConstruction && (
             <section className="fc-panel p-3 sm:p-4">
               <div className="fc-k mb-2">Committed Costs</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -565,6 +593,7 @@ export default function FinanceControls() {
                 {!(commitments as any[]).length && <div className="text-[11px] text-muted-foreground py-2">No commitments logged yet.</div>}
               </div>
             </section>
+            )}
 
             <section className="fc-panel p-3 sm:p-4">
               <div className="fc-k mb-2">Bank Feed Matching</div>
@@ -594,8 +623,8 @@ export default function FinanceControls() {
             <div className="fc-k mb-2">Launch Readiness Notes</div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               {[
-                ['WIP discipline', 'Keep project budgets, funded draws, paid invoices, and actual costs current so over/under billing is trustworthy.', Landmark],
-                ['Aging hygiene', 'Set invoice due dates and expense due dates for true AR/AP aging by client, vendor, and project.', FileSpreadsheet],
+                ...(isConstruction ? [['WIP discipline', 'Keep project budgets, funded draws, paid invoices, and actual costs current so over/under billing is trustworthy.', Landmark]] : []),
+                ['Aging hygiene', `Set invoice due dates and expense due dates for true AR/AP aging by client, vendor, and ${profile.terms.project.toLowerCase()}.`, FileSpreadsheet],
                 ['Bank matching', 'Import bank activity frequently and accept high-confidence matches to keep reconciliation live.', Banknote],
               ].map(([title, body, Icon]: any) => (
                 <div key={title} className="fc-card p-3">

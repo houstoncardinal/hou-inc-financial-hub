@@ -10,7 +10,8 @@ export type FinanceModuleKey =
   | 'overview' | 'ledger' | 'checks' | 'income' | 'expenses'
   | 'projects' | 'vendors' | 'invoices' | 'charts' | 'controls'
   | 'changelog' | 'concierge' | 'documents' | 'storm' | 'inventory' | 'reports'
-  | 'procurement' | 'clients';
+  | 'procurement' | 'clients'
+  | 'command' | 'estimates' | 'people' | 'equipment';
 
 export type OverviewVariant = 'construction' | 'generator' | 'holdings';
 
@@ -32,14 +33,21 @@ export interface EntityFinanceProfile {
   documentTags: string[];
   /** Projects-screen header copy. */
   projectsHeader: { title: string; description: string };
+  /** Finance Controls-screen header copy. Also gates which sections of that
+      screen render — WIP/percent-complete and cost-code commitments are
+      construction-specific concepts (retainage, change orders, earned
+      value) that don't map onto generator install/service jobs or holding-
+      company asset deals, so those sections only render for entities whose
+      `overview` is 'construction'. */
+  controlsHeader: { title: string; description: string };
   /** Shared-screen header copy keyed by screen (falls back to shared copy). */
   screenHeaders: Partial<Record<'vendors' | 'checks' | 'invoices', { title: string; description: string }>>;
 }
 
 const ALL_MODULES: FinanceModuleKey[] = [
-  'overview', 'ledger', 'checks', 'income', 'expenses', 'projects', 'vendors',
+  'overview', 'command', 'ledger', 'checks', 'income', 'expenses', 'projects', 'vendors',
   'invoices', 'charts', 'controls', 'changelog', 'concierge', 'documents', 'reports',
-  'clients', 'procurement',
+  'clients', 'procurement', 'estimates', 'people', 'equipment',
 ];
 
 export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
@@ -72,6 +80,10 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
     projectsHeader: {
       title: 'Project Portfolio',
       description: 'Budget allocation, capital deployed, and outstanding obligations across all active jobs.',
+    },
+    controlsHeader: {
+      title: 'Construction Finance Command Center',
+      description: 'WIP, retainage, aging, commitments, bank matching, and role controls for launch operations.',
     },
     screenHeaders: {},
   },
@@ -132,6 +144,10 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       title: 'Install Jobs',
       description: 'Generator sales, installation jobs, and service work — equipment, labor, and margin per job.',
     },
+    controlsHeader: {
+      title: 'Operations Controls',
+      description: 'AR/AP aging, bank feed matching, and role controls for Houston Generator Pros.',
+    },
     screenHeaders: {
       vendors: { title: 'Suppliers & Distributors', description: 'Generator distributors, electrical suppliers, subcontract electricians, and parts sources with spend history.' },
       checks: { title: 'Check Ledger', description: 'Distributor, subcontractor, and permit payments — issuance and clearance state.' },
@@ -188,6 +204,10 @@ export const ENTITY_FINANCE_PROFILES: Record<string, EntityFinanceProfile> = {
       title: 'Assets & Deals',
       description: 'Investments, development deals, and strategic initiatives across the holding portfolio.',
     },
+    controlsHeader: {
+      title: 'Portfolio Controls',
+      description: 'AR/AP aging, bank feed matching, and role controls across the Holdings portfolio.',
+    },
     screenHeaders: {
       vendors: { title: 'Counterparties', description: 'Lenders, attorneys, CPAs, insurers, and corporate service providers with disbursement history.' },
       checks: { title: 'Disbursements', description: 'Distributions, debt service, and corporate payments — issuance and clearance state.' },
@@ -209,6 +229,10 @@ export function entityHasModule(entityId: string | null | undefined, module: Fin
 /** Route → module map so navigation and guards gate consistently. */
 export const ROUTE_MODULES: Record<string, FinanceModuleKey> = {
   '/finance/dashboard': 'overview',
+  '/command': 'command',
+  '/estimates': 'estimates',
+  '/people': 'people',
+  '/equipment': 'equipment',
   '/ledger': 'ledger',
   '/checks': 'checks',
   '/income': 'income',

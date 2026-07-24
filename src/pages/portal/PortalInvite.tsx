@@ -6,13 +6,13 @@ import { usePortal } from '@/hooks/usePortal';
 import { CheckCircle2, AlertCircle, Loader2, ArrowRight, FolderKanban } from 'lucide-react';
 
 /* ── Tokens ─────────────────────────────────────────────────────── */
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const GOLDF  = '#C4A76B';
-const BORDER = '#E5E0D9';
-const SOFT   = '#F7F5F2';
-const SBG    = '#0D0A06';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const ACCENT_SOFT  = '#404040';
+const BORDER = '#E5E7EB';
+const SOFT   = '#F8FAFC';
+const SBG    = '#111827';
 const WHITE  = '#FFFFFF';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 
@@ -64,6 +64,8 @@ export default function PortalInvite() {
   }, [token]);
 
   /* ── Register ───────────────────────────────────────────────── */
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -73,22 +75,20 @@ export default function PortalInvite() {
     if (password !== confirm) { setError('Passwords do not match.'); return; }
 
     setSaving(true);
-    const result = await register(name.trim(), email.trim().toLowerCase(), phone.trim(), undefined, undefined, password);
-    if (!result.ok) { setError(result.error ?? 'Registration failed.'); setSaving(false); return; }
+    // Thread the invite token through as user metadata — PortalAuth.tsx's
+    // registration-confirmation handler reads it back after the client
+    // clicks the confirmation email link, and consumes it then (invite
+    // linkage can't happen until a real session exists).
+    const result = await register(
+      name.trim(), email.trim().toLowerCase(), phone.trim(), undefined, undefined, password,
+      invite?.is_valid ? token : undefined,
+    );
+    setSaving(false);
+    if (!result.ok) { setError(result.error ?? 'Registration failed.'); return; }
 
-    /* Consume the invite — links portal client to admin project */
-    if (invite?.is_valid) {
-      const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-      // Find the newly created portal_client by email
-      const { data: clientRow } = await (supabase as any).rpc('get_portal_client_by_email', { p_email: email.trim().toLowerCase() });
-      const clientId = (Array.isArray(clientRow) ? clientRow[0] : clientRow)?.id;
-      if (clientId) {
-        await (supabase as any).rpc('consume_portal_invite', { p_token: token, p_client_id: clientId });
-      }
-    }
+    if (result.needsConfirmation) { setNeedsConfirmation(true); return; }
 
     setDone(true);
-    setSaving(false);
     setTimeout(() => navigate('/portal/dashboard', { replace: true }), 2500);
   };
 
@@ -97,12 +97,12 @@ export default function PortalInvite() {
     <div style={{ minHeight: '100vh', backgroundColor: SOFT, display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ backgroundColor: SBG, padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 28, height: 28, backgroundColor: GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 28, height: 28, backgroundColor: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 14, fontWeight: 700, color: SBG }}>H</span>
         </div>
         <div>
           <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.3em', textTransform: 'uppercase', color: WHITE }}>Houston Enterprise</div>
-          <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.4em', color: GOLD }}>Client Portal</div>
+          <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.4em', color: ACCENT }}>Client Portal</div>
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export default function PortalInvite() {
         >
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 80 }}>
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: GOLD }} />
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: ACCENT }} />
               <p style={{ fontSize: 13, color: MUTED }}>Validating your invite…</p>
             </div>
           ) : invalid ? (
@@ -133,6 +133,19 @@ export default function PortalInvite() {
                 Go to Portal Login
               </button>
             </div>
+          ) : needsConfirmation ? (
+            /* Check your email */
+            <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+              style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}`, padding: '48px 40px', textAlign: 'center' }}>
+              <CheckCircle2 className="w-14 h-14 mx-auto mb-6" style={{ color: ACCENT }} strokeWidth={1.5} />
+              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 28, color: DARK, marginBottom: 10 }}>
+                Check your inbox.
+              </div>
+              <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7 }}>
+                We sent a confirmation link to <strong style={{ color: DARK }}>{email}</strong>. Click it to
+                activate your account and link this invite to your project.
+              </p>
+            </motion.div>
           ) : done ? (
             /* Success */
             <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
@@ -148,14 +161,14 @@ export default function PortalInvite() {
           ) : (
             /* Registration form */
             <div style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
-              <div style={{ height: 3, backgroundColor: GOLD }} />
+              <div style={{ height: 3, backgroundColor: ACCENT }} />
               <div style={{ padding: '32px 36px 36px' }}>
                 {/* Project info banner */}
                 {invite?.project_title && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', backgroundColor: GOLD + '0E', border: `1px solid ${GOLD}30`, marginBottom: 28 }}>
-                    <FolderKanban className="w-4 h-4" style={{ color: GOLD, flexShrink: 0 }} strokeWidth={1.5} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', backgroundColor: ACCENT + '0E', border: `1px solid ${ACCENT}30`, marginBottom: 28 }}>
+                    <FolderKanban className="w-4 h-4" style={{ color: ACCENT, flexShrink: 0 }} strokeWidth={1.5} />
                     <div>
-                      <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.28em', color: GOLD, fontWeight: 700 }}>You're invited to</div>
+                      <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.28em', color: ACCENT, fontWeight: 700 }}>You're invited to</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{invite.project_title}</div>
                     </div>
                   </div>
@@ -233,7 +246,7 @@ export default function PortalInvite() {
 
                 <p style={{ fontSize: 10, color: MUTED, textAlign: 'center', marginTop: 16 }}>
                   Already have an account?{' '}
-                  <button onClick={() => navigate('/portal')} style={{ color: GOLD, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                  <button onClick={() => navigate('/portal')} style={{ color: ACCENT, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                     Sign in
                   </button>
                 </p>

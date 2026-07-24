@@ -5,6 +5,8 @@ import { toast } from '@/hooks/use-toast';
 import { BUILDER } from '@/hooks/usePortal';
 import { StatCard } from '@/components/project-detail/StatCard';
 import { ActionButton } from '@/components/admin/design/ActionButton';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   FileText, UploadCloud, Search, X, CheckCircle2, XCircle, Trash2, Edit3,
   Download, FilePlus, ChevronRight, ChevronLeft, Loader2, Users, FolderKanban,
@@ -238,6 +240,8 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
         || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs, q, fStatus, fCategory, fClient, clients, projects]);
+
+  const docsPage = usePagination(filtered, 20, `${q}|${fStatus}|${fCategory}|${fClient}`);
 
   /* ── Upload wizard actions ── */
   const resetUpload = () => {
@@ -514,7 +518,7 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(d => (
+                  {docsPage.paged.map(d => (
                     <tr key={d.id} className="border-b border-border last:border-b-0 pdv2-row-hover transition-colors">
                       <td className="px-4 py-3.5"><DocCell d={d} /></td>
                       <td className="px-4 py-3.5"><AssignedCell d={d} /></td>
@@ -533,7 +537,7 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
 
             {/* Mobile cards */}
             <div className="xl:hidden divide-y divide-border">
-              {filtered.map(d => (
+              {docsPage.paged.map(d => (
                 <div key={d.id} className="px-4 py-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-3">
                     <DocCell d={d} />
@@ -547,6 +551,8 @@ export default function DocumentsManager({ onChanged }: { onChanged?: () => void
                 </div>
               ))}
             </div>
+            <PaginationBar page={docsPage.page} pageCount={docsPage.pageCount} total={docsPage.total}
+              pageSize={docsPage.pageSize} onPageChange={docsPage.setPage} itemLabel="documents" className="px-4 py-3" />
           </>
         )}
       </div>

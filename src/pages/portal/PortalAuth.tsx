@@ -10,14 +10,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePortal } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
-/* ── Design tokens ─────────────────────────────────────────────── */
+/* ── Design tokens — black accent everywhere on the light form panel;
+   the dark brand panel keeps its own near-white accent since black-on-
+   near-black would be invisible there. ── */
 const DARK  = '#07060A';
 const PANEL = '#FAFAF8';
-const GOLD  = '#9D7E3F';
-const GOLDF = '#C4A76B';
-const INK   = '#1A1410';
-const MUTED = '#8A7E74';
-const BDR   = '#DDD4C4';
+const ACCENT      = '#000000';
+const ACCENT_SOFT = '#404040';
+const DARK_ACCENT = '#FFFFFF';
+const INK   = '#111827';
+const MUTED = '#6B7280';
+const BDR   = '#E5E7EB';
 const ERR   = '#B94444';
 const SF    = "'Cormorant Garamond', Georgia, serif";
 
@@ -77,7 +80,7 @@ function PwFld({
           placeholder={placeholder}
           required={required}
           style={{ ...F, paddingRight: 32, borderBottomColor: invalid ? ERR : BDR }}
-          onFocus={e => (e.target.style.borderBottomColor = invalid ? ERR : GOLD)}
+          onFocus={e => (e.target.style.borderBottomColor = invalid ? ERR : ACCENT)}
           onBlur={e => (e.target.style.borderBottomColor = invalid ? ERR : BDR)}
         />
         <button type="button" onClick={onToggle}
@@ -97,7 +100,7 @@ function PwFld({
 
 /* ════════════════════════════════════════════════════════════════ */
 export default function PortalAuth() {
-  const { client, register, login, loginByEmail } = usePortal();
+  const { client, register, login, completeRegistration, refreshClient } = usePortal();
   const navigate = useNavigate();
 
   /* ── UI state ── */
@@ -106,6 +109,8 @@ export default function PortalAuth() {
   const [error,           setError]           = useState('');
   const [pendingApproval, setPendingApproval] = useState(false);
   const [accountRejected, setAccountRejected] = useState(false);
+  const [confirmSent,     setConfirmSent]     = useState(false);
+  const [confirmEmail,    setConfirmEmail]    = useState('');
 
   /* ── Forgot password ── */
   const [showForgot,      setShowForgot]      = useState(false);
@@ -122,7 +127,6 @@ export default function PortalAuth() {
   /* ── Password reset (returning from email link) ── */
   const [resetMode,       setResetMode]       = useState(false);
   const [resetEmail,      setResetEmail]      = useState('');
-  const [resetClientId,   setResetClientId]   = useState('');
   const [resetPw,         setResetPw]         = useState('');
   const [resetPw2,        setResetPw2]        = useState('');
   const [resetShow,       setResetShow]       = useState(false);
@@ -150,18 +154,42 @@ export default function PortalAuth() {
   const [rNotes,   setRNotes]  = useState('');
   const [typeOpen, setTypeOpen] = useState(false);
 
-  /* ── Detect returning magic link / reset link ── */
+  /* ── Detect returning magic link / reset link / registration confirmation ──
+     PASSWORD_RECOVERY is the authoritative signal for a real Supabase reset-
+     password link: it fires regardless of whether the link uses a hash
+     access_token (implicit flow) or a ?code= param (PKCE flow), and regardless
+     of who triggered the email (this app's "forgot password" form, or a
+     recovery email sent directly from the Supabase dashboard) — so relying on
+     it means the reset form always opens, instead of silently falling through
+     to a normal login and dropping the user on the dashboard. The ?reset=true
+     query flag is kept as a secondary signal for the same-tab case where the
+     event fires before this effect has a listener attached. ── */
   useEffect(() => {
     const hash = window.location.hash;
     const params = new URLSearchParams(window.location.search);
-    const isReset = params.get('reset') === 'true';
+    const isReset    = params.get('reset') === 'true';
+    const isRegister = params.get('register') === 'true';
+    const recovery = { current: false };
 
-    if (!hash.includes('access_token') && !isReset) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session?.user?.email) {
+        recovery.current = true;
+        window.history.replaceState({}, '', '/portal');
+        setVerifying(false);
+        setResetEmail(session.user.email);
+        setResetMode(true);
+      }
+    });
+
+    if (!hash.includes('access_token') && !isReset && !isRegister) {
+      return () => sub.subscription.unsubscribe();
+    }
 
     setVerifying(true);
     window.history.replaceState({}, '', '/portal');
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (recovery.current) return;
       if (!session?.user?.email) {
         setVerifying(false);
         setVerifyError('Your link has expired or is invalid. Please request a new one.');
@@ -170,41 +198,53 @@ export default function PortalAuth() {
       const email = session.user.email;
 
       if (isReset) {
-        // Look up portal client to get their ID for password update
-        (supabase as any).rpc('get_portal_client_by_email', { p_email: email.toLowerCase() })
-          .then(({ data }: { data: any }) => {
-            const row = Array.isArray(data) ? data[0] : data;
-            if (!row) {
-              setVerifying(false);
-              setVerifyError('No portal account found for this email address. Contact your builder team.');
-              return;
-            }
-            setResetEmail(email);
-            setResetClientId(row.id);
-            setVerifying(false);
-            setResetMode(true);
-          });
-      } else {
-        // Magic link login — bridge Supabase session to portal session
-        loginByEmail(email).then(({ ok, status, error: err }) => {
-          setVerifying(false);
-          if (!ok) { setVerifyError(err ?? 'No portal account found for this email.'); return; }
-          if (status === 'pending_approval') { setPendingApproval(true); return; }
-          if (status === 'rejected') { setAccountRejected(true); return; }
-          navigate('/portal/dashboard', { replace: true });
-        });
+        setResetEmail(email);
+        setVerifying(false);
+        setResetMode(true);
+        return;
       }
+
+      if (isRegister) {
+        // Confirmed via the registration email — create the profile row now
+        // that a real session exists, then link any pending invite.
+        const { ok, status, error: err, client: newClient } = await completeRegistration();
+        const inviteToken = (session.user.user_metadata as any)?.invite_token;
+        if (ok && inviteToken && newClient?.id) {
+          await (supabase as any).rpc('consume_portal_invite', { p_token: inviteToken, p_client_id: newClient.id });
+        }
+        setVerifying(false);
+        if (!ok) { setVerifyError(err ?? 'Could not finish setting up your account.'); return; }
+        if (status === 'pending_approval') { setPendingApproval(true); return; }
+        if (status === 'rejected') { setAccountRejected(true); return; }
+        navigate('/portal/dashboard', { replace: true });
+        return;
+      }
+
+      // Plain magic link login — bridge the confirmed Supabase session to the portal client
+      const { ok, status, error: err } = await refreshClient();
+      setVerifying(false);
+      if (!ok) { setVerifyError(err ?? 'No portal account found for this email.'); return; }
+      if (status === 'pending_approval') { setPendingApproval(true); return; }
+      if (status === 'rejected') { setAccountRejected(true); return; }
+      navigate('/portal/dashboard', { replace: true });
     });
+
+    return () => sub.subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Session redirect ── */
-  if (client && !pendingApproval && !accountRejected && !resetMode) {
-    if (!client.status || client.status === 'approved') {
-      navigate('/portal/dashboard', { replace: true });
-      return null;
-    }
-  }
+  /* ── Session redirect — in an effect, not during render, so this never
+     fires a setState-on-a-different-component warning from calling
+     navigate() synchronously while PortalAuth itself is rendering. ── */
+  const shouldRedirectToDashboard =
+    !!client && !pendingApproval && !accountRejected && !resetMode &&
+    (!client.status || client.status === 'approved');
+
+  useEffect(() => {
+    if (shouldRedirectToDashboard) navigate('/portal/dashboard', { replace: true });
+  }, [shouldRedirectToDashboard, navigate]);
+
+  if (shouldRedirectToDashboard) return null;
 
   /* ── Helpers ── */
   const switchMode = (m: typeof mode) => {
@@ -233,23 +273,24 @@ export default function PortalAuth() {
     if (rPw.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (rPw !== rPw2) { setError('Passwords do not match.'); return; }
     setLoading(true);
-    const { ok, error: err } = await register(rName.trim(), rEmail.trim(), rPhone.trim(), rType, rNotes.trim(), rPw);
+    const { ok, needsConfirmation, error: err } = await register(rName.trim(), rEmail.trim(), rPhone.trim(), rType, rNotes.trim(), rPw);
     setLoading(false);
     if (!ok) { setError(err ?? 'Registration failed — please try again.'); return; }
+    if (needsConfirmation) { setConfirmEmail(rEmail.trim()); setConfirmSent(true); return; }
     setPendingApproval(true);
   };
 
-  /* ── Forgot password → sends real email via Supabase OTP ── */
+  /* ── Forgot password → real Supabase password-recovery email. Using
+     resetPasswordForEmail (not signInWithOtp) means: it never silently
+     creates a new account for a mistyped/unregistered address, it fires the
+     PASSWORD_RECOVERY event on return (see effect above) instead of a plain
+     sign-in, and it sends Supabase's actual "Reset Password" email template. ── */
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim()) return;
     setForgotLoading(true);
-    await supabase.auth.signInWithOtp({
-      email: forgotEmail.trim().toLowerCase(),
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/portal?reset=true`,
-      },
+    await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/portal?reset=true`,
     });
     setForgotLoading(false);
     setForgotSent(true);
@@ -279,19 +320,17 @@ export default function PortalAuth() {
     if (resetPw.length < 8) { setResetError('Password must be at least 8 characters.'); return; }
     if (resetPw !== resetPw2) { setResetError('Passwords do not match.'); return; }
     setResetLoading(true);
-    const { error: err } = await (supabase as any).rpc('set_portal_password', {
-      p_id: resetClientId,
-      p_password: resetPw,
-    });
+    const { error: err } = await supabase.auth.updateUser({ password: resetPw });
     setResetLoading(false);
     if (err) { setResetError('Failed to update password. Please try again.'); return; }
     setResetDone(true);
   };
 
   /* ── Current view key ── */
-  type View = 'verifying' | 'reset' | 'form' | 'forgot' | 'pending' | 'rejected';
+  type View = 'verifying' | 'reset' | 'form' | 'forgot' | 'pending' | 'rejected' | 'confirm';
   const view: View = verifying ? 'verifying'
     : resetMode ? 'reset'
+    : confirmSent ? 'confirm'
     : pendingApproval ? 'pending'
     : accountRejected ? 'rejected'
     : showForgot ? 'forgot'
@@ -310,13 +349,13 @@ export default function PortalAuth() {
           backgroundSize: '26px 26px',
         }} />
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse at 35% 52%, rgba(157,126,63,0.07) 0%, transparent 62%)',
+          background: 'radial-gradient(ellipse at 35% 52%, rgba(255,255,255,0.05) 0%, transparent 62%)',
         }} />
-        <div className="absolute top-0 inset-x-0 h-px" style={{ backgroundColor: GOLD, opacity: 0.45 }} />
+        <div className="absolute top-0 inset-x-0 h-px" style={{ backgroundColor: DARK_ACCENT, opacity: 0.18 }} />
 
         <div className="relative z-10 flex flex-col h-full px-12 xl:px-16 py-12">
           <Link to="/" className="inline-flex items-center gap-3 select-none">
-            <div style={{ width: 2, height: 26, backgroundColor: GOLD }} />
+            <div style={{ width: 2, height: 26, backgroundColor: DARK_ACCENT, opacity: 0.7 }} />
             <div>
               <div style={{
                 fontSize: 11, fontWeight: 900, letterSpacing: '0.42em',
@@ -324,7 +363,7 @@ export default function PortalAuth() {
               }}>HOU INC</div>
               <div style={{
                 fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.44em',
-                fontWeight: 600, color: GOLDF, marginTop: 2,
+                fontWeight: 600, color: 'rgba(255,255,255,0.45)', marginTop: 2,
               }}>Client Portal</div>
             </div>
           </Link>
@@ -332,7 +371,7 @@ export default function PortalAuth() {
           <div className="flex-1 flex flex-col justify-center">
             <div style={{
               fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.46em',
-              fontWeight: 700, color: GOLD, marginBottom: 22, opacity: 0.85,
+              fontWeight: 700, color: DARK_ACCENT, marginBottom: 22, opacity: 0.6,
             }}>
               Private Access
             </div>
@@ -343,7 +382,7 @@ export default function PortalAuth() {
             }}>
               Your project.<br />
               Your timeline.<br />
-              <span style={{ color: GOLDF }}>Your builder.</span>
+              <span style={{ color: 'rgba(255,255,255,0.45)' }}>Your builder.</span>
             </h1>
             <p style={{
               fontSize: 13, fontWeight: 300, lineHeight: 1.74,
@@ -374,7 +413,7 @@ export default function PortalAuth() {
       <main className="flex-1 relative flex flex-col" style={{ backgroundColor: PANEL }}>
 
         <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: 'radial-gradient(rgba(157,126,63,0.035) 1px, transparent 1px)',
+          backgroundImage: 'radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px)',
           backgroundSize: '26px 26px',
         }} />
 
@@ -384,7 +423,7 @@ export default function PortalAuth() {
             {/* Mobile brand mark */}
             <div className="lg:hidden self-start mb-10">
               <Link to="/" className="inline-flex items-center gap-3 select-none">
-                <div style={{ width: 2, height: 22, backgroundColor: GOLD }} />
+                <div style={{ width: 2, height: 22, backgroundColor: ACCENT }} />
                 <div>
                   <div style={{
                     fontSize: 10, fontWeight: 900, letterSpacing: '0.36em',
@@ -392,7 +431,7 @@ export default function PortalAuth() {
                   }}>HOU INC</div>
                   <div style={{
                     fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.36em',
-                    fontWeight: 600, color: GOLD,
+                    fontWeight: 600, color: ACCENT,
                   }}>Client Portal</div>
                 </div>
               </Link>
@@ -431,7 +470,7 @@ export default function PortalAuth() {
                         </p>
                         <button onClick={() => { setVerifying(false); setVerifyError(''); setShowForgot(true); }}
                           style={{
-                            backgroundColor: GOLD, color: '#FFF', height: 50, width: '100%',
+                            backgroundColor: ACCENT, color: '#FFF', height: 50, width: '100%', borderRadius: 999,
                             fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
                             fontWeight: 700, border: 'none', cursor: 'pointer',
                           }}>
@@ -442,11 +481,11 @@ export default function PortalAuth() {
                       <>
                         <div style={{
                           width: 40, height: 40, margin: '0 auto 20px',
-                          backgroundColor: 'rgba(157,126,63,0.08)',
-                          border: '1px solid rgba(157,126,63,0.25)',
+                          backgroundColor: 'rgba(0,0,0,0.08)',
+                          border: '1px solid rgba(0,0,0,0.25)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                          <Zap style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                          <Zap style={{ width: 16, height: 16, color: ACCENT }} strokeWidth={1.5} />
                         </div>
                         <p style={{ fontSize: 13, color: MUTED, fontWeight: 300 }}>Verifying your link…</p>
                       </>
@@ -459,12 +498,12 @@ export default function PortalAuth() {
                   <div>
                     <div style={{
                       width: 40, height: 40,
-                      backgroundColor: 'rgba(157,126,63,0.08)',
-                      border: '1px solid rgba(157,126,63,0.25)',
+                      backgroundColor: 'rgba(0,0,0,0.08)',
+                      border: '1px solid rgba(0,0,0,0.25)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       marginBottom: 20,
                     }}>
-                      <Lock style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                      <Lock style={{ width: 16, height: 16, color: ACCENT }} strokeWidth={1.5} />
                     </div>
 
                     <h1 style={{
@@ -484,7 +523,7 @@ export default function PortalAuth() {
                           onClick={() => { setResetMode(false); setResetDone(false); }}
                           className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85"
                           style={{
-                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            backgroundColor: ACCENT, color: '#FFF', height: 52, width: '100%', borderRadius: 999,
                             fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
                             fontWeight: 700, border: 'none', cursor: 'pointer',
                           }}>
@@ -528,7 +567,7 @@ export default function PortalAuth() {
                           <button type="submit" disabled={resetLoading}
                             className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
                             style={{
-                              backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                              backgroundColor: ACCENT, color: '#FFF', height: 52, width: '100%', borderRadius: 999,
                               fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
                               fontWeight: 700, border: 'none', cursor: resetLoading ? 'not-allowed' : 'pointer',
                             }}>
@@ -560,7 +599,7 @@ export default function PortalAuth() {
                             <motion.div
                               layoutId="tab-bar"
                               className="absolute bottom-0 left-0 right-0"
-                              style={{ height: 2, backgroundColor: GOLD }}
+                              style={{ height: 2, backgroundColor: ACCENT }}
                               transition={{ type: 'spring', stiffness: 500, damping: 38 }}
                             />
                           )}
@@ -592,13 +631,13 @@ export default function PortalAuth() {
                           <div>
                             <div style={{
                               padding: 20,
-                              backgroundColor: 'rgba(157,126,63,0.04)',
-                              border: '1px solid rgba(157,126,63,0.18)',
+                              backgroundColor: 'rgba(0,0,0,0.04)',
+                              border: '1px solid rgba(0,0,0,0.18)',
                               marginBottom: 20,
                             }}>
                               <div style={{
                                 fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.36em',
-                                fontWeight: 700, color: GOLD, marginBottom: 8,
+                                fontWeight: 700, color: ACCENT, marginBottom: 8,
                               }}>Check your inbox</div>
                               <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300 }}>
                                 We sent a sign-in link to <strong style={{ color: INK, fontWeight: 500 }}>{magicEmail}</strong>.
@@ -626,7 +665,7 @@ export default function PortalAuth() {
                                   onChange={e => setMagicEmail(e.target.value)}
                                   placeholder="you@example.com"
                                   style={F}
-                                  onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                                  onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                                   onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                               </Fld>
                               <AnimatePresence>
@@ -667,7 +706,7 @@ export default function PortalAuth() {
                                 onChange={e => setLEmail(e.target.value)}
                                 placeholder="you@example.com"
                                 style={F}
-                                onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                                onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                                 onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                             </Fld>
 
@@ -700,7 +739,7 @@ export default function PortalAuth() {
                             <button type="submit" disabled={loading}
                               className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
                               style={{
-                                backgroundColor: GOLD, color: '#FFF',
+                                backgroundColor: ACCENT, color: '#FFF', borderRadius: 999,
                                 height: 52, width: '100%', fontSize: 10,
                                 textTransform: 'uppercase', letterSpacing: '0.32em', fontWeight: 700,
                                 border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
@@ -719,7 +758,7 @@ export default function PortalAuth() {
                                   fontSize: 11, color: MUTED, background: 'none', border: 'none',
                                   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
                                 }}>
-                                <Zap style={{ width: 11, height: 11, color: GOLDF }} strokeWidth={2} />
+                                <Zap style={{ width: 11, height: 11, color: ACCENT_SOFT }} strokeWidth={2} />
                                 Sign in with a magic link instead
                               </button>
                             </div>
@@ -736,7 +775,7 @@ export default function PortalAuth() {
                           <Fld label="Full Name">
                             <input required value={rName} onChange={e => setRName(e.target.value)}
                               placeholder="Jane Smith" style={F}
-                              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                              onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                               onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                           </Fld>
                           <Fld label="Phone">
@@ -746,7 +785,7 @@ export default function PortalAuth() {
                               placeholder="(713) 555-0100"
                               inputStyle={F}
                               showIcon={false}
-                              onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                              onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                               onBlur={e => (e.target.style.borderBottomColor = BDR)}
                               required
                             />
@@ -760,7 +799,7 @@ export default function PortalAuth() {
                             placeholder="you@example.com"
                             inputStyle={F}
                             showIcon={false}
-                            onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                            onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                             onBlur={e => (e.target.style.borderBottomColor = BDR)}
                             required
                           />
@@ -786,7 +825,7 @@ export default function PortalAuth() {
                               className="w-full flex items-center justify-between"
                               style={{
                                 ...F, display: 'flex', cursor: 'pointer',
-                                borderBottomColor: typeOpen ? GOLD : rType ? GOLD : BDR,
+                                borderBottomColor: typeOpen ? ACCENT : rType ? ACCENT : BDR,
                               }}>
                               <span style={{ color: rType ? INK : '#9A8E85', fontWeight: 300 }}>
                                 {rType || 'Select project type'}
@@ -806,8 +845,8 @@ export default function PortalAuth() {
                                   transition={{ duration: 0.16 }}
                                   className="absolute left-0 right-0 z-50 mt-0.5 py-1"
                                   style={{
-                                    backgroundColor: '#FFF',
-                                    border: `1px solid ${BDR}`,
+                                    backgroundColor: '#FFF', borderRadius: 14,
+                                    border: `1px solid ${BDR}`, overflow: 'hidden',
                                     boxShadow: '0 10px 36px rgba(0,0,0,0.09)',
                                   }}>
                                   {TYPES.map(pt => {
@@ -817,15 +856,15 @@ export default function PortalAuth() {
                                       <button key={pt.value} type="button"
                                         onClick={() => { setRType(pt.value); setTypeOpen(false); }}
                                         className="w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors"
-                                        style={{ backgroundColor: active ? 'rgba(157,126,63,0.05)' : 'transparent' }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(157,126,63,0.04)'; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = active ? 'rgba(157,126,63,0.05)' : 'transparent'; }}>
-                                        <Icon style={{ width: 12, height: 12, color: GOLD, marginTop: 3, flexShrink: 0 }} strokeWidth={1.5} />
+                                        style={{ backgroundColor: active ? 'rgba(0,0,0,0.05)' : 'transparent' }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(0,0,0,0.04)'; }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = active ? 'rgba(0,0,0,0.05)' : 'transparent'; }}>
+                                        <Icon style={{ width: 12, height: 12, color: ACCENT, marginTop: 3, flexShrink: 0 }} strokeWidth={1.5} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                           <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{pt.value}</div>
                                           <div style={{ fontSize: 10, color: MUTED, fontWeight: 300, marginTop: 1 }}>{pt.desc}</div>
                                         </div>
-                                        {active && <CheckCircle2 style={{ width: 13, height: 13, color: GOLD, marginTop: 2, flexShrink: 0 }} strokeWidth={2} />}
+                                        {active && <CheckCircle2 style={{ width: 13, height: 13, color: ACCENT, marginTop: 2, flexShrink: 0 }} strokeWidth={2} />}
                                       </button>
                                     );
                                   })}
@@ -840,7 +879,7 @@ export default function PortalAuth() {
                             placeholder="Briefly describe your project — location, scope, timeline…"
                             rows={2}
                             style={{ ...F, resize: 'none', paddingTop: 12, lineHeight: 1.55 }}
-                            onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                            onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                             onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                         </Fld>
 
@@ -856,7 +895,7 @@ export default function PortalAuth() {
                         <button type="submit" disabled={loading}
                           className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
                           style={{
-                            backgroundColor: INK, color: PANEL,
+                            backgroundColor: INK, color: PANEL, borderRadius: 999,
                             height: 52, width: '100%', fontSize: 10,
                             textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700,
                             border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
@@ -893,12 +932,12 @@ export default function PortalAuth() {
 
                     <div style={{
                       width: 40, height: 40,
-                      backgroundColor: 'rgba(157,126,63,0.08)',
-                      border: '1px solid rgba(157,126,63,0.25)',
+                      backgroundColor: 'rgba(0,0,0,0.08)',
+                      border: '1px solid rgba(0,0,0,0.25)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       marginBottom: 20,
                     }}>
-                      <Mail style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                      <Mail style={{ width: 16, height: 16, color: ACCENT }} strokeWidth={1.5} />
                     </div>
 
                     <h1 style={{
@@ -913,12 +952,12 @@ export default function PortalAuth() {
                       <>
                         <div style={{
                           padding: 20, marginBottom: 24,
-                          backgroundColor: 'rgba(157,126,63,0.04)',
-                          border: '1px solid rgba(157,126,63,0.14)',
+                          backgroundColor: 'rgba(0,0,0,0.04)',
+                          border: '1px solid rgba(0,0,0,0.14)',
                         }}>
                           <div style={{
                             fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.36em',
-                            fontWeight: 700, color: GOLD, marginBottom: 10,
+                            fontWeight: 700, color: ACCENT, marginBottom: 10,
                           }}>Check your inbox</div>
                           <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300 }}>
                             If <strong style={{ color: INK, fontWeight: 500 }}>{forgotEmail}</strong> has a portal account, you'll receive a reset link shortly.
@@ -932,7 +971,7 @@ export default function PortalAuth() {
                           onClick={() => { setShowForgot(false); setForgotSent(false); }}
                           className="w-full flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85"
                           style={{
-                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            backgroundColor: ACCENT, color: '#FFF', height: 52, width: '100%', borderRadius: 999,
                             fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
                             fontWeight: 700, border: 'none', cursor: 'pointer',
                           }}>
@@ -949,13 +988,13 @@ export default function PortalAuth() {
                             onChange={e => setForgotEmail(e.target.value)}
                             placeholder="you@example.com"
                             style={F}
-                            onFocus={e => (e.target.style.borderBottomColor = GOLD)}
+                            onFocus={e => (e.target.style.borderBottomColor = ACCENT)}
                             onBlur={e => (e.target.style.borderBottomColor = BDR)} />
                         </Fld>
                         <button type="submit" disabled={forgotLoading || !forgotEmail.trim()}
                           className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-85 disabled:opacity-40"
                           style={{
-                            backgroundColor: GOLD, color: '#FFF', height: 52, width: '100%',
+                            backgroundColor: ACCENT, color: '#FFF', height: 52, width: '100%', borderRadius: 999,
                             fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.32em',
                             fontWeight: 700, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer',
                           }}>
@@ -969,21 +1008,65 @@ export default function PortalAuth() {
                 )}
 
                 {/* ════ PENDING APPROVAL ════ */}
-                {view === 'pending' && (
+                {view === 'confirm' && (
                   <div>
                     <div style={{
                       width: 40, height: 40,
-                      backgroundColor: 'rgba(157,126,63,0.08)',
-                      border: '1px solid rgba(157,126,63,0.25)',
+                      backgroundColor: 'rgba(0,0,0,0.08)',
+                      border: '1px solid rgba(0,0,0,0.25)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       marginBottom: 20,
                     }}>
-                      <Clock style={{ width: 16, height: 16, color: GOLD }} strokeWidth={1.5} />
+                      <Mail style={{ width: 16, height: 16, color: ACCENT }} strokeWidth={1.5} />
                     </div>
 
                     <div style={{
                       fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.44em',
-                      fontWeight: 700, color: GOLD, marginBottom: 14,
+                      fontWeight: 700, color: ACCENT, marginBottom: 14,
+                    }}>
+                      Confirm Your Email
+                    </div>
+
+                    <h1 style={{
+                      fontFamily: SF, fontStyle: 'italic', fontWeight: 300,
+                      fontSize: 'clamp(26px, 4vw, 38px)', color: INK,
+                      lineHeight: 1.08, marginBottom: 12,
+                    }}>
+                      Check your inbox.
+                    </h1>
+                    <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.7, fontWeight: 300, marginBottom: 28 }}>
+                      We sent a confirmation link to{' '}
+                      <strong style={{ fontWeight: 600, color: INK }}>{confirmEmail}</strong>. Click it to
+                      activate your account — you'll come right back here to continue.
+                    </p>
+
+                    <button onClick={() => { setConfirmSent(false); switchMode('login'); }}
+                      style={{
+                        fontSize: 11, color: MUTED, fontFamily: SF, fontStyle: 'italic',
+                        fontWeight: 300, background: 'none',
+                        border: 'none', cursor: 'pointer', display: 'block',
+                      }}
+                      className="transition-opacity hover:opacity-60">
+                      ← Back to sign in
+                    </button>
+                  </div>
+                )}
+
+                {view === 'pending' && (
+                  <div>
+                    <div style={{
+                      width: 40, height: 40,
+                      backgroundColor: 'rgba(0,0,0,0.08)',
+                      border: '1px solid rgba(0,0,0,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      marginBottom: 20,
+                    }}>
+                      <Clock style={{ width: 16, height: 16, color: ACCENT }} strokeWidth={1.5} />
+                    </div>
+
+                    <div style={{
+                      fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.44em',
+                      fontWeight: 700, color: ACCENT, marginBottom: 14,
                     }}>
                       Application Received
                     </div>
@@ -1002,12 +1085,12 @@ export default function PortalAuth() {
 
                     <div style={{
                       marginBottom: 28, padding: 18,
-                      backgroundColor: 'rgba(157,126,63,0.04)',
-                      border: '1px solid rgba(157,126,63,0.14)',
+                      backgroundColor: 'rgba(0,0,0,0.04)',
+                      border: '1px solid rgba(0,0,0,0.14)',
                     }}>
                       <div style={{
                         fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.36em',
-                        fontWeight: 700, color: GOLD, marginBottom: 12,
+                        fontWeight: 700, color: ACCENT, marginBottom: 12,
                       }}>While you wait</div>
                       {[
                         'Check your inbox for a confirmation email from HOU INC',
@@ -1017,10 +1100,10 @@ export default function PortalAuth() {
                         <div key={i} className="flex items-start gap-3 mb-3 last:mb-0">
                           <div style={{
                             width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                            backgroundColor: 'rgba(157,126,63,0.14)',
+                            backgroundColor: 'rgba(0,0,0,0.14)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
                           }}>
-                            <span style={{ fontSize: 7, fontWeight: 800, color: GOLD }}>{i + 1}</span>
+                            <span style={{ fontSize: 7, fontWeight: 800, color: ACCENT }}>{i + 1}</span>
                           </div>
                           <span style={{ fontSize: 12, color: MUTED, lineHeight: 1.55, fontWeight: 300 }}>{item}</span>
                         </div>

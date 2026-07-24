@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationProvider } from "@elevenlabs/react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
@@ -13,6 +13,22 @@ import { EntityProvider, useEntity } from "@/contexts/EntityContext";
 import { entityHasModule, type FinanceModuleKey } from "@/lib/entityFinance";
 import { isSchemaCacheError, recordSystemHealthEvent } from "@/lib/systemHealth";
 import HelpRequestLauncher from "@/components/HelpRequestLauncher";
+
+/* Suspense fallback while a lazy-loaded route chunk fetches — brief and
+   unobtrusive, since this only shows on the first visit to a given route
+   (the chunk is cached by the browser after that). */
+function RouteLoader() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%',
+        border: '2.5px solid #E5E7EB', borderTopColor: '#111827',
+        animation: 'route-loader-spin 0.7s linear infinite',
+      }} />
+      <style>{'@keyframes route-loader-spin{to{transform:rotate(360deg)}}'}</style>
+    </div>
+  );
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -39,65 +55,74 @@ function GlobalShortcuts() {
   return null;
 }
 
+/* Every route below is lazy-loaded (React.lazy + <Suspense> further down) so
+   the initial JS bundle only ships the app shell — each page's code splits
+   into its own chunk fetched on first visit, instead of one ~8MB bundle
+   containing all ~55 pages regardless of which one the user actually opens. */
+
 // Public website
-import Home          from "./pages/public/Home";
-import Services      from "./pages/public/Services";
-import ServiceDetail from "./pages/public/ServiceDetail";
-import ResidentialConstruction from "./pages/public/ResidentialConstruction";
-import CommercialConstruction from "./pages/public/CommercialConstruction";
-import ProjectManagementServices from "./pages/public/ProjectManagementServices";
-import Portfolio     from "./pages/public/Portfolio";
-import PortfolioDetail from "./pages/public/PortfolioDetail";
-import About         from "./pages/public/About";
-import Contact       from "./pages/public/Contact";
-import StartProject  from "./pages/public/StartProject";
+const Home          = lazy(() => import("./pages/public/Home"));
+const Services      = lazy(() => import("./pages/public/Services"));
+const ServiceDetail = lazy(() => import("./pages/public/ServiceDetail"));
+const ResidentialConstruction = lazy(() => import("./pages/public/ResidentialConstruction"));
+const CommercialConstruction = lazy(() => import("./pages/public/CommercialConstruction"));
+const ProjectManagementServices = lazy(() => import("./pages/public/ProjectManagementServices"));
+const Portfolio     = lazy(() => import("./pages/public/Portfolio"));
+const PortfolioDetail = lazy(() => import("./pages/public/PortfolioDetail"));
+const About         = lazy(() => import("./pages/public/About"));
+const Contact       = lazy(() => import("./pages/public/Contact"));
+const StartProject  = lazy(() => import("./pages/public/StartProject"));
 
 // Client portal
-import PortalAuth      from "./pages/portal/PortalAuth";
-import PortalDashboard from "./pages/portal/PortalDashboard";
-import PortalProject   from "./pages/portal/PortalProject";
-import PortalMessages   from "./pages/portal/PortalMessages";
-import PortalDocuments  from "./pages/portal/PortalDocuments";
-import PortalMeetings   from "./pages/portal/PortalMeetings";
-import PortalProjects   from "./pages/portal/PortalProjects";
-import PortalMilestones from "./pages/portal/PortalMilestones";
-import PortalPayments   from "./pages/portal/PortalPayments";
-import PortalSettings   from "./pages/portal/PortalSettings";
-import PortalGallery    from "./pages/portal/PortalGallery";
-import PortalInvite     from "./pages/portal/PortalInvite";
+const PortalAuth      = lazy(() => import("./pages/portal/PortalAuth"));
+const PortalDashboard = lazy(() => import("./pages/portal/PortalDashboard"));
+const PortalProject   = lazy(() => import("./pages/portal/PortalProject"));
+const PortalMessages   = lazy(() => import("./pages/portal/PortalMessages"));
+const PortalDocuments  = lazy(() => import("./pages/portal/PortalDocuments"));
+const PortalMeetings   = lazy(() => import("./pages/portal/PortalMeetings"));
+const PortalProjects   = lazy(() => import("./pages/portal/PortalProjects"));
+const PortalMilestones = lazy(() => import("./pages/portal/PortalMilestones"));
+const PortalPayments   = lazy(() => import("./pages/portal/PortalPayments"));
+const PortalSettings   = lazy(() => import("./pages/portal/PortalSettings"));
+const PortalGallery    = lazy(() => import("./pages/portal/PortalGallery"));
+const PortalInvite     = lazy(() => import("./pages/portal/PortalInvite"));
 
 // Admin
-import Admin from "./pages/Admin";
-import ProjectForecasting from "./pages/admin/ProjectForecasting";
+const Admin = lazy(() => import("./pages/Admin"));
+const ProjectForecasting = lazy(() => import("./pages/admin/ProjectForecasting"));
 
 // Finance dashboard
-import EntitySelect  from "./pages/EntitySelect";
-import EntityOverview from "./pages/EntityOverview";
-import HgpJobs from "./pages/entity/HgpJobs";
-import HoldingsAssets from "./pages/entity/HoldingsAssets";
-import StormResponse from "./pages/entity/StormResponse";
-import HgpInventory from "./pages/entity/HgpInventory";
-import Auth          from "./pages/Auth";
-import Checks        from "./pages/Checks";
-import CheckNew      from "./pages/CheckNew";
-import TxnPage       from "./pages/TxnPage";
-import Ledger        from "./pages/Ledger";
-import Projects      from "./pages/Projects";
-import ProjectDetail from "./pages/ProjectDetail";
-import Clients       from "./pages/Clients";
-import Vendors       from "./pages/Vendors";
-import Concierge     from "./pages/Concierge";
-import Charts        from "./pages/Charts";
-import Changelog     from "./pages/Changelog";
-import Settings      from "./pages/Settings";
-import Invoices      from "./pages/Invoices";
-import InvoiceNew    from "./pages/InvoiceNew";
-import Documents     from "./pages/Documents";
-import OpsCenter     from "./pages/OpsCenter";
-import FinanceControls from "./pages/FinanceControls";
-import Reports        from "./pages/Reports";
-import ProcurementEngine from "./pages/ProcurementEngine";
-import NotFound      from "./pages/NotFound";
+const EntitySelect  = lazy(() => import("./pages/EntitySelect"));
+const EntityOverview = lazy(() => import("./pages/EntityOverview"));
+const HgpJobs = lazy(() => import("./pages/entity/HgpJobs"));
+const HoldingsAssets = lazy(() => import("./pages/entity/HoldingsAssets"));
+const StormResponse = lazy(() => import("./pages/entity/StormResponse"));
+const HgpInventory = lazy(() => import("./pages/entity/HgpInventory"));
+const Auth          = lazy(() => import("./pages/Auth"));
+const Checks        = lazy(() => import("./pages/Checks"));
+const CommandCenter = lazy(() => import("./pages/CommandCenter"));
+const Estimates     = lazy(() => import("./pages/Estimates"));
+const People        = lazy(() => import("./pages/People"));
+const Equipment     = lazy(() => import("./pages/Equipment"));
+const CheckNew      = lazy(() => import("./pages/CheckNew"));
+const TxnPage       = lazy(() => import("./pages/TxnPage"));
+const Ledger        = lazy(() => import("./pages/Ledger"));
+const Projects      = lazy(() => import("./pages/Projects"));
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
+const Clients       = lazy(() => import("./pages/Clients"));
+const Vendors       = lazy(() => import("./pages/Vendors"));
+const Concierge     = lazy(() => import("./pages/Concierge"));
+const Charts        = lazy(() => import("./pages/Charts"));
+const Changelog     = lazy(() => import("./pages/Changelog"));
+const Settings      = lazy(() => import("./pages/Settings"));
+const Invoices      = lazy(() => import("./pages/Invoices"));
+const InvoiceNew    = lazy(() => import("./pages/InvoiceNew"));
+const Documents     = lazy(() => import("./pages/Documents"));
+const OpsCenter     = lazy(() => import("./pages/OpsCenter"));
+const FinanceControls = lazy(() => import("./pages/FinanceControls"));
+const Reports        = lazy(() => import("./pages/Reports"));
+const ProcurementEngine = lazy(() => import("./pages/ProcurementEngine"));
+const NotFound      = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -124,8 +149,8 @@ const queryClient = new QueryClient({
   }),
 });
 
-const FINANCE_ROLES = ['admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer'] as const;
-const ADMIN_ROLES   = ['admin'] as const;
+const FINANCE_ROLES = ['developer', 'admin', 'finance_manager', 'finance', 'project_manager', 'read_only_auditor', 'viewer'] as const;
+const ADMIN_ROLES   = ['developer', 'admin'] as const;
 
 /* Direct-URL guard for modules the selected entity doesn't use (nav already
    hides them): e.g. construction WIP Controls for HGP/Holdings. Waits for
@@ -153,6 +178,10 @@ function FinanceRoutes() {
         <Route path="/finance"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
         <Route path="/finance/select"     element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntitySelect /></RoleGuard>} />
         <Route path="/finance/dashboard"  element={<RoleGuard allowed={[...FINANCE_ROLES]}><EntityOverview /></RoleGuard>} />
+        <Route path="/command"            element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="command"><CommandCenter /></ModuleGuard></RoleGuard>} />
+        <Route path="/estimates"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="estimates"><Estimates /></ModuleGuard></RoleGuard>} />
+        <Route path="/people"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="people"><People /></ModuleGuard></RoleGuard>} />
+        <Route path="/equipment"          element={<RoleGuard allowed={[...FINANCE_ROLES]}><ModuleGuard module="equipment"><Equipment /></ModuleGuard></RoleGuard>} />
         <Route path="/checks"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><Checks /></RoleGuard>} />
         <Route path="/checks/new"         element={<RoleGuard allowed={[...FINANCE_ROLES]}><CheckNew /></RoleGuard>} />
         <Route path="/income"             element={<RoleGuard allowed={[...FINANCE_ROLES]}><TxnPage kind="income" /></RoleGuard>} />
@@ -194,6 +223,7 @@ const App = () => (
               <ScrollToTop />
               <GlobalShortcuts />
               <HelpRequestLauncher />
+              <Suspense fallback={<RouteLoader />}>
               <Routes>
                 {/* ── Public website ── */}
                 <Route path="/"          element={<Home />} />
@@ -223,13 +253,14 @@ const App = () => (
                 <Route path="/portal/invite"    element={<PortalInvite />} />
 
                 {/* ── Admin (admin-role only) ── */}
-                <Route path="/admin"             element={<RoleGuard allowed={['admin']}><Admin /></RoleGuard>} />
-                <Route path="/admin/projects/:id/forecasting" element={<RoleGuard allowed={['admin', 'project_manager']}><ProjectForecasting /></RoleGuard>} />
+                <Route path="/admin"             element={<RoleGuard allowed={[...ADMIN_ROLES]}><Admin /></RoleGuard>} />
+                <Route path="/admin/projects/:id/forecasting" element={<RoleGuard allowed={['developer', 'admin', 'project_manager']}><ProjectForecasting /></RoleGuard>} />
 
                 {/* ── Finance sector (single shared EntityProvider) ── */}
                 <Route path="/auth"             element={<Auth />} />
                 <Route path="/*"               element={<FinanceRoutes />} />
               </Routes>
+              </Suspense>
             </AuthProvider>
           </ThemeProvider>
         </BrowserRouter>

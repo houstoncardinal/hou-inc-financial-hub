@@ -722,6 +722,40 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
     const base = t.projects?.name || 'No project';
     return isHoldings && t.entity_label ? `${t.entity_label} portfolio · ${base}` : base;
   };
+  /* Expense-kind badge: every expense is labeled with what kind of spend it
+     was (category → cost_type → expense_type), color-coded by family. */
+  const expenseKind = (t: any): string =>
+    t.category || t.expense_type ||
+    (t.cost_type ? String(t.cost_type).charAt(0).toUpperCase() + String(t.cost_type).slice(1) : '') ||
+    'Uncategorized';
+  const KIND_COLORS: Record<string, string> = {
+    materials: '#2563EB', labor: '#D97706', payroll: '#D97706', subcontractor: '#7C3AED',
+    subcontract: '#7C3AED', equipment: '#0891B2', 'equipment rental': '#0891B2',
+    permits: '#DC2626', inspections: '#DC2626', insurance: '#DC2626',
+    fuel: '#65A30D', delivery: '#65A30D', 'vehicle expense': '#65A30D', travel: '#65A30D',
+    'office overhead': '#6B7280', software: '#6B7280', marketing: '#DB2777',
+    'professional services': '#0284C7', uncategorized: '#9CA3AF',
+  };
+  const kindColor = (kind: string): string => {
+    const k = kind.toLowerCase();
+    if (KIND_COLORS[k]) return KIND_COLORS[k];
+    // Deterministic fallback so every custom category keeps a stable color
+    const palette = ['#2563EB', '#D97706', '#7C3AED', '#0891B2', '#16A34A', '#DB2777', '#0284C7'];
+    let h = 0;
+    for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+    return palette[h % palette.length];
+  };
+  const KindBadge = ({ t }: { t: any }) => {
+    const kind = expenseKind(t);
+    const color = kindColor(kind);
+    return (
+      <span className="inline-flex items-center gap-1.5 max-w-full px-2 py-0.5 text-[10px] font-bold truncate"
+        style={{ color, backgroundColor: `${color}14`, border: `1px solid ${color}30` }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        <span className="truncate">{kind}</span>
+      </span>
+    );
+  };
   const selectedRangeLabel = financeRangeLabel(timePeriod);
   const total = filteredTxns.reduce((s: number, t: any) => s + Number(t.total_amount ?? t.amount ?? 0), 0);
   const average = filteredTxns.length ? total / filteredTxns.length : 0;
@@ -857,7 +891,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
 
   /* ── Exports ── */
   const exportPDF = () => {
-    const doc = generateTransactionReport(filteredTxns, kind, selectedRangeLabel);
+    const doc = generateTransactionReport(filteredTxns, kind, selectedRangeLabel, entity?.name);
     savePDF(doc, `hou-${kind}-${todayLocalDate()}.pdf`);
     toast.success(`${isIncome ? 'Income' : 'Expense'} report exported · ${selectedRangeLabel}`);
   };
@@ -1712,7 +1746,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <div className="text-sm font-medium">{partyLabel(t)}</div>
               <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
                 <span>{projectLabel(t)}</span>
-                <span className="text-right truncate">{isIncome ? (t.external_invoice_provider ? providerName(t.external_invoice_provider) : (t.category || 'Income')) : (t.category || 'Expense')}</span>
+                <span className="text-right truncate">{isIncome ? (t.external_invoice_provider ? providerName(t.external_invoice_provider) : (t.category || 'Income')) : <KindBadge t={t} />}</span>
               </div>
               <div className="flex justify-between items-center pt-1 border-t border-border/60" onClick={e => e.stopPropagation()}>
                 <Button variant="ghost" size="sm" className="rounded-none h-7 text-xs text-foreground" onClick={() => setDetailRow(t)}>
@@ -1756,7 +1790,7 @@ export default function TxnPage({ kind }: { kind: 'income' | 'expense' }) {
               <div className="col-span-2 text-muted-foreground">{fmtDate(t.transaction_date)}</div>
               <div className="col-span-3 truncate">{partyLabel(t)}</div>
               <div className="col-span-3 truncate text-muted-foreground">{projectLabel(t)}</div>
-              <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : (t.category || '—')}</div>
+              <div className="col-span-2 truncate text-muted-foreground">{isIncome ? (t.notes || '—') : <KindBadge t={t} />}</div>
               <div className={`col-span-1 text-right font-semibold ${isIncome ? 'text-positive' : 'text-destructive'}`}>{isIncome ? '+' : '−'}{fmtUSD(Number(t.total_amount ?? t.amount ?? 0))}</div>
               <div className="col-span-1 flex justify-end" onClick={e => e.stopPropagation()}>
                 <AlertDialog>

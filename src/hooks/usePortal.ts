@@ -78,8 +78,6 @@ export const COMPANY = {
   address: '206 Brooks St, Sugar Land, TX 77478',
 };
 
-const SESSION_KEY = 'hou-portal-session';
-
 export const APPROVAL_DOCS: Omit<PortalDocument, 'id'>[] = [
   {
     name: 'Government-Issued Photo ID',
@@ -247,28 +245,75 @@ function autoReply(text: string, clientName: string): string {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePortal() {
-  const [clientId, setClientId] = useState<string | null>(() =>
-    localStorage.getItem(SESSION_KEY)
-  );
   const [client, setClient] = useState<PortalClient | null>(null);
-  // true once the initial session-restore fetch has resolved (or there was no session)
-  const [loaded, setLoaded] = useState(() => !localStorage.getItem(SESSION_KEY));
+  // true once the initial session-restore check has resolved
+  const [loaded, setLoaded] = useState(false);
   const [briefs, setBriefs] = useState<ProjectBrief[]>([]);
   const [messages, setMessages]   = useState<PortalMessage[]>([]);
   const [documents, setDocuments] = useState<PortalDocument[]>([]);
   const [meetings, setMeetings]   = useState<PortalMeeting[]>([]);
 
-  // Load client from Supabase when clientId changes
+  // Re-fetch the portal_clients row linked to the current Supabase Auth
+  // session (auth.uid()) — the single source of truth for "who am I".
+  const refreshClient = useCallback(async (): Promise<
+    { ok: boolean; status?: PortalClient['status']; error?: string; client?: PortalClient }
+  > => {
+    try {
+      const { data, error } = await (supabase as any).rpc('get_my_portal_client');
+      let row = Array.isArray(data) ? data[0] : data;
+
+      // Developer accounts have no portal_clients row by default — auto-provision
+      // one so they can view the portal too. ensure_developer_portal_profile()
+      // rejects (harmlessly, caught here) anyone who isn't actually a developer.
+      if (!row) {
+        const dev = await (supabase as any).rpc('ensure_developer_portal_profile');
+        const devRow = Array.isArray(dev.data) ? dev.data[0] : dev.data;
+        if (!dev.error && devRow) row = devRow;
+      }
+
+      if (!row) { setClient(null); return { ok: false, error: error?.message ?? 'No portal account found for this email address.' }; }
+      const c = mapClient(row);
+      setClient(c);
+      return { ok: true, status: c.status, client: c };
+    } catch (err) {
+      console.error('refreshClient failed:', err);
+      setClient(null);
+      return { ok: false, error: 'Account lookup failed. Please try again.' };
+    }
+  }, []);
+
+  // Restore session on mount, and react to sign-in/sign-out anywhere in the app.
+  // loaded must resolve no matter what — every portal page renders nothing at
+  // all while loaded is false, so a hung/rejected getSession() or a throw
+  // inside refreshClient() (e.g. a rejected RPC call, not just an {error} — a
+  // real risk on a cold reload where the token needs to be revalidated) would
+  // otherwise leave every page permanently blank with no console error.
   useEffect(() => {
-    if (!clientId) { setClient(null); setLoaded(true); return; }
-    (supabase as any).rpc('get_portal_client_by_id', { p_id: clientId })
-      .then(({ data }: { data: any }) => {
-        const row = Array.isArray(data) ? data[0] : data;
-        if (row) setClient(mapClient(row));
-        else { localStorage.removeItem(SESSION_KEY); setClientId(null); }
-        setLoaded(true);
-      });
-  }, [clientId]);
+    let active = true;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!active) return;
+        if (session) await refreshClient(); else setClient(null);
+      } catch (err) {
+        console.error('Portal session restore failed:', err);
+        if (active) setClient(null);
+      } finally {
+        if (active) setLoaded(true);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!active) return;
+      try {
+        if (session) await refreshClient(); else setClient(null);
+      } catch (err) {
+        console.error('Portal session refresh failed:', err);
+        if (active) setClient(null);
+      }
+    });
+    return () => { active = false; sub.subscription.unsubscribe(); };
+  }, [refreshClient]);
 
   // Load all client data once the client record is resolved
   useEffect(() => {
@@ -295,28 +340,35 @@ export function usePortal() {
     name: string, email: string, phone: string,
     projectType?: string, projectInterest?: string,
     password?: string,
-  ): Promise<{ ok: boolean; error?: string }> => {
+    inviteToken?: string,
+  ): Promise<{ ok: boolean; needsConfirmation?: boolean; error?: string }> => {
     if (!password?.trim()) return { ok: false, error: 'Please create a password for your account.' };
 
-    const { data, error } = await (supabase as any).rpc('create_portal_client', {
-      p_name:             name.trim(),
-      p_email:            email.trim().toLowerCase(),
-      p_password:         password,
-      p_phone:            phone.trim(),
-      p_project_type:     projectType     ?? '',
-      p_project_interest: projectInterest ?? '',
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        data: {
+          name: name.trim(),
+          phone: phone.trim(),
+          project_type: projectType ?? '',
+          project_interest: projectInterest ?? '',
+          ...(inviteToken ? { invite_token: inviteToken } : {}),
+        },
+        emailRedirectTo: `${window.location.origin}/portal?register=true`,
+      },
     });
 
     if (error) return { ok: false, error: error.message ?? 'Registration failed.' };
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { ok: false, error: 'Registration failed — no data returned. Run portal-setup.sql first.' };
-
-    const nc = mapClient(row);
-    localStorage.setItem(SESSION_KEY, nc.id);
-    setClientId(nc.id);
-    setClient(nc);
-    return { ok: true };
-  }, []);
+    if (data.session) {
+      // Some projects auto-confirm email — if a session came back immediately,
+      // finish setting up the profile right away instead of waiting on a click.
+      await (supabase as any).rpc('complete_portal_registration');
+      await refreshClient();
+      return { ok: true };
+    }
+    return { ok: true, needsConfirmation: true };
+  }, [refreshClient]);
 
   const login = useCallback(async (
     email: string,
@@ -324,58 +376,24 @@ export function usePortal() {
   ): Promise<{ ok: boolean; status?: PortalClient['status']; error?: string }> => {
     if (!password?.trim()) return { ok: false, error: 'Please enter your password.' };
 
-    const { data, error } = await (supabase as any).rpc('verify_portal_password', {
-      p_email:    email.trim().toLowerCase(),
-      p_password: password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error) return { ok: false, error: error.message ?? 'Incorrect email or password.' };
+    return refreshClient();
+  }, [refreshClient]);
 
-    if (error) return { ok: false, error: error.message ?? 'Sign in failed — please try again.' };
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { ok: false, error: 'Incorrect email or password.' };
+  // Called once a real Supabase Auth session exists after clicking the
+  // registration-confirmation email link — creates the portal_clients profile
+  // row (or returns the existing one if this already ran).
+  const completeRegistration = useCallback(async (): Promise<
+    { ok: boolean; status?: PortalClient['status']; error?: string; client?: PortalClient }
+  > => {
+    const { error } = await (supabase as any).rpc('complete_portal_registration');
+    if (error) return { ok: false, error: error.message ?? 'Could not finish setting up your account.' };
+    return refreshClient();
+  }, [refreshClient]);
 
-    const c = mapClient(row);
-    localStorage.setItem(SESSION_KEY, c.id);
-    setClientId(c.id);
-    setClient(c);
-    return { ok: true, status: c.status };
-  }, []);
-
-  const loginBypass = useCallback(async (
-    pin: string,
-  ): Promise<{ ok: boolean; error?: string }> => {
-    if (pin !== '011491') return { ok: false, error: 'Invalid bypass code.' };
-    const { data, error } = await (supabase as any).rpc('get_portal_client_by_email', {
-      p_email: 'cardinal.hunain@gmail.com',
-    });
-    if (error) return { ok: false, error: `${error.message} — run portal-setup.sql first.` };
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { ok: false, error: 'Demo account not found — run portal-setup.sql to seed it.' };
-    const c = mapClient(row);
-    localStorage.setItem(SESSION_KEY, c.id);
-    setClientId(c.id);
-    setClient(c);
-    return { ok: true };
-  }, []);
-
-  const loginByEmail = useCallback(async (
-    email: string,
-  ): Promise<{ ok: boolean; status?: PortalClient['status']; error?: string }> => {
-    const { data, error } = await (supabase as any).rpc('get_portal_client_by_email', {
-      p_email: email.trim().toLowerCase(),
-    });
-    if (error) return { ok: false, error: 'Account lookup failed.' };
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { ok: false, error: 'No portal account found for this email address.' };
-    const c = mapClient(row);
-    localStorage.setItem(SESSION_KEY, c.id);
-    setClientId(c.id);
-    setClient(c);
-    return { ok: true, status: c.status };
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY);
-    setClientId(null);
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
     setClient(null);
     setBriefs([]);
     setMessages([]);
@@ -608,8 +626,8 @@ export function usePortal() {
     loaded,
     register,
     login,
-    loginBypass,
-    loginByEmail,
+    completeRegistration,
+    refreshClient,
     logout,
     getBrief,
     getBriefs,

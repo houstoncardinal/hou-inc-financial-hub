@@ -419,7 +419,11 @@ export default function Checks() {
     const voidedAmount = voided.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
     const retainageAmount = filtered.reduce((s: number, c: any) => s + Number(c.retainage_held || 0), 0);
     const lienPending = filtered.filter((c: any) => c.lien_waiver_status === 'pending').length;
-    const reconciled = filtered.filter((c: any) => c.reconciliation_status === 'reconciled' || c.status === 'cleared');
+    /* Must match reconciliation_status alone — the per-row badge a few lines
+       down in the JSX shows this same raw field, so counting "cleared" as
+       reconciled here (clearing and reconciling are separate steps) made the
+       KPI% claim more checks were reconciled than the row badges agreed with. */
+    const reconciled = filtered.filter((c: any) => c.reconciliation_status === 'reconciled');
     const avgAmount = filtered.length ? totalAmount / filtered.length : 0;
     const reconciliationRate = filtered.length ? Math.round((reconciled.length / filtered.length) * 100) : 0;
     const oldestOpenDays = pending.reduce((max: number, c: any) => {
@@ -458,7 +462,7 @@ export default function Checks() {
       if (c.status === 'cleared') existing.cleared += 1;
       if (c.status === 'voided') existing.voided += 1;
       if (c.lien_waiver_status === 'pending') existing.lien += 1;
-      if (c.reconciliation_status === 'reconciled' || c.status === 'cleared') existing.reconciled += 1;
+      if (c.reconciliation_status === 'reconciled') existing.reconciled += 1;
       buckets.set(key, existing);
     });
     const sorted = Array.from(buckets.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -590,7 +594,7 @@ export default function Checks() {
 
   /* ── PDF Export ── */
   const exportPDF = () => {
-    const doc = generateCheckRegisterReport(filtered, statusFilter !== 'all' ? `${statusFilter} · ${selectedRangeLabel}` : selectedRangeLabel);
+    const doc = generateCheckRegisterReport(filtered, statusFilter !== 'all' ? `${statusFilter} · ${selectedRangeLabel}` : selectedRangeLabel, entity?.name);
     savePDF(doc, `hou-check-register-${todayLocalDate()}.pdf`);
     toast.success(`Check register exported as PDF · ${selectedRangeLabel}`);
   };

@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import {
   Plus, Search, X, CheckCircle2, FolderKanban, CalendarDays,
   DollarSign, Edit3, Trash2, Send, Link2, Copy, RefreshCw,
@@ -30,15 +32,16 @@ const SERIF = "'Cormorant Garamond', Georgia, serif";
 const HE_ENTITY = 'houston-enterprise';
 
 const ADMIN_PROJECT_CSS = `
-.ap-kpi{position:relative;overflow:hidden;border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.045),0 1px 0 rgba(255,255,255,.7) inset;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
+.ap-kpi{position:relative;overflow:hidden;border-radius:14px;border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.045);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
 .ap-kpi::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--ap-color-soft),transparent 46%);pointer-events:none;}
 .ap-kpi:hover{border-color:hsl(var(--foreground)/.16);box-shadow:0 12px 30px rgba(10,10,10,.08);transform:translateY(-1px);}
-.ap-kpi-icon{width:34px;height:34px;border:1px solid hsl(var(--border));background:var(--ap-color-soft);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.ap-kpi-icon{width:34px;height:34px;border-radius:10px;border:1px solid hsl(var(--border));background:var(--ap-color-soft);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
 .ap-kpi-foot{border-top:1px solid hsl(var(--border)/.65);background:hsl(var(--secondary)/.24);}
-.ap-command{background:hsl(var(--background));border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.04);}
-.ap-project-card{position:relative;border:1px solid hsl(var(--border));background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.04),0 1px 0 rgba(255,255,255,.65) inset;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
-.ap-project-card::before{content:'';position:absolute;inset:0;background:linear-gradient(145deg,rgba(157,126,63,.045),transparent 42%);pointer-events:none;}
-.ap-project-card:hover{border-color:hsl(var(--foreground)/.18);box-shadow:0 14px 34px rgba(10,10,10,.08);transform:translateY(-1px);}
+.ap-command{background:hsl(var(--background));border-radius:16px;border:1px solid hsl(var(--border));box-shadow:0 1px 3px rgba(10,10,10,.04);}
+.ap-project-card{position:relative;border:1px solid hsl(var(--border));border-radius:16px;background:hsl(var(--background));box-shadow:0 1px 3px rgba(10,10,10,.04);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
+.ap-project-card:hover{border-color:hsl(var(--foreground)/.2);box-shadow:0 10px 28px rgba(10,10,10,.09);transform:translateY(-2px);}
+.ap-stat{background:hsl(var(--secondary)/0.4);border-radius:10px;padding:8px 10px;min-width:0;}
+.ap-perf{background:hsl(var(--secondary)/0.22);border:1px solid hsl(var(--border));border-radius:12px;}
 @media(max-width:767px){
   .ap-kpi{min-height:68px;}
   .ap-kpi-icon{width:30px;height:30px;}
@@ -1344,6 +1347,12 @@ export default function ProjectManager() {
       && (categoryFilter === 'all' || p.projectCategory === categoryFilter);
   });
 
+  /* ── Pagination — cards and list views page independently; the reset key
+     lands back on page 1 whenever the filtered set changes underneath. ── */
+  const projectPaginationResetKey = `${search}|${filterStatus}|${categoryFilter}`;
+  const cardsPage = usePagination(filtered, 12, projectPaginationResetKey);
+  const listPage  = usePagination(filtered, 25, projectPaginationResetKey);
+
   const clientDisplay = (p: AdminProject) => {
     if (p.portal_client_id) return portalClients.find(c => c.id === p.portal_client_id)?.name ?? p.client_name ?? 'Linked Client';
     return p.client_name ?? null;
@@ -1627,8 +1636,9 @@ export default function ProjectManager() {
                 )}
               </div>
             ) : portfolioView === 'cards' ? (
-              <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
-                {filtered.map((p: any, idx: number) => {
+              <div className="p-3 sm:p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                {cardsPage.paged.map((p: any, idx: number) => {
                   const m = statusMeta(p.status);
                   const client = clientDisplay(p);
                   const category = categoryById(p.projectCategory);
@@ -1646,79 +1656,77 @@ export default function ProjectManager() {
                       className="ap-project-card group cursor-pointer overflow-hidden"
                     >
                       <div className="h-[3px]" style={{ backgroundColor: m.color }} />
-                      <div className="p-3.5 sm:p-4">
-                        <div className="flex items-start justify-between gap-3">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                              {p.project_code && (
-                                <span className="text-[8px] font-black uppercase tracking-[0.18em] text-muted-foreground font-mono-tab bg-secondary px-2 py-0.5">
-                                  {p.project_code}
-                                </span>
-                              )}
-                              <span className="text-[8px] uppercase tracking-[0.18em] font-black px-2 py-0.5 border" style={{ color: m.color, borderColor: `${m.color}55`, backgroundColor: `${m.color}12` }}>
+                            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                              <span className="text-[8px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 rounded-full border" style={{ color: m.color, borderColor: `${m.color}55`, backgroundColor: `${m.color}12` }}>
                                 {m.label}
                               </span>
-                              <span className="text-[8px] uppercase tracking-[0.16em] font-black px-2 py-0.5 border border-border bg-secondary/45 text-foreground/70 inline-flex items-center gap-1">
+                              <span className="text-[8px] uppercase tracking-[0.14em] font-semibold text-foreground/50 inline-flex items-center gap-1">
                                 <CategoryIcon className="w-2.5 h-2.5" style={{ color: category.color }} />
                                 {category.short}
                               </span>
                             </div>
                             <div className="text-[15px] font-bold leading-tight truncate group-hover:text-accent transition-colors">{p.title}</div>
-                            <div className="text-[10px] text-muted-foreground truncate mt-1">
-                              {[client, p.city, p.state].filter(Boolean).join(' · ') || p.type}
+                            <div className="text-[10px] text-foreground/50 truncate mt-0.5">
+                              {[p.project_code, client, p.city, p.state].filter(Boolean).join(' · ') || p.type}
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
-                            <div className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">Health</div>
-                            <div className="text-[22px] font-mono-tab font-black leading-none mt-1" style={{ color: health.color }}>
+                            <div className="text-[18px] font-mono-tab font-black leading-none" style={{ color: health.color }}>
                               {Math.round(p.healthScore)}
                             </div>
-                            <div className="text-[9px] font-semibold" style={{ color: health.color }}>{health.label}</div>
+                            <div className="text-[8px] uppercase tracking-[0.16em] font-bold mt-0.5" style={{ color: health.color }}>{health.label}</div>
                           </div>
                         </div>
 
-                        <div className="mt-3 border border-border bg-secondary/20 p-2.5">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[8px] uppercase tracking-[0.18em] font-black text-muted-foreground">Delivery Progress</span>
-                            <span className="text-[10px] font-mono-tab font-bold" style={{ color: m.color }}>{p.progress_pct}%</span>
+                        {(overBudget || nearLimit) && (
+                          <div className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.1em] mb-2 ${overBudget ? 'text-destructive' : 'text-warning'}`}>
+                            <AlertTriangle className="w-3 h-3" />
+                            {overBudget ? 'Over budget' : 'Near budget limit'}
                           </div>
-                          <div className="h-1.5 bg-background border border-border overflow-hidden">
-                            <div className="h-full" style={{ width: `${Math.min(p.progress_pct || 0, 100)}%`, backgroundColor: m.color }} />
-                          </div>
-                          <div className="grid grid-cols-3 gap-2 mt-2">
-                            {[
-                              ['Budget Used', `${Math.min(p.used, 150).toFixed(0)}%`, overBudget ? '#ef4444' : nearLimit ? '#f59e0b' : category.color],
-                              ['Collections', `${Math.min(p.collectionPct, 150).toFixed(0)}%`, '#10b981'],
-                              ['Open Checks', fmtUSD(p.outstanding), p.outstanding > 0 ? '#f59e0b' : 'hsl(var(--muted-foreground))'],
-                            ].map(([label, value, color]) => (
-                              <div key={label as string} className="min-w-0">
-                                <div className="text-[7px] uppercase tracking-[0.13em] font-black text-muted-foreground truncate">{label}</div>
-                                <div className="text-[10px] font-mono-tab font-bold truncate" style={{ color: color as string }}>{value}</div>
+                        )}
+
+                        <div className="ap-perf p-2.5 mb-2.5 space-y-2">
+                          {[
+                            ['Delivery Progress', p.progress_pct, m.color],
+                            ['Budget Used', p.used, overBudget ? '#ef4444' : nearLimit ? '#f59e0b' : category.color],
+                            ['Collections', p.collectionPct, '#10b981'],
+                          ].map(([label, value, color]) => (
+                            <div key={label as string}>
+                              <div className="flex items-center justify-between text-[8.5px] font-bold uppercase tracking-[0.1em] text-foreground/55 mb-1">
+                                <span>{label}</span>
+                                <span className="font-mono-tab text-foreground">{Math.min(value as number, 150).toFixed(0)}%</span>
                               </div>
-                            ))}
-                          </div>
+                              <div className="h-[5px] rounded-full bg-secondary overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${Math.min(value as number, 100)}%`, backgroundColor: color as string }} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border">
+                        <div className="grid grid-cols-2 gap-1.5">
                           {[
                             ['Budget', fmtUSD(p.budget), ''],
                             ['Deployed', fmtUSD(p.spent), ''],
                             ['Revenue', fmtUSD(p.incoming), 'text-positive'],
                             ['Net', fmtUSD(p.net), p.net >= 0 ? 'text-positive' : 'text-accent'],
                           ].map(([label, value, cls]) => (
-                            <div key={label} className="bg-background px-2 py-2 min-w-0">
-                              <div className="text-[7px] uppercase tracking-[0.14em] font-black text-muted-foreground">{label}</div>
-                              <div className={`text-[11px] font-mono-tab font-bold truncate ${cls}`}>{value}</div>
+                            <div key={label} className="ap-stat">
+                              <div className="text-[7.5px] uppercase tracking-[0.14em] font-bold text-foreground/55 mb-0.5">{label}</div>
+                              <div className={`text-[12px] font-mono-tab font-bold truncate ${cls}`}>{value}</div>
                             </div>
                           ))}
                         </div>
+                        {p.outstanding > 0 && (
+                          <div className="text-[9.5px] text-warning font-semibold mt-2">{fmtUSD(p.outstanding)} in open checks</div>
+                        )}
 
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          <div className="flex flex-wrap gap-1.5 min-w-0">
-                            {overBudget && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-destructive/10 text-destructive">Over Budget</span>}
-                            {nearLimit && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-warning/10 text-warning">Near Limit</span>}
-                            {p.finance_project_id && <span className="text-[8px] uppercase tracking-[0.15em] font-black px-2 py-1 bg-accent/10 text-accent">Finance Linked</span>}
-                          </div>
+                        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
+                          {p.finance_project_id ? (
+                            <span className="text-[8px] uppercase tracking-[0.14em] font-bold text-accent">Finance Linked</span>
+                          ) : <span />}
                           <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.16em] font-black text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
                             Manage <ChevronRight className="w-3 h-3" />
                           </span>
@@ -1727,6 +1735,9 @@ export default function ProjectManager() {
                     </motion.div>
                   );
                 })}
+              </div>
+              <PaginationBar page={cardsPage.page} pageCount={cardsPage.pageCount} total={cardsPage.total}
+                pageSize={cardsPage.pageSize} onPageChange={cardsPage.setPage} itemLabel="projects" className="mt-3" />
               </div>
             ) : (
               <>
@@ -1752,7 +1763,7 @@ export default function ProjectManager() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map(p => {
+                      {listPage.paged.map(p => {
                         const m = statusMeta(p.status);
                         const client = clientDisplay(p);
                         const category = categoryById(p.projectCategory);
@@ -1809,7 +1820,7 @@ export default function ProjectManager() {
 
                 {/* Mobile cards */}
                 <div className="xl:hidden divide-y divide-border">
-                  {filtered.map(p => {
+                  {listPage.paged.map(p => {
                     const m = statusMeta(p.status);
                     const client = clientDisplay(p);
                     const category = categoryById(p.projectCategory);
@@ -1854,11 +1865,10 @@ export default function ProjectManager() {
                   })}
                 </div>
 
-                <div className="border-t border-border px-5 py-2.5 flex items-center justify-between bg-secondary/20">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-[0.16em]">
-                    {projects.length} total project{projects.length !== 1 ? 's' : ''}
-                  </span>
+                <div className="border-t border-border px-5 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-secondary/20">
                   <span className="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: AC }}>{activeCount} active</span>
+                  <PaginationBar page={listPage.page} pageCount={listPage.pageCount} total={listPage.total}
+                    pageSize={listPage.pageSize} onPageChange={listPage.setPage} itemLabel="projects" />
                 </div>
               </>
             )}

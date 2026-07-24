@@ -1214,7 +1214,7 @@ export default function Ledger() {
     const visibleIncome = rows.filter(r => r._kind === 'income').map(r => r.raw);
     const visibleExpenses = rows.filter(r => r._kind === 'expense').map(r => r.raw);
     const visibleChecks = rows.filter(r => r._kind === 'check').map(r => r.raw);
-    const doc = generateLedgerReport(visibleIncome, visibleExpenses, visibleChecks, proj, `${type !== 'all' ? type : 'all'} · ${selectedRangeLabel}`);
+    const doc = generateLedgerReport(visibleIncome, visibleExpenses, visibleChecks, proj, `${type !== 'all' ? type : 'all'} · ${selectedRangeLabel}`, entity?.name);
     savePDF(doc, `hou-general-ledger-${todayLocalDate()}.pdf`);
     toast.success('Ledger exported as PDF');
   };
@@ -1229,7 +1229,7 @@ export default function Ledger() {
 
   const exportLedgerRecord = (row: any) => {
     if (!row) return;
-    const doc = generateLedgerRecordReport(row);
+    const doc = generateLedgerRecordReport(row, entity?.name);
     const label = `${row.type || 'ledger'}-${row.ref || row.id || 'record'}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')

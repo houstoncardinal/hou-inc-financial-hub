@@ -58,7 +58,7 @@ export default function Invoices() {
       subtotal: invoiceSubtotal(inv),
       tax: invoiceTax(inv),
       total: invoiceTotal(inv),
-    })));
+    })), entity?.name);
     savePDF(doc, `hou-invoices-${todayLocalDate()}.pdf`);
     toast.success('Invoice register exported as PDF');
   };

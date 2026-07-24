@@ -2,6 +2,13 @@
 -- HOU INC Client Portal — Supabase Setup  (v2)
 -- Run this in: Supabase Dashboard → SQL Editor → New Query → Run
 -- Safe to re-run (idempotent).
+--
+-- SUPERSEDED 2026-07-22 by supabase/migrations/20260722000004_portal_real_auth.sql:
+-- the portal now uses real Supabase Auth instead of the password_hash /
+-- create_portal_client / verify_portal_password RPCs defined below, and the
+-- table definitions here are now also tracked in that migration. Do not
+-- re-run this file — it would recreate the retired password RPCs and the
+-- plaintext-seeded demo account. Kept only for historical reference.
 -- ============================================================
 
 -- 1. Extensions ─────────────────────────────────────────────

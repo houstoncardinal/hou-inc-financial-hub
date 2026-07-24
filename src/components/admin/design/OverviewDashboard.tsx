@@ -6,13 +6,14 @@ import {
 } from 'recharts';
 import {
   ShieldCheck, ClipboardList, Inbox, FileCheck, Calendar,
-  ChevronRight, RefreshCw, ArrowUpRight, Bell,
+  ChevronRight, ChevronDown, RefreshCw, ArrowUpRight, Bell,
   FileText, CheckCircle2, History, HardHat,
   ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, X,
   MessageSquare, FolderKanban, Layers, Activity, ZoomOut,
 } from 'lucide-react';
 import { MeetingsCalendar, type CalendarMeeting } from './MeetingsCalendar';
 import { usePagination } from '@/hooks/usePagination';
+import { ENTITIES } from '@/contexts/EntityContext';
 
 const LEDGER_PAGE_SIZE = 8;
 
@@ -31,7 +32,8 @@ const ACCENTS = {
   gold:   '#D97706',
 };
 
-const NET_COLOR = '#2563EB';
+const NET_POSITIVE = '#06B6D4';   // electric cyan — profit
+const NET_NEGATIVE = '#DC2626';   // crimson — deficit
 const RETAINAGE_COLOR = '#F59E0B';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -139,6 +141,8 @@ export interface OverviewProps {
   onRefresh: () => void;
   onOpenFinance: () => void;
   onOpenLedgerEntry: (kind: 'income' | 'expense' | 'check', id: string) => void;
+  onOpenFinanceSection: (section: 'income' | 'expenses' | 'checks') => void;
+  onOpenEntityFinance: (entityId: string) => void;
   onSaveMeeting: (input: {
     id?: string; clientId: string; type: string; date: string; time: string;
     format: 'In-Person' | 'Video Call' | 'Phone Call';
@@ -152,7 +156,7 @@ export interface OverviewProps {
   onViewDocument: (url: string) => void;
 }
 
-/* ── Enterprise‑grade chart tooltip — detailed, multi-layered ── */
+/* ── Enterprise‑grade chart tooltip — magnetic pop‑in, detailed multi‑layer breakdown ── */
 function FinanceTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const income    = payload.find((p: any) => p.dataKey === 'income')?.value ?? 0;
@@ -160,8 +164,14 @@ function FinanceTooltip({ active, payload, label }: any) {
   const retainage = payload.find((p: any) => p.dataKey === 'retainage')?.value ?? 0;
   const net       = income - expense;
   const margin    = income > 0 ? ((net / income) * 100) : null;
+  const netColor  = net >= 0 ? NET_POSITIVE : NET_NEGATIVE;
   return (
-    <div className="rounded-2xl border px-4 py-3 shadow-2xl min-w-[190px]" style={{ borderColor: BORDER, background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(8px)' }}>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.94, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-2xl border px-4 py-3 shadow-2xl min-w-[190px]"
+      style={{ borderColor: BORDER, background: 'rgba(255,255,255,.97)', backdropFilter: 'blur(12px)' }}
+    >
       <div className="flex items-center justify-between gap-4 mb-2 pb-2 border-b" style={{ borderColor: BORDER }}>
         <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: SILVER }}>{label}</span>
         <span className="text-[7px] font-bold uppercase tracking-[0.16em] bg-gray-100 px-2 py-0.5 rounded" style={{ color: STEEL }}>Click to drill</span>
@@ -191,10 +201,10 @@ function FinanceTooltip({ active, payload, label }: any) {
       )}
       <div className="flex items-center justify-between gap-4 mt-2 pt-2 border-t" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <span className="w-5 h-[2px] rounded-full" style={{ backgroundColor: NET_COLOR }} />
+          <span className="w-5 h-[2px] rounded-full" style={{ backgroundColor: netColor, boxShadow: `0 0 6px ${netColor}99` }} />
           <span className="text-[10.5px] font-bold" style={{ color: BLACK }}>Net</span>
         </div>
-        <span className="text-[11px] font-bold tabular-nums" style={{ color: net >= 0 ? '#10B981' : '#EF4444' }}>
+        <span className="text-[11px] font-bold tabular-nums" style={{ color: netColor }}>
           {net < 0 ? '-' : '+'}${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}
         </span>
       </div>
@@ -204,17 +214,34 @@ function FinanceTooltip({ active, payload, label }: any) {
           <span className="text-[10.5px] font-bold tabular-nums" style={{ color: margin >= 0 ? '#10B981' : '#EF4444' }}>{margin.toFixed(1)}%</span>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
-/* ── Multi‑layered finance chart — revenue/expense areas + net & retainage lines, with click‑to‑toggle legend ── */
+/* ── Multi‑layered finance chart — revenue/expense glass panels + a split‑gradient
+   zero‑baseline Net area/line (electric cyan above zero, crimson below), a magnetic
+   glow crosshair, and a click‑to‑toggle legend. ── */
 const FIN_SERIES = [
   { key: 'income',    label: 'Revenue',   color: '#10B981' },
   { key: 'expense',   label: 'Expenses',  color: '#EF4444' },
-  { key: 'net',       label: 'Net',       color: NET_COLOR },
+  { key: 'net',       label: 'Net',       color: NET_POSITIVE, split: true },
   { key: 'retainage', label: 'Retainage', color: RETAINAGE_COLOR },
 ] as const;
+
+/* Custom Recharts tooltip cursor — a soft glowing vertical line that snaps to the
+   nearest data column, giving the "magnetic scrub" feel as the user scans the chart. */
+function MagneticCursor(props: any) {
+  const { points, height } = props;
+  const x = points?.[0]?.x;
+  if (x == null || !height) return null;
+  return (
+    <g pointerEvents="none">
+      <line x1={x} y1={0} x2={x} y2={height} stroke="url(#magnetic-glow)" strokeWidth={10} />
+      <line x1={x} y1={0} x2={x} y2={height} stroke={BLACK} strokeOpacity={0.16} strokeWidth={1} strokeDasharray="3 3" />
+      <circle cx={x} cy={height} r={2.5} fill={BLACK} fillOpacity={0.25} />
+    </g>
+  );
+}
 
 function FinanceChart({ data, timeframe, onTimeframeChange }: {
   data: { label: string; income: number; expense: number; retainage: number; net: number }[];
@@ -255,6 +282,20 @@ function FinanceChart({ data, timeframe, onTimeframeChange }: {
   const isZoomed = windowSize !== null && windowSize < data.length;
   const hasRetainage = data.some(d => Math.abs(d.retainage) > 0);
 
+  /* Split‑gradient zero baseline — compute the shared domain ourselves (rather than
+     leaving it to Recharts' "auto") so the gradient's color switch lands exactly on
+     the pixel row where value === 0, for every series sharing this axis. */
+  const { domainMin, domainMax, zeroPct } = useMemo(() => {
+    const values = visibleData.flatMap(d => [d.income, d.expense, d.net, d.retainage]);
+    let max = Math.max(0, ...values);
+    let min = Math.min(0, ...values);
+    if (max === min) max = min + 1;
+    const pad = (max - min) * 0.08;
+    max += pad; min -= pad;
+    const pct = Math.min(96, Math.max(4, (max / (max - min)) * 100));
+    return { domainMin: min, domainMax: max, zeroPct: pct };
+  }, [visibleData]);
+
   return (
     <div className="relative flex flex-col h-full">
       {/* Time‑range selector — positioned top‑right of the chart area */}
@@ -282,38 +323,78 @@ function FinanceChart({ data, timeframe, onTimeframeChange }: {
         ))}
       </div>
       <div ref={chartWrapRef} className="relative flex-1 min-h-[150px]" title="Scroll to zoom the timeline">
+        {/* Glass backdrop — a faint frosted ambiance behind the plotted series */}
+        <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{
+          background: `radial-gradient(120% 90% at 50% ${zeroPct}%, rgba(6,182,212,.06), transparent 65%)`,
+          backdropFilter: 'blur(1.5px)',
+        }} />
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={visibleData} margin={{ top: 6, right: 8, left: 2, bottom: 2 }}>
             <defs>
               <linearGradient id="fin-income-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10B981" stopOpacity={0.35} />
+                <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
                 <stop offset="100%" stopColor="#10B981" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="fin-expense-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.25} />
+                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.32} />
                 <stop offset="100%" stopColor="#EF4444" stopOpacity={0.02} />
               </linearGradient>
+              {/* Split‑gradient net fill: glowing cyan above the zero line, fading
+                  to near‑transparent AT the axis, then crimson building below it. */}
+              <linearGradient id="net-split-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={NET_POSITIVE} stopOpacity={0.5} />
+                <stop offset={`${Math.max(0, zeroPct - 14)}%`} stopColor={NET_POSITIVE} stopOpacity={0.07} />
+                <stop offset={`${zeroPct}%`} stopColor={NET_POSITIVE} stopOpacity={0} />
+                <stop offset={`${zeroPct}%`} stopColor={NET_NEGATIVE} stopOpacity={0} />
+                <stop offset={`${Math.min(100, zeroPct + 14)}%`} stopColor={NET_NEGATIVE} stopOpacity={0.14} />
+                <stop offset="100%" stopColor={NET_NEGATIVE} stopOpacity={0.5} />
+              </linearGradient>
+              {/* Split‑gradient net stroke: a hard cyan→crimson switch exactly at zero */}
+              <linearGradient id="net-split-stroke" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={NET_POSITIVE} />
+                <stop offset={`${zeroPct}%`} stopColor={NET_POSITIVE} />
+                <stop offset={`${zeroPct}%`} stopColor={NET_NEGATIVE} />
+                <stop offset="100%" stopColor={NET_NEGATIVE} />
+              </linearGradient>
+              {/* Magnetic crosshair glow */}
+              <linearGradient id="magnetic-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={NET_POSITIVE} stopOpacity={0} />
+                <stop offset="50%" stopColor={NET_POSITIVE} stopOpacity={0.16} />
+                <stop offset="100%" stopColor={NET_POSITIVE} stopOpacity={0} />
+              </linearGradient>
+              {/* Soft bloom filter — reused source graphic blurred behind itself */}
+              <filter id="net-glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="3.2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
             <CartesianGrid vertical={false} stroke={BORDER} strokeDasharray="3 3" strokeOpacity={0.6} />
             <XAxis dataKey="label" tick={{ fontSize: 8.5, fill: SILVER, fontWeight: 600 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-            {/* One shared currency scale for every series — each line's height is a true, directly comparable reading, never a rescaled illusion */}
-            <YAxis hide domain={['auto', 'auto']} />
-            <Tooltip content={<FinanceTooltip />} cursor={{ stroke: BORDER, strokeDasharray: '3 3', strokeOpacity: 0.7 }} />
-            <ReferenceLine y={0} stroke={SILVER} strokeOpacity={0.6} strokeDasharray="2 3" />
+            {/* One shared currency scale for every series, explicitly computed so the
+                split‑gradient's zero crossing lines up exactly with this axis' zero. */}
+            <YAxis hide domain={[domainMin, domainMax]} />
+            <Tooltip content={<FinanceTooltip />} cursor={<MagneticCursor />} />
+            <ReferenceLine y={0} stroke={SILVER} strokeOpacity={0.7} strokeDasharray="2 3" />
             {!hiddenSeries.has('income') && (
               <Area type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} fill="url(#fin-income-fill)"
+                style={{ mixBlendMode: 'multiply' }}
                 dot={{ r: 2.5, strokeWidth: 0, fill: '#10B981' }} isAnimationActive animationDuration={900} animationEasing="ease-out"
                 activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
             )}
             {!hiddenSeries.has('expense') && (
               <Area type="monotone" dataKey="expense" stroke="#EF4444" strokeWidth={2} fill="url(#fin-expense-fill)"
+                style={{ mixBlendMode: 'multiply' }}
                 dot={{ r: 2.5, strokeWidth: 0, fill: '#EF4444' }} isAnimationActive animationDuration={900} animationEasing="ease-out"
                 activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
             )}
             {!hiddenSeries.has('net') && (
-              <Line type="monotone" dataKey="net" stroke={NET_COLOR} strokeWidth={2.5}
-                dot={{ r: 2.5, strokeWidth: 0, fill: NET_COLOR }} isAnimationActive animationDuration={900} animationEasing="ease-out"
-                activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+              <Area type="monotone" dataKey="net" stroke="url(#net-split-stroke)" strokeWidth={2.75} fill="url(#net-split-fill)"
+                style={{ filter: 'url(#net-glow)' }}
+                dot={{ r: 2.5, strokeWidth: 0, fill: NET_POSITIVE }} isAnimationActive animationDuration={900} animationEasing="ease-out"
+                activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
             )}
             {!hiddenSeries.has('retainage') && (
               <Line type="monotone" dataKey="retainage" stroke={RETAINAGE_COLOR} strokeWidth={1.75} strokeDasharray="4 3"
@@ -336,7 +417,12 @@ function FinanceChart({ data, timeframe, onTimeframeChange }: {
               style={{ opacity: off ? 0.3 : faint ? 0.55 : 1 }}
               title={faint ? 'No retainage held in this period' : `Toggle ${item.label}`}
             >
-              <span className="w-2.5 h-[3px] rounded-full" style={{ backgroundColor: item.color }} />
+              <span
+                className="w-2.5 h-[3px] rounded-full"
+                style={'split' in item && item.split
+                  ? { background: `linear-gradient(90deg, ${NET_POSITIVE}, ${NET_NEGATIVE})` }
+                  : { backgroundColor: item.color }}
+              />
               <span className="text-[8.5px] font-semibold uppercase tracking-[0.04em]" style={{ color: STEEL, textDecoration: off ? 'line-through' : 'none' }}>{item.label}</span>
             </button>
           );
@@ -377,10 +463,95 @@ function BulletBar({ label, sub, value, target, max, color }: {
   );
 }
 
+/* ── "Open Finance" luxury flyout — hover reveals it on desktop, a tap reveals it on
+   mobile (tap again to pick), sliding out from underneath the primary button. Each
+   row is branded in that entity's own accent color. ── */
+function OpenFinanceMenu({ onOpenEntityFinance }: { onOpenEntityFinance: (entityId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickAway = (e: Event) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClickAway);
+    document.addEventListener('touchstart', onClickAway);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onClickAway);
+      document.removeEventListener('touchstart', onClickAway);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="ov-btn-primary"
+      >
+        Open Finance
+        <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} strokeWidth={2.6} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="menu"
+            initial={{ opacity: 0, y: -12, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-0 top-full mt-2.5 w-[248px] rounded-2xl overflow-hidden z-30"
+            style={{
+              background: 'rgba(255,255,255,.94)',
+              backdropFilter: 'blur(18px) saturate(180%)',
+              border: '1px solid rgba(0,0,0,.08)',
+              boxShadow: '0 24px 60px rgba(0,0,0,.22), 0 4px 14px rgba(0,0,0,.08)',
+            }}
+          >
+            <div className="px-4 pt-3 pb-2 text-[8.5px] font-bold uppercase tracking-[0.18em] text-gray-400">
+              Select Finance Dashboard
+            </div>
+            <div className="pb-1.5">
+              {ENTITIES.map(e => (
+                <button
+                  key={e.id}
+                  role="menuitem"
+                  onClick={() => { onOpenEntityFinance(e.id); setOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-black/[0.035] group/item"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 transition-transform duration-200 group-hover/item:scale-125"
+                    style={{ backgroundColor: e.color, boxShadow: `0 0 9px ${e.color}90` }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[12px] font-bold text-gray-900 truncate">{e.name}</span>
+                    <span className="block text-[9px] text-gray-400 truncate">{e.category}</span>
+                  </span>
+                  <ArrowUpRight className="w-3 h-3 text-gray-300 shrink-0 opacity-0 -translate-x-1 transition-all duration-200 group-hover/item:opacity-100 group-hover/item:translate-x-0" strokeWidth={2.4} />
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function OverviewDashboard({
   adminName, clients, briefs, allMsgs, allDocs, allMeetings, contactForms, startBriefs,
   helpRequests, projects, checks, transactions,
-  onSelectTab, onOpenClient, onRefresh, onOpenFinance, onOpenLedgerEntry,
+  onSelectTab, onOpenClient, onRefresh, onOpenFinance, onOpenLedgerEntry, onOpenFinanceSection, onOpenEntityFinance,
   onSaveMeeting, onDeleteMeeting, onConfirmMeeting, onCancelMeeting,
   onOpenMobileNav, onViewDocument,
 }: OverviewProps) {
@@ -478,7 +649,7 @@ export function OverviewDashboard({
       .filter((p: any) => p.status === 'active' && Number(p.current_contract_value) > 0)
       .slice()
       .sort((a: any, b: any) => Number(b.current_contract_value) - Number(a.current_contract_value))
-      .slice(0, 4)
+      .slice(0, 3)
       .map((p: any) => {
         const contract = Number(p.current_contract_value) || 0;
         const budget = Number(p.budget) || 0;
@@ -603,42 +774,48 @@ export function OverviewDashboard({
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onRefresh} className="ov-btn-outline"><RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />Refresh</button>
           <button onClick={() => onSelectTab('changelog')} className="ov-btn-outline"><History className="w-3.5 h-3.5" strokeWidth={2} />Changelog</button>
-          <button onClick={onOpenFinance} className="ov-btn-primary">Open Finance<ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.4} /></button>
+          <OpenFinanceMenu onOpenEntityFinance={onOpenEntityFinance} />
         </div>
       </div>
 
       {/* ══ Finance hero — enterprise‑grade, time‑scoped, multi‑layered ══ */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
-        <div className="ov-card xl:col-span-8 p-5 sm:p-6 flex flex-col overflow-hidden h-full">
+        <div className="ov-card xl:col-span-8 p-4 sm:p-5 flex flex-col overflow-hidden h-full">
           {/* Top row: Net Income hero + timeframe selector */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 flex-wrap">
             <div className="flex items-baseline gap-3">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-0.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10B981' }} />
                   <span className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color: STEEL }}>Net Income</span>
                 </div>
-                <span className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-none text-black tabular-nums">
+                <span className="text-[26px] sm:text-[32px] font-bold tracking-tight leading-none text-black tabular-nums">
                   {periodNet < 0 ? '−$' : '$'}{fmtMoney(periodNet)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* KPI stat row — clean, professional, color‑coded */}
-          <div className="grid grid-cols-3 gap-4 mt-5 pb-4 border-b" style={{ borderColor: BORDER }}>
+          {/* KPI stat row — clean, professional, color‑coded, click‑through to the live finance section */}
+          <div className="grid grid-cols-3 gap-4 mt-3 pb-3 border-b" style={{ borderColor: BORDER }}>
             {[
-              { label: 'Revenue', value: `+$${fmtMoney(periodTotalRevenue, 0)}`, color: '#10B981', dot: true },
-              { label: 'Expenses', value: `−$${fmtMoney(periodTotalExpenses, 0)}`, color: '#EF4444', dot: true },
-              { label: 'Open Checks', value: `${outstandingChecks} · $${fmtMoney(openChecksValue, 0)}`, color: '#F59E0B', dot: false },
+              { label: 'Revenue', value: `+$${fmtMoney(periodTotalRevenue, 0)}`, color: '#10B981', dot: true, section: 'income' as const },
+              { label: 'Expenses', value: `−$${fmtMoney(periodTotalExpenses, 0)}`, color: '#EF4444', dot: true, section: 'expenses' as const },
+              { label: 'Open Checks', value: `${outstandingChecks} · $${fmtMoney(openChecksValue, 0)}`, color: '#F59E0B', dot: false, section: 'checks' as const },
             ].map(stat => (
-              <div key={stat.label} className="flex flex-col">
+              <button
+                key={stat.label}
+                onClick={() => onOpenFinanceSection(stat.section)}
+                className="group flex flex-col items-start text-left rounded-lg -m-1.5 p-1.5 transition-colors hover:bg-black/[0.03]"
+                title={`Open ${stat.label} in the finance dashboard`}
+              >
                 <div className="flex items-center gap-1.5 mb-1">
                   {stat.dot && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stat.color }} />}
                   <span className="text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: STEEL }}>{stat.label}</span>
+                  <ArrowUpRight className="w-2.5 h-2.5 text-gray-300 opacity-0 -translate-x-0.5 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0" strokeWidth={2.5} />
                 </div>
                 <span className="text-[14px] sm:text-[16px] font-bold tabular-nums text-black">{stat.value}</span>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -649,11 +826,11 @@ export function OverviewDashboard({
         </div>
 
         {/* Right column: Active Contract Value + compact bento */}
-        <div className="xl:col-span-4 flex flex-col gap-2.5">
+        <div className="xl:col-span-4 flex flex-col gap-2">
           {/* Active Contract Value — professional light theme */}
-          <motion.button 
+          <motion.button
             onClick={() => onSelectTab('projects')}
-            className="relative overflow-hidden rounded-2xl p-5 text-left group"
+            className="relative overflow-hidden rounded-2xl p-3.5 text-left group"
             style={{
               background: '#ffffff',
               border: '1px solid #E5E7EB',
@@ -661,26 +838,26 @@ export function OverviewDashboard({
               transition: 'all .3s cubic-bezier(.16,1,.3,1)',
             }}>
             <div className="relative">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: '#6B7280' }}>Active Contract Value</span>
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB' }}>
-                  <HardHat className="w-4 h-4" style={{ color: '#0A0A0A' }} strokeWidth={2} />
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#F3F4F6', border: '1px solid #E5E7EB' }}>
+                  <HardHat className="w-3.5 h-3.5" style={{ color: '#0A0A0A' }} strokeWidth={2} />
                 </span>
               </div>
-              <div className="text-[24px] font-bold tracking-tight tabular-nums mb-4 text-black">${fmtMoney(activeContractValue, 0)}</div>
+              <div className="text-[21px] font-bold tracking-tight tabular-nums mb-2.5 text-black">${fmtMoney(activeContractValue, 0)}</div>
 
               {/* Bullet graph — contracted value vs. cost budget, largest active projects first */}
-              <div className="mb-3 rounded-lg p-3" style={{ background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
-                <div className="flex items-center justify-between mb-2.5">
+              <div className="mb-2 rounded-lg p-2.5" style={{ background: '#FAFAFA', border: '1px solid #F3F4F6' }}>
+                <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[8.5px] font-bold uppercase tracking-[0.1em]" style={{ color: '#9CA3AF' }}>Contract vs. Budget</span>
                   <span className="flex items-center gap-1 text-[8px] font-semibold" style={{ color: '#9CA3AF' }}>
                     <span className="w-2 h-[2px]" style={{ background: '#0A0A0A' }} /> Budget target
                   </span>
                 </div>
                 {contractBullets.length === 0 ? (
-                  <div className="py-5 text-center text-[10px]" style={{ color: '#9CA3AF' }}>No active contracted projects yet.</div>
+                  <div className="py-3 text-center text-[10px]" style={{ color: '#9CA3AF' }}>No active contracted projects yet.</div>
                 ) : (
-                  <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-1.5">
                     {contractBullets.map((b, i) => (
                       <BulletBar
                         key={b.id}
@@ -696,7 +873,7 @@ export function OverviewDashboard({
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-[9px] pt-2.5 mt-1 border-t" style={{ borderColor: '#F3F4F6' }}>
+              <div className="grid grid-cols-3 gap-2 text-[9px] pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
                 <div>
                   <div style={{ color: '#9CA3AF' }} className="text-[8px] font-medium mb-0.5">Entity</div>
                   <div className="font-semibold text-black truncate">Houston Enterprise</div>
@@ -723,7 +900,7 @@ export function OverviewDashboard({
               <motion.button
                 key={card.key}
                 onClick={() => onSelectTab(card.tab)}
-                className="relative overflow-hidden rounded-xl p-2.5 sm:p-2.5 text-left group"
+                className="relative overflow-hidden rounded-xl p-2.5 sm:p-2 text-left group"
                 style={{
                   background: `linear-gradient(160deg, ${hexToRgba(card.color, 0.08)}, #ffffff 58%)`,
                   border: `1px solid ${hexToRgba(card.color, 0.18)}`,
@@ -742,12 +919,12 @@ export function OverviewDashboard({
                   <span className="text-[19px] font-bold tracking-tight tabular-nums text-black shrink-0">{card.value}</span>
                 </div>
                 {/* Desktop / tablet — compact vertical layout for the 3‑up grid */}
-                <div className="relative hidden sm:flex sm:flex-col gap-1.5">
+                <div className="relative hidden sm:flex sm:flex-col gap-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(card.color, 0.14), border: `1px solid ${hexToRgba(card.color, 0.26)}` }}>
-                      <card.icon className="w-3.5 h-3.5" style={{ color: card.color }} strokeWidth={2} />
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: hexToRgba(card.color, 0.14), border: `1px solid ${hexToRgba(card.color, 0.26)}` }}>
+                      <card.icon className="w-3 h-3" style={{ color: card.color }} strokeWidth={2} />
                     </span>
-                    <span className="text-[16px] font-bold tracking-tight tabular-nums text-black">{card.value}</span>
+                    <span className="text-[15px] font-bold tracking-tight tabular-nums text-black">{card.value}</span>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-black truncate">{card.label}</div>

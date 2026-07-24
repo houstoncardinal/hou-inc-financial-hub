@@ -17,7 +17,7 @@ import {
   Map, Download, Mail, Search, StickyNote, LayoutList, CalendarDays,
   Receipt, FilePlus,
   FolderKanban, Bell, CheckSquare, Plus, BriefcaseBusiness,
-  History, FileDown, Menu, LifeBuoy, X as XIcon,
+  History, FileDown, Menu, LifeBuoy, X as XIcon, UserPlus,
 } from 'lucide-react';
 import ClientMap from '@/components/admin/ClientMap';
 import { APPROVAL_DOCS, BUILDER } from '@/hooks/usePortal';
@@ -37,6 +37,8 @@ import { TerminalTopBar, TerminalRail } from '@/components/admin/terminal/Termin
 import { ENTITIES } from '@/contexts/EntityContext';
 import { ActionButton } from '@/components/admin/design/ActionButton';
 import { AdminTable } from '@/components/admin/design/AdminTable';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 import { VerticalTimeline } from '@/components/admin/design/VerticalTimeline';
 import { OverviewDashboard } from '@/components/admin/design/OverviewDashboard';
 import { todayLocalDate } from '@/lib/format';
@@ -45,6 +47,7 @@ import {
   useHelpRequests, useUpdateHelpRequestStatus, useHelpRequestScreenshotUrl,
   HELP_CATEGORY_LABELS, SUPPORT_ADMIN_EMAIL, type HelpRequest,
 } from '@/hooks/useHelpRequests';
+import { useAllAdminAccessRequests } from '@/hooks/useAdminAccessRequests';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 const G500  = '#8A8580';
@@ -476,8 +479,8 @@ function LeadLifecycleSelect({ value, saving, onChange }: {
   );
 }
 
-type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'projects' | 'notifications' | 'changelog' | 'help_desk';
-const ADMIN_TAB_KEYS: AdminTab[] = ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog', 'help_desk'];
+type AdminTab = 'overview' | 'approvals' | 'clients' | 'leads' | 'documents' | 'meetings' | 'portfolio' | 'map' | 'finance' | 'analytics' | 'projects' | 'notifications' | 'changelog' | 'help_desk' | 'admin_requests';
+const ADMIN_TAB_KEYS: AdminTab[] = ['overview', 'approvals', 'clients', 'leads', 'documents', 'meetings', 'portfolio', 'map', 'finance', 'analytics', 'projects', 'notifications', 'changelog', 'help_desk', 'admin_requests'];
 
 export default function Admin() {
   /* ── Auth ── */
@@ -490,6 +493,12 @@ export default function Admin() {
   // gate the Help Requests tab to the one support-admin account.
   const { user } = useAuth();
   const isSupportAdmin = user?.email === SUPPORT_ADMIN_EMAIL;
+  // Gated on the real 'developer' role (app_user_roles), not a hardcoded
+  // email — approving/denying is enforced server-side by is_developer() in
+  // the RPCs regardless, this just hides the tab client-side for anyone else.
+  const isDeveloper = user?.role === 'developer';
+  const { requests: accessRequests, loading: accessRequestsLoading, approve: approveAccessRequest, deny: denyAccessRequest } = useAllAdminAccessRequests();
+  const pendingAccessRequests = accessRequests.filter(r => r.status === 'pending');
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -624,6 +633,8 @@ export default function Admin() {
   const [leadsSubTab, setLeadsSubTab] = useState<'startproject' | 'contact'>('startproject');
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const [leadStatusSaving, setLeadStatusSaving] = useState<string | null>(null);
+  const startBriefsPage  = usePagination(startBriefs, 15, leadsSubTab);
+  const contactFormsPage = usePagination([...contactForms].reverse(), 15, leadsSubTab);
 
   /* ── Help requests (client portal) ── */
   const [helpRequests, setHelpRequests] = useState<any[]>([]);
@@ -633,11 +644,37 @@ export default function Admin() {
   const updateHelpRequestStatus = useUpdateHelpRequestStatus();
   const [helpLightboxUrl, setHelpLightboxUrl] = useState<string | null>(null);
 
+  /* ── Resolved-request history paginates — the open/in-progress queues stay
+     small by nature (staff clears them), but resolved tickets accumulate
+     forever. ── */
+  const resolvedHelpReqsPage = usePagination(
+    helpRequests.filter((r: any) => r.status === 'resolved'), 10,
+  );
+  const resolvedTeamHelpReqsPage = usePagination(
+    teamHelpRequests.filter(r => r.status === 'resolved'), 10,
+  );
+
   /* ── Changelog ── */
   const [changelogEntries,   setChangelogEntries]   = useState<any[]>([]);
   const [clSearch,           setClSearch]           = useState('');
   const [clDashFilter,       setClDashFilter]       = useState('all');
   const [clEntityFilter,     setClEntityFilter]     = useState('all');
+  const changelogFiltered = changelogEntries.filter((e: any) => {
+    if (clDashFilter !== 'all' && e.dashboard !== clDashFilter) return false;
+    if (clEntityFilter !== 'all' && e.entity !== clEntityFilter) return false;
+    if (clSearch) {
+      const q = clSearch.toLowerCase();
+      if (
+        !e.action?.toLowerCase().includes(q) &&
+        !e.entity?.toLowerCase().includes(q) &&
+        !e.entity_label?.toLowerCase().includes(q) &&
+        !e.changed_by?.toLowerCase().includes(q) &&
+        !e.dashboard?.toLowerCase().includes(q)
+      ) return false;
+    }
+    return true;
+  });
+  const changelogPage = usePagination(changelogFiltered, 30, `${clSearch}|${clDashFilter}|${clEntityFilter}`);
 
   /* ── Mobile nav ── */
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -655,6 +692,14 @@ export default function Admin() {
     (docs ?? []).filter((d: any) => d.status === 'uploaded').map((d: any) => ({ ...d, clientId: cId })));
   const pendingMeets    = Object.entries(allMeetings).flatMap(([cId, meets]) =>
     (meets ?? []).filter((m: any) => m.status === 'requested').map((m: any) => ({ ...m, clientId: cId })));
+  const allMeetList = Object.entries(allMeetings)
+    .flatMap(([cId, meets]) => (meets ?? []).map((m: any) => ({ ...m, clientId: cId })));
+  const sortedMeets = [...allMeetList].sort((a: any, b: any) => {
+    if (meetingsView === 'calendar') return (a.date ?? '').localeCompare(b.date ?? '');
+    const order: Record<string, number> = { requested: 0, confirmed: 1, completed: 2, cancelled: 3 };
+    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+  });
+  const meetingsListPage = usePagination(sortedMeets, 20, meetingsView);
   const allLeads        = [...startBriefs, ...contactForms].length;
   const pendingApprovals = clients.filter((c: any) => c.status === 'pending_approval');
   const approvedClients  = clients.filter((c: any) => c.status === 'approved' || !c.status);
@@ -940,6 +985,7 @@ export default function Admin() {
     { key: 'notifications', label: 'Notifications',  icon: Bell,         desc: 'Client help', badge: openHelpCount || undefined, urgent: openHelpCount > 0 },
     { key: 'changelog',  label: 'Changelog',         icon: History,      desc: 'Audit trail' },
     ...(isSupportAdmin ? [{ key: 'help_desk' as AdminTab, label: 'Help Requests', icon: LifeBuoy, desc: 'Team support inbox', badge: openTeamHelpCount || undefined, urgent: openTeamHelpCount > 0 }] : []),
+    ...(isDeveloper ? [{ key: 'admin_requests' as AdminTab, label: 'Admin Requests', icon: UserPlus, desc: 'Staff access review', badge: pendingAccessRequests.length || undefined, urgent: pendingAccessRequests.length > 0 }] : []),
   ];
 
   /* ════════ LOCK SCREEN ════════ */
@@ -1106,6 +1152,8 @@ export default function Admin() {
               onRefresh={refreshData}
               onOpenFinance={() => navigate('/finance')}
               onOpenLedgerEntry={(kind, id) => navigate(`/ledger?openKind=${kind}&openId=${id}`)}
+              onOpenFinanceSection={section => navigate(`/${section}?entity=houston-enterprise`)}
+              onOpenEntityFinance={entityId => navigate(`/finance/dashboard?entity=${entityId}`)}
               onSaveMeeting={handleOverviewMeetingSave}
               onDeleteMeeting={handleOverviewMeetingDelete}
               onConfirmMeeting={handleMeetingConfirm}
@@ -1227,6 +1275,113 @@ export default function Admin() {
                     ) },
                   ]}
                   rows={[...clients].reverse()}
+                  paginate pageSize={25} itemLabel="applications"
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ══════ ADMIN REQUESTS (developer-only) ══════ */}
+          {tab === 'admin_requests' && isDeveloper && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="grid grid-cols-3 gap-4">
+                <StatCard label="Pending Review" value={String(pendingAccessRequests.length)} icon={UserPlus} trendColor="#f59e0b" />
+                <StatCard label="Approved" value={String(accessRequests.filter(r => r.status === 'approved').length)} icon={UserCheck} trendColor="#10b981" />
+                <StatCard label="Denied" value={String(accessRequests.filter(r => r.status === 'denied').length)} icon={UserX} trendColor="#ef4444" />
+              </div>
+
+              <div className="pdv2-card overflow-hidden">
+                <div className="pdv2-card-header flex items-center justify-between bg-warning/5">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-warning">Pending Staff Requests</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Only you (the developer account) can approve these — approving grants real admin access to the entity requested.</div>
+                  </div>
+                  {pendingAccessRequests.length > 0 && <StatusBadge label={`${pendingAccessRequests.length} waiting`} style={{ bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' }} />}
+                </div>
+
+                {!accessRequestsLoading && pendingAccessRequests.length === 0 && (
+                  <div className="py-14 text-center">
+                    <CheckCircle2 className="w-8 h-8 mx-auto mb-3 text-positive" strokeWidth={1} />
+                    <div className="text-[13px] font-semibold text-foreground">All caught up</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">No pending admin access requests.</div>
+                  </div>
+                )}
+
+                <div className="divide-y divide-border">
+                  {pendingAccessRequests.map((r) => {
+                    const entity = ENTITIES.find(e => e.id === r.entity_id);
+                    return (
+                      <div key={r.id} className="px-5 py-5">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 flex items-center justify-center text-[12px] font-black shrink-0 rounded-full bg-warning/10 text-warning">
+                            {(r.requester_name || r.requester_email || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 flex-wrap mb-1">
+                              <span className="text-[14px] font-bold text-foreground">{r.requester_name || r.requester_email}</span>
+                              <StatusBadge label={`Requesting ${entity?.shortName ?? r.entity_id} admin`} style={{ bg: 'rgba(157,126,63,0.1)', color: AC }} />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-3 text-[11px] text-muted-foreground">
+                              <span>{r.requester_email}</span>
+                              <span className="text-[10px]">
+                                Requested {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {r.reason && (
+                              <div className="p-3.5 mb-4 rounded-lg bg-secondary/40 border-l-2 border-border">
+                                <div className="text-[8px] uppercase tracking-[0.3em] font-bold mb-2 text-muted-foreground">Reason</div>
+                                <p className="text-[12px] text-foreground leading-relaxed">{r.reason}</p>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              <ActionButton variant="positive" icon={UserCheck} onClick={async () => { await approveAccessRequest(r.id); }} className="!border-positive !bg-positive/10">
+                                Approve {entity?.shortName ?? ''} Admin
+                              </ActionButton>
+                              <ActionButton variant="negative" icon={UserX} onClick={async () => { await denyAccessRequest(r.id); }}>Decline</ActionButton>
+                              <a href={`mailto:${r.requester_email}`} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                                Email
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pdv2-card overflow-hidden">
+                <div className="pdv2-card-header">
+                  <div className="text-[11px] font-bold uppercase tracking-wide">All Requests ({accessRequests.length})</div>
+                </div>
+                <AdminTable
+                  emptyText="No admin access requests yet."
+                  columns={[
+                    { key: 'requester', label: 'Requester', render: (r: any) => (
+                      <div>
+                        <div className="text-[12px] font-semibold text-foreground">{r.requester_name || r.requester_email}</div>
+                        <div className="text-[10px] text-muted-foreground">{r.requester_email}</div>
+                      </div>
+                    ) },
+                    { key: 'entity_id', label: 'Entity', render: (r: any) => ENTITIES.find(e => e.id === r.entity_id)?.name ?? r.entity_id },
+                    { key: 'created_at', label: 'Requested', render: (r: any) => new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
+                    { key: 'status', label: 'Status', render: (r: any) => {
+                      const statusColor = r.status === 'approved' ? { bg: 'rgba(16,185,129,0.08)', color: '#10b981' }
+                        : r.status === 'denied' ? { bg: 'rgba(239,68,68,0.08)', color: '#ef4444' }
+                        : { bg: 'rgba(245,158,11,0.08)', color: '#f59e0b' };
+                      return <StatusBadge label={r.status} style={statusColor} />;
+                    } },
+                    { key: 'actions', label: '', render: (r: any) => (
+                      r.status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          <ActionButton variant="positive" onClick={async () => { await approveAccessRequest(r.id); }}>Approve</ActionButton>
+                          <ActionButton variant="negative" onClick={async () => { await denyAccessRequest(r.id); }}>Decline</ActionButton>
+                        </div>
+                      )
+                    ) },
+                  ]}
+                  rows={accessRequests}
+                  paginate pageSize={25} itemLabel="requests"
                 />
               </div>
             </motion.div>
@@ -1302,6 +1457,8 @@ export default function Admin() {
                     { key: 'chevron', label: '', render: () => <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} /> },
                   ]}
                   rows={filteredClients}
+                  paginate pageSize={25} itemLabel="clients"
+                  resetKey={`${clientSearch}|${clientStatusFilter}`}
                 />
               </div>
             </motion.div>
@@ -2043,6 +2200,7 @@ export default function Admin() {
                   d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
                 return (
+                  <>
                   <div className="pdv2-card overflow-hidden divide-y divide-border">
                     {startBriefs.length === 0 ? (
                       <div className="px-6 py-16 text-center">
@@ -2050,7 +2208,8 @@ export default function Admin() {
                         <div className="text-[13px] font-medium mb-1 text-foreground">No project briefs yet</div>
                         <p className="text-[11px] text-muted-foreground">Submissions from the Start Project form will appear here.</p>
                       </div>
-                    ) : startBriefs.map((s: any, idx: number) => {
+                    ) : startBriefsPage.paged.map((s: any) => {
+                      const idx = startBriefs.indexOf(s);
                       const initials = (s.name || 'SP').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
                       const urgency = TIMELINE_URGENCY[s.start_timeline] ?? { color: '#8A8580', bg: 'rgba(0,0,0,0.04)' };
                       const isExpanded = expandedLeadId === s.id;
@@ -2226,17 +2385,21 @@ export default function Admin() {
                       );
                     })}
                   </div>
+                  <PaginationBar page={startBriefsPage.page} pageCount={startBriefsPage.pageCount} total={startBriefsPage.total}
+                    pageSize={startBriefsPage.pageSize} onPageChange={startBriefsPage.setPage} itemLabel="briefs" className="mt-3" />
+                  </>
                 );
               })()}
 
               {leadsSubTab === 'contact' && (
+                <>
                 <div className="pdv2-card overflow-hidden divide-y divide-border">
                   {contactForms.length === 0 ? (
                     <div className="px-5 py-14 text-center">
                       <MessageSquare className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" strokeWidth={1} />
                       <div className="text-[12px] text-muted-foreground">No contact form submissions yet.</div>
                     </div>
-                  ) : contactForms.slice().reverse().map((f: any, i: number) => (
+                  ) : contactFormsPage.paged.map((f: any, i: number) => (
                     <div key={f.id ?? f.email + String(i)} className="px-5 py-5">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1">
@@ -2265,6 +2428,9 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
+                <PaginationBar page={contactFormsPage.page} pageCount={contactFormsPage.pageCount} total={contactFormsPage.total}
+                  pageSize={contactFormsPage.pageSize} onPageChange={contactFormsPage.setPage} itemLabel="submissions" className="mt-3" />
+                </>
               )}
             </motion.div>
           )}
@@ -2278,14 +2444,6 @@ export default function Admin() {
 
           {/* ══════ MEETINGS ══════ */}
           {tab === 'meetings' && (() => {
-            const allMeetList = Object.entries(allMeetings)
-              .flatMap(([cId, meets]) => (meets ?? []).map((m: any) => ({ ...m, clientId: cId })));
-            const sortedMeets = [...allMeetList].sort((a: any, b: any) => {
-              // Calendar view: sort by date; list view: sort by status priority
-              if (meetingsView === 'calendar') return (a.date ?? '').localeCompare(b.date ?? '');
-              const order: Record<string, number> = { requested: 0, confirmed: 1, completed: 2, cancelled: 3 };
-              return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-            });
             // Calendar view: group by date
             const byDate: Record<string, typeof sortedMeets> = {};
             if (meetingsView === 'calendar') {
@@ -2325,8 +2483,9 @@ export default function Admin() {
                     <div className="text-[12px] text-muted-foreground">No meetings yet.</div>
                   </div>
                 ) : meetingsView === 'list' ? (
+                  <>
                   <div className="divide-y divide-border">
-                    {sortedMeets.map((m: any) => {
+                    {meetingsListPage.paged.map((m: any) => {
                       const FmtIcon = m.format === 'Video Call' ? Video : m.format === 'Phone Call' ? Phone : MapPin;
                       return (
                         <div key={`${m.clientId}-${m.id}`} className="flex items-center gap-4 px-5 py-4">
@@ -2353,6 +2512,9 @@ export default function Admin() {
                       );
                     })}
                   </div>
+                  <PaginationBar page={meetingsListPage.page} pageCount={meetingsListPage.pageCount} total={meetingsListPage.total}
+                    pageSize={meetingsListPage.pageSize} onPageChange={meetingsListPage.setPage} itemLabel="meetings" className="px-5 py-3" />
+                  </>
                 ) : (
                   /* Calendar view: date-grouped */
                   <div className="p-4 space-y-4">
@@ -2564,7 +2726,7 @@ export default function Admin() {
 
             const openReqs     = helpRequests.filter((r: any) => r.status === 'open');
             const inProgReqs   = helpRequests.filter((r: any) => r.status === 'in_progress');
-            const resolvedReqs = helpRequests.filter((r: any) => r.status === 'resolved');
+            const resolvedReqs = resolvedHelpReqsPage.paged;
 
             function RequestCard({ req }: { req: any }) {
               const sc    = HelpStatusColors[req.status] ?? HelpStatusColors.open;
@@ -2636,10 +2798,12 @@ export default function Admin() {
                   </div>
                 )}
 
-                {resolvedReqs.length > 0 && (
+                {resolvedHelpReqsPage.total > 0 && (
                   <div>
-                    <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-positive mb-3">Resolved · {resolvedReqs.length}</div>
+                    <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-positive mb-3">Resolved · {resolvedHelpReqsPage.total}</div>
                     {resolvedReqs.map((r: any) => <RequestCard key={r.id} req={r} />)}
+                    <PaginationBar page={resolvedHelpReqsPage.page} pageCount={resolvedHelpReqsPage.pageCount} total={resolvedHelpReqsPage.total}
+                      pageSize={resolvedHelpReqsPage.pageSize} onPageChange={resolvedHelpReqsPage.setPage} itemLabel="resolved requests" />
                   </div>
                 )}
               </motion.div>
@@ -2666,7 +2830,7 @@ export default function Admin() {
 
             const openReqs     = teamHelpRequests.filter(r => r.status === 'open');
             const inProgReqs   = teamHelpRequests.filter(r => r.status === 'in_progress');
-            const resolvedReqs = teamHelpRequests.filter(r => r.status === 'resolved');
+            const resolvedReqs = resolvedTeamHelpReqsPage.paged;
 
             function TeamHelpCard({ req }: { req: HelpRequest }) {
               const sc = TeamHelpStatusColors[req.status] ?? TeamHelpStatusColors.open;
@@ -2739,10 +2903,12 @@ export default function Admin() {
                       {inProgReqs.map(r => <TeamHelpCard key={r.id} req={r} />)}
                     </div>
                   )}
-                  {resolvedReqs.length > 0 && (
+                  {resolvedTeamHelpReqsPage.total > 0 && (
                     <div>
-                      <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-positive mb-3">Resolved · {resolvedReqs.length}</div>
+                      <div className="text-[8px] font-bold uppercase tracking-[0.36em] text-positive mb-3">Resolved · {resolvedTeamHelpReqsPage.total}</div>
                       {resolvedReqs.map(r => <TeamHelpCard key={r.id} req={r} />)}
+                      <PaginationBar page={resolvedTeamHelpReqsPage.page} pageCount={resolvedTeamHelpReqsPage.pageCount} total={resolvedTeamHelpReqsPage.total}
+                        pageSize={resolvedTeamHelpReqsPage.pageSize} onPageChange={resolvedTeamHelpReqsPage.setPage} itemLabel="resolved requests" />
                     </div>
                   )}
                 </motion.div>
@@ -2778,22 +2944,7 @@ export default function Admin() {
 
             const allDashboards = ['all', ...Array.from(new Set(changelogEntries.map((e: any) => e.dashboard)))];
             const allEntities   = ['all', ...Array.from(new Set(changelogEntries.map((e: any) => e.entity)))];
-
-            const filtered = changelogEntries.filter((e: any) => {
-              if (clDashFilter !== 'all' && e.dashboard !== clDashFilter) return false;
-              if (clEntityFilter !== 'all' && e.entity !== clEntityFilter) return false;
-              if (clSearch) {
-                const q = clSearch.toLowerCase();
-                if (
-                  !e.action?.toLowerCase().includes(q) &&
-                  !e.entity?.toLowerCase().includes(q) &&
-                  !e.entity_label?.toLowerCase().includes(q) &&
-                  !e.changed_by?.toLowerCase().includes(q) &&
-                  !e.dashboard?.toLowerCase().includes(q)
-                ) return false;
-              }
-              return true;
-            });
+            const filtered = changelogFiltered;
 
             function exportChangelogPDF() {
               try {
@@ -2898,8 +3049,9 @@ export default function Admin() {
 
                 {/* Timeline */}
                 {filtered.length > 0 && (
+                  <>
                   <VerticalTimeline
-                    entries={filtered.map((entry: any, idx: number) => {
+                    entries={changelogPage.paged.map((entry: any, idx: number) => {
                       const sc = ACTION_COLORS[entry.action] ?? { bg: 'rgba(138,133,128,0.08)', color: '#8A8580' };
                       const dc = DASH_COLORS[entry.dashboard] ?? '#8A8580';
                       const details = entry.details ?? {};
@@ -2934,6 +3086,9 @@ export default function Admin() {
                       };
                     })}
                   />
+                  <PaginationBar page={changelogPage.page} pageCount={changelogPage.pageCount} total={changelogPage.total}
+                    pageSize={changelogPage.pageSize} onPageChange={changelogPage.setPage} itemLabel="entries" className="mt-4" />
+                  </>
                 )}
               </motion.div>
             );

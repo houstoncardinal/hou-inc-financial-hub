@@ -10,12 +10,12 @@ import { usePortal, BUILDER } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── Tokens ─────────────────────────────────────────────────────── */
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const GOLDF  = '#C4A76B';
-const BORDER = '#E5E0D9';
-const SOFT   = '#F7F5F2';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const ACCENT_SOFT  = '#404040';
+const BORDER = '#E5E7EB';
+const SOFT   = '#F8FAFC';
 const GREEN  = '#10b981';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 const WHITE  = '#FFFFFF';
@@ -55,8 +55,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   planning:  { bg: 'rgba(139,92,246,0.1)',   text: '#8b5cf6' },
   active:    { bg: 'rgba(16,185,129,0.1)',    text: GREEN },
   on_hold:   { bg: 'rgba(245,158,11,0.1)',    text: '#f59e0b' },
-  completed: { bg: 'rgba(157,126,63,0.12)',   text: GOLD },
-  archived:  { bg: 'rgba(122,110,100,0.1)',   text: MUTED },
+  completed: { bg: 'rgba(0,0,0,0.12)',   text: ACCENT },
+  archived:  { bg: 'rgba(107,114,128,0.1)',   text: MUTED },
 };
 const STATUS_LABELS: Record<string, string> = { planning:'Planning', active:'Active', on_hold:'On Hold', completed:'Completed', archived:'Archived' };
 
@@ -93,15 +93,15 @@ function ProgressRing({ pct, size = 88 }: { pct: number; size?: number }) {
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(157,126,63,0.12)" strokeWidth={sw} />
-        <motion.circle cx={size/2} cy={size/2} r={r} fill="none" stroke={GOLD} strokeWidth={sw} strokeLinecap="butt"
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth={sw} />
+        <motion.circle cx={size/2} cy={size/2} r={r} fill="none" stroke={ACCENT} strokeWidth={sw} strokeLinecap="butt"
           strokeDasharray={`${arc} ${c - arc}`}
           initial={{ strokeDasharray: `0 ${c}` }}
           animate={{ strokeDasharray: `${arc} ${c - arc}` }}
           transition={{ duration: 1.1, ease: [0.22,1,0.36,1], delay: 0.2 }} />
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontFamily: SERIF, fontSize: size * 0.22, fontWeight: 700, color: GOLD, lineHeight: 1 }}>{pct}%</div>
+        <div style={{ fontFamily: SERIF, fontSize: size * 0.22, fontWeight: 700, color: ACCENT, lineHeight: 1 }}>{pct}%</div>
         <div style={{ fontSize: 6, textTransform: 'uppercase', letterSpacing: '0.18em', color: MUTED, fontWeight: 700, marginTop: 2 }}>done</div>
       </div>
     </div>
@@ -151,12 +151,12 @@ function HelpRequestModal({
       <motion.div
         initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
         transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-        style={{ backgroundColor: WHITE, width: '100%', maxWidth: 560, maxHeight: '90svh', overflowY: 'auto', borderTop: '3px solid #9D7E3F', borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
+        style={{ backgroundColor: WHITE, width: '100%', maxWidth: 560, maxHeight: '90svh', overflowY: 'auto', borderTop: '3px solid #000000', borderLeft: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.38em', fontWeight: 700, color: GOLD, marginBottom: 4 }}>Request Help</div>
+            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.38em', fontWeight: 700, color: ACCENT, marginBottom: 4 }}>Request Help</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: DARK, lineHeight: 1.3 }}>{project.title}</div>
           </div>
           <button onClick={onClose} style={{ padding: 4, color: MUTED, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}><X className="w-4 h-4" /></button>
@@ -184,14 +184,14 @@ function HelpRequestModal({
                 value={message} onChange={e => setMessage(e.target.value)}
                 rows={5} placeholder="Describe what you need help with…"
                 style={{ width: '100%', padding: '10px 12px', border: `1px solid ${BORDER}`, fontSize: 13, color: DARK, resize: 'vertical', outline: 'none', lineHeight: 1.6 }}
-                onFocus={e => { e.target.style.borderColor = GOLD; }}
+                onFocus={e => { e.target.style.borderColor = ACCENT; }}
                 onBlur={e => { e.target.style.borderColor = BORDER; }}
               />
             </div>
             <button
               onClick={handleSubmit}
               disabled={!message.trim() || submitting}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 24px', backgroundColor: message.trim() && !submitting ? GOLD : 'rgba(157,126,63,0.35)', color: WHITE, border: 'none', cursor: message.trim() && !submitting ? 'pointer' : 'not-allowed', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', transition: 'background-color 0.18s' }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 24px', backgroundColor: message.trim() && !submitting ? ACCENT : 'rgba(0,0,0,0.35)', color: WHITE, border: 'none', cursor: message.trim() && !submitting ? 'pointer' : 'not-allowed', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.24em', transition: 'background-color 0.18s' }}>
               <Send className="w-3.5 h-3.5" />
               {submitting ? 'Sending…' : 'Send Request'}
             </button>
@@ -218,7 +218,11 @@ export default function PortalProjects() {
   const [helpProjectId, setHelpProjectId]   = useState<string | null>(null);
   const [successMsg, setSuccessMsg]         = useState<string | null>(null);
 
-  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
+  }, [client, loaded, navigate]);
 
   useEffect(() => {
     if (!client) return;
@@ -235,7 +239,7 @@ export default function PortalProjects() {
       });
   }, [client?.id]);
 
-  if (!loaded || !client) return null;
+  if (!loaded || !client || (client.status && client.status !== 'approved')) return null;
 
   const brief    = getBrief();
   const hasAdmin = adminProjects.length > 0;
@@ -248,13 +252,13 @@ export default function PortalProjects() {
   return (
     <PortalLayout>
       <motion.div className="px-5 sm:px-10 py-8 md:py-12 max-w-4xl"
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}>
 
         {/* Page header */}
         <div className="mb-8" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.44em', fontWeight: 700, color: GOLD, marginBottom: 8 }}>Client Portal</div>
+            <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.44em', fontWeight: 700, color: ACCENT, marginBottom: 8 }}>Client Portal</div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px,4vw,44px)', color: DARK, lineHeight: 1.05 }}>My Projects</div>
           </div>
           {/* Add new project CTA */}
@@ -318,7 +322,7 @@ export default function PortalProjects() {
                     ] as [string, string, any][]).map(([label, value, Icon], i, arr) => (
                       <div key={label} style={{ padding: '14px 16px', borderRight: i < arr.length-1 ? `1px solid ${BORDER}` : 'none' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                          <Icon className="w-3 h-3" style={{ color: GOLD }} strokeWidth={1.5} />
+                          <Icon className="w-3 h-3" style={{ color: ACCENT }} strokeWidth={1.5} />
                           <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, color: MUTED }}>{label}</div>
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{value}</div>
@@ -328,10 +332,10 @@ export default function PortalProjects() {
 
                   {/* In-progress milestone */}
                   {activeMs && (
-                    <div style={{ padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, backgroundColor: 'rgba(157,126,63,0.03)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: GOLD, flexShrink: 0 }} />
+                    <div style={{ padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, backgroundColor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: ACCENT, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, color: GOLD, marginBottom: 1 }}>Currently In Progress</div>
+                        <div style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, color: ACCENT, marginBottom: 1 }}>Currently In Progress</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{activeMs.title}</div>
                       </div>
                       {activeMs.target_date && <div style={{ fontSize: 10, color: MUTED, flexShrink: 0 }}>Target: {fmtDate(activeMs.target_date)}</div>}
@@ -342,7 +346,7 @@ export default function PortalProjects() {
                   {proj.milestones.length > 0 && (
                     <div style={{ padding: '18px 24px', borderBottom: `1px solid ${BORDER}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: GOLD }}>Milestones</div>
+                        <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: ACCENT }}>Milestones</div>
                         <div style={{ fontSize: 10, color: MUTED }}>{completedMs} of {proj.milestones.length} complete</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -353,7 +357,7 @@ export default function PortalProjects() {
                               {done
                                 ? <CheckCircle2 className="w-4 h-4" style={{ color: GREEN, flexShrink: 0 }} />
                                 : active
-                                ? <div style={{ width: 16, height: 16, border: `2px solid ${GOLD}`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><div style={{ width: 5, height: 5, backgroundColor: GOLD, borderRadius: '50%' }} /></div>
+                                ? <div style={{ width: 16, height: 16, border: `2px solid ${ACCENT}`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><div style={{ width: 5, height: 5, backgroundColor: ACCENT, borderRadius: '50%' }} /></div>
                                 : <div style={{ width: 16, height: 16, border: `1.5px solid ${BORDER}`, borderRadius: '50%', flexShrink: 0 }} />}
                               <span style={{ flex: 1, fontSize: 12, color: done ? MUTED : DARK, fontWeight: active ? 600 : 400, textDecoration: done ? 'line-through' : 'none' }}>{m.title}</span>
                               {m.target_date && !done && <span style={{ fontSize: 10, color: MUTED, flexShrink: 0 }}>{fmtDate(m.target_date)}</span>}
@@ -365,7 +369,7 @@ export default function PortalProjects() {
                       {proj.milestones.length > 5 && (
                         <button
                           onClick={() => toggleMilestones(proj.project_id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: 10, fontWeight: 700, color: GOLD, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: 10, fontWeight: 700, color: ACCENT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                           {showAllMs ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                           {showAllMs ? 'Show less' : `Show all ${proj.milestones.length} milestones`}
                         </button>
@@ -376,7 +380,7 @@ export default function PortalProjects() {
                   {/* Updates */}
                   {proj.updates.length > 0 && (
                     <div style={{ padding: '18px 24px', borderBottom: `1px solid ${BORDER}` }}>
-                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: GOLD, marginBottom: 12 }}>Recent Updates</div>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: ACCENT, marginBottom: 12 }}>Recent Updates</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {proj.updates.slice(0, 3).map(u => {
                           const { Icon, color, label } = UPDATE_ICONS[u.update_type] ?? UPDATE_ICONS.general;
@@ -435,7 +439,7 @@ export default function PortalProjects() {
                       <button
                         onClick={() => setHelpProjectId(proj.project_id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: MUTED, background: 'none', border: `1px solid ${BORDER}`, cursor: 'pointer', padding: '7px 12px', transition: 'border-color 0.15s, color 0.15s' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = GOLD; (e.currentTarget as HTMLButtonElement).style.color = GOLD; }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = ACCENT; (e.currentTarget as HTMLButtonElement).style.color = ACCENT; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; (e.currentTarget as HTMLButtonElement).style.color = MUTED; }}>
                         <HelpCircle className="w-3 h-3" />
                         Request Help
@@ -444,12 +448,12 @@ export default function PortalProjects() {
                       {/* Per-project smart links */}
                       <Link
                         to={`/portal/milestones?project=${proj.project_id}`}
-                        style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: GOLD, textDecoration: 'none' }}>
+                        style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: ACCENT, textDecoration: 'none' }}>
                         Timeline →
                       </Link>
                       <Link
                         to={`/portal/messages?project=${encodeURIComponent(proj.title)}`}
-                        style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: GOLD, textDecoration: 'none' }}>
+                        style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: ACCENT, textDecoration: 'none' }}>
                         Messages →
                       </Link>
                     </div>
@@ -460,7 +464,7 @@ export default function PortalProjects() {
 
             {/* Add another project prompt */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '28px 24px', border: `1px dashed ${BORDER}`, gap: 12 }}>
-              <FolderOpen className="w-4 h-4" style={{ color: GOLDF }} strokeWidth={1.5} />
+              <FolderOpen className="w-4 h-4" style={{ color: ACCENT_SOFT }} strokeWidth={1.5} />
               <span style={{ fontSize: 12, color: MUTED }}>Have another project in mind?</span>
               <Link
                 to="/portal/project?new=1"
@@ -483,7 +487,7 @@ export default function PortalProjects() {
               </div>
             </div>
             <div style={{ padding: '24px 28px' }}>
-              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: GOLD, marginBottom: 20 }}>Project Pipeline</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.36em', fontWeight: 700, color: ACCENT, marginBottom: 20 }}>Project Pipeline</div>
               <div style={{ display: 'flex' }}>
                 {PIPELINE_STEPS.map((step, i) => {
                   const stepIdx = STEP_MAP[brief.status] ?? 0;
@@ -491,14 +495,14 @@ export default function PortalProjects() {
                   return (
                     <div key={step} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: 8 }}>
-                        <div style={{ flex: 1, height: 1, backgroundColor: i===0?'transparent':i<=stepIdx?GOLD:BORDER }} />
-                        <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: done?GOLD:current?'rgba(157,126,63,0.08)':WHITE, border: done?`1px solid ${GOLD}`:current?`2px solid ${GOLD}`:`1px solid ${BORDER}` }}>
+                        <div style={{ flex: 1, height: 1, backgroundColor: i===0?'transparent':i<=stepIdx?ACCENT:BORDER }} />
+                        <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: done?ACCENT:current?'rgba(0,0,0,0.08)':WHITE, border: done?`1px solid ${ACCENT}`:current?`2px solid ${ACCENT}`:`1px solid ${BORDER}` }}>
                           {done&&<CheckCircle className="w-3 h-3" style={{ color: WHITE }} />}
-                          {current&&<div style={{ width: 6, height: 6, backgroundColor: GOLD }} />}
+                          {current&&<div style={{ width: 6, height: 6, backgroundColor: ACCENT }} />}
                         </div>
-                        <div style={{ flex: 1, height: 1, backgroundColor: i===PIPELINE_STEPS.length-1?'transparent':i<stepIdx?GOLD:BORDER }} />
+                        <div style={{ flex: 1, height: 1, backgroundColor: i===PIPELINE_STEPS.length-1?'transparent':i<stepIdx?ACCENT:BORDER }} />
                       </div>
-                      <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', color: done||current?(current?GOLD:DARK):'rgba(26,20,16,0.3)', paddingInline: 4 }}>{step}</div>
+                      <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', color: done||current?(current?ACCENT:DARK):'rgba(17,24,39,0.3)', paddingInline: 4 }}>{step}</div>
                     </div>
                   );
                 })}
@@ -510,12 +514,12 @@ export default function PortalProjects() {
         {/* ── Empty state ── */}
         {!hasAdmin && !brief && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBlock: 96, textAlign: 'center' }}>
-            <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, backgroundColor: 'rgba(157,126,63,0.06)', border: `1px solid rgba(157,126,63,0.18)` }}>
-              <FolderOpen className="w-7 h-7" style={{ color: GOLDF }} strokeWidth={1} />
+            <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, backgroundColor: 'rgba(0,0,0,0.06)', border: `1px solid rgba(0,0,0,0.18)` }}>
+              <FolderOpen className="w-7 h-7" style={{ color: ACCENT_SOFT }} strokeWidth={1} />
             </div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 26, color: DARK, marginBottom: 10 }}>No active projects yet.</div>
             <p style={{ fontSize: 13, fontWeight: 300, marginBottom: 28, maxWidth: 280, color: MUTED }}>Submit your project brief and we'll build a custom plan tailored to your vision.</p>
-            <Link to="/portal/project?new=1" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.28em', fontWeight: 900, padding: '14px 28px', backgroundColor: GOLD, color: '#FAF7F2', textDecoration: 'none' }}>
+            <Link to="/portal/project?new=1" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.28em', fontWeight: 900, padding: '14px 28px', backgroundColor: ACCENT, color: '#F8FAFC', textDecoration: 'none' }}>
               Submit Project Brief <ArrowUpRight className="w-3 h-3" strokeWidth={2.5} />
             </Link>
           </div>

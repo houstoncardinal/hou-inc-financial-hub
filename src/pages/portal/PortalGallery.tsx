@@ -6,11 +6,11 @@ import PortalLayout from '@/components/PortalLayout';
 import { usePortal } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const GOLDF  = '#C4A76B';
-const BORDER = '#E5E0D9';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const ACCENT_SOFT  = '#404040';
+const BORDER = '#E5E7EB';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 const WHITE  = '#FFFFFF';
 
@@ -26,7 +26,11 @@ export default function PortalGallery() {
   const { client, loaded } = usePortal();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
+  }, [client, loaded, navigate]);
 
   const [photos, setPhotos]   = useState<ProjectPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +67,7 @@ export default function PortalGallery() {
     };
   }, [client?.id]);
 
-  if (!client) return null;
+  if (!client || (client.status && client.status !== 'approved')) return null;
 
   const phases = Array.from(new Set(photos.map(p => p.phase_label ?? 'General')));
   const byPhase = (phase: string) => photos.filter(p => (p.phase_label ?? 'General') === phase);
@@ -72,13 +76,13 @@ export default function PortalGallery() {
     <PortalLayout>
       <motion.div
         className="px-6 md:px-10 py-8 md:py-12 max-w-6xl"
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Header */}
         <div className="mb-10">
-          <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>Build Progress</div>
+          <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: ACCENT }}>Build Progress</div>
           <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px, 4vw, 44px)', color: DARK, lineHeight: 1.05 }}>
             Progress Photos
           </div>
@@ -94,10 +98,10 @@ export default function PortalGallery() {
             style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}
           >
             <div
-              className="w-16 h-16 flex items-center justify-center mb-6"
-              style={{ backgroundColor: 'rgba(157,126,63,0.06)', border: `1px solid rgba(157,126,63,0.18)` }}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              style={{ backgroundColor: 'rgba(0,0,0,0.06)', border: `1px solid rgba(0,0,0,0.18)` }}
             >
-              <Camera className="w-7 h-7" style={{ color: GOLDF }} strokeWidth={1} />
+              <Camera className="w-7 h-7" style={{ color: ACCENT_SOFT }} strokeWidth={1} />
             </div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 22, color: DARK }} className="mb-3">
               No photos yet.
@@ -111,7 +115,7 @@ export default function PortalGallery() {
             {phases.map(phase => (
               <div key={phase}>
                 <div className="flex items-center gap-4 mb-5">
-                  <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: GOLD }}>{phase}</div>
+                  <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: ACCENT }}>{phase}</div>
                   <div className="flex-1 h-px" style={{ backgroundColor: BORDER }} />
                   <div className="text-[9px] font-light" style={{ color: MUTED }}>
                     {byPhase(phase).length} photo{byPhase(phase).length !== 1 ? 's' : ''}
@@ -172,12 +176,12 @@ export default function PortalGallery() {
             {(preview.caption || preview.phase_label) && (
               <div className="mt-3 text-center space-y-1">
                 {preview.caption && <p className="text-[13px] font-light text-white">{preview.caption}</p>}
-                {preview.phase_label  && <p className="text-[9px] uppercase tracking-[0.22em] font-bold" style={{ color: GOLDF }}>{preview.phase_label}</p>}
+                {preview.phase_label  && <p className="text-[9px] uppercase tracking-[0.22em] font-bold" style={{ color: ACCENT_SOFT }}>{preview.phase_label}</p>}
               </div>
             )}
             <button
               onClick={() => setPreview(null)}
-              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center transition-opacity hover:opacity-100 opacity-60"
+              className="absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-100 opacity-60"
               style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
             >
               <X className="w-4 h-4 text-white" strokeWidth={2} />

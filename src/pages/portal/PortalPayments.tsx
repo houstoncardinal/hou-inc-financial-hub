@@ -7,12 +7,12 @@ import { usePortal, BUILDER } from '@/hooks/usePortal';
 import { supabase } from '@/integrations/supabase/client';
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const GOLDF  = '#C4A76B';
-const BORDER = '#E5E0D9';
-const CREAM  = '#FAF7F2';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const ACCENT_SOFT  = '#404040';
+const BORDER = '#E5E7EB';
+const CREAM  = '#F8FAFC';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 const WHITE  = '#FFFFFF';
 
@@ -45,8 +45,8 @@ interface ChangeOrder {
 
 const STATUS_STYLE: Record<InvoiceStatus, { bg: string; text: string; label: string }> = {
   paid:     { bg: 'rgba(16,185,129,0.1)',   text: '#10b981', label: 'Paid' },
-  pending:  { bg: 'rgba(157,126,63,0.12)',  text: GOLD,      label: 'Pending' },
-  upcoming: { bg: 'rgba(122,110,100,0.1)',  text: MUTED,     label: 'Upcoming' },
+  pending:  { bg: 'rgba(0,0,0,0.12)',  text: ACCENT,      label: 'Pending' },
+  upcoming: { bg: 'rgba(107,114,128,0.1)',  text: MUTED,     label: 'Upcoming' },
 };
 
 const fmt = (n: number) =>
@@ -74,28 +74,19 @@ export default function PortalPayments() {
   const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   const [loading, setLoading]         = useState(true);
 
-  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
+  }, [client, loaded, navigate]);
 
   useEffect(() => {
     if (!client) return;
     (async () => {
       setLoading(true);
-      // Fetch by portal_client_id FK first, fall back to email match
-      const { data: byId } = await (supabase as any)
-        .from('invoices')
-        .select('*')
-        .eq('portal_client_id', client.id)
-        .order('due_date', { ascending: true });
-      if (byId && byId.length > 0) {
-        setInvoices(byId);
-      } else {
-        const { data: byEmail } = await (supabase as any)
-          .from('invoices')
-          .select('*')
-          .eq('client_email', client.email)
-          .order('due_date', { ascending: true });
-        setInvoices(byEmail ?? []);
-      }
+      const { data } = await (supabase as any)
+        .rpc('get_portal_invoices');
+      setInvoices(data ?? []);
 
       // Change orders — graceful fallback if table doesn't exist yet
       try {
@@ -111,7 +102,7 @@ export default function PortalPayments() {
     })();
   }, [client?.id, client?.email]);
 
-  if (!client) return null;
+  if (!client || (client.status && client.status !== 'approved')) return null;
 
   const totalContract = invoices.reduce((s, inv) => s + invoiceAmount(inv), 0);
   const paidToDate    = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + invoiceAmount(i), 0);
@@ -120,53 +111,43 @@ export default function PortalPayments() {
 
   const hasInvoices = invoices.length > 0;
 
-  const SBG = '#0D0A06';
-
   return (
     <PortalLayout>
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* ── Hero header ── */}
-        <div style={{ backgroundColor: SBG, borderBottom: '1px solid rgba(157,126,63,0.1)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{
-            position: 'absolute', inset: 0, pointerEvents: 'none',
-            backgroundImage: 'radial-gradient(rgba(157,126,63,0.05) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-          }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: GOLD }} />
-          <div className="px-5 sm:px-8 md:px-10 pt-7 pb-6">
-            <div className="text-[7px] uppercase tracking-[0.48em] font-bold mb-4" style={{ color: GOLD }}>Finance</div>
-            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(30px, 5vw, 48px)', color: WHITE, lineHeight: 1.03 }}>
-              Payments & Invoices
-            </div>
-            {hasInvoices && !loading && (
-              <div className="mt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 18 }}>
-                {/* Payment progress bar */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[7px] uppercase tracking-[0.3em] font-bold" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    Payment Progress
-                  </span>
-                  <span className="text-[10px] font-bold" style={{ color: GOLDF }}>{paidPct}%</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }}>
-                  <motion.div className="h-full" style={{ backgroundColor: GOLD }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${paidPct}%` }}
-                    transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.25 }}
-                  />
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <TrendingUp className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.2)' }} strokeWidth={1.5} />
-                  <span className="text-[9px] font-light" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                    {fmt(paidToDate)} paid of {fmt(totalContract)}
-                  </span>
-                </div>
-              </div>
-            )}
+        {/* ── Header ── */}
+        <div className="px-5 sm:px-8 md:px-10 pt-8 sm:pt-10 pb-6" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <div className="text-[9px] uppercase tracking-[0.4em] font-bold mb-3" style={{ color: MUTED }}>Finance</div>
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 5vw, 46px)', color: DARK, lineHeight: 1.05 }}>
+            Payments & Invoices
           </div>
+          {hasInvoices && !loading && (
+            <div className="mt-5 pt-4 max-w-md" style={{ borderTop: `1px solid ${BORDER}` }}>
+              {/* Payment progress bar */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] uppercase tracking-[0.3em] font-bold" style={{ color: MUTED }}>
+                  Payment Progress
+                </span>
+                <span className="text-[10px] font-bold" style={{ color: ACCENT }}>{paidPct}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+                <motion.div className="h-full rounded-full" style={{ backgroundColor: ACCENT }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${paidPct}%` }}
+                  transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.25 }}
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <TrendingUp className="w-3 h-3" style={{ color: MUTED }} strokeWidth={1.5} />
+                <span className="text-[9px] font-light" style={{ color: MUTED }}>
+                  {fmt(paidToDate)} paid of {fmt(totalContract)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-5 sm:px-8 md:px-10 py-6 sm:py-8 max-w-5xl">
@@ -184,10 +165,10 @@ export default function PortalPayments() {
               style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}
             >
               <div
-                className="w-14 h-14 flex items-center justify-center mb-2"
-                style={{ backgroundColor: 'rgba(157,126,63,0.06)', border: `1px solid rgba(157,126,63,0.18)` }}
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-2"
+                style={{ backgroundColor: 'rgba(0,0,0,0.06)', border: `1px solid rgba(0,0,0,0.18)` }}
               >
-                <DollarSign className="w-6 h-6" style={{ color: GOLDF }} strokeWidth={1} />
+                <DollarSign className="w-6 h-6" style={{ color: ACCENT_SOFT }} strokeWidth={1} />
               </div>
               <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 22, color: DARK }}>
                 No invoices issued yet.
@@ -203,7 +184,7 @@ export default function PortalPayments() {
               style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}
             >
               <div className="flex-1">
-                <div className="text-[9px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>
+                <div className="text-[9px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: ACCENT }}>
                   Questions About Payments?
                 </div>
                 <p className="text-[13px] font-light" style={{ color: MUTED }}>
@@ -214,7 +195,7 @@ export default function PortalPayments() {
                 <a
                   href={`tel:${BUILDER.phone.replace(/\D/g,'')}`}
                   className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-bold px-5 py-3 transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: GOLD, color: CREAM }}
+                  style={{ backgroundColor: ACCENT, color: CREAM }}
                 >
                   <Phone className="w-3 h-3" strokeWidth={2} />
                   {BUILDER.phone}
@@ -223,7 +204,7 @@ export default function PortalPayments() {
                   href={`mailto:${BUILDER.email}`}
                   className="flex items-center gap-2 text-[9px] uppercase tracking-[0.22em] font-bold px-5 py-3 transition-all"
                   style={{ border: `1px solid ${BORDER}`, color: MUTED }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = GOLD; (e.currentTarget as HTMLElement).style.color = GOLD; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = ACCENT; (e.currentTarget as HTMLElement).style.color = ACCENT; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = BORDER; (e.currentTarget as HTMLElement).style.color = MUTED; }}
                 >
                   <Mail className="w-3 h-3" strokeWidth={2} />
@@ -239,7 +220,7 @@ export default function PortalPayments() {
               {[
                 {
                   label: 'Total Contract Value', value: fmt(totalContract), sub: null,
-                  Icon: DollarSign, iconBg: 'rgba(26,20,16,0.06)', iconColor: MUTED, valueColor: DARK,
+                  Icon: DollarSign, iconBg: 'rgba(17,24,39,0.06)', iconColor: MUTED, valueColor: DARK,
                 },
                 {
                   label: 'Paid to Date', value: fmt(paidToDate), sub: `${paidPct}% of total`,
@@ -247,17 +228,17 @@ export default function PortalPayments() {
                 },
                 {
                   label: 'Balance Remaining', value: fmt(balance), sub: null,
-                  Icon: Clock, iconBg: 'rgba(157,126,63,0.08)', iconColor: GOLDF, valueColor: DARK,
+                  Icon: Clock, iconBg: 'rgba(0,0,0,0.08)', iconColor: ACCENT_SOFT, valueColor: DARK,
                 },
               ].map(tile => {
                 const Icon = tile.Icon;
                 return (
-                  <div key={tile.label} className="p-6" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
+                  <div key={tile.label} className="p-6 rounded-2xl" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
                     <div className="flex items-start justify-between mb-4">
                       <div className="text-[9px] uppercase tracking-[0.32em] font-bold" style={{ color: MUTED }}>
                         {tile.label}
                       </div>
-                      <div className="w-7 h-7 flex items-center justify-center shrink-0" style={{ backgroundColor: tile.iconBg }}>
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: tile.iconBg }}>
                         <Icon className="w-3 h-3" style={{ color: tile.iconColor }} strokeWidth={1.5} />
                       </div>
                     </div>
@@ -273,9 +254,9 @@ export default function PortalPayments() {
             </div>
 
             {/* ── Invoice table ── */}
-            <div className="mb-8" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
+            <div className="mb-8 rounded-2xl overflow-hidden" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
               <div className="px-7 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}>
-                <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: GOLD }}>
+                <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: ACCENT }}>
                   Invoices
                 </div>
               </div>
@@ -350,9 +331,9 @@ export default function PortalPayments() {
             </div>
             {/* ── Change Orders ── */}
             {changeOrders.length > 0 && (
-              <div className="mb-8" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
+              <div className="mb-8 rounded-2xl overflow-hidden" style={{ backgroundColor: WHITE, border: `1px solid ${BORDER}` }}>
                 <div className="px-7 py-5 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
-                  <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: GOLD }}>Change Orders</div>
+                  <div className="text-[9px] uppercase tracking-[0.44em] font-bold" style={{ color: ACCENT }}>Change Orders</div>
                   {changeOrders.some(co => co.status === 'pending') && (
                     <span className="text-[7px] uppercase tracking-[0.2em] font-bold px-2 py-1"
                       style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
@@ -365,7 +346,7 @@ export default function PortalPayments() {
                     pending:  { bg: 'rgba(245,158,11,0.1)',  text: '#f59e0b', label: 'Awaiting Approval' },
                     approved: { bg: 'rgba(16,185,129,0.1)',  text: '#10b981', label: 'Approved' },
                     rejected: { bg: 'rgba(239,68,68,0.1)',   text: '#ef4444', label: 'Declined' },
-                  }[co.status] ?? { bg: 'rgba(26,20,16,0.06)', text: MUTED, label: co.status };
+                  }[co.status] ?? { bg: 'rgba(17,24,39,0.06)', text: MUTED, label: co.status };
                   return (
                     <div key={co.id} className="px-7 py-5"
                       style={{ borderBottom: i < changeOrders.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
@@ -409,18 +390,18 @@ export default function PortalPayments() {
           {/* ── Footer note ── */}
           <div
             className="mt-8 flex items-start gap-3 px-5 py-4"
-            style={{ backgroundColor: 'rgba(26,20,16,0.025)', border: `1px solid ${BORDER}` }}
+            style={{ backgroundColor: 'rgba(17,24,39,0.025)', border: `1px solid ${BORDER}` }}
           >
-            <div className="w-1 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: GOLD }} />
+            <div className="w-1 h-1 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: ACCENT }} />
             <p className="text-[11px] font-light leading-relaxed" style={{ color: MUTED }}>
               All payments processed via secure bank transfer.{' '}
               <span style={{ color: DARK, fontWeight: 500 }}>Contact {BUILDER.name}</span> for payment
               instructions —{' '}
-              <a href={`tel:${BUILDER.phone.replace(/\D/g,'')}`} className="transition-opacity hover:opacity-70" style={{ color: GOLD }}>
+              <a href={`tel:${BUILDER.phone.replace(/\D/g,'')}`} className="transition-opacity hover:opacity-70" style={{ color: ACCENT }}>
                 {BUILDER.phone}
               </a>{' '}
               or{' '}
-              <a href={`mailto:${BUILDER.email}`} className="transition-opacity hover:opacity-70" style={{ color: GOLD }}>
+              <a href={`mailto:${BUILDER.email}`} className="transition-opacity hover:opacity-70" style={{ color: ACCENT }}>
                 {BUILDER.email}
               </a>
             </p>

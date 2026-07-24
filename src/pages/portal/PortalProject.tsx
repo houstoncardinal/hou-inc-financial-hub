@@ -9,14 +9,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import PortalLayout from '@/components/PortalLayout';
 import { usePortal, ProjectBrief } from '@/hooks/usePortal';
 
-const SIDEBAR = '#0F0D0B';
-const DARK    = '#1C1814';
-const CREAM   = '#FAF7F2';
-const GOLD    = '#9D7E3F';
-const GOLDF   = '#C4A76B';
-const BORDER  = '#DDD4C4';
-const MUTED   = '#8A7A6A';
+const DARK    = '#111827';
+const CREAM   = '#F8FAFC';
+const ACCENT      = '#000000';
+const ACCENT_SOFT = '#404040';
+const BORDER  = '#E5E7EB';
+const MUTED   = '#6B7280';
 const SERIF   = "'Cormorant Garamond', Georgia, serif";
+
+/* Bento card recipe — same recipe as the rest of the (now light) portal. */
+const PF_CSS = `
+.pfp-card{position:relative;background:#fff;border-radius:20px;border:1px solid ${BORDER};box-shadow:0 1px 3px rgba(17,24,39,.04),0 8px 24px rgba(17,24,39,.05);transition:box-shadow .3s cubic-bezier(.16,1,.3,1),border-color .2s ease;}
+.pfp-card:hover{border-color:rgba(0,0,0,.35);box-shadow:0 6px 18px rgba(17,24,39,.05),0 18px 44px rgba(17,24,39,.08);}
+.pfp-tile{position:relative;border-radius:14px;background:#fff;border:1px solid ${BORDER};transition:all .2s cubic-bezier(.16,1,.3,1);}
+.pfp-tile:hover{border-color:rgba(0,0,0,.4);transform:translateY(-1px);box-shadow:0 4px 14px rgba(17,24,39,.06);}
+.pfp-tile.sel{background:rgba(0,0,0,.06);border-color:${ACCENT};box-shadow:0 0 0 1px rgba(0,0,0,.22);}
+`;
 
 const PROJECT_TYPES = [
   { id: 'Custom Estate',       label: 'Custom Estate',       sub: 'Luxury single-family, 5,000+ sq ft',           Icon: Building2 },
@@ -61,6 +69,7 @@ export default function PortalProject() {
   useEffect(() => {
     if (!loaded) return;
     if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
   }, [client, loaded, navigate]);
 
   const briefs = getBriefs();
@@ -98,7 +107,7 @@ export default function PortalProject() {
     setBrief(viewedIsDraft && viewedBrief ? viewedBrief : EMPTY_BRIEF);
   }, [viewId, isNew, !!viewedBrief]);
 
-  if (!loaded || !client) return null;
+  if (!loaded || !client || (client.status && client.status !== 'approved')) return null;
 
   const set = (k: keyof ProjectBrief, v: string | string[]) =>
     setBrief(b => ({ ...b, [k]: v }));
@@ -135,18 +144,19 @@ export default function PortalProject() {
   if (mode === 'list') {
     return (
       <PortalLayout>
-        <div className="px-5 sm:px-10 py-8 md:py-12 max-w-3xl mx-auto">
+        <style>{PF_CSS}</style>
+        <div className="px-5 sm:px-10 py-8 md:py-12 max-w-3xl mx-auto" style={{ backgroundColor: CREAM }}>
           <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
             <div>
-              <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>Client Portal</div>
+              <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: ACCENT }}>Client Portal</div>
               <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(26px,4vw,44px)', color: DARK, lineHeight: 1.05 }}>
                 Project Briefs
               </div>
             </div>
             <Link
               to="/portal/project?new=1"
-              className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-bold px-5 py-3 transition-opacity hover:opacity-90"
-              style={{ backgroundColor: DARK, color: '#FFFFFF' }}
+              className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-bold px-5 py-3.5 rounded-full transition-opacity hover:opacity-90"
+              style={{ backgroundColor: ACCENT, color: '#FFFFFF' }}
             >
               <Plus className="w-3.5 h-3.5" strokeWidth={2.5} /> Submit New Project Brief
             </Link>
@@ -163,12 +173,11 @@ export default function PortalProject() {
                 <Link
                   key={b.id}
                   to={`/portal/project?id=${b.id}`}
-                  className="flex items-center justify-between gap-4 px-6 py-5 transition-colors hover:bg-black/[0.02]"
-                  style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}
+                  className="pfp-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-5 sm:px-6 py-5"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.24)` }}>
-                      <FileText className="w-4 h-4" style={{ color: GOLD }} strokeWidth={1.5} />
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(0,0,0,0.08)', border: `1px solid rgba(0,0,0,0.24)` }}>
+                      <FileText className="w-4 h-4" style={{ color: ACCENT }} strokeWidth={1.5} />
                     </div>
                     <div className="min-w-0">
                       <div className="text-[13px] font-semibold truncate" style={{ color: DARK }}>{b.type || 'Untitled Project'}</div>
@@ -177,7 +186,7 @@ export default function PortalProject() {
                       </div>
                     </div>
                   </div>
-                  <span className="text-[9px] uppercase tracking-[0.18em] font-bold shrink-0" style={{ color: b.status === 'draft' ? MUTED : GOLD }}>
+                  <span className="self-start sm:self-auto text-[9px] uppercase tracking-[0.18em] font-bold shrink-0 px-2.5 py-1 rounded-full ml-[52px] sm:ml-0" style={{ color: b.status === 'draft' ? MUTED : ACCENT, backgroundColor: b.status === 'draft' ? 'rgba(107,114,128,0.08)' : 'rgba(0,0,0,0.1)' }}>
                     {label}
                   </span>
                 </Link>
@@ -194,17 +203,18 @@ export default function PortalProject() {
     const display = done ? brief : viewedBrief;
     return (
       <PortalLayout>
-        <div className="min-h-[calc(100dvh-56px)] flex items-center justify-center p-6">
+        <style>{PF_CSS}</style>
+        <div className="min-h-[calc(100dvh-56px)] flex items-center justify-center p-6" style={{ backgroundColor: CREAM }}>
           <motion.div
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="w-full max-w-2xl"
           >
-            <div className="p-10 md:p-14"
-              style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, boxShadow: '0 4px 32px rgba(28,24,20,0.06)' }}>
-              <div className="w-14 h-14 flex items-center justify-center mx-auto mb-8"
-                style={{ backgroundColor: 'rgba(157,126,63,0.1)', border: `1px solid rgba(157,126,63,0.3)` }}>
-                <CheckCircle className="w-6 h-6" style={{ color: GOLD }} strokeWidth={1.5} />
+            <div className="pfp-card p-10 md:p-14" style={{ overflow: 'hidden' }}>
+              <div style={{ height: 3, background: `linear-gradient(90deg, ${ACCENT} 0%, ${ACCENT_SOFT} 100%)`, margin: '-40px -56px 40px' }} />
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-8"
+                style={{ backgroundColor: 'rgba(0,0,0,0.1)', border: `1px solid rgba(0,0,0,0.3)` }}>
+                <CheckCircle className="w-6 h-6" style={{ color: ACCENT }} strokeWidth={1.5} />
               </div>
               <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '2.5rem', color: DARK, lineHeight: 1.1, textAlign: 'center', marginBottom: '0.75rem' }}>
                 {done ? 'Brief Submitted' : 'Brief on File'}
@@ -215,7 +225,7 @@ export default function PortalProject() {
                   : 'Your brief is already on file and under review. Your builder will reach out shortly.'}
               </p>
 
-              <div className="mb-10" style={{ border: `1px solid ${BORDER}` }}>
+              <div className="mb-10 rounded-2xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
                 {[
                   { label: 'Project Type', val: display?.type },
                   { label: 'Location',     val: display?.location },
@@ -223,9 +233,9 @@ export default function PortalProject() {
                   { label: 'Budget',       val: display?.budget },
                   { label: 'Timeline',     val: display?.timeline },
                   { label: 'Styles',       val: (display?.style ?? []).join(', ') },
-                ].filter(r => r.val).map((r, i) => (
+                ].filter(r => r.val).map((r, i, arr) => (
                   <div key={r.label} className="flex justify-between items-baseline px-5 py-3.5"
-                    style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : CREAM, borderBottom: `1px solid ${BORDER}` }}>
+                    style={{ backgroundColor: i % 2 === 0 ? '#FFFFFF' : CREAM, borderBottom: i < arr.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
                     <span className="text-[9px] uppercase tracking-[0.24em] font-bold" style={{ color: MUTED }}>{r.label}</span>
                     <span className="text-[12px] font-semibold" style={{ color: DARK }}>{r.val}</span>
                   </div>
@@ -235,8 +245,8 @@ export default function PortalProject() {
               <div className="flex justify-center items-center gap-4 flex-wrap">
                 <button
                   onClick={() => navigate('/portal/messages')}
-                  className="inline-flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4 transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: GOLD, color: DARK }}>
+                  className="inline-flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black px-10 py-4 rounded-full transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: ACCENT, color: '#FFFFFF' }}>
                   Message Your Builder <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </button>
                 {briefs.length > 1 && (
@@ -258,22 +268,23 @@ export default function PortalProject() {
   // ── Main wizard ───────────────────────────────────────────────────────
   return (
     <PortalLayout>
+      <style>{PF_CSS}</style>
       <div className="flex" style={{ minHeight: 'calc(100dvh - 56px)' }}>
 
         {/* ── Left sidebar (lg+) ── */}
-        <div className="hidden lg:flex flex-col w-72 xl:w-80 shrink-0"
-          style={{ backgroundColor: SIDEBAR }}>
+        <div className="hidden lg:flex flex-col w-72 xl:w-80 shrink-0 bg-white"
+          style={{ borderRight: `1px solid ${BORDER}` }}>
 
           {/* Brand */}
-          <div className="px-8 pt-10 pb-7" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-1.5" style={{ color: GOLD }}>HOU INC</div>
-            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '1.1rem', color: 'rgba(255,255,255,0.82)', lineHeight: 1.3 }}>
+          <div className="px-8 pt-10 pb-7" style={{ borderBottom: `1px solid ${BORDER}` }}>
+            <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-1.5" style={{ color: ACCENT }}>HOU INC</div>
+            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: '1.1rem', color: DARK, lineHeight: 1.3 }}>
               Project Brief
             </div>
           </div>
 
           {/* Step list */}
-          <div className="flex-1 px-5 py-7 space-y-0.5">
+          <div className="flex-1 px-5 py-7 space-y-1">
             {STEPS.map((s, i) => {
               const isActive = i === step;
               const isDone   = i < step;
@@ -282,27 +293,27 @@ export default function PortalProject() {
                   key={s.label}
                   onClick={() => { if (isDone) { setDirection(-1); setStep(i); } }}
                   disabled={!isDone && !isActive}
-                  className="w-full text-left px-4 py-3.5 transition-all duration-200 flex items-start gap-3.5"
+                  className="w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 flex items-start gap-3.5"
                   style={{
-                    backgroundColor: isActive ? 'rgba(157,126,63,0.1)' : 'transparent',
-                    borderLeft: `2px solid ${isActive ? GOLD : isDone ? 'rgba(157,126,63,0.38)' : 'rgba(255,255,255,0.07)'}`,
+                    backgroundColor: isActive ? 'rgba(0,0,0,0.08)' : 'transparent',
+                    borderLeft: `2px solid ${isActive ? ACCENT : isDone ? 'rgba(0,0,0,0.38)' : BORDER}`,
                     cursor: isDone ? 'pointer' : 'default',
                   }}>
-                  <div className="w-5 h-5 flex items-center justify-center shrink-0 mt-0.5"
+                  <div className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                     style={{
-                      backgroundColor: isDone ? GOLD : isActive ? 'rgba(157,126,63,0.22)' : 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${isDone ? GOLD : isActive ? GOLD : 'rgba(255,255,255,0.12)'}`,
+                      backgroundColor: isDone ? ACCENT : isActive ? 'rgba(0,0,0,0.14)' : '#F9FAFB',
+                      border: `1px solid ${isDone ? ACCENT : isActive ? ACCENT : BORDER}`,
                     }}>
                     {isDone
-                      ? <span className="text-[7px] font-black" style={{ color: DARK }}>✓</span>
-                      : <span className="text-[8px] font-bold" style={{ color: isActive ? GOLDF : 'rgba(255,255,255,0.22)' }}>{i + 1}</span>
+                      ? <span className="text-[7px] font-black text-white">✓</span>
+                      : <span className="text-[8px] font-bold" style={{ color: isActive ? ACCENT : '#9CA3AF' }}>{i + 1}</span>
                     }
                   </div>
                   <div>
-                    <div className="text-[11px] font-bold" style={{ color: isActive ? GOLDF : isDone ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.26)' }}>
+                    <div className="text-[11px] font-bold" style={{ color: isActive ? ACCENT : isDone ? DARK : '#9CA3AF' }}>
                       {s.label}
                     </div>
-                    <div className="text-[9px] mt-0.5 font-light" style={{ color: isActive ? 'rgba(196,167,107,0.6)' : 'rgba(255,255,255,0.18)' }}>
+                    <div className="text-[9px] mt-0.5 font-light" style={{ color: isActive ? 'rgba(0,0,0,0.7)' : '#D1D5DB' }}>
                       {s.desc}
                     </div>
                   </div>
@@ -312,16 +323,16 @@ export default function PortalProject() {
           </div>
 
           {/* Progress */}
-          <div className="px-8 py-7" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="px-8 py-7" style={{ borderTop: `1px solid ${BORDER}` }}>
             <div className="flex justify-between text-[8px] uppercase tracking-[0.2em] font-bold mb-2.5"
-              style={{ color: 'rgba(255,255,255,0.22)' }}>
+              style={{ color: '#9CA3AF' }}>
               <span>Progress</span>
-              <span style={{ color: GOLD }}>{Math.round((step / (STEPS.length - 1)) * 100)}%</span>
+              <span style={{ color: ACCENT }}>{Math.round((step / (STEPS.length - 1)) * 100)}%</span>
             </div>
-            <div className="h-px w-full" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
-              <motion.div className="h-full" style={{ backgroundColor: GOLD }}
+            <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+              <motion.div className="h-full" style={{ backgroundColor: ACCENT }}
                 animate={{ width: `${(step / (STEPS.length - 1)) * 100}%` }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} />
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} />
             </div>
           </div>
         </div>
@@ -336,14 +347,14 @@ export default function PortalProject() {
               <div className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: MUTED }}>
                 Step {step + 1} of {STEPS.length}
               </div>
-              <div className="text-[8px] uppercase tracking-[0.2em] font-bold" style={{ color: GOLD }}>
+              <div className="text-[8px] uppercase tracking-[0.2em] font-bold" style={{ color: ACCENT }}>
                 {STEPS[step].label}
               </div>
             </div>
-            <div className="h-px w-full" style={{ backgroundColor: BORDER }}>
-              <motion.div className="h-full" style={{ backgroundColor: GOLD }}
+            <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+              <motion.div className="h-full" style={{ backgroundColor: ACCENT }}
                 animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} />
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }} />
             </div>
           </div>
 
@@ -363,7 +374,7 @@ export default function PortalProject() {
                 {/* ── Step 0: Project Type ── */}
                 {step === 0 && (
                   <div>
-                    <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+                    <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
                       Step 1 — Project Type
                     </div>
                     <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: DARK, lineHeight: 1.1, marginBottom: '0.5rem' }}>
@@ -379,21 +390,21 @@ export default function PortalProject() {
                           <button
                             key={pt.id}
                             onClick={() => set('type', pt.id)}
-                            className="group text-left p-6 transition-all duration-200 flex items-start gap-4"
+                            className="pfp-tile group text-left p-6 transition-all duration-200 flex items-start gap-4"
                             style={{
-                              backgroundColor: sel ? 'rgba(157,126,63,0.06)' : '#FFFFFF',
-                              border: `1px solid ${sel ? GOLD : BORDER}`,
-                              boxShadow: sel ? '0 0 0 1px rgba(157,126,63,0.22)' : 'none',
+                              backgroundColor: sel ? 'rgba(0,0,0,0.06)' : '#FFFFFF',
+                              border: `1px solid ${sel ? ACCENT : BORDER}`,
+                              boxShadow: sel ? '0 0 0 1px rgba(0,0,0,0.22)' : 'none',
                             }}>
-                            <div className="w-10 h-10 flex items-center justify-center shrink-0"
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                               style={{
-                                backgroundColor: sel ? 'rgba(157,126,63,0.1)' : 'rgba(28,24,20,0.04)',
-                                border: `1px solid ${sel ? 'rgba(157,126,63,0.28)' : BORDER}`,
+                                backgroundColor: sel ? 'rgba(0,0,0,0.1)' : 'rgba(17,24,39,0.04)',
+                                border: `1px solid ${sel ? 'rgba(0,0,0,0.28)' : BORDER}`,
                               }}>
-                              <pt.Icon className="w-4 h-4" style={{ color: sel ? GOLD : MUTED }} strokeWidth={1.5} />
+                              <pt.Icon className="w-4 h-4" style={{ color: sel ? ACCENT : MUTED }} strokeWidth={1.5} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-[13px] font-bold mb-1" style={{ color: sel ? GOLD : DARK }}>{pt.label}</div>
+                              <div className="text-[13px] font-bold mb-1" style={{ color: sel ? ACCENT : DARK }}>{pt.label}</div>
                               <div className="text-[10px] font-light leading-relaxed" style={{ color: MUTED }}>{pt.sub}</div>
                             </div>
                           </button>
@@ -407,7 +418,7 @@ export default function PortalProject() {
                 {step === 1 && (
                   <div className="space-y-9">
                     <div>
-                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
                         Step 2 — Scale & Location
                       </div>
                       <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: DARK, lineHeight: 1.1, marginBottom: '0.5rem' }}>
@@ -432,7 +443,7 @@ export default function PortalProject() {
                           backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, color: DARK,
                           transition: 'border-color 0.15s',
                         }}
-                        focusBorderColor={GOLD}
+                        focusBorderColor={ACCENT}
                         defaultBorderColor={BORDER}
                       />
                     </div>
@@ -446,12 +457,12 @@ export default function PortalProject() {
                           const sel = brief.sqft === o;
                           return (
                             <button key={o} onClick={() => set('sqft', o)}
-                              className="py-4 px-3 text-[11px] font-semibold transition-all"
+                              className="pfp-tile py-4 px-3 text-[11px] font-semibold transition-all"
                               style={{
-                                border: `1px solid ${sel ? GOLD : BORDER}`,
-                                backgroundColor: sel ? 'rgba(157,126,63,0.07)' : '#FFFFFF',
-                                color: sel ? GOLD : 'rgba(28,24,20,0.55)',
-                                boxShadow: sel ? '0 0 0 1px rgba(157,126,63,0.2)' : 'none',
+                                border: `1px solid ${sel ? ACCENT : BORDER}`,
+                                backgroundColor: sel ? 'rgba(0,0,0,0.07)' : '#FFFFFF',
+                                color: sel ? ACCENT : 'rgba(17,24,39,0.55)',
+                                boxShadow: sel ? '0 0 0 1px rgba(0,0,0,0.2)' : 'none',
                               }}>
                               {o}
                             </button>
@@ -480,7 +491,7 @@ export default function PortalProject() {
                               color: brief[key] ? DARK : MUTED,
                               transition: 'border-color 0.15s',
                             }}
-                            onFocus={e => (e.target.style.borderColor = GOLD)}
+                            onFocus={e => (e.target.style.borderColor = ACCENT)}
                             onBlur={e => (e.target.style.borderColor = BORDER)}>
                             <option value="">—</option>
                             {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -495,7 +506,7 @@ export default function PortalProject() {
                 {step === 2 && (
                   <div className="space-y-9">
                     <div>
-                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
                         Step 3 — Style & Vision
                       </div>
                       <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: DARK, lineHeight: 1.1, marginBottom: '0.5rem' }}>
@@ -515,14 +526,14 @@ export default function PortalProject() {
                           const sel = brief.style.includes(s);
                           return (
                             <button key={s} onClick={() => toggleStyle(s)}
-                              className="flex items-center gap-3.5 py-4 px-5 text-[12px] font-semibold text-left transition-all"
+                              className="pfp-tile flex items-center gap-3.5 py-4 px-5 text-[12px] font-semibold text-left transition-all"
                               style={{
-                                border: `1px solid ${sel ? GOLD : BORDER}`,
-                                backgroundColor: sel ? 'rgba(157,126,63,0.06)' : '#FFFFFF',
-                                color: sel ? GOLD : 'rgba(28,24,20,0.6)',
+                                border: `1px solid ${sel ? ACCENT : BORDER}`,
+                                backgroundColor: sel ? 'rgba(0,0,0,0.06)' : '#FFFFFF',
+                                color: sel ? ACCENT : 'rgba(17,24,39,0.6)',
                               }}>
-                              <div className="w-4 h-4 rounded-sm border flex items-center justify-center shrink-0"
-                                style={{ borderColor: sel ? GOLD : BORDER, backgroundColor: sel ? GOLD : 'transparent' }}>
+                              <div className="w-4 h-4 rounded-md border flex items-center justify-center shrink-0"
+                                style={{ borderColor: sel ? ACCENT : BORDER, backgroundColor: sel ? ACCENT : 'transparent' }}>
                                 {sel && <span className="text-[8px] font-black" style={{ color: DARK }}>✓</span>}
                               </div>
                               {s}
@@ -547,7 +558,7 @@ export default function PortalProject() {
                           backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, color: DARK,
                           transition: 'border-color 0.15s',
                         }}
-                        onFocus={e => (e.target.style.borderColor = GOLD)}
+                        onFocus={e => (e.target.style.borderColor = ACCENT)}
                         onBlur={e => (e.target.style.borderColor = BORDER)}
                       />
                     </div>
@@ -558,7 +569,7 @@ export default function PortalProject() {
                 {step === 3 && (
                   <div className="space-y-9">
                     <div>
-                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+                      <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
                         Step 4 — Budget & Timeline
                       </div>
                       <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: DARK, lineHeight: 1.1, marginBottom: '0.5rem' }}>
@@ -578,12 +589,12 @@ export default function PortalProject() {
                           const sel = brief.budget === o;
                           return (
                             <button key={o} onClick={() => set('budget', o)}
-                              className="py-4 px-3 text-[11px] font-semibold transition-all"
+                              className="pfp-tile py-4 px-3 text-[11px] font-semibold transition-all"
                               style={{
-                                border: `1px solid ${sel ? GOLD : BORDER}`,
-                                backgroundColor: sel ? 'rgba(157,126,63,0.07)' : '#FFFFFF',
-                                color: sel ? GOLD : 'rgba(28,24,20,0.55)',
-                                boxShadow: sel ? '0 0 0 1px rgba(157,126,63,0.2)' : 'none',
+                                border: `1px solid ${sel ? ACCENT : BORDER}`,
+                                backgroundColor: sel ? 'rgba(0,0,0,0.07)' : '#FFFFFF',
+                                color: sel ? ACCENT : 'rgba(17,24,39,0.55)',
+                                boxShadow: sel ? '0 0 0 1px rgba(0,0,0,0.2)' : 'none',
                               }}>
                               {o}
                             </button>
@@ -601,16 +612,16 @@ export default function PortalProject() {
                           const sel = brief.timeline === o;
                           return (
                             <button key={o} onClick={() => set('timeline', o)}
-                              className="w-full text-left flex items-center gap-4 py-4 px-5 transition-all"
+                              className="pfp-tile w-full text-left flex items-center gap-4 py-4 px-5 transition-all"
                               style={{
-                                border: `1px solid ${sel ? GOLD : BORDER}`,
-                                backgroundColor: sel ? 'rgba(157,126,63,0.06)' : '#FFFFFF',
+                                border: `1px solid ${sel ? ACCENT : BORDER}`,
+                                backgroundColor: sel ? 'rgba(0,0,0,0.06)' : '#FFFFFF',
                               }}>
                               <div className="w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                                style={{ borderColor: sel ? GOLD : BORDER, backgroundColor: sel ? 'rgba(157,126,63,0.12)' : 'transparent' }}>
-                                {sel && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: GOLD }} />}
+                                style={{ borderColor: sel ? ACCENT : BORDER, backgroundColor: sel ? 'rgba(0,0,0,0.12)' : 'transparent' }}>
+                                {sel && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ACCENT }} />}
                               </div>
-                              <span className="text-[12px] font-semibold" style={{ color: sel ? GOLD : 'rgba(28,24,20,0.65)' }}>{o}</span>
+                              <span className="text-[12px] font-semibold" style={{ color: sel ? ACCENT : 'rgba(17,24,39,0.65)' }}>{o}</span>
                             </button>
                           );
                         })}
@@ -622,7 +633,7 @@ export default function PortalProject() {
                 {/* ── Step 4: Review ── */}
                 {step === 4 && (
                   <div>
-                    <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+                    <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
                       Step 5 — Review
                     </div>
                     <h2 style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 44px)', color: DARK, lineHeight: 1.1, marginBottom: '0.5rem' }}>
@@ -632,7 +643,7 @@ export default function PortalProject() {
                       Review your brief below. Once submitted, your builder will receive it immediately.
                     </p>
 
-                    <div style={{ border: `1px solid ${BORDER}` }}>
+                    <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
                       {[
                         { label: 'Project Type', val: brief.type },
                         { label: 'Location',     val: brief.location },
@@ -648,7 +659,7 @@ export default function PortalProject() {
                         <div key={r.label} className="flex gap-5 px-6 py-4"
                           style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: i % 2 === 0 ? '#FFFFFF' : CREAM }}>
                           <div className="w-32 shrink-0 text-[9px] uppercase tracking-[0.22em] font-bold pt-0.5"
-                            style={{ color: 'rgba(28,24,20,0.36)' }}>
+                            style={{ color: 'rgba(17,24,39,0.36)' }}>
                             {r.label}
                           </div>
                           <div className="text-[12px] font-semibold flex-1 leading-relaxed" style={{ color: DARK }}>
@@ -670,22 +681,22 @@ export default function PortalProject() {
             <div className="flex items-center justify-between max-w-3xl">
               {step > 0 ? (
                 <button onClick={handleBack}
-                  className="flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-bold py-3.5 px-6 transition-opacity hover:opacity-70"
-                  style={{ border: `1px solid ${BORDER}`, color: 'rgba(28,24,20,0.5)' }}>
+                  className="flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-bold py-3.5 px-6 rounded-full transition-all hover:border-[rgba(0,0,0,0.4)]"
+                  style={{ border: `1px solid ${BORDER}`, color: MUTED }}>
                   <ChevronLeft className="w-3.5 h-3.5" strokeWidth={2} /> Back
                 </button>
               ) : <div />}
 
               {step < STEPS.length - 1 ? (
                 <button onClick={handleNext} disabled={!canNext()}
-                  className="flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black py-3.5 px-8 transition-opacity hover:opacity-90 disabled:opacity-35"
-                  style={{ backgroundColor: GOLD, color: DARK }}>
+                  className="flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black py-3.5 px-8 rounded-full transition-opacity hover:opacity-90 disabled:opacity-35"
+                  style={{ backgroundColor: ACCENT, color: '#FFFFFF' }}>
                   Continue <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </button>
               ) : (
                 <button onClick={handleSubmit}
-                  className="flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black py-3.5 px-8 transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: DARK, color: CREAM }}>
+                  className="flex items-center gap-2.5 text-[10px] uppercase tracking-[0.28em] font-black py-3.5 px-8 rounded-full transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: DARK, color: '#FFFFFF' }}>
                   Submit to Builder <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </button>
               )}

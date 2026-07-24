@@ -318,16 +318,16 @@ export default function Reports() {
     items.push(
       { id: 'ledger', title: 'General Ledger', category: 'Financial', formats: ['pdf', 'xlsx'], ready: true,
         description: 'Every income, expense, and check entry in one unified ledger.',
-        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateLedgerReport(income, expenses, checks), `hou-ledger-${stamp()}.pdf`) : R.downloadLedgerExcel(income, expenses, checks), 'General ledger') },
+        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateLedgerReport(income, expenses, checks, undefined, undefined, entityLabel), `hou-ledger-${stamp()}.pdf`) : R.downloadLedgerExcel(income, expenses, checks), 'General ledger') },
       { id: 'income', title: 'Income Report', category: 'Financial', formats: ['pdf', 'xlsx'], ready: true,
         description: 'All recorded income, sorted by date, with source and project detail.',
-        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateTransactionReport(income, 'income'), `hou-income-${stamp()}.pdf`) : R.downloadTransactionExcel(income, 'income'), 'Income report') },
+        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateTransactionReport(income, 'income', undefined, entityLabel), `hou-income-${stamp()}.pdf`) : R.downloadTransactionExcel(income, 'income'), 'Income report') },
       { id: 'expense', title: 'Expense Report', category: 'Financial', formats: ['pdf', 'xlsx'], ready: true,
         description: `All recorded expenses by ${profile.terms.vendor.toLowerCase()} and category.`,
-        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateTransactionReport(expenses, 'expense'), `hou-expenses-${stamp()}.pdf`) : R.downloadTransactionExcel(expenses, 'expense'), 'Expense report') },
+        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateTransactionReport(expenses, 'expense', undefined, entityLabel), `hou-expenses-${stamp()}.pdf`) : R.downloadTransactionExcel(expenses, 'expense'), 'Expense report') },
       { id: 'checks', title: 'Check Register', category: 'Financial', formats: ['pdf', 'xlsx'], ready: true,
         description: 'Issued, cleared, and voided checks with retainage detail.',
-        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateCheckRegisterReport(checks), `hou-checks-${stamp()}.pdf`) : R.downloadCheckExcel(checks), 'Check register') },
+        run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateCheckRegisterReport(checks, undefined, entityLabel), `hou-checks-${stamp()}.pdf`) : R.downloadCheckExcel(checks), 'Check register') },
       { id: 'aging', title: 'Open AR / AP Aging', category: 'Financial', formats: ['pdf', 'xlsx'], ready: true,
         description: 'Receivables and payables aged into current / 1-30 / 31-60 / 61-90 / 90+ buckets.',
         run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateAgingReport(aging, entityLabel), `hou-aging-${stamp()}.pdf`) : R.downloadAgingExcel(aging, entityLabel), 'Aging report') },
@@ -335,7 +335,7 @@ export default function Reports() {
         description: 'Every invoice with status, terms, and payment-link availability.',
         run: fmt => dl(() => {
           const rows = (invoices as any[]).map(inv => ({ invoice_number: inv.invoice_number, client_name: inv.client_name, client_company: inv.client_company, issue_date: inv.issue_date, due_date: inv.due_date, status: inv.status, subtotal: invoiceSubtotal(inv), tax: invoiceTax(inv), total: invoiceTotal(inv) }));
-          if (fmt === 'pdf') R.savePDF(R.generateInvoicesReport(rows), `hou-invoices-${stamp()}.pdf`);
+          if (fmt === 'pdf') R.savePDF(R.generateInvoicesReport(rows, entityLabel), `hou-invoices-${stamp()}.pdf`);
           else R.downloadInvoiceExcel(rows);
         }, 'Invoice report') },
     );
@@ -372,7 +372,7 @@ export default function Reports() {
       items.push(
         { id: 'project-portfolio', title: 'Project Financial Breakdown & Profitability', category: 'Projects / Jobs', formats: ['pdf', 'xlsx'], ready: true,
           description: 'Contract value, capital deployed, collected revenue, and health per project.',
-          run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateProjectReport(enrichedProjects), `hou-projects-${stamp()}.pdf`) : R.downloadProjectExcel(enrichedProjects), 'Project portfolio report') },
+          run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateProjectReport(enrichedProjects, entityLabel), `hou-projects-${stamp()}.pdf`) : R.downloadProjectExcel(enrichedProjects), 'Project portfolio report') },
         { id: 'cost-code', title: 'Cost Code / Phase Spend', category: 'Projects / Jobs', formats: ['pdf', 'xlsx'], ready: true,
           description: 'Actual spend rolled up by cost code and construction division.',
           run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateCostCodeReport(costCodes, expenses, entityLabel), `hou-cost-codes-${stamp()}.pdf`) : R.downloadCostCodeExcel(costCodes, expenses, entityLabel), 'Cost code report') },
@@ -464,7 +464,7 @@ export default function Reports() {
           description: 'Formal invoices created directly from an install, service, or emergency job.',
           run: hgpJobInvoices.length ? () => dl(() => {
             const rows = hgpJobInvoices.map(inv => ({ invoice_number: inv.invoice_number, client_name: inv.client_name, client_company: inv.client_company, issue_date: inv.issue_date, due_date: inv.due_date, status: inv.status, subtotal: invoiceSubtotal(inv), tax: invoiceTax(inv), total: invoiceTotal(inv) }));
-            R.savePDF(R.generateInvoicesReport(rows), `hou-job-invoices-${stamp()}.pdf`);
+            R.savePDF(R.generateInvoicesReport(rows, entityLabel), `hou-job-invoices-${stamp()}.pdf`);
           }, 'Job invoice report') : undefined },
       );
     }
@@ -473,7 +473,7 @@ export default function Reports() {
     items.push({
       id: 'vendor-spend', title: `${profile.terms.vendor} Spend`, category: 'Vendors / Suppliers', formats: ['pdf', 'xlsx'], ready: true,
       description: `Total spend per ${profile.terms.vendor.toLowerCase()} across transactions and checks.`,
-      run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateVendorSpendReport(vendors, expenses, checks, profile.terms.vendor), `hou-vendor-spend-${stamp()}.pdf`) : R.downloadVendorSpendExcel(expenses, checks, profile.terms.vendor), `${profile.terms.vendor} spend report`),
+      run: fmt => dl(() => fmt === 'pdf' ? R.savePDF(R.generateVendorSpendReport(vendors, expenses, checks, profile.terms.vendor, entityLabel), `hou-vendor-spend-${stamp()}.pdf`) : R.downloadVendorSpendExcel(expenses, checks, profile.terms.vendor), `${profile.terms.vendor} spend report`),
     });
     if (entityId === 'houston-generator-pros') {
       items.push(

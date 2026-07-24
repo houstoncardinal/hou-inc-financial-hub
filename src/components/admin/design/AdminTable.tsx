@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { usePagination } from '@/hooks/usePagination';
+import { PaginationBar } from '@/components/PaginationBar';
 
 export interface AdminTableColumn {
   key: string;
@@ -8,17 +10,30 @@ export interface AdminTableColumn {
   className?: string;
 }
 
-export function AdminTable({ columns, rows, keyField = 'id', emptyText = 'Nothing here yet.', onRowClick }: {
+export function AdminTable({
+  columns, rows, keyField = 'id', emptyText = 'Nothing here yet.', onRowClick,
+  paginate = false, pageSize = 25, itemLabel = 'items', resetKey,
+}: {
   columns: AdminTableColumn[];
   rows: any[];
   keyField?: string;
   emptyText?: string;
   onRowClick?: (row: any) => void;
+  /** Opt a given table into shared client-side pagination instead of rendering every row. */
+  paginate?: boolean;
+  pageSize?: number;
+  itemLabel?: string;
+  /** Jump back to page 1 whenever this changes (e.g. a search/filter value). */
+  resetKey?: unknown;
 }) {
+  const pagination = usePagination(rows, pageSize, resetKey);
+  const visibleRows = paginate ? pagination.paged : rows;
+
   if (rows.length === 0) {
     return <div className="py-16 text-center text-[13px] text-muted-foreground">{emptyText}</div>;
   }
   return (
+    <>
     <div className="admin-table-wrap">
       <div className="hidden xl:block overflow-x-auto">
         <table className="w-full text-[12px] admin-table">
@@ -32,7 +47,7 @@ export function AdminTable({ columns, rows, keyField = 'id', emptyText = 'Nothin
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
+            {visibleRows.map((row, i) => (
               <tr
                 key={row[keyField] ?? i}
                 className={`border-b border-border last:border-b-0 pdv2-row-hover transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
@@ -50,7 +65,7 @@ export function AdminTable({ columns, rows, keyField = 'id', emptyText = 'Nothin
       </div>
 
       <div className="xl:hidden divide-y divide-border">
-        {rows.map((row, i) => {
+        {visibleRows.map((row, i) => {
           const primary = columns[0];
           const actions = columns.filter(c => !c.label.trim());
           const details = columns.slice(1).filter(c => c.label.trim());
@@ -96,5 +111,10 @@ export function AdminTable({ columns, rows, keyField = 'id', emptyText = 'Nothin
         })}
       </div>
     </div>
+    {paginate && (
+      <PaginationBar page={pagination.page} pageCount={pagination.pageCount} total={pagination.total}
+        pageSize={pagination.pageSize} onPageChange={pagination.setPage} itemLabel={itemLabel} className="px-4 py-3" />
+    )}
+    </>
   );
 }

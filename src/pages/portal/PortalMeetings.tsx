@@ -9,11 +9,11 @@ import PortalLayout from '@/components/PortalLayout';
 import { usePortal, PortalMeeting } from '@/hooks/usePortal';
 import { DateInput } from '@/components/ui/date-input';
 
-const DARK   = '#1A1410';
-const MUTED  = '#7A6E64';
-const GOLD   = '#9D7E3F';
-const GOLDF  = '#C4A76B';
-const BORDER = '#E5E0D9';
+const DARK   = '#111827';
+const MUTED  = '#6B7280';
+const ACCENT   = '#000000';
+const ACCENT_SOFT  = '#404040';
+const BORDER = '#E5E7EB';
 const SERIF  = "'Cormorant Garamond', Georgia, serif";
 
 const MEETING_TYPES = [
@@ -36,17 +36,17 @@ function statusConfig(status: PortalMeeting['status']): { color: string; bg: str
   switch (status) {
     case 'confirmed':  return { color: '#10b981', bg: 'rgba(16,185,129,0.1)',  label: 'Confirmed', icon: <CheckCircle className="w-3.5 h-3.5" style={{ color: '#10b981' }} strokeWidth={2} /> };
     case 'requested':  return { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Pending Confirmation', icon: <AlertCircle className="w-3.5 h-3.5" style={{ color: '#f59e0b' }} strokeWidth={2} /> };
-    case 'completed':  return { color: MUTED,      bg: 'rgba(26,20,16,0.06)', label: 'Completed', icon: <CheckCircle className="w-3.5 h-3.5" style={{ color: MUTED }} strokeWidth={2} /> };
+    case 'completed':  return { color: MUTED,      bg: 'rgba(17,24,39,0.06)', label: 'Completed', icon: <CheckCircle className="w-3.5 h-3.5" style={{ color: MUTED }} strokeWidth={2} /> };
     case 'cancelled':  return { color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  label: 'Cancelled', icon: <XCircle className="w-3.5 h-3.5" style={{ color: '#ef4444' }} strokeWidth={2} /> };
-    default: return { color: MUTED, bg: 'rgba(26,20,16,0.06)', label: status, icon: null };
+    default: return { color: MUTED, bg: 'rgba(17,24,39,0.06)', label: status, icon: null };
   }
 }
 
 function FormatIcon({ format }: { format: PortalMeeting['format'] }) {
   switch (format) {
-    case 'Video Call': return <Video className="w-3.5 h-3.5" style={{ color: GOLD }} strokeWidth={1.5} />;
-    case 'Phone Call': return <Phone className="w-3.5 h-3.5" style={{ color: GOLD }} strokeWidth={1.5} />;
-    default:           return <MapPin className="w-3.5 h-3.5" style={{ color: GOLD }} strokeWidth={1.5} />;
+    case 'Video Call': return <Video className="w-3.5 h-3.5" style={{ color: ACCENT }} strokeWidth={1.5} />;
+    case 'Phone Call': return <Phone className="w-3.5 h-3.5" style={{ color: ACCENT }} strokeWidth={1.5} />;
+    default:           return <MapPin className="w-3.5 h-3.5" style={{ color: ACCENT }} strokeWidth={1.5} />;
   }
 }
 
@@ -66,7 +66,11 @@ export default function PortalMeetings() {
   const [notes,     setNotes]     = useState('');
   const [submitErr, setSubmitErr] = useState('');
 
-  useEffect(() => { if (!loaded) return; if (!client) navigate('/portal', { replace: true }); }, [client, loaded, navigate]);
+  useEffect(() => {
+    if (!loaded) return;
+    if (!client) navigate('/portal', { replace: true });
+    else if (client.status === 'pending_approval' || client.status === 'rejected') navigate('/portal', { replace: true });
+  }, [client, loaded, navigate]);
 
   // Sync meetings from hook after Supabase load
   useEffect(() => {
@@ -74,7 +78,7 @@ export default function PortalMeetings() {
     if (current.length > 0) setMeetings(current);
   }, [getMeetings]);
 
-  if (!loaded || !client) return null;
+  if (!loaded || !client || (client.status && client.status !== 'approved')) return null;
 
   const refresh = () => setMeetings(getMeetings());
 
@@ -120,13 +124,13 @@ export default function PortalMeetings() {
   const MeetingCard = ({ m }: { m: PortalMeeting }) => {
     const sc = statusConfig(m.status);
     return (
-      <motion.div className="p-6" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}
+      <motion.div className="p-6 rounded-2xl" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4 flex-1 min-w-0">
             {/* Date box */}
-            <div className="shrink-0 text-center px-3 py-2 min-w-[60px]" style={{ backgroundColor: 'rgba(157,126,63,0.08)', border: `1px solid rgba(157,126,63,0.2)` }}>
-              <div className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: GOLD }}>
+            <div className="shrink-0 text-center px-3 py-2 min-w-[60px]" style={{ backgroundColor: 'rgba(0,0,0,0.08)', border: `1px solid rgba(0,0,0,0.2)` }}>
+              <div className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: ACCENT }}>
                 {m.date ? new Date(m.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' }) : '–'}
               </div>
               <div style={{ fontFamily: SERIF, fontSize: '22px', fontWeight: 300, color: DARK, lineHeight: 1.1 }}>
@@ -171,9 +175,9 @@ export default function PortalMeetings() {
             {(m.status === 'requested' || m.status === 'confirmed') && (
               <button onClick={() => handleCancel(m.id)}
                 className="text-[9px] uppercase tracking-[0.18em] font-semibold transition-colors"
-                style={{ color: 'rgba(26,20,16,0.3)' }}
+                style={{ color: 'rgba(17,24,39,0.3)' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(26,20,16,0.3)'; }}>
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(17,24,39,0.3)'; }}>
                 Cancel
               </button>
             )}
@@ -188,9 +192,9 @@ export default function PortalMeetings() {
       <div className="px-6 md:px-10 py-8 md:py-12 max-w-4xl">
 
         {/* Header */}
-        <motion.div className="flex items-end justify-between mb-8" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div className="flex items-end justify-between mb-8" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16 }}>
           <div>
-            <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: GOLD }}>Meetings</div>
+            <div className="text-[8px] uppercase tracking-[0.44em] font-bold mb-2" style={{ color: ACCENT }}>Meetings</div>
             <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: 'clamp(24px, 3.5vw, 38px)', color: DARK, lineHeight: 1.08 }}>
               Consultations & Site Visits
             </div>
@@ -200,7 +204,7 @@ export default function PortalMeetings() {
           </div>
           <button onClick={openModal}
             className="hidden md:flex items-center gap-2 text-[9px] uppercase tracking-[0.26em] font-black px-5 py-3 transition-opacity hover:opacity-85"
-            style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+            style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
             <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
             Schedule Meeting
           </button>
@@ -208,17 +212,17 @@ export default function PortalMeetings() {
 
         {/* Upcoming */}
         <motion.div className="mb-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-          <div className="text-[9px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: GOLD }}>
+          <div className="text-[9px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: ACCENT }}>
             Upcoming Meetings {upcomingMeetings.length > 0 && `(${upcomingMeetings.length})`}
           </div>
           {upcomingMeetings.length === 0 ? (
-            <div className="text-center py-16" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}>
+            <div className="text-center py-16 rounded-2xl" style={{ backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}` }}>
               <Calendar className="w-8 h-8 mx-auto mb-3" style={{ color: BORDER }} strokeWidth={1} />
               <div className="text-[14px] font-light mb-1" style={{ color: DARK }}>No upcoming meetings</div>
               <div className="text-[11px] font-light mb-5" style={{ color: MUTED }}>Schedule a consultation to get started.</div>
               <button onClick={openModal}
                 className="inline-flex items-center gap-2 text-[9px] uppercase tracking-[0.24em] font-black px-5 py-2.5"
-                style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+                style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
                 <Plus className="w-3 h-3" strokeWidth={2.5} />
                 Schedule First Meeting
               </button>
@@ -233,7 +237,7 @@ export default function PortalMeetings() {
         {/* Past meetings */}
         {pastMeetings.length > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
-            <div className="text-[9px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: 'rgba(26,20,16,0.3)' }}>
+            <div className="text-[9px] uppercase tracking-[0.38em] font-bold mb-4" style={{ color: 'rgba(17,24,39,0.3)' }}>
               Past Meetings
             </div>
             <div className="space-y-3 opacity-60">
@@ -242,15 +246,18 @@ export default function PortalMeetings() {
           </motion.div>
         )}
 
-        {/* Mobile CTA */}
-        <div className="md:hidden mt-6">
-          <button onClick={openModal}
-            className="w-full flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.26em] font-black py-4 transition-opacity hover:opacity-85"
-            style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
-            Schedule a Meeting
-          </button>
-        </div>
+        {/* Mobile CTA — only when there's a list to scroll past; the empty
+            state above already has its own identical CTA. */}
+        {upcomingMeetings.length > 0 && (
+          <div className="md:hidden mt-6">
+            <button onClick={openModal}
+              className="w-full flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.26em] font-black py-4 rounded-xl transition-opacity hover:opacity-85"
+              style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              Schedule a Meeting
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Modal ── */}
@@ -271,10 +278,10 @@ export default function PortalMeetings() {
                   <motion.div key="success" className="p-12 text-center"
                     initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                     <motion.div className="w-14 h-14 mx-auto mb-5 flex items-center justify-center"
-                      style={{ backgroundColor: 'rgba(157,126,63,0.12)', border: `1px solid rgba(157,126,63,0.3)` }}
+                      style={{ backgroundColor: 'rgba(0,0,0,0.12)', border: `1px solid rgba(0,0,0,0.3)` }}
                       initial={{ rotate: -90, scale: 0 }} animate={{ rotate: 0, scale: 1 }}
                       transition={{ type: 'spring', stiffness: 280, damping: 22 }}>
-                      <CheckCircle className="w-7 h-7" style={{ color: GOLD }} strokeWidth={1.5} />
+                      <CheckCircle className="w-7 h-7" style={{ color: ACCENT }} strokeWidth={1.5} />
                     </motion.div>
                     <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '28px', color: DARK, lineHeight: 1.1 }}>
                       Meeting Requested
@@ -288,7 +295,7 @@ export default function PortalMeetings() {
                     {/* Header */}
                     <div className="px-7 pt-7 pb-5 flex items-start justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
                       <div>
-                        <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-1" style={{ color: GOLD }}>Schedule</div>
+                        <div className="text-[8px] uppercase tracking-[0.38em] font-bold mb-1" style={{ color: ACCENT }}>Schedule</div>
                         <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 300, fontSize: '26px', color: DARK, lineHeight: 1.1 }}>
                           Request a Meeting
                         </div>
@@ -338,9 +345,9 @@ export default function PortalMeetings() {
                             <button key={f} type="button" onClick={() => setFormat(f)}
                               className="flex flex-col items-center gap-1.5 py-3 text-[9px] uppercase tracking-[0.18em] font-bold transition-all"
                               style={{
-                                border: `1px solid ${format === f ? GOLD : BORDER}`,
-                                backgroundColor: format === f ? 'rgba(157,126,63,0.08)' : 'transparent',
-                                color: format === f ? GOLD : MUTED,
+                                border: `1px solid ${format === f ? ACCENT : BORDER}`,
+                                backgroundColor: format === f ? 'rgba(0,0,0,0.08)' : 'transparent',
+                                color: format === f ? ACCENT : MUTED,
                               }}>
                               {f === 'Video Call' ? <Video className="w-3.5 h-3.5" strokeWidth={1.5} />
                                : f === 'Phone Call' ? <Phone className="w-3.5 h-3.5" strokeWidth={1.5} />
@@ -374,7 +381,7 @@ export default function PortalMeetings() {
                       <div className="flex gap-3 pt-2">
                         <button type="submit" disabled={!date || submitting}
                           className="flex-1 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.24em] font-black py-3.5 disabled:opacity-40 transition-opacity hover:opacity-85"
-                          style={{ backgroundColor: GOLD, color: '#FAF7F2' }}>
+                          style={{ backgroundColor: ACCENT, color: '#F8FAFC' }}>
                           {submitting
                             ? 'Sending…'
                             : <><Calendar className="w-3.5 h-3.5" strokeWidth={2} />Request Meeting</>}

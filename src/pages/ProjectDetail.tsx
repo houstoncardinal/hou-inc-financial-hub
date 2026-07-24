@@ -25,7 +25,7 @@ import {
   ArrowLeft, Download, FileText, ArrowUpRight, Plus, ExternalLink,
   Users, LayoutDashboard, Upload, Trash2, File, Image, Eye, Camera,
   ChevronRight, Pencil, Check, X, FolderOpen, Link2,
-  Receipt, ClipboardList, ShieldCheck, Mail,
+  Receipt, ClipboardList, ClipboardCheck, ShieldCheck, Mail,
   TrendingUp, Wallet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,6 +41,7 @@ import { DocumentsCard } from '@/components/project-detail/DocumentsCard';
 import { ProjectDetailsCard } from '@/components/project-detail/ProjectDetailsCard';
 import { ProjectGantt } from '@/components/project-detail/ProjectGantt';
 import { FlushTabs } from '@/components/project-detail/FlushTabs';
+import { ProjectWorkflowPanel } from '@/components/project-detail/ProjectWorkflowPanel';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationBar } from '@/components/PaginationBar';
 
@@ -90,7 +91,7 @@ function FileIcon({ mimeType, className = 'w-4 h-4' }: { mimeType: string | null
 
 
 /* ── Tab type ── */
-type Tab = 'overview' | 'documents' | 'photos' | 'activity' | 'breakdown';
+type Tab = 'overview' | 'documents' | 'photos' | 'activity' | 'breakdown' | 'fieldops';
 
 export default function ProjectDetail() {
   const { id }     = useParams<{ id: string }>();
@@ -502,7 +503,7 @@ export default function ProjectDetail() {
   /* ── Exports ── */
   const exportPDF = () => {
     if (!enriched) return;
-    const doc = generateProjectReport([enriched]);
+    const doc = generateProjectReport([enriched], entity?.name);
     savePDF(doc, `hou-project-${enriched.name.toLowerCase().replace(/\s+/g, '-')}-${todayLocalDate()}.pdf`);
     toast.success('Project report exported');
   };
@@ -526,6 +527,7 @@ export default function ProjectDetail() {
   const TABS: { key: Tab; label: string; short: string; count?: number; icon: any }[] = [
     { key: 'overview',   label: 'Overview', short: 'Overview', icon: LayoutDashboard },
     { key: 'breakdown',  label: 'Houston Enterprise Reconciliation', short: 'Reconciliation', icon: ShieldCheck },
+    { key: 'fieldops',   label: 'Field Ops', short: 'Field Ops', icon: ClipboardCheck },
     { key: 'documents',  label: 'Documents', short: 'Documents', count: projectDocs.length, icon: FolderOpen },
     { key: 'photos',     label: 'Progress Photos', short: 'Photos', count: photos.length, icon: Camera },
     { key: 'activity',   label: 'Activity', short: 'Activity', count: sortedActivity.length, icon: Receipt },
@@ -1231,6 +1233,15 @@ export default function ProjectDetail() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          FIELD OPS TAB — tasks, RFIs, submittals, punch, inspections
+      ══════════════════════════════════════════════════════════ */}
+      {tab === 'fieldops' && (
+        <div className="pd-section">
+          <ProjectWorkflowPanel projectId={id!} />
         </div>
       )}
 

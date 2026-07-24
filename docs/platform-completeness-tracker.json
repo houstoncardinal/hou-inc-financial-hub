@@ -1,9 +1,9 @@
 {
   "$schema": "Update alongside platform-completeness-tracker.md. Percentages reflect the last verified pass, grounded in verification RPCs and the test suite.",
-  "updated": "2026-07-19",
-  "pass": "ctc-forecasting-eac-wip-ap-compliance-guard",
+  "updated": "2026-07-23",
+  "pass": "launch-punch-list-closure",
   "overall": {
-    "completion": 95,
+    "completion": 97,
     "status": "launch-ready-with-punch-list"
   },
   "apps": {
@@ -16,25 +16,25 @@
       "status": "launch-ready"
     },
     "admin_dashboard": {
-      "completion": 90,
+      "completion": 93,
       "status": "launch-ready"
     },
     "finance_dashboard": {
-      "completion": 96,
+      "completion": 98,
       "status": "launch-ready"
     }
   },
   "entities": {
     "houston-enterprise": {
-      "completion": 95,
+      "completion": 96,
       "status": "launch-ready"
     },
     "houston-generator-pros": {
-      "completion": 95,
+      "completion": 97,
       "status": "launch-ready"
     },
     "houston-enterprise-holdings": {
-      "completion": 90,
+      "completion": 95,
       "status": "launch-ready"
     }
   },
@@ -170,25 +170,24 @@
     },
     {
       "id": "holdings-balance-sheet-visibility",
-      "completion": 70,
-      "status": "launch-ready",
-      "remaining": [
-        "get_holdings_balance_sheet RPC is wired into Reports and Assets & Deals but never imported into HoldingsHQ.tsx — /finance/dashboard shows no financial-position section for Holdings"
-      ],
-      "priority": "medium",
-      "complexity": "S",
-      "verification": "verify_holdings_balance_sheet"
+      "completion": 97,
+      "status": "complete",
+      "remaining": [],
+      "priority": "low",
+      "complexity": null,
+      "verification": "verify_holdings_balance_sheet",
+      "note": "fixed 2026-07-23 — get_holdings_balance_sheet() already existed and was wired into Reports and Assets & Deals, just never imported into HoldingsHQ.tsx. Added a Financial Position panel (Total Assets/Liabilities/Owners' Equity + Cash/Notes Receivable/Notes Payable/Mgmt Fees breakdown) to the Overview tab, gated on the RPC returning data."
     },
     {
       "id": "ledger-reconciliation",
-      "completion": 93,
+      "completion": 96,
       "status": "complete",
       "remaining": [
-        "AP aging depends on unpaid-bill logging discipline",
-        "Checks page KPI counts 'cleared' as reconciled while row badges show 'unreconciled' — same-page contradiction"
+        "AP aging depends on unpaid-bill logging discipline"
       ],
-      "priority": "medium",
-      "complexity": "S"
+      "priority": "low",
+      "complexity": null,
+      "note": "fixed 2026-07-23 — Checks KPI now counts reconciliation_status==='reconciled' only, matching the row badges (was also counting status==='cleared', causing the two to visibly disagree); project Reconciliation Progress ring no longer shows 0% when paid>0 but billed=0, shows an explicit 'ahead of billing' state instead"
     },
     {
       "id": "invoices-payments",
@@ -233,25 +232,23 @@
     },
     {
       "id": "mobile-responsiveness",
-      "completion": 87,
+      "completion": 93,
       "status": "launch-ready",
       "remaining": [
-        "tablet screenshot sweep",
-        "global .finance-mobile-surface .overflow-x-auto * { min-width:0 } rule (src/index.css:143-166) sits outside any @layer and beats Tailwind's min-w-[...] escape hatch, collapsing CSS-grid table columns to illegible widths on mobile"
+        "tablet screenshot sweep"
       ],
-      "priority": "high",
-      "complexity": "S"
+      "priority": "medium",
+      "complexity": "S",
+      "note": "fixed 2026-07-23 — the .finance-mobile-surface *{min-width:0} rule in src/index.css sat outside any @layer, so per CSS cascade-layer rules it always beat every @layer-based Tailwind min-w-[...] utility regardless of specificity, collapsing table columns to illegible widths on mobile. Scoped the reset to exclude .overflow-x-auto and its descendants so the flex-shrink fix still works without nuking table columns."
     },
     {
       "id": "performance-scaling",
-      "completion": 92,
-      "status": "launch-ready",
-      "remaining": [
-        "production build emits a single 7.9MB/2.1MB-gzip JS chunk, no code-splitting"
-      ],
+      "completion": 97,
+      "status": "complete",
+      "remaining": [],
       "priority": "low",
-      "complexity": "M",
-      "note": "fixed 2026-07-19 — shared usePagination/PaginationBar pattern applied across every unbounded list in the finance dashboard (Income/Expenses, Checks, Vendors, Invoices, Documents, Clients, Projects control summary, HGP inventory/storm/procurement, Holdings HQ note schedule + capital activity, Holdings assets/notes registers, and every ProjectBreakdown/ProjectDetail tab). Live Playwright sweep across 11 screens post-fix showed zero console errors."
+      "complexity": null,
+      "note": "fixed 2026-07-19 — shared usePagination/PaginationBar pattern applied across every unbounded list in the finance dashboard (Income/Expenses, Checks, Vendors, Invoices, Documents, Clients, Projects control summary, HGP inventory/storm/procurement, Holdings HQ note schedule + capital activity, Holdings assets/notes registers, and every ProjectBreakdown/ProjectDetail tab). Extended 2026-07-22 — the finance Projects page and admin Projects tab had been missed by the original sweep; fixed, plus AdminTable gained a built-in optional paginate/pageSize/resetKey prop, applied to admin Clients/All-Applications/Documents/Leads/Meetings/Help-Requests/Changelog. Extended 2026-07-23 — production code-splitting: every page in src/App.tsx converted to React.lazy() behind one <Suspense> boundary, plus a vendor-react manual chunk. The single 7.9MB/2.1MB-gzip chunk is gone; build now emits 200+ chunks, with mapbox-gl (510KB gzip) and the PDF/Excel reports bundle (435KB gzip) isolated to only the pages that need them. Live Playwright sweep on the built app confirmed Home/Portal pages load neither chunk."
     },
     {
       "id": "launch-documentation",
@@ -360,18 +357,13 @@
       "id": "cost-code-phase-reporting",
       "foundation": "cost code/division tables + hooks",
       "complexity": "M"
-    },
-    {
-      "id": "finance-controls-entity-awareness",
-      "foundation": "controls module is enabled for all 3 entities, but FinanceControls.tsx hardcodes construction copy and its WIP widget reads the HE-shaped projects table",
-      "complexity": "M"
     }
   ],
   "test_battery": {
     "typescript": "clean",
     "eslint": "clean (1 pre-existing unrelated prefer-const error, ProjectManager.tsx:1075, not from this pass)",
     "unit": "15/15",
-    "build": "clean (single 7.9MB/2.1MB-gzip JS chunk — no code-splitting, see performance-scaling)",
+    "build": "clean (code-split into 200+ chunks via React.lazy() + vendor-react manual chunk, see performance-scaling)",
     "playwright": {
       "note": "no full suite run this pass — targeted live Playwright + direct SQL checks per feature instead (Ledger correction form dropdowns, redesigned vendor drawer, 11-screen pagination sweep with zero console errors, CTC worksheet + WIP section + commitment-line entry live end-to-end, AP compliance trigger stress-tested with real inserts including a 3-stage max-dollar/lien-waiver test); all temp specs/screenshots and test data cleaned up afterward"
     },

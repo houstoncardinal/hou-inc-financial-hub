@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ENTITIES } from '@/contexts/EntityContext';
 import {
   useHoldingsNotes, useCapitalActivity, useConsolidatedEntityTotals, useNotePayments, useHoldingsCovenants,
-  useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime,
+  useEntityOpsUpsert, useEntityOpsSoftDelete, useEntityOpsRealtime, useHoldingsBalanceSheet,
 } from '@/hooks/useEntityOps';
 import { fmtDate, fmtUSD, todayLocalDate } from '@/lib/format';
 import { toast } from 'sonner';
@@ -305,6 +305,7 @@ export default function HoldingsHQ() {
   const { data: activity = [], isLoading: activityLoading } = useCapitalActivity();
   const { data: payments = [] } = useNotePayments();
   const { data: consolidated = {} } = useConsolidatedEntityTotals();
+  const { data: balanceSheet } = useHoldingsBalanceSheet();
 
   const upsertNote = useEntityOpsUpsert('holdings_notes');
   const deleteNote = useEntityOpsSoftDelete('holdings_notes');
@@ -961,6 +962,35 @@ export default function HoldingsHQ() {
             <Metric label="Mgmt Fees YTD" value={fmtUSD(stats.ytdManagementFees)} sub="Fees charged to subsidiaries" icon={FileText} color="#0891b2" />
             <Metric label="Tax Reserves YTD" value={fmtUSD(stats.ytdTaxReserves)} sub="Set aside for tax obligations" icon={ShieldCheck} color="#7c3aed" />
           </div>
+
+          {/* ── Financial Position — management-basis balance sheet ── */}
+          {balanceSheet && (
+            <section className="heh-panel p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="heh-k">Financial Position · As of {fmtDate(balanceSheet.as_of_date)}</div>
+                <Link to="/reports" className="text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors">
+                  Full Statement →
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3">
+                <Metric label="Total Assets" value={fmtUSD(balanceSheet.total_assets)} sub="Cash + notes receivable" icon={Building2} color="#2C5F8A" />
+                <Metric label="Total Liabilities" value={fmtUSD(balanceSheet.total_liabilities)} sub="Notes payable (active)" icon={Scale} color="#dc2626" />
+                <Metric label="Owners' Equity" value={fmtUSD(balanceSheet.owners_equity)} sub="Assets − liabilities (residual)" icon={Landmark}
+                  color={balanceSheet.owners_equity >= 0 ? '#059669' : '#dc2626'} />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <Metric label="Cash Position" value={fmtUSD(balanceSheet.cash_position)} sub="Net of all-time income/expense" icon={Banknote} />
+                <Metric label="Notes Receivable" value={fmtUSD(balanceSheet.notes_receivable)} sub="Active only" icon={TrendingUp} color="#059669" />
+                <Metric label="Notes Payable" value={fmtUSD(balanceSheet.notes_payable)} sub="Active only" icon={Scale} color="#dc2626" />
+                <Metric label="Mgmt Fees ITD" value={fmtUSD(balanceSheet.management_fees_itd)} sub="Collected since inception" icon={FileText} color="#0891b2" />
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-3 leading-relaxed">
+                Management-basis statement — this platform maintains a cash/transaction ledger rather than full
+                double-entry books with dedicated equity accounts, so Owners' Equity is reported as a residual
+                (Total Assets less Total Liabilities) rather than reconciled line-by-line. Not prepared under GAAP.
+              </p>
+            </section>
+          )}
 
           {/* ── Debt service — next 12 months ── */}
           {debtService.any && (

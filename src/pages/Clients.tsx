@@ -10,8 +10,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { fmtDate, fmtUSD } from '@/lib/format';
 import { toast } from 'sonner';
 import {
-  Building2, CalendarClock, CheckCircle2, ClipboardList, Edit3, Home,
-  Mail, MapPin, Phone, Plus, Search, Trash2, UserRound, Zap,
+  Building2, CalendarClock, CheckCircle2, ClipboardList, DownloadCloud, Edit3, Home,
+  Link2, Mail, MapPin, Phone, Plus, Search, Trash2, UserRound, Zap,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationBar } from '@/components/PaginationBar';
@@ -113,6 +113,64 @@ export default function Clients() {
 
   const summaryRows = (summary.data ?? []) as any[];
   const selectedSummary = summaryRows.find(r => r.id === selected?.id) ?? null;
+
+  /* ── Client Portal roster: every portal account, matched to finance accounts
+     by stamped metadata.portal_client_id or email, importable in one click ── */
+  const portalQuery = useQuery({
+    queryKey: ['portal-clients-roster'],
+    enabled: !isHgp,
+    queryFn: async () => {
+      const { data, error: pErr } = await (supabase as any)
+        .from('portal_clients')
+        .select('id, name, email, phone, status, project_type, created_at')
+        .order('created_at', { ascending: false });
+      if (pErr) throw pErr;
+      return data ?? [];
+    },
+  });
+  const portalClients = (portalQuery.data ?? []) as any[];
+  const financeIdByPortal = useMemo(() => {
+    const map: Record<string, string> = {};
+    (clients as any[]).forEach(c => {
+      const pid = c.metadata?.portal_client_id;
+      if (pid) map[pid] = c.id;
+    });
+    portalClients.forEach(p => {
+      if (map[p.id]) return;
+      const byEmail = p.email && (clients as any[]).find(c => c.email?.toLowerCase() === p.email.toLowerCase());
+      if (byEmail) map[p.id] = byEmail.id;
+    });
+    return map;
+  }, [clients, portalClients]);
+  const unimportedPortal = useMemo(
+    () => portalClients.filter(p => !financeIdByPortal[p.id]),
+    [portalClients, financeIdByPortal],
+  );
+  const importPortal = useMutation({
+    mutationFn: async (targets: any[]) => {
+      const rows = targets.map(p => ({
+        user_id: user?.id,
+        entity_id: entityId,
+        client_type: 'residential',
+        status: p.status === 'approved' ? 'active' : 'prospect',
+        name: p.name,
+        email: p.email || null,
+        phone: p.phone || null,
+        construction_scope: p.project_type || null,
+        notes: 'Imported from the client portal.',
+        metadata: { portal_client_id: p.id, source: 'client-portal' },
+      }));
+      const { error: insErr } = await (supabase as any).from('finance_client_accounts').insert(rows);
+      if (insErr) throw insErr;
+      return rows.length;
+    },
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['finance-client-accounts'] });
+      qc.invalidateQueries({ queryKey: ['finance-client-account-summary'] });
+      toast.success(`Imported ${n} portal client${n === 1 ? '' : 's'} into finance`);
+    },
+    onError: (e: any) => toast.error(`Import failed: ${e.message}`),
+  });
 
   const selectedJobs = (hgpJobs as any[]).filter(j =>
     selected && (j.finance_client_id === selected.id || (!j.finance_client_id && j.customer_name?.toLowerCase() === selected.name?.toLowerCase())),
@@ -335,6 +393,59 @@ export default function Clients() {
           </div>
 
           <div className="space-y-4 min-w-0">
+            {/* ── Client Portal roster — every portal account, linked or one-click importable ── */}
+            {!isHgp && portalClients.length > 0 && (
+              <div className="clients-card p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                  <div>
+                    <div className="clients-label">Client Portal</div>
+                    <h3 className="text-xl font-black">Portal accounts ({portalClients.length})</h3>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      {portalClients.length - unimportedPortal.length} linked to finance · {unimportedPortal.length} not yet imported
+                    </div>
+                  </div>
+                  {unimportedPortal.length > 0 && (
+                    <button className="clients-btn clients-btn-primary" disabled={importPortal.isPending}
+                      onClick={() => importPortal.mutate(unimportedPortal)}>
+                      <DownloadCloud className="w-3.5 h-3.5" /> Import all {unimportedPortal.length}
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                  {portalClients.map(p => {
+                    const linkedId = financeIdByPortal[p.id];
+                    return (
+                      <div key={p.id}
+                        className={`border p-3 flex flex-col gap-1.5 transition-colors ${linkedId ? 'border-border bg-secondary/20 cursor-pointer hover:bg-secondary/40' : 'border-dashed border-border'}`}
+                        onClick={() => linkedId && setSelectedId(linkedId)}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-black text-sm truncate">{p.name}</span>
+                          <span className={`shrink-0 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide ${p.status === 'approved' ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
+                            {p.status || 'pending'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {[p.email, p.project_type].filter(Boolean).join(' · ') || '—'}
+                        </div>
+                        <div className="mt-auto pt-1">
+                          {linkedId ? (
+                            <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-700">
+                              <Link2 className="w-3 h-3" /> Linked to finance — view account →
+                            </span>
+                          ) : (
+                            <button className="clients-btn h-7 px-2.5 text-[10px]" disabled={importPortal.isPending}
+                              onClick={e => { e.stopPropagation(); importPortal.mutate([p]); }}>
+                              <DownloadCloud className="w-3 h-3" /> Import
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="clients-card p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div>
@@ -355,7 +466,14 @@ export default function Clients() {
                   return (
                     <button key={c.id} type="button" onClick={() => setSelectedId(c.id)} className={`clients-row w-full text-left py-3 transition-colors ${selected?.id === c.id ? 'bg-secondary/45' : 'hover:bg-secondary/25'}`}>
                       <div className="min-w-0">
-                        <div className="font-black text-sm truncate">{c.name}</div>
+                        <div className="font-black text-sm truncate flex items-center gap-1.5">
+                          <span className="truncate">{c.name}</span>
+                          {c.metadata?.portal_client_id && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-blue-700 bg-blue-50" title="Linked to a client-portal account">
+                              <Link2 className="w-2.5 h-2.5" /> Portal
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-muted-foreground truncate">{c.company || c.client_type} · {c.status}</div>
                       </div>
                       <div className="text-xs text-muted-foreground min-w-0"><MapPin className="w-3 h-3 inline mr-1" />{[c.city, c.zip].filter(Boolean).join(' ') || 'No location'}</div>

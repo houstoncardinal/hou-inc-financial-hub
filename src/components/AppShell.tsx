@@ -12,6 +12,7 @@ import {
   Settings, Sun, Moon, Receipt, Globe,
   Building2, Zap, Landmark, Layers, FolderOpen, Plus, X, ChevronDown, ChevronRight, Check,
   MoreHorizontal, History, ShieldCheck, CloudLightning, Package, FileBarChart, ShoppingCart,
+  Gauge, Calculator, HardHat, Truck,
 } from 'lucide-react';
 import ElevenLabsAgent from './ElevenLabsAgent';
 import { sounds } from '@/hooks/useSound';
@@ -23,6 +24,7 @@ const navGroups = [
     label: 'Daily',
     items: [
       { to: '/finance/dashboard', label: 'Overview',  icon: LayoutGrid,      end: true, desc: 'Balance, stats & charts' },
+      { to: '/command',           label: 'Command Center', icon: Gauge,                 desc: 'KPIs, insights & cash forecast' },
       { to: '/ledger',            label: 'Ledger',    icon: BookOpen,                   desc: 'Full transaction log' },
       { to: '/checks',            label: 'Checks',    icon: FileText,                   desc: 'Issue & track checks' },
       { to: '/income',            label: 'Income',    icon: ArrowDownToLine,            desc: 'Log revenue received' },
@@ -33,6 +35,9 @@ const navGroups = [
     label: 'Management',
     items: [
       { to: '/projects', label: 'Projects', icon: FolderKanban, desc: 'Active & archived jobs' },
+      { to: '/estimates', label: 'Estimates', icon: Calculator, desc: 'Trade takeoffs & proposals' },
+      { to: '/people', label: 'People & Payroll', icon: HardHat, desc: 'Workforce, runs & labor costing' },
+      { to: '/equipment', label: 'Equipment & POs', icon: Truck, desc: 'Fleet, tools & purchase orders' },
       { to: '/clients', label: 'Clients', icon: Users, desc: 'Client accounts & history' },
       { to: '/storm',    label: 'Storm Response', icon: CloudLightning, desc: 'Outage intelligence & dispatch' },
       { to: '/inventory', label: 'Inventory', icon: Package, desc: 'Parts, stock & movement ledger' },

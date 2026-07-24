@@ -15,6 +15,8 @@ export interface Entity {
   colorMuted: string;
   since: number;
   type: 'construction' | 'energy' | 'holdings';
+  hasAdminAccess: boolean;
+  logoUrl?: string;
 }
 
 export const ENTITIES: Entity[] = [
@@ -26,10 +28,12 @@ export const ENTITIES: Entity[] = [
     description:
       'Full-service construction company delivering luxury residential, commercial, and industrial projects across the Greater Houston Metropolitan Area.',
     category: 'Construction',
-    color: '#9D7E3F',
-    colorMuted: 'rgba(157,126,63,0.10)',
+    color: '#0A0A0A',
+    colorMuted: 'rgba(10,10,10,0.06)',
     since: 1998,
     type: 'construction',
+    hasAdminAccess: true,
+    logoUrl: '/helogo.png',
   },
   {
     id: 'houston-generator-pros',
@@ -39,10 +43,12 @@ export const ENTITIES: Entity[] = [
     description:
       'Commercial and residential generator installation, preventive maintenance, 24/7 emergency repair services, and load-bank testing across Houston.',
     category: 'Energy Services',
-    color: '#1B72B5',
-    colorMuted: 'rgba(27,114,181,0.10)',
+    color: '#F66E15',
+    colorMuted: 'rgba(246,110,21,0.10)',
     since: 2015,
     type: 'energy',
+    hasAdminAccess: false,
+    logoUrl: '/hgplogo.png',
   },
   {
     id: 'houston-enterprise-holdings',
@@ -56,6 +62,7 @@ export const ENTITIES: Entity[] = [
     colorMuted: 'rgba(4,120,87,0.10)',
     since: 2010,
     type: 'holdings',
+    hasAdminAccess: false,
   },
 ];
 

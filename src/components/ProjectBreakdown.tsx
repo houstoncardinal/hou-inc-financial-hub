@@ -995,13 +995,28 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                   <div className="pdv2-card overflow-hidden">
                     <div className="pdv2-card-header"><div className="text-[11px] font-bold uppercase tracking-wide">Reconciliation Center</div></div>
                     <div className="p-4">
-                      <div className="flex items-center gap-4">
-                        <ProgressRing pct={fin.billed > 0 ? (fin.paid / fin.billed) * 100 : 0} />
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-semibold">Reconciliation Progress</div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5">{fmtUSD(fin.paid)} collected of {fmtUSD(fin.billed)}</div>
-                        </div>
-                      </div>
+                      {(() => {
+                        /* billed=0 with paid=0 means nothing to reconcile yet (0% is
+                           correct); billed=0 with paid>0 means collections have come
+                           in ahead of any funded draw (deposits, retainage releases) —
+                           that's fully caught up, not "0% collected", so the ring and
+                           copy need a distinct state instead of dividing by zero. */
+                        const aheadOfBilling = fin.billed <= 0 && fin.paid > 0;
+                        const pct = fin.billed > 0 ? (fin.paid / fin.billed) * 100 : aheadOfBilling ? 100 : 0;
+                        return (
+                          <div className="flex items-center gap-4">
+                            <ProgressRing pct={pct} />
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold">Reconciliation Progress</div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                                {aheadOfBilling
+                                  ? `${fmtUSD(fin.paid)} collected — ahead of billing`
+                                  : `${fmtUSD(fin.paid)} collected of ${fmtUSD(fin.billed)}`}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-border text-center">
                         <div>
                           <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Cleared</div>
@@ -1608,6 +1623,33 @@ export default function ProjectBreakdown({ project, enriched, projectDocs = [] }
                         steps={['Name draw', 'Attach invoice', 'Confirm status']}
                       />
                       <div className="pb-entry-grid">
+                        <div className="pb-span-4 space-y-1">
+                          <div className="micro-label">Bill Against Milestone</div>
+                          <select
+                            className={F}
+                            value=""
+                            onChange={e => {
+                              const m = milestones.find(x => x.id === e.target.value);
+                              if (!m) return;
+                              setDrawForm(p => ({
+                                ...p,
+                                milestone_name: m.title,
+                                draw_amount: Number(m.billing_amount) > 0 ? String(m.billing_amount) : p.draw_amount,
+                                scheduled_date: p.scheduled_date || m.planned_completion_date || '',
+                              }));
+                              toast.success(Number(m.billing_amount) > 0
+                                ? `Pulled ${fmtUSD(Number(m.billing_amount))} from "${m.title}"`
+                                : `Selected "${m.title}" — no billing amount set on this milestone`);
+                            }}
+                          >
+                            <option value="">Select a milestone to auto-fill name & billing amount…</option>
+                            {milestones.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.title}{Number(m.billing_amount) > 0 ? ` — ${fmtUSD(Number(m.billing_amount))}` : ''}{m.billing_eligible ? '' : ' (not billing-eligible)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="pb-span-4 space-y-1">
                           <div className="micro-label">Draw / Milestone Name</div>
                           <input className={F} value={drawForm.milestone_name} onChange={dr('milestone_name')} placeholder="e.g. Draw #1 — Foundation" />

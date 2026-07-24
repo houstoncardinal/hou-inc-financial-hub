@@ -1,8 +1,9 @@
 # HOU INC Financial Hub — Enterprise Launch Readiness Checklist
 
-Last updated: 2026-07-19 (full-platform deep audit + live-repair pass — see
-`platform-completeness-tracker.md` for the detailed findings list). Run every
-section top to bottom before go-live.
+Last updated: 2026-07-22 (Projects/admin pagination sweep — see
+`platform-completeness-tracker.md` for the detailed findings list; prior pass
+2026-07-19 full-platform deep audit + live-repair). Run every section top to
+bottom before go-live.
 
 ## 1. Database migrations (run in the Supabase SQL editor, in order)
 
@@ -130,11 +131,15 @@ migration to apply in its skip message.
 - [ ] QA rows archived (Houston Enterprise still has ~90 "Launch QA" test
       projects and 100+ "Launch QA" transactions polluting real screens)
 - [ ] Post-launch monitoring owner assigned
-- [ ] Pre-launch punch list from the 2026-07-19 audit addressed or explicitly
-      accepted as post-launch: Income/Expenses pagination (TxnPage.tsx has
-      none, largest real screens render 20,000+px), mobile table-column CSS
-      collapse, FinanceControls not entity-aware for HGP/Holdings, Holdings
-      HQ dashboard missing its balance-sheet section — full detail in
+- [x] Projects screens pagination (2026-07-22) — `Projects.tsx` (finance) and
+      `ProjectManager.tsx` (admin) were missed by the 2026-07-19 sweep and
+      rendered every project unpaginated; fixed, along with the admin
+      Documents review queue, Leads, Meetings, both Help Requests inboxes,
+      and the Changelog (was rendering all 500 entries at once)
+- [ ] Pre-launch punch list still open: mobile table-column CSS collapse
+      (`src/index.css:143-166`), FinanceControls not entity-aware for
+      HGP/Holdings, Holdings HQ dashboard missing its balance-sheet section,
+      production build's single un-code-split JS chunk — full detail in
       `platform-completeness-tracker.md`
 
 ## Known deferred items (not launch blockers)

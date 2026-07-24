@@ -39,9 +39,9 @@ const JOBS_CSS = `
 .hj-kpi:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#1B72B5);}
 .hj-k{font-size:7.5px;text-transform:uppercase;letter-spacing:.16em;font-weight:900;color:hsl(var(--muted-foreground));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hj-v{font-size:15px;font-weight:900;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.hj-card{border:1px solid hsl(var(--border));background:hsl(var(--background));transition:box-shadow .16s,border-color .16s,transform .16s;cursor:pointer;position:relative;overflow:hidden;}
+.hj-card{border:1px solid hsl(var(--border));border-radius:16px;background:hsl(var(--background));transition:box-shadow .2s cubic-bezier(.16,1,.3,1),border-color .2s ease,transform .2s cubic-bezier(.16,1,.3,1);cursor:pointer;position:relative;overflow:hidden;}
 .hj-card:before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--accent,#1B72B5);}
-.hj-card:hover{box-shadow:0 6px 20px rgba(10,10,10,.08);border-color:hsl(var(--foreground)/.2);transform:translateY(-1px);}
+.hj-card:hover{box-shadow:0 10px 28px rgba(10,10,10,.09);border-color:hsl(var(--foreground)/.2);transform:translateY(-2px);}
 .hj-client-band{border:1px solid hsl(var(--border));background:hsl(var(--secondary)/.25);padding:7px 8px;min-width:0;}
 .hj-mini-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid hsl(var(--border));background:hsl(var(--background));padding:3px 6px;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;}
 .hj-note{border-left:2px solid rgba(27,114,181,.5);background:rgba(27,114,181,.055);padding:6px 8px;font-size:10px;line-height:1.35;color:hsl(var(--foreground)/.78);}
@@ -57,7 +57,7 @@ const JOBS_CSS = `
 .hj-page-btn:hover:not(:disabled){background:hsl(var(--secondary)/.6);border-color:hsl(var(--foreground)/.22);}
 .hj-page-btn:disabled{opacity:.38;cursor:not-allowed;}
 .dark .hj-panel,.dark .hj-kpi,.dark .hj-card,.dark .hj-action,.dark .hj-stage{background:hsl(var(--card));}
-@media(max-width:767px){.hj-v{font-size:13px}.hj-panel{padding:10px!important}.hj-stage{min-height:32px;padding:5px 8px;font-size:8.5px}.hj-action{min-height:36px}.hj-primary{min-height:38px}.hj-mini-chip{min-height:26px}.hj-card{border-radius:0}.hj-page-btn{min-height:36px;min-width:42px}}
+@media(max-width:767px){.hj-v{font-size:13px}.hj-panel{padding:10px!important}.hj-stage{min-height:32px;padding:5px 8px;font-size:8.5px}.hj-action{min-height:36px}.hj-primary{min-height:38px}.hj-mini-chip{min-height:26px}.hj-page-btn{min-height:36px;min-width:42px}}
 `;
 
 export const HGP_STAGES: { key: string; label: string }[] = [

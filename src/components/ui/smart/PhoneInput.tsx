@@ -20,6 +20,7 @@ interface Props {
   focusBorderColor?: string;
   defaultBorderColor?: string;
   showIcon?: boolean;
+  iconColor?: string;
   required?: boolean;
 }
 
@@ -32,6 +33,7 @@ export default function PhoneInput({
   focusBorderColor = '#9D7E3F',
   defaultBorderColor = '#DDD4C4',
   showIcon = true,
+  iconColor = '#8A7A6A',
   required,
 }: Props) {
   return (
@@ -39,7 +41,7 @@ export default function PhoneInput({
       {showIcon && (
         <Phone style={{
           position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)',
-          width: 13, height: 13, color: '#8A7A6A', pointerEvents: 'none',
+          width: 13, height: 13, color: iconColor, pointerEvents: 'none',
         }} strokeWidth={1.5} />
       )}
       <input
